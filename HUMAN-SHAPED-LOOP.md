@@ -1,303 +1,288 @@
-# Human-Shaped Loop: Giving Long Agent Tasks Human Judgment
+# Human-Shaped Loop: Injecting Human Judgment into Long Agent Tasks
 
 [简体中文](./HUMAN-SHAPED-LOOP.zh-CN.md) | **English**
 
-This article explains the engineering thinking and collaboration philosophy behind Loopora. For installation and usage, start with the [README](./README.md).
+This article explains the engineering thinking and collaboration philosophy behind Loopora. For installation and usage, see [README](./README.md).
 
-Loopora begins from a plain desire: laziness.
+---
 
-More accurately, it begins from not wanting to sit at a desk, wait while an Agent slowly finishes a round, point out what is wrong, and nudge it to fix the same kind of thing again.
+Loopora starts from a simple desire: laziness.
 
-The laziness here is not about avoiding judgment. It is about repeatedly applying the same kinds of judgment:
+Not wanting to sit at the desk, wait for the Agent to finish a round, then point out what's wrong and nudge it to fix.
 
-- Seeing that the page exists, then reminding the Agent: "This is still a demo; the backend flow also has to be complete."
-- Reading "safety is improved," then asking whether authorization, refund eligibility, payment failure, and auditability were actually covered.
-- Noticing that tests stay on the main path, then asking for partial refunds, disputed orders, chargebacks, and refund-window boundaries.
-- Seeing the Agent continue polishing the UI, then pulling it back to the riskier failure paths and support handoff.
-- When the code starts to bloat, asking the Agent to refactor and tighten the current implementation.
+But it's not that simple—either you can't be lazy, or it doesn't work:
 
-These actions look different from task to task, but the pattern is similar: the human keeps pulling the Agent from "looks done" back to the real delivery judgment. The rest of this article asks why that judgment keeps returning in long tasks, and whether it can become a structure that later rounds inherit.
+- **Run `/goal` and let the Agent keep going**: Pure blind box—you only know how far it drifted after it finishes. Tokens spent, result unpredictable, maybe you need to rerun everything from scratch.
+- **Write a massive PRD and let it follow along**: The Agent quickly finishes the work and declares success—the larger the PRD, the more scattered the Agent's attention, the less reliable the final result. It always tends to close tasks fast rather than proving success item by item.
+
+What if you don't take the lazy route? Watch every round, manually judge and correct—still not good enough: the Agent might fix A and forget B, patch B and lose C. Judgment gets scattered across rounds, lost between iterations. The same reminders get repeated over and over:
+- "Beyond the UI, the backend logic needs to be complete"
+- "Did you actually do permissions and audit?"
+- "Tests only cover the main path, what about edge cases?"
+- "Patch the failure path"
+- "The code is bloated, needs a refactor"
+
+Different failure patterns, same root cause: judgment has no stable position. The Agent can't see persistent standards, so output drifts, errors accumulate, the final delivery becomes unreliable.
+
+Can we turn judgment into structure,施加固定的影响力 at a fixed position? Make long tasks run more steadily and healthily?
+
+That's Human-shaped Loop—what Loopora is built to do.
 
 <p align="center">
   <img src="./assets/diagrams/loopora-position.en.svg" alt="Loopora turns human judgment into a running structure outside the Agent" width="1000" />
 </p>
 
-## 1. A Task That Looks Perfect For An Agent
+## 1. A Task That Looks Perfect for an Agent
 
-Imagine a B2B SaaS company whose support team handles a large number of refund tickets every day.
+Imagine a B2B SaaS company whose support team handles many refund tickets daily. They decide to build a self-service refund flow: a customer admin opens the billing page, sees if an order is eligible, submits a refund request, and gets a clear result. If the order looks risky, the flow hands off to support.
 
-The team decides to build a self-service refund flow: a customer admin opens the billing page, sees whether an order is eligible, submits a refund request, and gets a clear result. If an order looks risky, the flow hands it off to support.
+This looks like a good task for a Coding Agent: UI to build, business rules to encode, tests to add, edge cases to discover, and enough work that one pass probably isn't enough.
 
-This looks like a good task for a Coding Agent:
+The user requests:
 
-- there is a product surface to build.
-- there are business rules to encode.
-- there are tests to add.
-- there are edge cases to discover.
-- there is enough work that one pass may not be enough.
+> Build a self-service refund flow: customer admins can request refunds for eligible orders from the billing page; risky orders go to support. Make it safe, add tests, iterate until ready to ship.
 
-So the user says:
+Round one looks promising: page, form, status messages, mocked eligibility rules, passing main-path tests. The Agent replies:
+> Refund flow fully implemented. All goals achieved.
 
-> Build a self-service refund flow: a customer admin can request refunds for eligible orders from the billing page; risky orders go to support. Make it safe, add tests, iterate until it is ready to ship.
+For a demo, this looks complete. But for production release, can this feature ship?
 
-Round one looks promising: a page, a form, a status message, a few mocked eligibility rules, and passing main-path tests.
+**No.** Because:
+- It didn't prove only authorized customer admins can request refunds—**permission boundary unverified**.
+- Eligibility checks use mocked rules, not real business logic—**business logic stubbed**.
+- Main-path tests pass, but partial refunds, disputed orders, chargebacks, past-window refunds, closed accounting periods aren't covered—**edge cases uncovered**.
+- When the payment provider fails, how does the system record it, what's the ledger state, how does support take over—**failure path und designed**.
+- Whether the audit log lets support, finance, or compliance reconstruct the whole process—**auditability unproven**.
 
-The Agent says:
+The developer asks the Agent to patch these. Round two looks more product-like: more page states, fuller confirmation flow, some edge rules, summary mentions "authorization," "eligibility," "audit."
 
-> The refund flow is fully implemented. All goals have been achieved.
+Progress, but problems remain: What did this round actually prove? Which risks were resolved versus merely mentioned? Where should the next round focus?
 
-If this were just a demo, the story might end here. But if this is meant to ship as a real product, the real problems are only beginning:
+Another pattern emerges: across rounds, the Agent fixes A and forgets B, patches B and loses C, or drifts toward easier-to-report work—putting authorization in copy, keeping mocked rules, adding more main-path tests, then saying "security improved." It didn't completely drift, but core risks get hidden behind more product-like surfaces and smoother summaries.
 
-- It does not prove that only authorized customer admins can request refunds.
-- The eligibility check is mocked, not a reliable business path.
-- Main-path tests pass, but partial refunds, disputed orders, chargebacks, refunds past the window, and closed accounting periods are not covered.
-- It does not explain what happens when the payment provider fails: how the system records it, what the ledger state is, and how support takes over.
-- It does not prove that the audit log is enough for support, finance, or compliance to reconstruct what happened.
+The problem isn't that the Agent isn't diligent. The problem is that correct judgment has to be manually applied round by round to keep the task on track. Even a smarter model can't guarantee stable judgment across a large, long task. Errors accumulate, and the final result goes off course.
 
-These are real engineering concerns. Now the developer is not facing an abstract concern. They face a concrete shipping decision: can this go live?
+## 2. What Humans Keep Doing Is Only a Few Things
 
-The answer is no.
+The previous section's problem can be reframed: long Agent tasks are naturally a loop—execute, report, judge, redirect, execute again.
 
-So the developer says:
+In an Agent workflow, this loop's shape comes mainly from the Agent's current understanding, chat memory, and what it just did. Judgment standards have no fixed position—they're scattered across round-by-round reminders and corrections. Each human intervention temporarily reshapes the loop: reject what, trust what, block what, change what next, when to close.
 
-> The feature is not complete yet. The permission model is not designed. First cover refund eligibility, payment failure handling, and the audit trail; polish the UI last.
+Abstract these scattered actions, and humans repeatedly apply only a few control signals:
 
-The Agent takes the instruction and completes a second round.
-
-Round two may also look more product-like: more page states, a fuller confirmation flow, some added boundary rules, and a summary that mentions "authorization," "eligibility," and "audit." This is real progress. If the human engineer keeps checking and pointing out gaps, the task can move round by round toward real delivery.
-
-The cost is that every round asks the human to judge again: which risks were actually solved, which ones were only mentioned, and what should be fixed first next. In an ordinary chat, those judgments mostly stay in the human's head and a few reminders. When the Agent gets busy, it can fix A and lose B, or drift toward work that is easier to report: put authorization into copy, keep eligibility in mocked rules, add more main-path tests, then say "safety is improved." It is not completely off track, but the core risk can be hidden behind a more product-like surface and a cleaner summary.
-
-So the problem is not that the Agent is not diligent, and it is not that multi-round iteration always fails. The problem is that correct judgment still has to be applied by hand, round after round.
-
-## 2. Human Intervention Shapes The Loop
-
-A long Agent task is already a loop: execute, report, judge, redirect, execute again.
-
-In an ordinary chat, the shape of that loop mainly comes from the Agent's current understanding, the chat memory, and the work it just performed. Each time the human returns, they temporarily reshape the loop: what to reject, what to trust, what must block, what to change next, and when to close.
-
-In engineering teams, these interventions rarely remain only as reminders. When a reviewer says, "Do not just build the page; prove authorization and auditability first," that sentence turns into design constraints, test plans, release gates, audit checks, rollback conditions, and support handoff instructions. Judgment is not merely remembered. It is placed where later work cannot avoid it.
-
-The recurring control signals are small enough to name:
-
-| What the human keeps doing | Stable meaning | Where engineering usually puts it |
+| Control Signal | Meaning | Typical Case |
 | --- | --- | --- |
-| Say "not done" | This looks complete, but does not meet the shipping standard. | Done criteria, counterexamples, acceptance notes |
-| Judge evidence strength | This material is trustworthy; that is only self-report. | Test results, logs, audit records, traceable artifacts |
-| Say "go here next" | Do not keep expanding; repair this gap first. | Priorities, next-step plans, handoff notes |
-| Set "cannot pass" | This risk cannot be packaged as completion. | Release gates, rollback conditions, blocking findings |
-| Decide closure | These parts are proven; those parts are explicit residual risk. | Acceptance records, residual-risk notes, follow-up owners |
+| Completion veto | "Looks done, but doesn't meet delivery standard" | "This is just demo, backend needs to be complete" |
+| Evidence ruling | "This material is trustworthy, that is just self-report" | "Tests pass, but edge cases?" |
+| Execution steering | "Next round don't expand, patch the key gap first" | "Patch failure path first, don't keep polishing UI" |
+| Blocking constraint | "This risk can't be packaged as completion" | "Permissions not proven, can't close" |
+| Closure ruling | "What's proven, what's explicit residual risk" | "This risk can carry forward, but someone must own it" |
 
-That is what Human-shaped Loop is trying to name.
+Five control signals, different concrete contents per task, but same abstract shape: pull the Agent from "looks done" back to "actually delivered."
 
-It does not put the human back into every execution step, it does not ask the human to write more at the beginning, and it does not invent judgment on the human's behalf. It handles the cost, forgetting, and drift that appear when the same judgment has to be reapplied again and again: it turns human judgment into the shape of the later loop. That shape decides what results can be accepted, what evidence is strong enough, which risks must block, why the next round should turn, and how the task can close honestly.
+既然形态稳定，关键问题就来了: can these control signals be extracted before the task starts,变成后续轮次会自动继承的结构?
 
-So a Human-shaped Loop is not a longer prompt, and it is not "make the model reflect for more rounds." It asks whether human judgment can be previewed, executed, evidenced, traced, and judged.
+That's the core idea of Human-shaped Loop.
 
-## 3. Why PRDs, Tests, And Plain Loops Are Not Enough
+## 3. Human-shaped Loop Definition
 
-Better questions at the start, a stronger PRD, and a plan-execute-self-check routine usually improve the result.
+**Human-shaped Loop turns human judgment into execution structure that shapes subsequent loops.**
 
-Those methods are useful. Up-front clarity reduces the chance of a bad first pass. A PRD can state goals, constraints, and boundaries. Checklists can remind the Agent not to miss common risks. Tests, type checks, static checks, proof scripts, and benchmarks can turn part of the judgment into hard feedback. Multi-Agent review can add a skeptical angle.
+This structure determines:
+- What results will be accepted
+- What evidence is sufficient
+- What risks must be blocked
+- Based on current evidence, how the next round turns
+- How the task honestly closes
 
-But they mainly improve the opening, or a class of boundaries already expressible through tools. They do not replace judgment returning during execution.
+It's not writing more requirements upfront—that's a longer PRD. It's not making the model reflect more rounds—that's stronger self-checking. It's not替人类做判断—that脱离人的 control.
 
-Real engineering teams do not cancel code review, tests, release gates, monitoring, and retrospectives because the design document is detailed. Documents state intent; execution creates new facts. Once the refund task enters a multi-round run, every round creates questions:
+It solves something else: make human judgment unavoidable material for subsequent work, instead of needing humans to keep emphasizing.
 
+So Human-shaped Loop doesn't关注"will the model work harder"—it关注"can human judgment be previewed, executed, evidenced, traced, and ruled upon."
+
+## 4. Why PRD, Tests, and Plain Loops Aren't Enough
+
+The previous section naturally raises a question: if we write a finer PRD and design fuller tests upfront, can the Agent just follow along?
+
+当然应该这样做. Upfront clarification, detailed PRD, complete test plan—all significantly improve round-one quality.
+
+But they improve opening quality, not judgment callbacks during execution.
+
+In the real world, even the strongest engineering team can't foresee all problems upfront. Design docs state intent; execution generates new facts. Once multi-round execution begins, each round raises new questions:
 - What code and flow did it actually change?
-- Which hard parts did it route around?
-- Are the new tests proving core risk, or only proving easier paths?
-- Did the summary turn "not proven" into "done"?
+- Which hard parts did it绕过?
+- Are new tests proving core risks, or只是证明更容易通过的路径?
+- Did the summary把"尚未证明"写成"已经完成"?
 
-Those facts only exist after execution, so every round has to answer what it proved, which gaps block closure, which risks can remain explicitly, and whether the next round should expand, gather evidence, narrow scope, fix root cause, or stop.
+These questions only appear after execution, can't be exhausted at design stage.
 
-**This is the difference between PRD / prompt and Human-shaped Loop:**
+PRD or prompt answers "what to do." Human-shaped Loop answers "is it proven, should it turn, can it close." Different layers.
 
 | PRD / prompt | Human-shaped Loop |
 | --- | --- |
-| Describes goals and constraints known before the task starts | Turns judgment into control structure that keeps acting during execution |
-| Reminds the Agent what to care about | Requires each round to answer with evidence |
-| Improves first-round quality | Controls multi-round error propagation |
-| Can be selectively quoted or locally satisfied | Records gaps, blockers, and residual risk |
-| Mainly answers "what should be done" | Keeps asking "was it proven, should we turn, can we close" |
+| Describes goals and constraints known before task starts | Turns judgment into control structure that keeps acting during execution |
+| Reminds Agent what to care about | Requires each round to respond with evidence |
+| Improves round-one quality | Controls error propagation across rounds |
+| May be selectively quoted or locally satisfied | Records gaps, blockers, and residual risk |
+| Only guidance, no hard constraint | No proof means no closure |
 
-Fixed cases and automated checks are also essential. In the refund task, only authorized admins can request refunds, past-window refunds are rejected, duplicate refunds are rejected, and provider failure creates a record plus a handoff path. Those should become stable checks whenever possible.
+Judgments that can be written as tests, type checks, lint, proof scripts—当然应该优先写. These are hard evidence, machine-adjudicable.
 
-The principle is simple: if a judgment can be expressed as a stable test, schema, lint rule, type check, benchmark, or proof script, it should usually become hard evidence.
+But some judgments can't be externalized or quantified as a concrete metric. For example:
+- "Code is bloated, needs a refactor"—this is complexity perception, not testable.
+- "This方案滑向更容易汇报的工作, not touching真正难点"—this is execution-direction judgment, needs human ruling.
+- "This risk可以随行, but must be visible and owned"—this is residual-risk strategy, depends on team commitments and business environment.
 
-But evidence also has strength. The Agent's natural-language summary can help a reader, but it cannot sit at the top of the evidence chain.
-
-| Evidence source | How to treat it |
-| --- | --- |
-| Tests, CI, benchmarks, proof scripts, real external probes | Strongest; good for stable contracts and machine-adjudicable boundaries. |
-| Traceable artifacts, logs, screenshots, structured check results | Useful, but they must state what they prove. |
-| Independent checks or human review | Useful for surfacing risk and gaps, but usually needs to land in more concrete evidence. |
-| The Agent's natural-language summary | Useful for reading, but not enough to support pass by itself. |
-
-Tests can say whether a set of checks passed. The higher-level judgment still asks whether those checks cover this task's done criteria, whether missing evidence blocks closure, and whether the next round should return to a specific evidence gap.
-
-Without that kind of gate, more rounds can amplify early error. The Agent keeps acting, keeps summarizing, and keeps making the result look more complete, while the underlying definition of completion has drifted.
+These judgments need to become structure, constraining subsequent action and final evaluation.
 
 <p align="center">
   <img src="./assets/diagrams/error-propagation.en.svg" alt="How a plain automated loop packages early error into a more convincing completion story" width="1000" />
 </p>
 
-This does not mean refund safety cannot be tested. Quite the opposite: the more important the area, the more it should become tests, audit records, simulated failures, support handoff drills, or other evidence.
+## 5. Why Not Just Use Fixed Team Templates
 
-The point is that some judgment does not fit into one score, but it can become structure:
+A popular approach in open-source: mold Agent workflows after human engineering teams—PM Agent analyzes requirements, Architect Agent designs, Engineer Agent implements, QA Agent reviews, Reviewer Agent signs off.
 
-- **Priority order**: the real refund path matters more than a polished page.
-- **Blocking conditions**: unauthorized refunds, double refunds, and missing audit trails cannot pass.
-- **Evidence demands**: authorization, eligibility, provider failure, and support handoff must leave traceable material.
-- **Residual risk**: a rare provider edge can remain only if it is visible, named, and owned.
+This approach has value, but it's a特定形态的 Loop—fixed team template. It fits scenarios where task type, failure mode, and deliverables are all stable. For other scenarios:
 
-This is not abandoning proof. It is recognizing that some proof is not a single number. It is a set of judgments that constrains later action and final evaluation.
+- **Light tasks**: Fix button copy,拆一个小函数—套上PM、Architect、QA流程只会 overkill, slows work.
+- **Heavy tasks**: Refund flow, data migration—fixed role names can't自动知道这次任务最怕哪种伪完成. "QA"可能只检查页面可用、测试通过、文案完整, yet misses authorization path, refund eligibility, audit trail.
 
-## 4. Why Not A Fixed Team Template?
+Fixed team template的本质: presets一套角色分工和交接顺序. It answers "who first, who next, who reviews whom." But it doesn't answer:
+- What's the completion standard for this task?
+- What evidence counts as sufficient?
+- Which gap should pull the next round?
+- When can the task honestly close?
 
-Another common approach is to freeze a human team shape into an Agent workflow: a product manager analyzes requirements, an architect designs, an engineer implements, a tester or QA agent reviews, and a final reviewer signs off.
+These answers change with the task. Fixed templates can't adapt.
 
-That approach has value. Real teams use roles, stage handoffs, and standard operating procedures to reduce confusion. When the task type is stable, the failure modes are stable, and the artifacts are stable, a fixed process can reduce idle chatter and make Agents more disciplined.
+Loopora differs: before running, dynamically generate Loop structure per current task—extract completion standards, fake-done patterns, evidence requirements, blocking risks, execution priorities, residual-risk policies, compile into一份可审查的方案. Human confirms, then the Loop executes stably—后续轮次不能偷偷降低标准.
 
-But it solves a different layer of the problem. A fixed team template mostly answers:
+Dynamic generation不等于运行时随意改规则. It's compile once before run, stay stable during execution. When judgment needs change, return to `/loopora-plan` or Web review to realign,而不是让执行阶段偷偷改方案.
 
-> Who acts first, who acts next, and who reviews whom?
+One-sentence summary:
+> Fixed team templates are one specific form of Loopora, suited for stable tasks with预设判断. Loopora's full capability: dynamically generate judgment structure per task—light tasks get light process, heavy tasks get heavy evidence.
 
-Human-shaped Loop asks:
+## 6. How This Lands in Loopora
 
-> In this task, what is not done? What evidence should be trusted? Which risks must block? Which gap should pull the next round back? When can the task close honestly?
+Loopora's core workflow: **compile human judgment into runnable Loop structure, let the Agent execute within it, each round's result returns to evidence buckets, gaps pull the next round.**
 
-Those questions are not interchangeable. In the refund task, a generic "QA" role may check that the page works, tests pass, and copy is complete while still failing to prove authorization, eligibility, provider failure, and auditability. In a data migration task, QA may need to focus on idempotence, rollback, reconciliation, and rollout boundaries. In a refactor, the reviewer may need to judge behavior compatibility, whether complexity actually decreased, and whether existing tests still protect the public contract.
+具体来说:
 
-The role name can stay the same while the useful judgment changes with the task. A fixed template can provide generic division of labor, but it does not automatically know which fake completion this task is most likely to produce.
+**Before run: Compile judgment**
+- Human describes task and key judgments via `/loopora-plan` or Web
+- Loopora extracts completion standards, fake-done patterns, evidence requirements, blocking risks, residual-risk policies
+- Compiles into一份可审查的 Loop plan
+- Human confirms, Loop stays stable—后续轮次不能偷偷降低标准
 
-That is why Loopora needs to generate the Loop structure dynamically. "Dynamic" here does not mean changing the rules arbitrarily during the run. It means compiling a reviewable Loop before execution from the current task's goal, fake-done patterns, evidence preferences, blocking risks, execution priorities, and residual-risk policy. Once the human accepts it, that Loop should stay stable during execution: later rounds cannot quietly lower the done criteria, and required evidence cannot be waived just because a generic reviewer says the result looks good.
+**During execution: Evidence-driven**
+- Agent executes within Loop structure
+- Each round's result gets整理成证据桶: proven, weak evidence, unproven, blocking risk
+- Evidence gaps automatically pull the next round's execution direction
 
-This is also why Loopora should not devolve into role proliferation. More roles are not automatically safer. A new role is useful only when it carries a new evidence responsibility, handoff boundary, or verdict input. Otherwise, "product manager + architect + engineer + QA" is only a more team-shaped story, not a more trustworthy task judgment.
-
-The difference can be compressed into one sentence:
-
-> Fixed team templates imitate division of labor; Loopora generates task judgment. The former answers "who does the work," while the latter answers "what proves this round was right."
-
-So a good Loop is not necessarily more complex. It should be the smallest structure that covers the critical judgment of this task: when automated tests can prove something, use tests; when independent evidence is needed, assign evidence responsibility; when a risk must block, put it into verdict rules; when judgment is missing, ask, review, or refuse to run instead of applying a universal workflow.
-
-## 5. What Changes Inside Loopora?
-
-When Human-shaped Loop lands in Loopora, it first appears through three reader-visible surfaces:
-
-- **Reviewable before the run**: the user can see what this Loop will reject, trust, prioritize, block, and accept at closure.
-- **Inherited during execution**: later rounds receive the same judgment, action boundaries, evidence gaps, and output requirements instead of continuing from chat memory alone.
-- **Auditable at closure**: the result can say what was proven, what is weak evidence, what remains unproven, what blocks closure, and what residual risk is explicit.
-
-Readers do not need to understand Loopora's internal terms first. The important point is that judgment cannot remain only in a prompt or summary. It has to become material the later work repeatedly encounters.
+**At closure: Honest ruling**
+- Results clearly separate: what's proven, what scenarios uncovered, what problems block closure
+- Residual risks visible, named, owned
+- System can finish running while task may remain unproven—二者分开
 
 <p align="center">
-  <img src="./assets/diagrams/judgment-surfaces.en.svg" alt="Human judgment becomes a task contract, execution strategy, evidence path, and decision rule" width="1000" />
+  <img src="./assets/diagrams/judgment-surfaces.en.svg" alt="Human judgment becomes task contract, execution strategy, evidence path, and ruling rules" width="1000" />
 </p>
 
-Return to the refund task. Before the loop starts, the user should not need to hand-write a large configuration. Loopora should turn the judgment into runnable structure:
+Back to the refund task. Before run, Loopora turns judgment into runnable structure:
+- Page submission is not completion
+- Authorization, eligibility, payment failure, audit, support handoff must have evidence
+- Unauthorized refunds, double refunds, missing audit trails must block
+- Rare payment-provider edges can be residual risk, but must be visible, named, owned
 
-- A submitting page is not completion.
-- Authorization, eligibility, provider failure, audit, and support handoff require evidence.
-- Unauthorized refunds, double refunds, and missing audit trails must block.
-- Rare provider edges may remain as residual risk, but only if visible, named, and owned.
+After round one, the Agent can't just report "I finished." It must return to明确判断标准:
+- What did this round prove?
+- Evidence for authorized-admin path?
+- Is refund eligibility real business path or still mocked?
+- After payment failure, is there record, ledger state, support handoff?
+- Can audit material let support, finance, compliance reconstruct afterward?
 
-After the Agent completes the first round, it cannot only report "done." If this round still returns a page, a form, mocked eligibility rules, and main-path tests, it has to return to the visible judgment standard:
+Results get整理成证据桶:
 
-- What did this round actually prove?
-- Is there evidence for the authorized-admin path?
-- Is refund eligibility a real business path, or still mocked rules?
-- After provider failure, is there a record, ledger state, and support handoff?
-- Can support, finance, or compliance reconstruct what happened from the audit material?
-
-This round might then be organized like this:
-
-| Evaluation surface | This round's reality |
+| Evidence Bucket | This Round's Reality |
 | --- | --- |
-| Proven | The page can submit, and main-path tests pass |
-| Weak evidence | Refund eligibility still mainly comes from mocked rules |
-| Unproven | Authorized-admin path, provider failure handling, audit trail |
-| Blocking risk | If unauthorized refund safety is unproven, the run cannot close |
+| Proven | Page can submit, main-path tests pass |
+| Weak evidence | Refund eligibility still mainly from mocked rules |
+| Unproven | Authorized-admin path, payment failure handling, audit trail |
+| Blocking risk | Unauthorized refund path not proven safe, can't close |
+
+Evidence buckets and control signals are一体两面: control signals是人施加的判断动作, evidence buckets是这些动作落在每轮结果上的分类. Human applies "evidence ruling," result lands in "proven" or "weak evidence"; human applies "blocking constraint," result shows "blocking risk."
 
 <p align="center">
   <img src="./assets/diagrams/refund-evidence-loop.en.svg" alt="The refund task in Loopora is pulled into the next round by evidence gaps" width="1000" />
 </p>
 
-When evidence is weak, the next round is not free to continue in any direction, and it should not keep polishing UI or adding more confirmation copy. It gets pulled back to the harder questions: prove authorization first, cover refund eligibility boundaries first, add the provider failure path first, and add audit records plus human handoff first.
+When evidence is insufficient, the next round doesn't freely explore—it gets pulled back to key gaps: authorization proof, refund eligibility boundaries, payment failure path, audit records, human handoff.
 
-Closure also does not promise zero risk. A good conclusion should clearly separate what is proven, which cases remain uncovered, which findings block closure, and which risks can move forward only if visible, owned, and connected to follow-up.
+At closure, we don't追求零风险—we clearly separate: what's proven, what scenarios uncovered, what blocks closure, what risks can carry forward but must be visible and owned.
 
-## 6. What Does This Require From The System?
+## 7. What Tasks Fit Loopora
 
-Human-shaped Loop is not just the name of an essay. It is a minimum bar the system has to meet.
+Loopora doesn't fit every complex task. Complexity isn't the deciding factor—the real factor is whether this judgment needs repeated execution.
 
-- A candidate Loop cannot be only a task summary; it must carry this task's judgment boundary.
-- The Loop structure cannot be only a fixed team template; roles and flow must carry this task's evidence responsibilities, handoff boundaries, and verdict inputs.
-- When judgment is insufficient, the system should ask, review, or refuse to become runnable instead of inventing missing judgment.
-- Once a run starts, each step should inherit these judgments, action boundaries, and evidence gaps.
-- Each round must return to evidence, coverage, handoff material, and gaps instead of retaining only a polished summary.
-- Final pass must depend on supporting evidence; missing required evidence must prevent the task from being packaged as passed.
-- Runtime lifecycle and task meaning must stay separate: the system can finish running while the task remains unproven.
+Engineering流程有成本. Fixing button copy doesn't need design review, release gates, retrospectives; fixing a clear-stacktrace bug usually doesn't either. Heavy流程套在轻任务上只会拖慢工作.
 
-If these conditions are invisible in the product experience, Human-shaped Loop remains a nice phrase instead of a trustworthy runtime boundary.
+But refunds, billing permissions, payment callbacks, data migrations are different. Risk accumulates across rounds, evidence needs retention, completion can't rely only on the implementer's self-report. Design must clarify risks, tests must prove key boundaries, pre-release needs human ruling, failure paths must be traceable.
 
-That is the line between Loopora and an ordinary prompt: a prompt can remind the model; Loopora has to turn the reminder into something the run can ask about, record, and decide from.
+判断顺序如下:
 
-## 7. When Does Loopora Fit?
-
-Loopora is not for every complex task. Complexity is not the deciding factor. Repeated judgment is.
-
-Engineering process has a cost, so it is not spread evenly across every task. Changing button copy does not need design review, release gates, and a retrospective. Fixing a small bug with a clear stack trace usually does not need them either. Heavy process on light work only slows the work down.
-
-Refunds, billing permissions, payment callbacks, and data migration are different. Design has to name the risks, tests have to prove key boundaries, someone has to decide before release, and failure paths have to be traceable. Risk accumulates across rounds, evidence has to be retained, and completion cannot rest only on the implementer's summary.
-
-Ask in this order:
-
-| Gate | If the answer leans yes | If the answer leans no |
+| Gate | If leaning "yes" | If leaning "no" |
 | --- | --- | --- |
-| Is one Agent pass plus one human review enough? | Skip Loopora; direct work is cheaper | Continue |
-| Will later rounds create new evidence? | Continue | Do not open a Loop; it will only create longer narrative |
-| Can the judgment become a stable automated check? | Prefer tests, benchmarks, or proof scripts | Continue |
-| Is fake completion likely? | Loopora is more valuable | Direct Agent work or a simple loop may be enough |
-| Should this judgment survive one chat? | It may deserve a Loop | Direct chat is enough |
+| Is one Agent pass plus one human review enough? | No need for Loopora,直接做更划算 | Keep judging |
+| Will subsequent rounds generate new evidence? | Keep judging | No need for Loop, just拉长叙事 |
+| Can the judgment稳定变成自动检查? | Prefer tests, benchmarks, proof scripts | Keep judging |
+| Is there fake completion risk? | Loopora更值得 | Simple loop or direct Agent可能就够了 |
+| Does this judgment need to超出单次对话? | Worth compiling into Loop | Just chat |
 
-More concrete examples:
+具体例子:
+- **Usually not needed**: Generate 30 campaign themes, fix button error with clear stacktrace,拆边界明确的小函数
+- **Better fit**: Self-service refunds, billing permission refactor, cross-service payment callback loss, brand exploration needing multi-round discovery but avoiding stale patterns
 
-- **Usually skip**: generate 30 campaign ideas, fix a button crash with a clear stack trace, split a small helper with clear boundaries.
-- **Better fit**: self-service refunds, billing permission refactors, intermittent cross-service payment callback loss, brand exploration that must avoid stale patterns across rounds.
-- **Key difference**: not whether the task sounds complex, but whether humans would repeatedly return after key rounds to judge evidence, risk, direction, and closure.
+关键差别不是任务听起来复杂,而是人类是否会在关键轮次后反复回来判断证据、风险、方向和收尾.
 
-## 8. Stronger Models And Trusted Autonomy
+## 8. Can Stronger Models Solve the Judgment Problem?
 
-The model should learn general capability: language, coding, planning, tool use, reasoning patterns, and broad taste. Those abilities should transfer across users and tasks.
+Models should learn general capabilities: language, code, planning, tool use, reasoning patterns, broad aesthetics. These should transfer across users and tasks.
 
-Stronger models will make many tasks easier. They are like more senior engineers: they can notice more risks up front, write a better first plan, and avoid many basic mistakes.
+Stronger models of course make many things simpler—like更资深的工程师, can spot更多风险 upfront, write better first-plan, make fewer basic mistakes.
 
-But nobody cancels code review, tests, release gates, audit trails, and incident retrospectives just because the engineer is senior. That is not distrust of individual ability. Delivery judgment does not live only inside individual ability. Which risks are acceptable, what evidence is sufficient, and when residual risk can ship depend on the specific task, team commitment, and business environment. They have to be explicit enough to be debated and changed.
+But nobody cancels code review, tests, release gates, audit trails, incident retrospectives just because the engineer is资深. This isn't distrust of individual ability—交付判断本来就不只存在于个人能力里. Which risks are acceptable, what evidence counts as sufficient, when residual risk can ship—all depend on具体任务、团队承诺、业务环境, must be explicitly exposed for debate and modification.
 
-This means judgment is not something that can be written once into a model or global memory. It is bound to this task, this set of risks, this team commitment, and this evidence.
+That's why judgment in one task should usually be treated as local, temporary, debatable:
 
-Judgment inside one task should often be local, temporary, and debatable:
+- This refund flow must be conservative, doesn't mean every product task must be.
+- This prototype can accept rough visuals, doesn't mean all prototypes can.
+- This benchmark is credible, doesn't mean all benchmarks are.
+- Accepting this residual risk now, doesn't mean it's a long-term preference.
 
-- this refund flow should be conservative; not every product task should be.
-- this prototype can accept rough visuals; not every prototype can.
-- this benchmark is trusted here; another benchmark may mislead.
-- this residual risk is acceptable now; the same risk may block elsewhere.
+These judgments should be explicit, previewable, editable, exportable, disposable. They fit better in the Loop layer outside the Agent, not silently baked into model weights or long-term memory.
 
-These judgments should be explicit, previewable, editable, exportable, and disposable. They belong in the Loop layer outside the Agent, not silently in model weights or long-term memory.
+> Models learn general capability. Loops learn how this task should be judged.
 
-> The model learns general capability. The Loop learns how this task should be judged.
+## 9. Conclusion: Laziness Comes from Trusted Autonomy
 
-Loopora is not trying to increase the Agent's freedom. It is trying to increase trusted autonomy. Autonomy does not mean running without constraint. It means continuing inside the shape of human judgment.
+Future AI-human collaboration won't evolve only along the "smarter models" line.
 
-That also means autonomy needs boundaries. Loopora should not give the Agent new permissions, bypass the host tool's safety model, or turn a passed task result into final human approval. It can externalize action permissions, evidence gaps, blockers, and residual risk, so the human intervenes less often in routine cycles but more clearly at key decisions.
+Models will keep getting stronger, but complex tasks still need human judgment: what's worth doing, what counts as real completion, is evidence credible, is risk acceptable, when to continue, stop, or pivot.
 
-When judgment, evidence, redirection, and closure have been externalized, humans can truly come back less often. That is Loopora's version of laziness: not sacrificing quality to save effort, but raising trusted autonomy so the same judgment does not have to be repeated by hand.
+This philosophy didn't spring from abstract AI theory. It更像是在学习人类工程管理中那些经验证明有用的东西: reviews, gates, evidence, traces, retrospectives, and天然不信任 of "looks done." Loopora doesn't copy organizational流程—it compresses这些约束 into Agent-executable task structure.
+
+真正的高阶协作,不是每一步都把人拉回,也不是假装人可以完全离开,而是让人类判断力以更合适的时间形态参与任务.
 
 Human-in-the-loop puts humans inside execution.
 
 Human-shaped Loop turns human judgment into prior execution structure.
 
-That is Human-shaped Loop.
+Loopora wants to raise not Agent freedom, but trusted autonomy. Autonomy isn't running without constraint—it's continuing within human judgment structure.
 
-To install and run Loopora, return to the [README](./README.md). The README explains how to use it; this article explains why this layer exists.
+When judgment, evidence, redirect, and closure are all externalized, humans can truly intervene less often. That's Loopora's version of laziness: not sacrificing quality to save effort, but raising trusted autonomy so the same judgment doesn't have to be repeated by hand.
+
+This is Human-shaped Loop.
+
+For installation and running Loopora, return to [README](./README.md). README explains how to use; this article explains why this layer exists.
