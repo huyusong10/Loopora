@@ -274,6 +274,13 @@ def _adjust_blocked_composite_score(composite_score: object, result: dict, block
     return score
 
 
+def _gatekeeper_residual_risk_blocker(code: str, residual_risks: list[str], guidance: str) -> str:
+    detail = "; ".join(residual_risks[:2])
+    if detail:
+        return f"{code}: {detail}. {guidance}"
+    return f"{code}: {guidance}"
+
+
 def _score_value(value: object) -> float | None:
     return structured_optional_finite_number(value)
 
@@ -357,10 +364,20 @@ class ServiceWorkflowSupportMixin:
         residual_risks = _string_list(result.get("residual_risks"))
         residual_risk_policy = str((compiled_spec or {}).get("residual_risk") or "").strip()
         if result["passed"] and residual_risks and residual_risk_policy_disallows_acceptance(residual_risk_policy):
-            blocking_issues.append("gatekeeper_pass_violates_no_residual_risk_policy")
+            guidance = "The run contract disallows accepted residual risk; resolve it or report it as blocking before passing."
+            blocking_issues.append(
+                _gatekeeper_residual_risk_blocker("gatekeeper_pass_violates_no_residual_risk_policy", residual_risks, guidance)
+            )
+            if not feedback:
+                feedback = guidance
             result["passed"] = False
         if result["passed"] and any(residual_risk_is_unmanaged(risk) for risk in residual_risks):
-            blocking_issues.append("gatekeeper_pass_has_unmanaged_residual_risk")
+            guidance = "Move it to blocking_issues, remove it, or name an owner, follow-up, or acceptance path before passing."
+            blocking_issues.append(
+                _gatekeeper_residual_risk_blocker("gatekeeper_pass_has_unmanaged_residual_risk", residual_risks, guidance)
+            )
+            if not feedback:
+                feedback = guidance
             result["passed"] = False
         evidence_refs = _apply_gatekeeper_evidence_gate(
             GatekeeperEvidenceGateState(

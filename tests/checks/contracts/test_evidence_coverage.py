@@ -379,6 +379,188 @@ def test_coverage_downgrades_positive_target_report_without_supporting_evidence(
     assert targets["done_when.check_001"]["evidence_refs"] == ["ev_gatekeeper"]
 
 
+def test_coverage_keeps_blocked_target_when_later_positive_report_lacks_support(tmp_path: Path) -> None:
+    layout = _coverage_layout(tmp_path)
+    _write_ledger(
+        layout.evidence_ledger_path,
+        [
+            {
+                "id": "ev_inspector",
+                "archetype": "inspector",
+                "evidence_kind": "inspection",
+                "result": "blocked",
+                "claim": "Inspector blocked the required target.",
+                "coverage_results": [
+                    {
+                        "target_id": "done_when.check_001",
+                        "status": "blocked",
+                        "evidence_refs": [],
+                        "note": "Direct proof is missing.",
+                    }
+                ],
+            },
+            {
+                "id": "ev_gatekeeper",
+                "archetype": "gatekeeper",
+                "evidence_kind": "verdict",
+                "result": "blocked",
+                "claim": "GateKeeper attempted positive target coverage from blocked evidence.",
+                "measured_evidence": True,
+                "concrete_evidence_claim_count": 1,
+                "coverage_results": [
+                    {
+                        "target_id": "done_when.check_001",
+                        "status": "covered",
+                        "evidence_refs": ["ev_inspector"],
+                        "note": "This ref is not supporting evidence.",
+                    }
+                ],
+            },
+        ],
+    )
+
+    projection = build_evidence_coverage_projection(layout)
+
+    targets = {target["id"]: target for target in projection["targets"]}
+    assert projection["status"] == "blocked"
+    assert targets["done_when.check_001"]["status"] == "blocked"
+    assert targets["done_when.check_001"]["reason"] == "Evidence reported this coverage target as blocked or failed."
+    assert targets["done_when.check_001"]["evidence_refs"] == ["ev_inspector", "ev_gatekeeper"]
+
+
+def test_coverage_result_missing_remains_gap_instead_of_blocker(tmp_path: Path) -> None:
+    layout = _coverage_layout(tmp_path)
+    _write_ledger(
+        layout.evidence_ledger_path,
+        [
+            {
+                "id": "ev_inspector",
+                "archetype": "inspector",
+                "evidence_kind": "inspection",
+                "result": "completed",
+                "claim": "Inspector reported the required target still has no direct proof.",
+                "coverage_results": [
+                    {
+                        "target_id": "done_when.check_001",
+                        "status": "missing",
+                        "evidence_refs": [],
+                        "note": "No current proof covers this target yet.",
+                    }
+                ],
+            },
+        ],
+    )
+
+    projection = build_evidence_coverage_projection(layout)
+
+    targets = {target["id"]: target for target in projection["targets"]}
+    assert projection["status"] == "partial"
+    assert projection["blocked_target_count"] == 0
+    assert targets["done_when.check_001"]["status"] == "missing"
+    assert targets["done_when.check_001"]["reason"] == "Evidence reported this coverage target is still missing."
+    assert targets["done_when.check_001"]["evidence_refs"] == ["ev_inspector"]
+    assert projection["top_gaps"][0]["status"] == "missing"
+
+
+def test_coverage_blocked_target_keeps_blocker_ref_when_it_cites_supporting_evidence(tmp_path: Path) -> None:
+    layout = _coverage_layout(tmp_path)
+    _write_ledger(
+        layout.evidence_ledger_path,
+        [
+            {
+                "id": "ev_supporting_inspector",
+                "archetype": "inspector",
+                "evidence_kind": "inspection",
+                "result": "passed",
+                "claim": "Inspector verified this target before GateKeeper found a blocker.",
+                "verifies": ["target:done_when.check_001:covered"],
+            },
+            {
+                "id": "ev_gatekeeper",
+                "archetype": "gatekeeper",
+                "evidence_kind": "verdict",
+                "result": "blocked",
+                "claim": "GateKeeper blocked the target while citing the relevant upstream evidence.",
+                "coverage_results": [
+                    {
+                        "target_id": "done_when.check_001",
+                        "status": "blocked",
+                        "evidence_refs": ["ev_supporting_inspector"],
+                        "note": "The target still lacks another required proof dimension.",
+                    }
+                ],
+            },
+        ],
+    )
+
+    projection = build_evidence_coverage_projection(layout)
+
+    targets = {target["id"]: target for target in projection["targets"]}
+    assert projection["status"] == "blocked"
+    assert targets["done_when.check_001"]["status"] == "blocked"
+    assert targets["done_when.check_001"]["reason"] == "Evidence reported this coverage target as blocked or failed."
+    assert targets["done_when.check_001"]["evidence_refs"] == ["ev_supporting_inspector", "ev_gatekeeper"]
+    assert projection["top_gaps"][0]["evidence_refs"] == ["ev_supporting_inspector", "ev_gatekeeper"]
+
+
+def test_coverage_replaces_historical_blocked_refs_when_supporting_evidence_covers_target(tmp_path: Path) -> None:
+    layout = _coverage_layout(tmp_path)
+    proof_path = tmp_path / "project" / "proof" / "primary-flow.txt"
+    proof_path.parent.mkdir(parents=True)
+    proof_path.write_text("primary flow proof\n", encoding="utf-8")
+    _write_ledger(
+        layout.evidence_ledger_path,
+        [
+            {
+                "id": "ev_old_block",
+                "archetype": "inspector",
+                "evidence_kind": "inspection",
+                "result": "blocked",
+                "claim": "Previous inspection blocked the target before implementation proof existed.",
+                "coverage_results": [
+                    {
+                        "target_id": "done_when.check_001",
+                        "status": "blocked",
+                        "evidence_refs": [],
+                        "note": "Proof was missing in the first pass.",
+                    }
+                ],
+            },
+            {
+                "id": "ev_builder_proof",
+                "archetype": "builder",
+                "evidence_kind": "implementation",
+                "result": "completed",
+                "claim": "Builder produced current project-owned proof.",
+                "artifact_refs": [
+                    {
+                        "kind": "workspace",
+                        "label": "proof-file:proof/primary-flow.txt",
+                        "relative_path": "proof/primary-flow.txt",
+                        "workspace_path": "proof/primary-flow.txt",
+                        "absolute_path": str(proof_path),
+                    }
+                ],
+                "coverage_results": [
+                    {
+                        "target_id": "done_when.check_001",
+                        "status": "covered",
+                        "evidence_refs": [],
+                        "note": "The current proof covers the primary flow.",
+                    }
+                ],
+            },
+        ],
+    )
+
+    projection = build_evidence_coverage_projection(layout)
+
+    targets = {target["id"]: target for target in projection["targets"]}
+    assert targets["done_when.check_001"]["status"] == "covered"
+    assert targets["done_when.check_001"]["evidence_refs"] == ["ev_builder_proof"]
+    assert targets["done_when.check_001"]["artifact_refs"][0]["label"] == "proof-file:proof/primary-flow.txt"
+
+
 def test_coverage_accepts_gatekeeper_target_report_with_supporting_related_evidence(tmp_path: Path) -> None:
     layout = _coverage_layout(tmp_path)
     proof_path = tmp_path / "project" / "tests" / "evidence" / "proof.json"

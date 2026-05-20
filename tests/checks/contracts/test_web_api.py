@@ -2014,6 +2014,7 @@ def test_api_run_lifecycle_rejects_web_headless_start_for_agent_first_loop(
     assert payload["agent_entry_start"]["host_context_id"] == "web-api-agent-first"
     assert "loopora agent codex run" in payload["agent_entry_start"]["loop_command"]
     assert "--context-id web-api-agent-first" in payload["agent_entry_start"]["loop_command"]
+    assert "--json" in payload["agent_entry_start"]["loop_command"]
     assert len(service.get_loop(started["run"]["loop_id"])["runs"]) == 1
 
 
@@ -2051,6 +2052,7 @@ def test_api_runtime_activity_reports_running_runs(
 
     assert response.status_code == 200
     payload = response.json()
+    assert payload["app_home"]
     assert payload["running_count"] >= 1
     assert payload["has_running_runs"] is True
     assert any(item["id"] == run["id"] and item["loop_name"] == "Runtime Activity Loop" for item in payload["runs"])
@@ -2475,7 +2477,9 @@ def test_run_detail_rerun_routes_agent_first_terminal_run_back_to_slash_command(
     assert "开启下一轮" in page_response.text
     assert "复制续跑命令" in page_response.text
     assert 'data-agent-entry-command-copy' in page_response.text
-    assert 'data-copy-value="LOOPORA_AGENT_ENTRY_SOURCE=codex_project_skill loopora agent codex run' in page_response.text
+    assert 'data-copy-value="' in page_response.text
+    assert "LOOPORA_AGENT_ENTRY_SOURCE=codex_project_skill" in page_response.text
+    assert "loopora agent codex run" in page_response.text
     assert 'data-testid="run-rerun-button"' not in page_response.text
 
     rerun_response = client.post(f"/runs/{started['run']['id']}/rerun")

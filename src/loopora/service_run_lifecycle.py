@@ -23,6 +23,7 @@ from loopora.run_takeaways import (
 from loopora.service_cleanup_diagnostics import best_effort_rmtree, record_cleanup_failure
 from loopora.service_run_finalization import TerminalRunFinalizationRequest
 from loopora.service_types import ACTIVE_RUN_STATUSES, LooporaConflictError, LooporaError, LooporaNotFoundError, TERMINAL_RUN_STATUSES
+from loopora.settings import app_home
 from loopora.structured_numbers import structured_non_negative_int
 
 logger = get_logger(__name__)
@@ -99,6 +100,24 @@ def _current_agent_step_continuation_projection(capsule: dict) -> dict:
     }
 
 
+def _current_agent_step_iteration_repair_projection(capsule: dict) -> dict:
+    repair = _dict(capsule.get("iteration_repair"))
+    if repair.get("active") is not True:
+        return {}
+    return {
+        "active": True,
+        "previous_iteration": structured_non_negative_int(repair.get("previous_iteration")),
+        "source_step_id": _text(repair.get("source_step_id")),
+        "source_role": _text(repair.get("source_role")),
+        "status": _text(repair.get("status")),
+        "summary": _text(repair.get("summary"), limit=600),
+        "blocking_items": _list_of_strings(repair.get("blocking_items"), limit=8),
+        "recommended_next_action": _text(repair.get("recommended_next_action"), limit=600),
+        "evidence_refs": _list_of_strings(repair.get("evidence_refs"), limit=8),
+        "top_gaps": _list_of_dicts(repair.get("top_gaps"), limit=5),
+    }
+
+
 def _current_agent_step_projection(run: dict) -> dict:
     if str(run.get("status") or run.get("run_status") or "") not in ACTIVE_RUN_STATUSES:
         return {}
@@ -124,6 +143,7 @@ def _current_agent_step_projection(run: dict) -> dict:
         "step_id": _text(capsule.get("step_id")),
         "iter": structured_non_negative_int(capsule.get("iter")),
         "step_order": structured_non_negative_int(capsule.get("step_order")),
+        "parallel_group": _text(capsule.get("parallel_group")),
         "claimed_at": _text(active.get("claimed_at")),
         "role": {
             "id": _text(role.get("id")),
@@ -133,11 +153,18 @@ def _current_agent_step_projection(run: dict) -> dict:
             "posture_notes": _text(role.get("posture_notes")),
         },
         "target_agent": _text(dispatch.get("target_agent")),
+        "target_agent_config_path": _text(dispatch.get("target_agent_config_path"), limit=1000),
+        "target_agent_config_absolute_path": _text(dispatch.get("target_agent_config_absolute_path"), limit=2000),
+        "target_agent_config_exists": dispatch.get("target_agent_config_exists") is True,
         "role_dispatch": {
             "target_agent": _text(dispatch.get("target_agent")),
+            "target_agent_config_path": _text(dispatch.get("target_agent_config_path"), limit=1000),
+            "target_agent_config_absolute_path": _text(dispatch.get("target_agent_config_absolute_path"), limit=2000),
+            "target_agent_config_exists": dispatch.get("target_agent_config_exists") is True,
             "inline_allowed": dispatch.get("inline_allowed") is True,
             "dispatch_contract": _text(dispatch.get("dispatch_contract")),
         },
+        "inputs": _dict(capsule.get("inputs")),
         "action_policy": _dict(capsule.get("action_policy")),
         "required_coverage": {
             "status": _text(coverage.get("status")),
@@ -153,6 +180,7 @@ def _current_agent_step_projection(run: dict) -> dict:
             "top_gaps": top_gaps,
         },
         "continuation": _current_agent_step_continuation_projection(capsule),
+        "iteration_repair": _current_agent_step_iteration_repair_projection(capsule),
         "context_path": _text(capsule.get("context_path"), limit=1000),
         "context_absolute_path": _text(capsule.get("context_absolute_path"), limit=2000),
         "capsule_path": _text(capsule.get("capsule_path"), limit=1000),
@@ -162,6 +190,8 @@ def _current_agent_step_projection(run: dict) -> dict:
             "result_file_contract": _text(submit_hint.get("result_file_contract"), limit=1000),
             "result_outbox_dir": _text(submit_hint.get("result_outbox_dir"), limit=1000),
             "result_outbox_absolute_dir": _text(submit_hint.get("result_outbox_absolute_dir"), limit=2000),
+            "result_file_path": _text(submit_hint.get("result_file_path"), limit=1000),
+            "result_file_absolute_path": _text(submit_hint.get("result_file_absolute_path"), limit=2000),
             "result_template_path": _text(submit_hint.get("result_template_path"), limit=1000),
             "result_template_absolute_path": _text(submit_hint.get("result_template_absolute_path"), limit=2000),
         },
@@ -610,6 +640,7 @@ class ServiceRunLifecycleMixin:
                 }
             )
         return {
+            "app_home": str(app_home().resolve()),
             "running_count": running_count,
             "queued_count": queued_count,
             "awaiting_agent_count": awaiting_agent_count,

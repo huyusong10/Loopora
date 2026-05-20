@@ -504,7 +504,8 @@ def test_loop_rejects_gatekeeper_residual_risk_when_contract_disallows_acceptanc
     assert run["status"] == "failed"
     assert run["task_verdict"]["status"] == "failed"
     assert gatekeeper_output["passed"] is False
-    assert gatekeeper_output["blocking_issues"] == ["gatekeeper_pass_violates_no_residual_risk_policy"]
+    assert gatekeeper_output["blocking_issues"][0].startswith("gatekeeper_pass_violates_no_residual_risk_policy:")
+    assert "Manual billing export remains visible as a follow-up owned by Support." in gatekeeper_output["blocking_issues"][0]
     assert gatekeeper_output["residual_risks"] == ["Manual billing export remains visible as a follow-up owned by Support."]
 
 

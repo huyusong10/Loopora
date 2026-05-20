@@ -35,7 +35,7 @@ The headless path remains a first-class automation path and the execution plane 
 
 ## Validation
 
-- `tests/checks/contracts/test_agent_adapters.py` covers `/loopora-plan -> /loopora-run`, READY binding, imported-session handoff, `agent_native` state, dispatch proof, frozen `next_step.judgment_contract`, required coverage, no inline submit, control capsules and CLI behavior that does not spawn a nested worker.
+- The split Agent adapter contract tests cover `/loopora-plan -> /loopora-run`, READY binding, imported-session handoff, `agent_native` state, dispatch proof, frozen `next_step.judgment_contract`, required coverage, no inline submit, control capsules and CLI behavior that does not spawn a nested worker.
 - `tests/checks/contracts/test_runner_artifacts.py` covers the typed StepContextPacket contract that feeds the capsule.
 - `tests/probes/real_environment/run_real_probes.py --suite real-agent` is the release-profile real-host check for managed Agent entries.
 - `tests/probes/real_environment/run_real_probes.py --suite real-cli` keeps the explicit headless/provider CLI boundary covered separately.

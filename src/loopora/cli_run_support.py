@@ -18,6 +18,9 @@ from loopora.run_takeaways import build_judgment_contract
 from loopora.service import LooporaError
 from loopora.utils import utc_now
 
+PASSING_TASK_VERDICT_STATUSES = {"passed", "passed_with_residual_risk"}
+TASK_VERDICT_BUCKET_KEYS = ("proven", "weak", "unproven", "blocking", "residual_risk")
+
 
 def print_loop_created(loop: dict) -> None:
     typer.echo(f"loop: {loop['id']}")
@@ -232,7 +235,7 @@ def _cli_coverage_targets(judgment_contract: dict) -> list[str]:
             continue
         suffix = " (required)" if item.get("required") is True else ""
         targets.append(f"{target_id}{suffix}")
-    return targets[:8]
+    return targets
 
 
 def _clip_cli_text(text: str, limit: int) -> str:
@@ -245,21 +248,54 @@ def print_task_verdict(task_verdict: object) -> None:
     if not isinstance(task_verdict, dict) or not task_verdict:
         typer.echo("task_verdict: not_evaluated")
         return
-    typer.echo(f"task_verdict: {task_verdict.get('status', 'not_evaluated')}")
+    status = str(task_verdict.get("status") or "not_evaluated")
+    typer.echo(f"task_verdict: {status}")
     if task_verdict.get("source"):
         typer.echo(f"task_verdict_source: {task_verdict['source']}")
     if task_verdict.get("summary"):
         typer.echo(f"task_verdict_summary: {task_verdict['summary']}")
     buckets = task_verdict.get("buckets") if isinstance(task_verdict.get("buckets"), dict) else {}
     if buckets:
-        bucket_counts = [
-            f"proven {len(buckets.get('proven') or [])}",
-            f"weak {len(buckets.get('weak') or [])}",
-            f"unproven {len(buckets.get('unproven') or [])}",
-            f"blocking {len(buckets.get('blocking') or [])}",
-            f"residual_risk {len(buckets.get('residual_risk') or [])}",
-        ]
+        counts = _task_verdict_bucket_counts(buckets)
+        bucket_counts = [f"{bucket} {counts[bucket]}" for bucket in TASK_VERDICT_BUCKET_KEYS]
         typer.echo(f"task_verdict_buckets: {' / '.join(bucket_counts)}")
+        _print_task_verdict_pass_basis(status, buckets, counts)
+
+
+def _task_verdict_bucket_counts(buckets: dict) -> dict[str, int]:
+    return {bucket: len(buckets.get(bucket) or []) for bucket in TASK_VERDICT_BUCKET_KEYS}
+
+
+def _print_task_verdict_pass_basis(status: str, buckets: dict, counts: dict[str, int]) -> None:
+    if status not in PASSING_TASK_VERDICT_STATUSES:
+        return
+    proven_required, total_required, open_required = _required_bucket_counts(buckets)
+    if total_required:
+        basis_bits = [f"{proven_required}/{total_required} required targets proven"]
+        if counts["blocking"] == 0:
+            basis_bits.append("blocking 0")
+        else:
+            basis_bits.append(f"blocking {counts['blocking']}")
+        if open_required:
+            basis_bits.append(f"{open_required} required open")
+        typer.echo(f"task_verdict_required_basis: {'; '.join(basis_bits)}")
+    if counts["blocking"] == 0 and open_required == 0 and any(counts[bucket] for bucket in ("weak", "unproven", "residual_risk")):
+        typer.echo(
+            "task_verdict_bucket_note: passing verdict kept non-blocking weak/unproven/residual buckets "
+            "for audit or accepted follow-up; required coverage and GateKeeper support still passed"
+        )
+
+
+def _required_bucket_counts(buckets: dict) -> tuple[int, int, int]:
+    proven_required = _required_item_count(buckets.get("proven"))
+    open_required = sum(_required_item_count(buckets.get(bucket)) for bucket in ("weak", "unproven", "blocking"))
+    return proven_required, proven_required + open_required, open_required
+
+
+def _required_item_count(items: object) -> int:
+    if not isinstance(items, list):
+        return 0
+    return sum(1 for item in items if isinstance(item, dict) and item.get("required") is True)
 
 
 def background_worker_command(run_id: str) -> list[str]:

@@ -176,7 +176,10 @@ def test_task_verdict_distinguishes_gatekeeper_pass_with_residual_risk(tmp_path:
                 {"id": "done_when.check_001", "label": "Required proof", "status": "covered", "required": True},
                 {"id": "gatekeeper.finish", "label": "GateKeeper finish", "status": "covered", "required": True},
             ],
-            "risk_signals": ["Manual billing export remains a visible follow-up."],
+            "risk_signals": [
+                "Earlier GateKeeper blocker was resolved by the next Builder pass.",
+                "Manual billing export remains a visible follow-up.",
+            ],
             "latest_gatekeeper": {
                 "id": "ev_gatekeeper",
                 "result": "passed",
@@ -200,6 +203,44 @@ def test_task_verdict_distinguishes_gatekeeper_pass_with_residual_risk(tmp_path:
     assert task_verdict["source"] == "gatekeeper"
     assert task_verdict["summary"] == "GateKeeper passed with a named follow-up risk."
     assert [item["label"] for item in task_verdict["buckets"]["residual_risk"]] == ["Manual billing export remains a visible follow-up."]
+
+
+def test_task_verdict_omits_historical_risks_after_clean_gatekeeper_pass(tmp_path: Path) -> None:
+    run_dir = tmp_path / "run_superseded_residual_risk"
+    _write_coverage(
+        run_dir,
+        {
+            "summary": {"reason": "Required and advisory coverage targets have supporting evidence."},
+            "targets": [
+                {"id": "done_when.check_001", "label": "Required proof", "status": "covered", "required": True},
+                {"id": "gatekeeper.finish", "label": "GateKeeper finish", "status": "covered", "required": True},
+            ],
+            "risk_signals": [
+                "Admin presentation remains for downstream inspection rather than this Builder pass.",
+                "Blocking: rollback/replay/audit preservation remains unproven and must be owned by the next Builder pass.",
+            ],
+            "latest_gatekeeper": {
+                "id": "ev_gatekeeper",
+                "result": "passed",
+                "residual_risk": "No blocking residual risk was reported by GateKeeper.",
+            },
+        },
+    )
+
+    task_verdict = build_task_verdict(
+        {
+            "status": "succeeded",
+            "last_verdict_json": {
+                "passed": True,
+                "decision_summary": "GateKeeper accepted the current evidence.",
+            },
+        },
+        run_dir=run_dir,
+    )
+
+    assert task_verdict["status"] == "passed"
+    assert task_verdict["buckets"]["weak"] == []
+    assert task_verdict["buckets"]["residual_risk"] == []
 
 
 def test_task_verdict_projects_raw_gatekeeper_residual_risks_into_bucket(tmp_path: Path) -> None:
@@ -525,7 +566,7 @@ def test_task_verdict_drops_non_string_raw_verdict_list_items(tmp_path: Path) ->
     assert [item["label"] for item in failed_verdict["buckets"]["blocking"]] == ["real_blocker"]
 
 
-def test_task_verdict_keeps_pass_when_only_historical_residual_risk_exists(tmp_path: Path) -> None:
+def test_task_verdict_hides_superseded_historical_residual_risk_after_gatekeeper_pass(tmp_path: Path) -> None:
     run_dir = tmp_path / "run_historical_residual_risk"
     _write_coverage(
         run_dir,
@@ -557,9 +598,7 @@ def test_task_verdict_keeps_pass_when_only_historical_residual_risk_exists(tmp_p
 
     assert task_verdict["status"] == "passed"
     assert task_verdict["source"] == "gatekeeper"
-    assert [item["label"] for item in task_verdict["buckets"]["weak"]] == [
-        "Earlier blocked iteration named a risk that is no longer part of the final pass."
-    ]
+    assert task_verdict["buckets"]["weak"] == []
     assert task_verdict["buckets"]["residual_risk"] == []
 
 

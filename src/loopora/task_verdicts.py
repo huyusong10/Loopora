@@ -149,7 +149,7 @@ def _build_buckets(coverage: Mapping[str, Any], verdict: Mapping[str, Any], comp
     residual_risk_acceptance_allowed = not residual_risk_policy_disallows_acceptance(compiled_spec.get("residual_risk"))
     _append_coverage_target_buckets(buckets, coverage.get("targets"))
     _append_verdict_blockers(buckets, verdict)
-    _append_residual_risk_buckets(buckets, coverage.get("risk_signals"), acceptance_allowed=residual_risk_acceptance_allowed)
+    _append_residual_risk_buckets(buckets, _coverage_risk_signals_for_buckets(coverage, verdict), acceptance_allowed=residual_risk_acceptance_allowed)
     _append_verdict_residual_risk_buckets(buckets, verdict, acceptance_allowed=residual_risk_acceptance_allowed)
     if not any(buckets.values()):
         _append_legacy_evidence_buckets(buckets, verdict)
@@ -204,6 +204,16 @@ def _append_residual_risk_buckets(buckets: dict[str, list[dict]], risk_signals: 
                     "managed": False,
                 }
             )
+
+
+def _coverage_risk_signals_for_buckets(coverage: Mapping[str, Any], verdict: Mapping[str, Any]) -> list[str]:
+    raw_verdict_risks = {_clean_text(risk, max_length=240) for risk in _verdict_residual_risk_texts(verdict)}
+    latest_gatekeeper = coverage.get("latest_gatekeeper")
+    if isinstance(latest_gatekeeper, Mapping) and str(latest_gatekeeper.get("result") or "").strip().lower() == "passed":
+        risks = _string_list(latest_gatekeeper.get("residual_risk"))
+    else:
+        risks = _strict_string_list(coverage.get("risk_signals"))
+    return [risk for risk in risks if _clean_text(risk, max_length=240) not in raw_verdict_risks]
 
 
 def _append_verdict_residual_risk_buckets(buckets: dict[str, list[dict]], verdict: Mapping[str, Any], *, acceptance_allowed: bool) -> None:

@@ -4,8 +4,10 @@ from pathlib import Path
 
 from loopora.context_flow import (
     IterationSummaryContext,
+    StepEvidenceEntryRequest,
     StepResultContext,
     build_iteration_summary,
+    build_step_evidence_entry,
     build_step_handoff,
     render_handoff_list_section,
     render_previous_iteration_summary,
@@ -93,6 +95,67 @@ def test_completed_handoff_list_keeps_blocking_items_for_downstream_roles() -> N
     assert "next=Run the authorization proof before GateKeeper." in rendered
 
 
+def test_builder_abandoned_note_is_residual_risk_not_blocking_item(tmp_path: Path) -> None:
+    layout = RunArtifactLayout(tmp_path / "run")
+    layout.initialize()
+    result = StepResultContext(
+        layout=layout,
+        iter_id=0,
+        step={"id": "builder_step"},
+        step_order=0,
+        role={"id": "builder", "name": "Builder", "archetype": "builder"},
+        runtime_role="generator",
+        output={
+            "attempted": "Built the focused starter slice.",
+            "abandoned": "Did not broaden the sandbox into a full application.",
+            "assumption": "Inspect the starter check output before GateKeeper.",
+            "summary": "Starter flow now has a project-owned check.",
+            "changed_files": [],
+            "proof_files": [],
+            "proof_artifacts": [],
+            "artifact_paths": [],
+        },
+    )
+
+    handoff = build_step_handoff(result)
+    evidence = build_step_evidence_entry(StepEvidenceEntryRequest(result=result, handoff=handoff))
+
+    assert handoff["status"] == "completed"
+    assert handoff["blocking_items"] == []
+    assert "Out-of-scope or unfinished note: Did not broaden the sandbox into a full application." in handoff["summary"]
+    assert evidence["residual_risk"] == "Did not broaden the sandbox into a full application."
+
+
+def test_inspector_handoff_deduplicates_failed_items_and_check_results(tmp_path: Path) -> None:
+    layout = RunArtifactLayout(tmp_path / "run")
+    layout.initialize()
+    handoff = build_step_handoff(
+        StepResultContext(
+            layout=layout,
+            iter_id=0,
+            step={"id": "contract_inspection_step"},
+            step_order=1,
+            role={"id": "contract_inspector", "name": "Contract Inspector", "archetype": "inspector"},
+            runtime_role="contract_inspector",
+            output={
+                "tester_observations": "Primary-flow proof is still weak.",
+                "failed_items": [
+                    {"id": "contract.primary_flow", "title": "Primary flow evidence"},
+                    {"id": "contract.project_evidence", "title": "Project-owned evidence"},
+                ],
+                "check_results": [
+                    {"id": "contract.primary_flow", "title": "Primary flow evidence", "status": "failed"},
+                    {"id": "contract.project_evidence", "title": "Project-owned evidence", "status": "failed"},
+                ],
+                "dynamic_checks": [],
+            },
+        )
+    )
+
+    assert handoff["status"] == "blocked"
+    assert handoff["blocking_items"] == ["Primary flow evidence", "Project-owned evidence"]
+
+
 def test_gatekeeper_handoff_projects_blocking_issues_and_hard_constraints(tmp_path: Path) -> None:
     layout = RunArtifactLayout(tmp_path / "run")
     layout.initialize()
@@ -125,6 +188,72 @@ def test_gatekeeper_handoff_projects_blocking_issues_and_hard_constraints(tmp_pa
         "Payment failure path has no traceable handoff.",
     ]
     assert handoff["recommended_next_action"] == "Produce direct primary-flow proof before asking for closure."
+
+
+def test_gatekeeper_pass_handoff_does_not_report_blocking_next_action(tmp_path: Path) -> None:
+    layout = RunArtifactLayout(tmp_path / "run")
+    layout.initialize()
+
+    handoff = build_step_handoff(
+        StepResultContext(
+            layout=layout,
+            iter_id=0,
+            step={"id": "gatekeeper_step"},
+            step_order=2,
+            role={"id": "gatekeeper", "name": "GateKeeper", "archetype": "gatekeeper"},
+            runtime_role="gatekeeper",
+            output={
+                "passed": True,
+                "decision_summary": "Required evidence passed.",
+                "feedback_to_builder": "",
+                "feedback_to_generator": "",
+                "blocking_issues": [],
+                "hard_constraint_violations": [],
+                "failed_check_ids": [],
+                "priority_failures": [],
+            },
+        )
+    )
+
+    assert handoff["status"] == "passed"
+    assert handoff["blocking_items"] == []
+    assert handoff["recommended_next_action"] == "No further role action is required; the GateKeeper verdict passed."
+
+
+def test_step_evidence_entry_deduplicates_related_and_coverage_refs(tmp_path: Path) -> None:
+    layout = RunArtifactLayout(tmp_path / "run")
+    layout.initialize()
+    result = StepResultContext(
+        layout=layout,
+        iter_id=0,
+        step={"id": "gatekeeper_step"},
+        step_order=3,
+        role={"id": "gatekeeper", "name": "GateKeeper", "archetype": "gatekeeper"},
+        runtime_role="gatekeeper",
+        output={
+            "passed": False,
+            "decision_summary": "Known evidence still blocks the task.",
+            "evidence_refs": ["ev_builder", "ev_inspector", "ev_builder", "ev_000_03_gatekeeper_step"],
+            "coverage_results": [
+                {
+                    "target_id": "done_when.check_001",
+                    "status": "blocked",
+                    "evidence_refs": ["ev_inspector", "ev_builder", "ev_inspector"],
+                    "note": "The primary flow is still blocked.",
+                }
+            ],
+        },
+    )
+
+    entry = build_step_evidence_entry(
+        StepEvidenceEntryRequest(
+            result=result,
+            handoff={"status": "blocked", "summary": "GateKeeper blocked the task.", "artifact_refs": []},
+        )
+    )
+
+    assert entry["related_evidence_ids"] == ["ev_builder", "ev_inspector"]
+    assert entry["coverage_results"][0]["evidence_refs"] == ["ev_inspector", "ev_builder"]
 
 
 def test_gatekeeper_output_rejects_unknown_coverage_result_evidence_refs() -> None:
@@ -525,7 +654,9 @@ def test_gatekeeper_output_rejects_unmanaged_residual_risk_on_pass() -> None:
     assert output["passed"] is False
     assert output["composite_score"] == 0.89
     assert output["evidence_gate_status"] == "blocked"
-    assert output["blocking_issues"] == ["gatekeeper_pass_has_unmanaged_residual_risk"]
+    assert output["blocking_issues"][0].startswith("gatekeeper_pass_has_unmanaged_residual_risk:")
+    assert "Some residual risk remains." in output["blocking_issues"][0]
+    assert "owner, follow-up, or acceptance path" in output["feedback_to_builder"]
     assert output["residual_risks"] == ["Some residual risk remains."]
 
 
@@ -557,7 +688,8 @@ def test_gatekeeper_output_rejects_manual_visible_residual_risk_without_manageme
     assert output["passed"] is False
     assert output["composite_score"] == 0.89
     assert output["evidence_gate_status"] == "blocked"
-    assert output["blocking_issues"] == ["gatekeeper_pass_has_unmanaged_residual_risk"]
+    assert output["blocking_issues"][0].startswith("gatekeeper_pass_has_unmanaged_residual_risk:")
+    assert "Ownerless manual billing export remains visible." in output["blocking_issues"][0]
     assert output["residual_risks"] == ["Ownerless manual billing export remains visible."]
 
 
@@ -590,7 +722,8 @@ def test_gatekeeper_output_rejects_residual_risk_when_contract_disallows_accepta
     assert output["passed"] is False
     assert output["composite_score"] == 0.89
     assert output["evidence_gate_status"] == "blocked"
-    assert output["blocking_issues"] == ["gatekeeper_pass_violates_no_residual_risk_policy"]
+    assert output["blocking_issues"][0].startswith("gatekeeper_pass_violates_no_residual_risk_policy:")
+    assert "Manual billing export remains visible as a follow-up owned by Support." in output["blocking_issues"][0]
     assert output["residual_risks"] == ["Manual billing export remains visible as a follow-up owned by Support."]
 
 
@@ -621,7 +754,8 @@ def test_gatekeeper_output_rejects_negated_residual_risk_with_exception_on_pass(
 
     assert output["passed"] is False
     assert output["evidence_gate_status"] == "blocked"
-    assert output["blocking_issues"] == ["gatekeeper_pass_has_unmanaged_residual_risk"]
+    assert output["blocking_issues"][0].startswith("gatekeeper_pass_has_unmanaged_residual_risk:")
+    assert "No blocking residual risk except untested billing export." in output["blocking_issues"][0]
     assert output["residual_risks"] == ["No blocking residual risk except untested billing export."]
 
 

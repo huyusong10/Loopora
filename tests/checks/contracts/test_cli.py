@@ -117,6 +117,95 @@ def _assert_documented_cli_entries_available(documented_adapters: list[set[str]]
     )
 
 
+def _assert_plan_slash_shell_recovery(runner: CliRunner) -> None:
+    plan_result = runner.invoke(cli.app, ["/loopora-plan"])
+    assert plan_result.exit_code == 2
+    assert "No such command" not in plan_result.output
+    assert "slash_command_recovery: /loopora-plan is an Agent slash command, not a shell subcommand." in plan_result.stdout
+    assert 'loopora init codex --workdir "$PWD"' in plan_result.stdout
+    assert 'loopora init codex --workdir "$PWD" --check' in plan_result.stdout
+    assert "refresh or restart that Agent" in plan_result.stdout
+    assert "return to that Agent" in plan_result.stdout
+    assert "first_task_message_example:" in plan_result.stdout
+    assert "Goal:" in plan_result.stdout
+    assert "Fake-done risks:" in plan_result.stdout
+    assert "Required evidence:" in plan_result.stdout
+
+    plan_help_result = runner.invoke(cli.app, ["/loopora-plan", "--help"])
+    assert plan_help_result.exit_code == 0
+    assert "Usage: " not in plan_help_result.stdout
+    assert "slash_command_recovery: /loopora-plan is an Agent slash command, not a shell subcommand." in plan_help_result.stdout
+    assert "debug_cli: loopora agent codex plan" in plan_help_result.stdout
+
+    plan_without_slash_result = runner.invoke(cli.app, ["loopora-plan"])
+    assert plan_without_slash_result.exit_code == 2
+    assert "No such command" not in plan_without_slash_result.output
+    assert "slash_command_recovery: /loopora-plan is an Agent slash command, not a shell subcommand." in plan_without_slash_result.stdout
+
+    plan_json_result = runner.invoke(cli.app, ["/loopora-plan", "--json"])
+    assert plan_json_result.exit_code == 2
+    plan_payload = json.loads(plan_json_result.stdout)
+    assert next(iter(plan_payload)) == "slash_command_recovery_summary"
+    assert plan_payload["slash_command_recovery_summary"]["slash_command_recovery"] == "agent_slash_command_in_shell"
+    assert plan_payload["slash_command"] == "/loopora-plan"
+    assert plan_payload["agent_command"] is True
+    assert plan_payload["shell_subcommand"] is False
+    assert plan_payload["first_task_message_example"].startswith("After /loopora-plan, send: Goal:")
+    assert "loopora agent codex plan" in plan_payload["debug_cli"]
+
+
+def _assert_run_slash_shell_recovery(runner: CliRunner) -> None:
+    run_result = runner.invoke(cli.app, ["/loopora-run"])
+    assert run_result.exit_code == 2
+    assert "No such command" not in run_result.output
+    assert "slash_command_recovery: /loopora-run is an Agent slash command, not a shell subcommand." in run_result.stdout
+    assert 'loopora init codex --workdir "$PWD" --check' in run_result.stdout
+    assert "same Agent session" in run_result.stdout
+    assert 'loopora agent codex run --workdir "$PWD"' in run_result.stdout
+
+    run_help_result = runner.invoke(cli.app, ["/loopora-run", "--help"])
+    assert run_help_result.exit_code == 0
+    assert "Usage: " not in run_help_result.stdout
+    assert "slash_command_recovery: /loopora-run is an Agent slash command, not a shell subcommand." in run_help_result.stdout
+    assert 'loopora agent codex run --workdir "$PWD"' in run_help_result.stdout
+
+    run_without_slash_result = runner.invoke(cli.app, ["loopora-run"])
+    assert run_without_slash_result.exit_code == 2
+    assert "No such command" not in run_without_slash_result.output
+    assert "slash_command_recovery: /loopora-run is an Agent slash command, not a shell subcommand." in run_without_slash_result.stdout
+
+    run_json_result = runner.invoke(cli.app, ["loopora-run", "--json"])
+    assert run_json_result.exit_code == 2
+    run_payload = json.loads(run_json_result.stdout)
+    assert next(iter(run_payload)) == "slash_command_recovery_summary"
+    assert run_payload["slash_command_recovery_summary"]["slash_command_recovery"] == "agent_slash_command_in_shell"
+    assert run_payload["slash_command"] == "/loopora-run"
+    assert run_payload["next_step"].startswith("run /loopora-run inside the same Agent session")
+    assert "loopora agent codex run" in run_payload["debug_cli"]
+
+
+def _assert_next_slash_shell_recovery(runner: CliRunner) -> None:
+    next_result = runner.invoke(cli.app, ["/next"])
+    assert next_result.exit_code == 2
+    assert "No such command" not in next_result.output
+    assert "Loopora does not install a top-level /next slash command" in next_result.stdout
+    assert "use /loopora-run inside the Agent" in next_result.stdout
+    assert 'loopora agent codex next --workdir "$PWD" --run-id <run_id>' in next_result.stdout
+
+    next_json_result = runner.invoke(cli.app, ["/next", "--json"])
+    assert next_json_result.exit_code == 2
+    next_payload = json.loads(next_json_result.stdout)
+    assert next_payload["slash_command_recovery"] == "unsupported_loopora_slash_command"
+    assert next_payload["slash_command"] == "/next"
+
+
+def test_cli_recovers_when_agent_slash_command_is_typed_in_shell() -> None:
+    runner = CliRunner()
+    _assert_plan_slash_shell_recovery(runner)
+    _assert_run_slash_shell_recovery(runner)
+    _assert_next_slash_shell_recovery(runner)
+
+
 def test_cli_package_exposes_loopora_console_script() -> None:
     console_scripts = {
         entry_point.name: entry_point.value
@@ -299,6 +388,38 @@ def test_cli_run_result_separates_run_status_and_task_verdict(capsys, tmp_path: 
     assert "task_verdict_summary: The run ended, but evidence is still too thin." in output
 
 
+def test_cli_run_result_explains_passing_verdict_audit_buckets(capsys, tmp_path: Path) -> None:
+    print_run_result(
+        {
+            "id": "run_passed_with_audit_buckets",
+            "status": "succeeded",
+            "run_status": "succeeded",
+            "runs_dir": str(tmp_path / "runs" / "run_passed_with_audit_buckets"),
+            "task_verdict": {
+                "status": "passed",
+                "source": "gatekeeper",
+                "summary": "Required evidence passed.",
+                "buckets": {
+                    "proven": [{"id": "done_when.check_001", "label": "Required proof", "required": True}],
+                    "weak": [{"label": "Earlier weak evidence remains visible."}],
+                    "unproven": [{"id": "fake_done.risk_001", "label": "Advisory fake-done risk", "required": False}],
+                    "blocking": [],
+                    "residual_risk": [{"label": "Tracked follow-up.", "managed": True}],
+                },
+            },
+        }
+    )
+
+    output = capsys.readouterr().out
+    assert "task_verdict: passed" in output
+    assert "task_verdict_buckets: proven 1 / weak 1 / unproven 1 / blocking 0 / residual_risk 1" in output
+    assert "task_verdict_required_basis: 1/1 required targets proven; blocking 0" in output
+    assert (
+        "task_verdict_bucket_note: passing verdict kept non-blocking weak/unproven/residual buckets "
+        "for audit or accepted follow-up; required coverage and GateKeeper support still passed"
+    ) in output
+
+
 def test_cli_run_result_prints_not_evaluated_when_task_verdict_is_missing(capsys, tmp_path: Path) -> None:
     print_run_result(
         {
@@ -351,6 +472,13 @@ def test_cli_run_result_prints_frozen_judgment_contract_summary(capsys, tmp_path
                     "checks": [{"id": "check_001"}, {"id": "check_002"}],
                     "coverage_targets": [
                         {"id": "done_when.check_001", "required": True},
+                        {"id": "done_when.check_002", "required": True},
+                        {"id": "success_surface.surface_001", "required": False},
+                        {"id": "fake_done.risk_001", "required": False},
+                        {"id": "fake_done.risk_002", "required": False},
+                        {"id": "evidence_preference.pref_001", "required": False},
+                        {"id": "evidence_preference.pref_002", "required": False},
+                        {"id": "evidence_preference.pref_003", "required": False},
                         {"id": "gatekeeper.finish", "required": True},
                     ],
                 },
@@ -383,6 +511,7 @@ def test_cli_run_result_prints_frozen_judgment_contract_summary(capsys, tmp_path
     assert "workflow_collaboration_intent: Builder evidence feeds Inspector review before GateKeeper closure." in output
     assert "check_count: 2" in output
     _assert_cli_list(output, "coverage_targets", "done_when.check_001 (required)", "gatekeeper.finish (required)")
+    assert "evidence_preference.pref_003" in output
     _assert_cli_list(output, "loop_fit_reasons", "Future rounds keep proof alive.")
     _assert_cli_list(output, "judgment_tradeoffs", "Proof beats speed when closure is uncertain.")
     _assert_cli_list(

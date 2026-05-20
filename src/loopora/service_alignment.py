@@ -15,7 +15,7 @@ from loopora.alignment_semantics import (
     semantic_antipattern_match_is_negated,
     text_mentions_loop_fit_contradiction,
 )
-from loopora.agent_adapters import agent_loop_command, read_agent_binding
+from loopora.agent_adapters import agent_loop_command, agent_loop_json_command, read_agent_binding
 from loopora.alignment_guidance import load_alignment_guidance_assets
 from loopora.branding import APP_STATE_DIRNAME, state_dir_for_workdir
 from loopora.bundles import (
@@ -50,6 +50,7 @@ logger = get_logger(__name__)
 
 ALIGNMENT_ACTIVE_STATUSES = {"running", "validating", "repairing"}
 ALIGNMENT_CONFIRMED_STAGES = {"confirmed", "compiling", "ready_review"}
+PASSING_TASK_VERDICT_STATUSES = frozenset({"passed", "passed_with_residual_risk"})
 ALIGNMENT_READINESS_KEYS = [
     "loop_fit",
     "task_scope",
@@ -3521,7 +3522,12 @@ class ServiceAlignmentMixin(ServiceAlignmentLegacyMixin):
         entry_source = str(payload.get("entry_source") or "").strip()
         host_context_id = str(payload.get("host_context_id") or "").strip()
         workdir = str(session.get("workdir") or "").strip()
-        loop_command = agent_loop_command(adapter, workdir, entry_source=entry_source, context_id=host_context_id)
+        loop_command = agent_loop_json_command(
+            adapter,
+            workdir,
+            entry_source=entry_source,
+            context_id=host_context_id,
+        )
         ready_event = self._alignment_session_agent_entry_ready_event(session_id)
         ready_payload = ready_event.get("payload") if isinstance(ready_event.get("payload"), dict) else {}
         ready_sha = str(ready_payload.get("ready_candidate_sha256") or payload.get("ready_candidate_sha256") or "").strip()
@@ -4608,6 +4614,7 @@ class ServiceAlignmentMixin(ServiceAlignmentLegacyMixin):
                 "action": "choose_recoverable_context",
                 "confidence": "single_recoverable" if len(choices) == 1 else "ambiguous",
                 "requires_user_choice": True,
+                **self._agent_run_context_choice_summary(choices),
                 "choices": choices,
                 "message": "Choose a recoverable Loopora run context before /loopora-run starts.",
             }
@@ -4688,24 +4695,75 @@ class ServiceAlignmentMixin(ServiceAlignmentLegacyMixin):
                 seen.add(option_id)
         return self._bounded_alignment_context_options(choices)
 
+    @staticmethod
+    def _agent_run_context_choice_summary(choices: list[dict]) -> dict[str, object]:
+        runnable_count = sum(1 for choice in choices if isinstance(choice, dict) and choice.get("runnable") is not False)
+        total_count = len([choice for choice in choices if isinstance(choice, dict)])
+        non_runnable_count = max(0, total_count - runnable_count)
+        if runnable_count == 0:
+            selection_hint = "no runnable contexts are available; return to /loopora-plan or Web review for the listed previews."
+        elif runnable_count == 1 and non_runnable_count:
+            selection_hint = "one runnable context is available; non-runnable contexts need plan repair or Web review before they can run."
+        elif runnable_count == 1:
+            selection_hint = "one runnable context is available; select its option_id to continue."
+        else:
+            selection_hint = (
+                f"{runnable_count} runnable contexts are available; choose the exact option_id for the active, READY, "
+                "or terminal context you mean; non-runnable contexts need plan repair or Web review."
+            )
+        return {
+            "choice_count": total_count,
+            "runnable_choice_count": runnable_count,
+            "non_runnable_choice_count": non_runnable_count,
+            "selection_hint": selection_hint,
+        }
+
     def _agent_run_context_choice_from_session(self, session: dict, *, adapter: str, payload: dict | None = None) -> dict:
         session_id = str(session.get("id") or "").strip()
         linked_run_id = str(session.get("linked_run_id") or "").strip()
         option_id = self._alignment_source_option_id("agent_run", session_id)
         entry_source = str((payload or {}).get("entry_source") or "")
         linked_run_status = ""
+        task_verdict_status = ""
+        task_verdict_summary = ""
         next_action = "start_ready_preview"
         if linked_run_id:
             try:
                 run = self.get_run(linked_run_id)
                 linked_run_status = str(run.get("status") or "")
-                next_action = "replay_terminal_run" if linked_run_status in TERMINAL_RUN_STATUSES else "resume_active_run"
+                task_verdict = self._agent_run_context_task_verdict(run)
+                task_verdict_status = str(task_verdict.get("status") or "")
+                task_verdict_summary = str(task_verdict.get("summary") or "")
+                if linked_run_status in TERMINAL_RUN_STATUSES:
+                    next_action = (
+                        "replay_terminal_pass"
+                        if task_verdict_status in PASSING_TASK_VERDICT_STATUSES
+                        else "continue_terminal_evidence"
+                    )
+                else:
+                    next_action = "resume_active_run"
             except LooporaError:
                 next_action = "stale_linked_run"
+        elif str(session.get("status") or "") == "failed":
+            next_action = "repair_failed_preview"
         elif str(session.get("status") or "") not in {"ready", "imported"}:
             next_action = "preview_not_ready"
         title = self._alignment_context_title_from_session(session)
-        return {
+        choice_status, choice_hint_en, choice_hint_zh = self._agent_run_context_choice_hint(next_action)
+        runnable = next_action not in {"preview_not_ready", "repair_failed_preview", "stale_linked_run"}
+        next_slash_command = f"/loopora-run option:{option_id}" if runnable else ""
+        next_cli_command = (
+            agent_loop_command(
+                adapter,
+                str(session.get("workdir") or "."),
+                entry_source=entry_source,
+                source_option_id=option_id,
+            )
+            if runnable and adapter
+            else ""
+        )
+        preview_path = f"/loops/new/bundle?alignment_session_id={session_id}" if session_id else ""
+        choice = {
             "option_id": option_id,
             "action": next_action,
             "source_type": "agent_entry",
@@ -4714,23 +4772,134 @@ class ServiceAlignmentMixin(ServiceAlignmentLegacyMixin):
             "alignment_status": str(session.get("status") or ""),
             "linked_run_id": linked_run_id,
             "linked_run_status": linked_run_status,
+            "task_verdict_status": task_verdict_status,
+            "task_verdict_summary": task_verdict_summary,
+            "choice_status": choice_status,
+            "choice_hint_en": choice_hint_en,
+            "choice_hint_zh": choice_hint_zh,
+            "runnable": runnable,
+            "next_plan_command": "" if runnable else "/loopora-plan",
             "updated_at": session.get("updated_at", ""),
             "entry_source": entry_source,
             "host_context_id": str((payload or {}).get("host_context_id") or ""),
-            "next_command": f"/loopora-run option:{option_id}",
-            "agent_cli_command": agent_loop_command(
-                adapter,
-                str(session.get("workdir") or "."),
-                entry_source=entry_source,
-                source_option_id=option_id,
-            )
-            if adapter
-            else "",
-            "label_zh": f"恢复 Agent 运行：{title}",
-            "label_en": f"Resume Agent run: {title}",
+            "preview_path": preview_path,
+            "next_command": next_slash_command,
+            "next_slash_command": next_slash_command,
+            "next_cli_command": next_cli_command,
+            "agent_cli_command": next_cli_command,
+            "label_zh": f"{self._agent_run_context_choice_label_prefix_zh(next_action)}：{title}",
+            "label_en": f"{self._agent_run_context_choice_label_prefix_en(next_action)}: {title}",
             "description_zh": "回到这个 Agent Native Loop 的现有运行或 READY 预览；不会重新规划。",
             "description_en": "Return to this Agent Native Loop's existing run or READY preview without replanning.",
         }
+        if next_action == "repair_failed_preview":
+            choice.update(self._agent_failed_preview_choice_repair_fields(session, payload=payload))
+        elif next_action == "preview_not_ready":
+            choice["next_review_step"] = "open the preview, complete Web review or rerun /loopora-plan, then use /loopora-run only after it is ready"
+        return choice
+
+    def _agent_failed_preview_choice_repair_fields(self, session: dict, *, payload: dict | None = None) -> dict:
+        session_id = str(session.get("id") or "").strip()
+        validation = session.get("validation") if isinstance(session.get("validation"), dict) else {}
+        failed_event = self._alignment_session_bundle_sync_failed_event(session_id)
+        failed_payload = failed_event.get("payload") if isinstance(failed_event.get("payload"), dict) else {}
+        validation_error = str(validation.get("error") or session.get("error_message") or failed_payload.get("error") or "").strip()
+        source_path = str((payload or {}).get("source_path") or "").strip()
+        preview_plan_copy = str(session.get("bundle_path") or validation.get("bundle_path") or failed_payload.get("bundle_path") or "").strip()
+        summary = {
+            "validation_error": validation_error,
+            "plan_file_to_repair": source_path or preview_plan_copy,
+            "preview_plan_copy": preview_plan_copy,
+            "next_repair_step": "repair the candidate plan file, rerun /loopora-plan, then use /loopora-run only after the preview is ready",
+        }
+        return {key: value for key, value in summary.items() if value not in ("", [], {})}
+
+    def _alignment_session_bundle_sync_failed_event(self, session_id: str) -> dict:
+        failed_events = [
+            event
+            for event in self.repository.list_alignment_events(session_id, limit=50)
+            if event.get("event_type") == "alignment_bundle_sync_failed" and isinstance(event.get("payload"), dict)
+        ]
+        return failed_events[-1] if failed_events else {}
+
+    @staticmethod
+    def _agent_run_context_task_verdict(run: dict) -> dict:
+        verdict = run.get("task_verdict") if isinstance(run.get("task_verdict"), dict) else run.get("task_verdict_json")
+        return verdict if isinstance(verdict, dict) else {}
+
+    @staticmethod
+    def _agent_run_context_choice_label_prefix_en(action: str) -> str:
+        labels = {
+            "resume_active_run": "Resume Agent run",
+            "start_ready_preview": "Start READY preview",
+            "replay_terminal_pass": "Replay terminal run",
+            "continue_terminal_evidence": "Continue evidence from terminal run",
+            "preview_not_ready": "Review unfinished preview",
+            "repair_failed_preview": "Repair Agent plan",
+            "stale_linked_run": "Repair missing run link",
+        }
+        return labels.get(action, "Recover Agent context")
+
+    @staticmethod
+    def _agent_run_context_choice_label_prefix_zh(action: str) -> str:
+        labels = {
+            "resume_active_run": "恢复 Agent 运行",
+            "start_ready_preview": "启动 READY 预览",
+            "replay_terminal_pass": "回放已结束运行",
+            "continue_terminal_evidence": "从已结束运行继续补证据",
+            "preview_not_ready": "检查未完成预览",
+            "repair_failed_preview": "修复 Agent 方案",
+            "stale_linked_run": "修复缺失运行关联",
+        }
+        return labels.get(action, "恢复 Agent 上下文")
+
+    @staticmethod
+    def _agent_run_context_choice_hint(action: str) -> tuple[str, str, str]:
+        hints = {
+            "resume_active_run": (
+                "active_run",
+                "Continue the in-progress run; choose this if work was interrupted mid-task.",
+                "继续一个进行中的 run；如果任务中途被打断，选这个。",
+            ),
+            "start_ready_preview": (
+                "ready_preview",
+                "Start this READY preview as a run; choose this if it is the plan you just reviewed.",
+                "把这个 READY 预览启动为 run；如果这是你刚确认的方案，选这个。",
+            ),
+            "replay_terminal_pass": (
+                "terminal_passed",
+                "Replay a terminal run whose task verdict already passed; no new Agent work starts unless the task scope changes.",
+                "回放一个任务裁决已通过的已结束 run；除非任务范围变化，否则不会启动新的 Agent 工作。",
+            ),
+            "continue_terminal_evidence": (
+                "terminal_unproven",
+                "Continue from a terminal run whose task verdict is not proven; selecting this starts the next evidence pass.",
+                "从任务裁决未证明的已结束 run 继续；选择它会启动下一轮补证据。",
+            ),
+            "preview_not_ready": (
+                "not_ready",
+                "Not runnable yet; return to /loopora-plan or Web review before selecting it.",
+                "还不能运行；先回到 /loopora-plan 或 Web review。",
+            ),
+            "repair_failed_preview": (
+                "needs_repair",
+                "Candidate plan failed validation; repair it with /loopora-plan before selecting it.",
+                "候选方案校验失败；选它之前先用 /loopora-plan 修复。",
+            ),
+            "stale_linked_run": (
+                "stale",
+                "Linked run is missing; use Web review or /loopora-plan before continuing.",
+                "关联 run 已缺失；继续前请使用 Web review 或 /loopora-plan。",
+            ),
+        }
+        return hints.get(
+            action,
+            (
+                "recoverable",
+                "Recover this Loopora context without replanning.",
+                "恢复这个 Loopora 上下文，不重新规划。",
+            ),
+        )
 
     @staticmethod
     def _redact_agent_context_binding(binding: dict) -> dict:
@@ -4886,8 +5055,15 @@ class ServiceAlignmentMixin(ServiceAlignmentLegacyMixin):
                 continue
             content = redact_sensitive_text(str(entry.get("content", "") or "").strip())
             if content:
-                return content[:80]
+                return ServiceAlignmentMixin._alignment_context_title_preview(content)
         return str(session.get("id") or "alignment session")
+
+    @staticmethod
+    def _alignment_context_title_preview(content: str, *, limit: int = 80) -> str:
+        text = " ".join(str(content or "").split()).strip()
+        if len(text) <= limit:
+            return text
+        return text[: max(0, limit - 3)].rstrip() + "..."
 
     @classmethod
     def _alignment_session_context_options(cls, session: dict) -> list[dict]:

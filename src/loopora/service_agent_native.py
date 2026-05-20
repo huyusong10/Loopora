@@ -1,16 +1,38 @@
 from __future__ import annotations
 
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
+import fcntl
 from pathlib import Path
-import shlex
 from typing import Any
 
 from loopora.agent_adapters import normalize_agent_adapter_kind, read_agent_binding
 from loopora.context_flow import evidence_entry_id
 from loopora.recovery import RetryConfig
-from loopora.run_artifacts import INITIAL_STAGNATION_STATE, read_jsonl
+from loopora.run_artifacts import INITIAL_STAGNATION_STATE, RunArtifactLayout, read_jsonl
 from loopora.run_takeaways import build_judgment_contract
+from loopora.service_agent_native_contracts import (
+    AGENT_NATIVE_WORKSPACE_ARTIFACT_FIELDS,
+    _agent_native_actionable_blocking_item,
+    _agent_native_actionable_repair_next_action,
+    _agent_native_compact_known_evidence_refs,
+    _agent_native_current_gap_repair_next_action,
+    _agent_native_output_coverage_results,
+    _agent_native_previous_blocked_handoff,
+    _agent_native_repair_blockers_still_current,
+    _agent_native_result_artifact_stem,
+    _agent_native_result_scaffold_from_schema,
+    _agent_native_role_posture_list,
+    _agent_native_schema_validation_issues,
+    _agent_native_string_list,
+    _agent_native_submit_command,
+    _agent_native_submit_hint_with_scoped_result_paths,
+    _agent_native_template_coverage_targets,
+    _agent_native_unknown_coverage_target_ids,
+    _agent_native_unknown_evidence_refs,
+)
 from loopora.service_types import ACTIVE_RUN_STATUSES, LooporaConflictError, LooporaError, LooporaNotFoundError, TERMINAL_RUN_STATUSES, normalize_completion_mode
 from loopora.service_workflow_execution import (
     _WorkflowIterationState,
@@ -100,201 +122,27 @@ class _AgentNativeStepAdvanceRequest:
     is_control_step: bool
 
 
-def _agent_native_string_list(value: object) -> list[str]:
-    if isinstance(value, str):
-        return [value.strip()] if value.strip() else []
-    if not isinstance(value, list):
-        return []
-    return [str(item).strip() for item in value if str(item).strip()]
+@dataclass(frozen=True)
+class _AgentNativeSubmittedStepResultRequest:
+    layout: RunArtifactLayout
+    iter_id: int
+    step: dict[str, Any]
+    step_order: int
+    role: dict[str, Any]
+    runtime_role: str
+    normalized_output: dict[str, Any]
+    handoff: dict[str, Any]
 
 
-def _agent_native_submit_command(*, adapter: str, run_id: str, step_id: str, entry_source: str = "") -> str:
-    bits = [
-        "loopora",
-        "agent",
-        adapter,
-        "submit",
-        "--workdir",
-        '"$PWD"',
-        "--run-id",
-        shlex.quote(run_id),
-        "--step-id",
-        shlex.quote(step_id),
-        "--result-file",
-        "<result-json>",
-    ]
-    normalized_entry_source = str(entry_source or "").strip()
-    if normalized_entry_source:
-        bits.extend(["--entry-source", shlex.quote(normalized_entry_source)])
-    command = " ".join(bits)
-    if normalized_entry_source:
-        command = f"LOOPORA_AGENT_ENTRY_SOURCE={shlex.quote(normalized_entry_source)} {command}"
-    return command
-
-
-def _agent_native_role_posture_list(value: object) -> list[str]:
-    if not isinstance(value, list):
-        return []
-    postures: list[str] = []
-    for item in value:
-        if isinstance(item, dict):
-            posture = str(item.get("posture_notes") or "").strip()
-            if not posture:
-                continue
-            role_name = str(item.get("role_name") or item.get("name") or "").strip()
-            archetype = str(item.get("archetype") or "").strip()
-            label = role_name or archetype
-            if label and archetype and archetype not in label.lower():
-                label = f"{label} ({archetype})"
-            postures.append(f"{label}: {posture}" if label else posture)
-            continue
-        text = str(item or "").strip()
-        if text:
-            postures.append(text)
-    return postures
-
-
-def _agent_native_output_evidence_refs(output: dict[str, Any]) -> list[str]:
-    refs: list[str] = []
-    refs.extend(_agent_native_string_list(output.get("evidence_refs")))
-    for item in list(output.get("coverage_results") or []):
-        if isinstance(item, dict):
-            refs.extend(_agent_native_string_list(item.get("evidence_refs")))
-    return list(dict.fromkeys(refs))
-
-
-def _agent_native_known_evidence_ids(active: dict, context_packet: dict) -> set[str]:
-    capsule = active.get("capsule") if isinstance(active.get("capsule"), dict) else {}
-    if isinstance(capsule.get("known_evidence_ids"), list):
-        return set(_agent_native_string_list(capsule.get("known_evidence_ids")))
-    evidence = context_packet.get("evidence") if isinstance(context_packet.get("evidence"), dict) else {}
-    return set(_agent_native_string_list(evidence.get("known_ids")))
-
-
-def _agent_native_unknown_evidence_refs(output: dict[str, Any], *, active: dict, context_packet: dict) -> list[str]:
-    known_ids = _agent_native_known_evidence_ids(active, context_packet)
-    return [item for item in _agent_native_output_evidence_refs(output) if item not in known_ids]
-
-
-def _agent_native_output_coverage_target_ids(output: dict[str, Any]) -> list[str]:
-    target_ids: list[str] = []
-    for item in list(output.get("coverage_results") or []):
-        if not isinstance(item, dict):
-            continue
-        target_id = str(item.get("target_id") or "").strip()
-        if target_id:
-            target_ids.append(target_id)
-    return list(dict.fromkeys(target_ids))
-
-
-def _agent_native_capsule_coverage_target_ids(active: dict[str, Any]) -> set[str]:
-    capsule = active.get("capsule") if isinstance(active.get("capsule"), dict) else {}
-    judgment_contract = capsule.get("judgment_contract") if isinstance(capsule.get("judgment_contract"), dict) else {}
-    target_ids: set[str] = set()
-    for item in list(judgment_contract.get("coverage_targets") or []):
-        if not isinstance(item, dict):
-            continue
-        target_id = str(item.get("id") or item.get("target_id") or "").strip()
-        if target_id:
-            target_ids.add(target_id)
-    return target_ids
-
-
-def _agent_native_unknown_coverage_target_ids(output: dict[str, Any], *, active: dict[str, Any]) -> list[str]:
-    known_target_ids = _agent_native_capsule_coverage_target_ids(active)
-    return [target_id for target_id in _agent_native_output_coverage_target_ids(output) if target_id not in known_target_ids]
-
-
-AGENT_NATIVE_WORKSPACE_ARTIFACT_FIELDS = ("changed_files", "generated_files", "proof_files", "proof_artifacts", "artifact_paths")
-
-
-def _agent_native_schema_type_name(value: object) -> str:
-    typed_names = (
-        (bool, "boolean"),
-        (dict, "object"),
-        (list, "array"),
-        (str, "string"),
-        (int, "integer"),
-        (float, "number"),
-    )
-    if value is None:
-        return "null"
-    for value_type, type_name in typed_names:
-        if isinstance(value, value_type):
-            return type_name
-    return type(value).__name__
-
-
-def _agent_native_schema_value_matches_type(value: object, expected_type: str) -> bool:
-    validators = {
-        "object": lambda item: isinstance(item, dict),
-        "array": lambda item: isinstance(item, list),
-        "string": lambda item: isinstance(item, str),
-        "boolean": lambda item: isinstance(item, bool),
-        "integer": lambda item: isinstance(item, int) and not isinstance(item, bool),
-        "number": lambda item: isinstance(item, (int, float)) and not isinstance(item, bool),
-    }
-    validator = validators.get(expected_type)
-    return True if validator is None else bool(validator(value))
-
-
-def _agent_native_schema_object_issues(value: dict, schema: dict[str, Any], *, path: str) -> list[str]:
-    issues: list[str] = []
-    properties = schema.get("properties") if isinstance(schema.get("properties"), dict) else {}
-    required = [str(item) for item in list(schema.get("required") or []) if str(item)]
-    missing = [field for field in required if field not in value]
-    issues.extend(f"{path}.{field} is required" for field in missing)
-    if schema.get("additionalProperties") is False:
-        extra_fields = sorted(str(field) for field in value if str(field) not in properties)
-        issues.extend(f"{path}.{field} is not allowed by output_schema" for field in extra_fields)
-    for field, field_schema in properties.items():
-        if field in value:
-            issues.extend(_agent_native_schema_validation_issues(value[field], field_schema, path=f"{path}.{field}"))
-    return issues
-
-
-def _agent_native_schema_array_issues(value: list, schema: dict[str, Any], *, path: str) -> list[str]:
-    item_schema = schema.get("items")
-    if not isinstance(item_schema, dict):
-        return []
-    issues: list[str] = []
-    for index, item in enumerate(value):
-        issues.extend(_agent_native_schema_validation_issues(item, item_schema, path=f"{path}[{index}]"))
-    return issues
-
-
-def _agent_native_schema_validation_issues(value: object, schema: object, *, path: str = "$") -> list[str]:
-    if not isinstance(schema, dict):
-        return []
-    issues: list[str] = []
-    expected_type = str(schema.get("type") or "").strip()
-    if expected_type and not _agent_native_schema_value_matches_type(value, expected_type):
-        return [f"{path} expected {expected_type}, got {_agent_native_schema_type_name(value)}"]
-    enum_values = schema.get("enum")
-    if isinstance(enum_values, list) and value not in enum_values:
-        issues.append(f"{path} must be one of {enum_values!r}")
-    if expected_type == "object" and isinstance(value, dict):
-        issues.extend(_agent_native_schema_object_issues(value, schema, path=path))
-    elif expected_type == "array" and isinstance(value, list):
-        issues.extend(_agent_native_schema_array_issues(value, schema, path=path))
-    return issues
-
-
-def _agent_native_result_scaffold_from_schema(schema: object) -> object:
-    if not isinstance(schema, dict):
-        return None
-    expected_type = str(schema.get("type") or "").strip()
-    if expected_type == "object":
-        properties = schema.get("properties") if isinstance(schema.get("properties"), dict) else {}
-        property_schemas = {str(field): field_schema for field, field_schema in properties.items()}
-        required = [str(item) for item in list(schema.get("required") or []) if str(item)]
-        ordered_fields = list(dict.fromkeys(required))
-        ordered_fields.extend(field for field in property_schemas if field not in ordered_fields)
-        return {field: _agent_native_result_scaffold_from_schema(property_schemas.get(field)) for field in ordered_fields}
-    if expected_type == "array":
-        item_schema = schema.get("items")
-        return [_agent_native_result_scaffold_from_schema(item_schema)] if isinstance(item_schema, dict) else [None]
-    return None
+@dataclass(frozen=True)
+class _AgentNativeSubmitResponseRequest:
+    kind: str
+    run: dict[str, Any]
+    state: dict[str, Any]
+    layout: RunArtifactLayout
+    finish_result: dict[str, Any] | None
+    submitted_step: dict[str, Any]
+    entry_source: str
 
 
 class ServiceAgentNativeMixin:
@@ -318,9 +166,16 @@ class ServiceAgentNativeMixin:
         task_verdict = run.get("task_verdict") if isinstance(run.get("task_verdict"), dict) else run.get("task_verdict_json")
         task_verdict = task_verdict if isinstance(task_verdict, dict) else {}
         status = str(task_verdict.get("status") or "").strip() or "not_evaluated"
-        if status in {"passed", "passed_with_residual_risk"}:
-            return {}
         summary = str(task_verdict.get("summary") or "").strip()
+        if status in {"passed", "passed_with_residual_risk"}:
+            return {
+                "kind": "already_passed",
+                "reason": "task_verdict_passed",
+                "run_status": run_status,
+                "task_verdict_status": status,
+                "task_verdict_summary": summary,
+                "guidance": "Task verdict already passed; no new evidence pass will start unless the task scope changes.",
+            }
         return {
             "kind": "continue_evidence",
             "reason": "run_lifecycle_complete_task_not_proven",
@@ -411,6 +266,12 @@ class ServiceAgentNativeMixin:
             self._write_agent_native_state(layout, state)
         active = state.get("active_step") if isinstance(state.get("active_step"), dict) else {}
         if active and active.get("capsule"):
+            refreshed_context_packet = self._agent_native_context_packet_with_latest_coverage(
+                layout,
+                active.get("context_packet"),
+            )
+            if refreshed_context_packet != active.get("context_packet"):
+                active["context_packet"] = refreshed_context_packet
             capsule = self._agent_native_capsule_with_judgment_contract(
                 run,
                 active["capsule"],
@@ -420,6 +281,7 @@ class ServiceAgentNativeMixin:
                 active["capsule"] = capsule
                 state["active_step"] = active
                 self._write_agent_native_state(layout, state)
+            self._write_agent_native_step_contract_files(capsule)
             return self._with_agent_native_judgment_contract(
                 {
                     "adapter": kind,
@@ -515,7 +377,9 @@ class ServiceAgentNativeMixin:
             runtime_role=runtime_role,
             prompt=str(prepared["prompt"]),
             output_schema=role_request.output_schema,
-            known_evidence_ids=[str(item) for item in list(evidence_context.get("known_ids") or []) if str(item).strip()],
+            known_evidence_ids=list(
+                dict.fromkeys(str(item) for item in list(evidence_context.get("known_ids") or []) if str(item).strip())
+            ),
             context_packet=context_packet,
             entry_source=request.entry_source,
         )
@@ -737,6 +601,18 @@ class ServiceAgentNativeMixin:
         output = request.output
 
         layout = self._run_artifact_layout(Path(run["runs_dir"]))
+        with self._agent_native_submit_lock(layout):
+            return self._submit_agent_native_step_locked(request, kind=kind, run=run, layout=layout, output=output)
+
+    def _submit_agent_native_step_locked(
+        self,
+        request: AgentNativeStepSubmitRequest,
+        *,
+        kind: str,
+        run: dict[str, Any],
+        layout: RunArtifactLayout,
+        output: dict[str, Any],
+    ) -> dict[str, Any]:
         state = self._agent_native_state(layout, adapter=kind, run=run)
         active = state.get("active_step") if isinstance(state.get("active_step"), dict) else {}
         if not active:
@@ -748,6 +624,10 @@ class ServiceAgentNativeMixin:
 
         iter_id = int(active.get("iter_id") or state.get("iter_id") or 0)
         step_order = int(active.get("step_order") or state.get("step_index") or 0)
+        if self._agent_native_step_already_submitted(layout, iter_id=iter_id, step_order=step_order, step_id=step_id):
+            raise LooporaConflictError(
+                "agent-native step was already submitted; rerun agent next --json if the run advanced or this result file is stale"
+            )
 
         context = self._agent_native_run_context(run, state)
         iteration = self._agent_native_iteration_state(state)
@@ -801,6 +681,18 @@ class ServiceAgentNativeMixin:
             "iter_id": iter_id,
         }
         finish_result = self._commit_workflow_step_result(context, iteration, result)
+        submitted_step = self._agent_native_submitted_step_result(
+            _AgentNativeSubmittedStepResultRequest(
+                layout=layout,
+                iter_id=iter_id,
+                step=step,
+                step_order=step_order,
+                role=role,
+                runtime_role=runtime_role,
+                normalized_output=normalized_output,
+                handoff=iteration.current_handoffs[-1] if iteration.current_handoffs else {},
+            )
+        )
         is_control_step = self._agent_native_record_control_completion(run, result)
         self.append_run_event(
             run["id"],
@@ -834,26 +726,87 @@ class ServiceAgentNativeMixin:
             )
         )
         self._write_agent_native_state(layout, state)
-        if finish_result is not None:
-            state["status"] = "complete"
-            self._write_agent_native_state(layout, state)
-            self.repository.release_run_slot(run["id"])
+        return self._agent_native_submit_response(
+            _AgentNativeSubmitResponseRequest(
+                kind=kind,
+                run=run,
+                state=state,
+                layout=layout,
+                finish_result=finish_result,
+                submitted_step=submitted_step,
+                entry_source=str(request.entry_source or "").strip(),
+            )
+        )
+
+    def _agent_native_submit_response(self, request: _AgentNativeSubmitResponseRequest) -> dict[str, Any]:
+        if request.finish_result is not None:
+            request.state["status"] = "complete"
+            self._write_agent_native_state(request.layout, request.state)
+            self.repository.release_run_slot(request.run["id"])
             return self._with_agent_native_judgment_contract(
                 {
-                    "adapter": kind,
-                    "run": finish_result,
-                    "run_path": f"/runs/{run['id']}",
+                    "adapter": request.kind,
+                    "run": request.finish_result,
+                    "run_path": f"/runs/{request.run['id']}",
                     "next_step": None,
                     "complete": True,
+                    "submitted_step": request.submitted_step,
                 }
             )
-        return self.claim_agent_native_step(
+        next_result = self.claim_agent_native_step(
             AgentNativeStepClaimRequest(
-                adapter=kind,
-                run_id=run["id"],
+                adapter=request.kind,
+                run_id=request.run["id"],
                 entry_source=request.entry_source,
             )
         )
+        next_result["submitted_step"] = request.submitted_step
+        return next_result
+
+    def _agent_native_submitted_step_result(
+        self,
+        request: _AgentNativeSubmittedStepResultRequest,
+    ) -> dict[str, Any]:
+        step_id = str(request.step.get("id") or "").strip()
+        evidence_refs = [str(item) for item in list(request.handoff.get("evidence_refs") or []) if str(item).strip()]
+        if not evidence_refs and step_id:
+            evidence_refs = [evidence_entry_id(request.iter_id, request.step_order, step_id)]
+        handoff_path = request.layout.step_handoff_path(request.iter_id, request.step_order, step_id)
+        blocking_items = [str(item).strip() for item in list(request.handoff.get("blocking_items") or []) if str(item).strip()]
+        actionable_blocking_items = [_agent_native_actionable_blocking_item(item) for item in blocking_items]
+        recommended_next_action = _agent_native_actionable_repair_next_action(
+            str(request.handoff.get("recommended_next_action") or "").strip(),
+            actionable_blocking_items,
+        )
+        submitted_step = {
+            "iter": request.iter_id,
+            "step_id": step_id,
+            "step_order": request.step_order,
+            "role": {
+                "id": str(request.role.get("id") or ""),
+                "name": str(request.role.get("name") or ""),
+                "archetype": str(request.role.get("archetype") or ""),
+            },
+            "runtime_role": request.runtime_role,
+            "status": str(
+                request.handoff.get("status") or request.normalized_output.get("status") or request.normalized_output.get("mode") or "completed"
+            ),
+            "summary": str(
+                request.handoff.get("summary")
+                or request.normalized_output.get("summary")
+                or request.normalized_output.get("decision_summary")
+                or ""
+            ).strip(),
+            "evidence_refs": evidence_refs,
+            "blocking_items": actionable_blocking_items,
+            "recommended_next_action": recommended_next_action,
+            "handoff_path": request.layout.relative(handoff_path),
+            "handoff_absolute_path": str(handoff_path.resolve()),
+        }
+        coverage_results = _agent_native_output_coverage_results(request.normalized_output)
+        if coverage_results:
+            submitted_step["coverage_results"] = coverage_results
+        return submitted_step
 
     def _agent_native_advance_state_after_submit(self, request: _AgentNativeStepAdvanceRequest) -> None:
         if request.is_control_step:
@@ -1328,6 +1281,27 @@ class ServiceAgentNativeMixin:
     def _agent_native_state_path(layout) -> Path:
         return layout.run_dir / "agent_native" / "state.json"
 
+    @contextmanager
+    def _agent_native_submit_lock(self, layout) -> Iterator[None]:
+        # Agent submits can arrive from separate CLI processes; evidence/state writes must be single-accept.
+        lock_path = self._agent_native_submit_lock_path(layout)
+        lock_path.parent.mkdir(parents=True, exist_ok=True)
+        with lock_path.open("a+", encoding="utf-8") as handle:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+            try:
+                yield
+            finally:
+                fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+
+    @staticmethod
+    def _agent_native_submit_lock_path(layout) -> Path:
+        return layout.run_dir / "agent_native" / "submit.lock"
+
+    @staticmethod
+    def _agent_native_step_already_submitted(layout, *, iter_id: int, step_order: int, step_id: str) -> bool:
+        existing_id = evidence_entry_id(iter_id, step_order, step_id)
+        return any(str(item.get("id") or "").strip() == existing_id for item in read_jsonl(layout.evidence_ledger_path))
+
     def _agent_native_capsule(  # noqa: PLR0913 - capsule fields are the public step contract projection.
         self,
         adapter: str,
@@ -1349,15 +1323,28 @@ class ServiceAgentNativeMixin:
         capsule_path = layout.step_capsule_path(iter_id, step_order, step["id"])
         output_path = layout.step_output_raw_path(iter_id, step_order, step["id"])
         result_outbox_dir = layout.workdir_path / ".loopora" / "agent_outbox" / adapter
-        result_template_path = result_outbox_dir / f"{run['id']}__{step['id']}.result.template.json"
+        result_artifact_stem = _agent_native_result_artifact_stem(
+            run_id=str(run["id"]),
+            iter_id=iter_id,
+            step_order=step_order,
+            step_id=str(step["id"]),
+        )
+        result_template_path = result_outbox_dir / f"{result_artifact_stem}.result.template.json"
+        result_file_path = result_outbox_dir / f"{result_artifact_stem}.result.json"
         if known_evidence_ids is None:
-            known_evidence_ids = [
-                str(item.get("id"))
-                for item in read_jsonl(layout.evidence_ledger_path)
-                if isinstance(item, dict) and str(item.get("id") or "").strip()
-            ]
+            known_evidence_ids = list(
+                dict.fromkeys(
+                    str(item.get("id"))
+                    for item in read_jsonl(layout.evidence_ledger_path)
+                    if isinstance(item, dict) and str(item.get("id") or "").strip()
+                )
+            )
+        else:
+            known_evidence_ids = list(dict.fromkeys(str(item) for item in known_evidence_ids if str(item).strip()))
         normalized_entry_source = str(entry_source or "").strip()
         target_agent = self._agent_native_target_agent(role["archetype"])
+        target_agent_config_path = self._agent_native_target_agent_config_path(adapter, target_agent)
+        target_agent_config_absolute_path = str((layout.workdir_path / target_agent_config_path).resolve()) if target_agent_config_path else ""
         return {
             "execution_plane": "agent_native",
             "adapter": adapter,
@@ -1380,16 +1367,21 @@ class ServiceAgentNativeMixin:
                 "required": True,
                 "dispatch_contract": "host_native_subagent",
                 "target_agent": target_agent,
+                "target_agent_config_path": target_agent_config_path,
+                "target_agent_config_absolute_path": target_agent_config_absolute_path,
+                "target_agent_config_exists": Path(target_agent_config_absolute_path).exists() if target_agent_config_absolute_path else False,
                 "target_role_archetype": role["archetype"],
                 "inline_allowed": False,
                 "proof_field": "loopora_host_dispatch",
                 "result_field": "result",
                 "accepted_dispatch_modes": ["host_subagent", "host_task", "host_agent"],
             },
+            "inputs": dict(step.get("inputs") or {}) if isinstance(step.get("inputs"), dict) else {},
             "action_policy": dict(step.get("action_policy") or {}),
             "required_coverage": self._agent_native_required_coverage(context_packet),
             "judgment_contract": self._agent_native_capsule_judgment_contract(run, context_packet),
             "continuation": self._agent_native_capsule_continuation_context(context_packet),
+            "iteration_repair": self._agent_native_capsule_iteration_repair_context(context_packet),
             "prompt": prompt,
             "output_schema": output_schema,
             "evidence_rules": self._agent_native_evidence_rules(role["archetype"]),
@@ -1409,14 +1401,19 @@ class ServiceAgentNativeMixin:
                     run_id=str(run["id"]),
                     step_id=str(step["id"]),
                     entry_source=normalized_entry_source,
+                    result_file=str(result_file_path.resolve()),
                 ),
                 "result_file_contract": "Write one wrapper JSON object with loopora_host_dispatch and a schema-shaped result; replace null placeholders before submit.",
                 "result_outbox_dir": layout.workspace_relative(result_outbox_dir),
                 "result_outbox_absolute_dir": str(result_outbox_dir.resolve()),
+                "result_file_path": layout.workspace_relative(result_file_path),
+                "result_file_absolute_path": str(result_file_path.resolve()),
                 "result_template_path": layout.workspace_relative(result_template_path),
                 "result_template_absolute_path": str(result_template_path.resolve()),
             },
             "known_evidence_ids": known_evidence_ids,
+            "known_evidence_refs": _agent_native_compact_known_evidence_refs(known_evidence_ids, context_packet),
+            "known_evidence_count": len(known_evidence_ids),
         }
 
     def _write_agent_native_step_contract_files(self, capsule: dict[str, Any]) -> None:
@@ -1438,37 +1435,63 @@ class ServiceAgentNativeMixin:
         dispatch = capsule.get("role_dispatch") if isinstance(capsule.get("role_dispatch"), dict) else {}
         target_agent = str(dispatch.get("target_agent") or "").strip()
         output_schema = dict(capsule.get("output_schema") or {}) if isinstance(capsule.get("output_schema"), dict) else {}
+        coverage_targets = _agent_native_template_coverage_targets(capsule)
+        iteration_repair = dict(capsule.get("iteration_repair") or {}) if isinstance(capsule.get("iteration_repair"), dict) else {}
+        submit_hint = capsule.get("submit_hint") if isinstance(capsule.get("submit_hint"), dict) else {}
+        result_contract = {
+            "ignored_on_submit": True,
+            "result_must_match_output_schema": True,
+            "result_is_schema_shaped_scaffold": True,
+            "result_scaffold_uses_null_placeholders": True,
+            "replace_null_placeholders_before_submit": True,
+            "remove_optional_placeholders_if_unused": True,
+            "array_placeholders_show_item_shape": True,
+            "step_id": str(capsule.get("step_id") or ""),
+            "role": dict(capsule.get("role") or {}) if isinstance(capsule.get("role"), dict) else {},
+            "action_policy": dict(capsule.get("action_policy") or {}) if isinstance(capsule.get("action_policy"), dict) else {},
+            "required_coverage": dict(capsule.get("required_coverage") or {}) if isinstance(capsule.get("required_coverage"), dict) else {},
+            "coverage_target_ids": [str(item["id"]) for item in coverage_targets],
+            "coverage_targets": coverage_targets,
+            "known_evidence_ids": list(
+                dict.fromkeys(str(item) for item in list(capsule.get("known_evidence_ids") or []) if isinstance(item, str))
+            ),
+            "known_evidence_refs": [
+                dict(item) for item in list(capsule.get("known_evidence_refs") or []) if isinstance(item, dict)
+            ],
+            "evidence_ref_contract": dict(capsule.get("evidence_ref_contract") or {})
+            if isinstance(capsule.get("evidence_ref_contract"), dict)
+            else {},
+            "evidence_rules": [dict(item) for item in list(capsule.get("evidence_rules") or []) if isinstance(item, dict)],
+            "output_schema": output_schema,
+        }
+        result_file_to_write = str(submit_hint.get("result_file_absolute_path") or submit_hint.get("result_file_path") or "").strip()
+        if result_file_to_write:
+            result_contract["result_file_to_write"] = result_file_to_write
+        submit_command = str(submit_hint.get("command") or "").strip()
+        if submit_command:
+            result_contract["submit_command"] = submit_command
+        result_template_path = str(
+            submit_hint.get("result_template_absolute_path") or submit_hint.get("result_template_path") or ""
+        ).strip()
+        if result_template_path:
+            result_contract["result_template_path"] = result_template_path
+        if iteration_repair.get("active") is True:
+            result_contract["iteration_repair"] = iteration_repair
         return {
             "loopora_host_dispatch": {
                 "schema_version": 1,
                 "adapter": str(capsule.get("adapter") or ""),
                 "run_id": str(capsule.get("run_id") or ""),
+                "iter": structured_non_negative_int(capsule.get("iter")),
                 "step_id": str(capsule.get("step_id") or ""),
+                "step_order": structured_non_negative_int(capsule.get("step_order")),
                 "target_agent": target_agent,
                 "actual_agent": target_agent,
                 "dispatch_mode": "host_subagent",
                 "inline": False,
                 "attestation": "The host invoked the named Loopora role agent for this step.",
             },
-            "loopora_result_contract": {
-                "ignored_on_submit": True,
-                "result_must_match_output_schema": True,
-                "result_is_schema_shaped_scaffold": True,
-                "result_scaffold_uses_null_placeholders": True,
-                "replace_null_placeholders_before_submit": True,
-                "remove_optional_placeholders_if_unused": True,
-                "array_placeholders_show_item_shape": True,
-                "step_id": str(capsule.get("step_id") or ""),
-                "role": dict(capsule.get("role") or {}) if isinstance(capsule.get("role"), dict) else {},
-                "action_policy": dict(capsule.get("action_policy") or {}) if isinstance(capsule.get("action_policy"), dict) else {},
-                "required_coverage": dict(capsule.get("required_coverage") or {}) if isinstance(capsule.get("required_coverage"), dict) else {},
-                "known_evidence_ids": [str(item) for item in list(capsule.get("known_evidence_ids") or []) if isinstance(item, str)],
-                "evidence_ref_contract": dict(capsule.get("evidence_ref_contract") or {})
-                if isinstance(capsule.get("evidence_ref_contract"), dict)
-                else {},
-                "evidence_rules": [dict(item) for item in list(capsule.get("evidence_rules") or []) if isinstance(item, dict)],
-                "output_schema": output_schema,
-            },
+            "loopora_result_contract": result_contract,
             "result": _agent_native_result_scaffold_from_schema(output_schema),
         }
 
@@ -1484,14 +1507,145 @@ class ServiceAgentNativeMixin:
             raise LooporaError("agent-native active step capsule is invalid")
         normalized = dict(capsule)
         normalized["judgment_contract"] = cls._agent_native_capsule_judgment_contract(run, context_packet)
+        normalized["required_coverage"] = cls._agent_native_required_coverage(context_packet)
         normalized["continuation"] = cls._agent_native_capsule_continuation_context(context_packet)
+        normalized["iteration_repair"] = cls._agent_native_capsule_iteration_repair_context(context_packet)
+        role = normalized.get("role") if isinstance(normalized.get("role"), dict) else {}
+        archetype = str(role.get("archetype") or "").strip()
+        if archetype:
+            normalized["evidence_rules"] = cls._agent_native_evidence_rules(archetype)
+        cls._refresh_agent_native_submit_hint(normalized)
+        cls._refresh_agent_native_role_dispatch_availability(normalized)
+        known_evidence_ids = normalized.get("known_evidence_ids")
+        if isinstance(known_evidence_ids, list):
+            known_evidence_ids = list(dict.fromkeys(str(item) for item in known_evidence_ids if isinstance(item, str)))
+            normalized["known_evidence_ids"] = known_evidence_ids
+        normalized["known_evidence_count"] = len(known_evidence_ids) if isinstance(known_evidence_ids, list) else 0
+        normalized["known_evidence_refs"] = (
+            _agent_native_compact_known_evidence_refs(known_evidence_ids, context_packet) if isinstance(known_evidence_ids, list) else []
+        )
         return normalized
+
+    def _agent_native_context_packet_with_latest_coverage(
+        self,
+        layout: RunArtifactLayout,
+        context_packet: object,
+    ) -> object:
+        if not isinstance(context_packet, dict):
+            return context_packet
+        coverage = self._coverage_context_for_run(layout)
+        iteration = dict(context_packet.get("iteration") or {}) if isinstance(context_packet.get("iteration"), dict) else {}
+        refreshed_iteration = {
+            **iteration,
+            "coverage_status": coverage["status"],
+            "covered_check_count": coverage["covered_check_count"],
+            "missing_check_count": coverage["missing_check_count"],
+            "covered_check_ids": list(coverage["covered_check_ids"]),
+            "missing_check_ids": list(coverage["missing_check_ids"]),
+            "target_count": coverage["target_count"],
+            "covered_target_count": coverage["covered_target_count"],
+            "weak_target_count": coverage["weak_target_count"],
+            "missing_target_count": coverage["missing_target_count"],
+            "blocked_target_count": coverage["blocked_target_count"],
+            "coverage_top_gaps": [dict(item) for item in list(coverage["top_gaps"]) if isinstance(item, dict)],
+        }
+        refreshed_packet = dict(context_packet)
+        refreshed_packet["iteration"] = refreshed_iteration
+        return refreshed_packet
+
+    @staticmethod
+    def _refresh_agent_native_submit_hint(capsule: dict[str, Any]) -> None:
+        submit_hint = dict(capsule.get("submit_hint") or {}) if isinstance(capsule.get("submit_hint"), dict) else {}
+        if not submit_hint:
+            return
+        adapter = str(capsule.get("adapter") or "").strip()
+        run_id = str(capsule.get("run_id") or "").strip()
+        step_id = str(capsule.get("step_id") or "").strip()
+        if not adapter or not run_id or not step_id:
+            return
+        submit_hint = _agent_native_submit_hint_with_scoped_result_paths(submit_hint, capsule, run_id=run_id, step_id=step_id)
+        result_file = str(submit_hint.get("result_file_absolute_path") or submit_hint.get("result_file_path") or "").strip()
+        if not result_file:
+            template_path = str(submit_hint.get("result_template_absolute_path") or submit_hint.get("result_template_path") or "").strip()
+            if template_path.endswith(".result.template.json"):
+                result_file = template_path[: -len(".result.template.json")] + ".result.json"
+        if result_file and result_file != "RESULT_JSON_PATH":
+            if Path(result_file).is_absolute():
+                submit_hint["result_file_absolute_path"] = result_file
+            else:
+                submit_hint["result_file_path"] = result_file
+        submit_hint["command"] = _agent_native_submit_command(
+            adapter=adapter,
+            run_id=run_id,
+            step_id=step_id,
+            entry_source=str(capsule.get("entry_source") or "").strip(),
+            result_file=result_file or "RESULT_JSON_PATH",
+        )
+        capsule["submit_hint"] = submit_hint
+
+    @staticmethod
+    def _refresh_agent_native_role_dispatch_availability(capsule: dict[str, Any]) -> None:
+        dispatch = dict(capsule.get("role_dispatch") or {}) if isinstance(capsule.get("role_dispatch"), dict) else {}
+        if not dispatch:
+            return
+        config_path = str(dispatch.get("target_agent_config_absolute_path") or "").strip()
+        if not config_path:
+            config_path = str(dispatch.get("target_agent_config_path") or "").strip()
+        if not config_path:
+            dispatch["target_agent_config_exists"] = False
+            capsule["role_dispatch"] = dispatch
+            return
+        dispatch["target_agent_config_exists"] = Path(config_path).expanduser().exists()
+        capsule["role_dispatch"] = dispatch
 
     @staticmethod
     def _agent_native_capsule_continuation_context(context_packet: object) -> dict[str, Any]:
         packet = context_packet if isinstance(context_packet, dict) else {}
         continuation = packet.get("continuation") if isinstance(packet.get("continuation"), dict) else {}
         return dict(continuation) if continuation.get("active") is True else {}
+
+    @staticmethod
+    def _agent_native_capsule_iteration_repair_context(context_packet: object) -> dict[str, Any]:
+        packet = context_packet if isinstance(context_packet, dict) else {}
+        iteration = packet.get("iteration") if isinstance(packet.get("iteration"), dict) else {}
+        previous_summary = packet.get("upstream", {}).get("previous_iteration_summary") if isinstance(packet.get("upstream"), dict) else None
+        previous_summary = previous_summary if isinstance(previous_summary, dict) else {}
+        iter_index = structured_non_negative_int(iteration.get("iter_index"))
+        if not previous_summary and not (iter_index and iter_index > 0):
+            return {}
+        blocked_handoff = _agent_native_previous_blocked_handoff(previous_summary)
+        gatekeeper_verdict = previous_summary.get("gatekeeper_verdict") if isinstance(previous_summary.get("gatekeeper_verdict"), dict) else {}
+        blocking_items = _agent_native_string_list(blocked_handoff.get("blocking_items"))
+        if not blocking_items:
+            blocking_items = _agent_native_string_list(gatekeeper_verdict.get("blocking_issues"))
+        blocking_items = [_agent_native_actionable_blocking_item(item) for item in blocking_items if item]
+        top_gaps = [dict(item) for item in list(iteration.get("coverage_top_gaps") or []) if isinstance(item, dict)][:5]
+        summary = str(blocked_handoff.get("summary") or gatekeeper_verdict.get("decision_summary") or "").strip()
+        recommended_next_action = str(
+            blocked_handoff.get("recommended_next_action")
+            or gatekeeper_verdict.get("feedback_to_builder")
+            or gatekeeper_verdict.get("feedback_to_generator")
+            or ""
+        ).strip()
+        if not _agent_native_repair_blockers_still_current(blocking_items, top_gaps):
+            blocking_items = []
+            recommended_next_action = _agent_native_current_gap_repair_next_action(top_gaps)
+        recommended_next_action = _agent_native_actionable_repair_next_action(recommended_next_action, blocking_items)
+        if not any((blocking_items, top_gaps, summary, recommended_next_action)):
+            return {}
+        source = blocked_handoff.get("source") if isinstance(blocked_handoff.get("source"), dict) else {}
+        return {
+            "active": True,
+            "previous_iteration": structured_non_negative_int(previous_summary.get("iter")),
+            "source_step_id": str(source.get("step_id") or "").strip(),
+            "source_role": str(source.get("role_name") or source.get("role_id") or "").strip(),
+            "status": str(blocked_handoff.get("status") or "").strip(),
+            "summary": summary,
+            "blocking_items": blocking_items[:8],
+            "recommended_next_action": recommended_next_action,
+            "evidence_refs": _agent_native_string_list(blocked_handoff.get("evidence_refs"))[:8],
+            "top_gaps": top_gaps,
+        }
 
     @staticmethod
     def _agent_native_capsule_judgment_contract(run: dict, context_packet: object) -> dict[str, Any]:
@@ -1538,6 +1692,11 @@ class ServiceAgentNativeMixin:
             "evidence_progress_mode": str(iteration.get("evidence_progress_mode") or "none"),
             "covered_check_count": structured_non_negative_int(iteration.get("covered_check_count")),
             "missing_check_count": structured_non_negative_int(iteration.get("missing_check_count")),
+            "target_count": structured_non_negative_int(iteration.get("target_count")),
+            "covered_target_count": structured_non_negative_int(iteration.get("covered_target_count")),
+            "weak_target_count": structured_non_negative_int(iteration.get("weak_target_count")),
+            "missing_target_count": structured_non_negative_int(iteration.get("missing_target_count")),
+            "blocked_target_count": structured_non_negative_int(iteration.get("blocked_target_count")),
             "covered_check_ids": [str(item) for item in list(iteration.get("covered_check_ids") or []) if str(item).strip()],
             "missing_check_ids": [str(item) for item in list(iteration.get("missing_check_ids") or []) if str(item).strip()],
             "top_gaps": [dict(item) for item in list(iteration.get("coverage_top_gaps") or []) if isinstance(item, dict)][:5],
@@ -1555,9 +1714,30 @@ class ServiceAgentNativeMixin:
         return "loopora-inspector"
 
     @staticmethod
+    def _agent_native_target_agent_config_path(adapter: str, target_agent: str) -> str:
+        normalized_adapter = str(adapter or "").strip().lower()
+        normalized_agent = str(target_agent or "").strip()
+        if not normalized_agent:
+            return ""
+        if normalized_adapter == "codex":
+            return f".codex/agents/{normalized_agent}.toml"
+        if normalized_adapter == "claude":
+            return f".claude/agents/{normalized_agent}.md"
+        if normalized_adapter == "opencode":
+            return f".opencode/agents/{normalized_agent}.md"
+        return ""
+
+    @staticmethod
     def _required_agent_native_dispatch_text(dispatch: dict[str, Any], field: str) -> str:
         value = str(dispatch.get(field) or "").strip()
         if not value:
+            raise LooporaConflictError(f"agent-native host dispatch {field} is required")
+        return value
+
+    @staticmethod
+    def _required_agent_native_dispatch_int(dispatch: dict[str, Any], field: str) -> int:
+        value = dispatch.get(field)
+        if isinstance(value, bool) or not isinstance(value, int):
             raise LooporaConflictError(f"agent-native host dispatch {field} is required")
         return value
 
@@ -1687,8 +1867,9 @@ class ServiceAgentNativeMixin:
             raise LooporaConflictError("agent-native host dispatch step_id does not match the submitted step")
         if dispatch_adapter != adapter:
             raise LooporaConflictError("agent-native host dispatch adapter does not match the submitted adapter")
+        dispatch_position = self._agent_native_dispatch_position(active, dispatch)
 
-        return {
+        normalized = {
             "schema_version": self._agent_native_dispatch_schema_version(dispatch),
             "adapter": adapter,
             "run_id": str(run["id"]),
@@ -1699,6 +1880,39 @@ class ServiceAgentNativeMixin:
             "inline": inline,
             "attestation": str(dispatch.get("attestation") or "").strip(),
         }
+        normalized.update(dispatch_position)
+        return normalized
+
+    def _agent_native_dispatch_position(self, active: dict[str, Any], dispatch: dict[str, Any]) -> dict[str, int]:
+        position: dict[str, int] = {}
+        expected_iter = self._agent_native_expected_dispatch_int(active, "iter_id", "iter")
+        expected_step_order = self._agent_native_expected_dispatch_int(active, "step_order", "step_order")
+        if expected_iter is not None:
+            dispatch_iter = self._required_agent_native_dispatch_int(dispatch, "iter")
+            if dispatch_iter != expected_iter:
+                raise LooporaConflictError("agent-native host dispatch iter does not match the claimed agent-native step")
+            position["iter"] = expected_iter
+        if expected_step_order is not None:
+            dispatch_step_order = self._required_agent_native_dispatch_int(dispatch, "step_order")
+            if dispatch_step_order != expected_step_order:
+                raise LooporaConflictError("agent-native host dispatch step_order does not match the claimed agent-native step")
+            position["step_order"] = expected_step_order
+        return position
+
+    @staticmethod
+    def _agent_native_expected_dispatch_int(active: dict[str, Any], active_field: str, capsule_field: str) -> int | None:
+        value = active.get(active_field)
+        if isinstance(value, bool):
+            return None
+        if isinstance(value, int):
+            return value
+        capsule = active.get("capsule") if isinstance(active.get("capsule"), dict) else {}
+        value = capsule.get(capsule_field)
+        if isinstance(value, bool):
+            return None
+        if isinstance(value, int):
+            return value
+        return None
 
     @staticmethod
     def _agent_native_evidence_rules(archetype: str) -> list[dict[str, str]]:
@@ -1716,7 +1930,7 @@ class ServiceAgentNativeMixin:
             {
                 "id": "coverage_results.target_id_must_be_known_coverage_target",
                 "severity": "hard",
-                "rule": "Every coverage_results.target_id must be copied exactly from judgment_contract.coverage_targets[].id; do not invent or rename coverage target IDs.",
+                "rule": "Every coverage_results.target_id must be copied exactly from loopora_result_contract.coverage_target_ids or active judgment_contract.coverage_targets[].id; do not invent or rename coverage target IDs.",
             }
         ]
         if archetype == "inspector":

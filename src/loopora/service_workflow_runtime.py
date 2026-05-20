@@ -196,7 +196,60 @@ class ServiceWorkflowRuntimeMixin:
 
     @staticmethod
     def _evidence_known_ids(evidence_items: list[dict]) -> list[str]:
-        return [str(item.get("id")) for item in evidence_items if isinstance(item, dict) and str(item.get("id") or "").strip()]
+        return list(
+            dict.fromkeys(
+                str(item.get("id"))
+                for item in evidence_items
+                if isinstance(item, dict) and str(item.get("id") or "").strip()
+            )
+        )
+
+    @staticmethod
+    def _dedupe_evidence_items(evidence_items: list[dict]) -> list[dict]:
+        unique_items: list[dict] = []
+        seen_ids: set[str] = set()
+        for item in evidence_items:
+            if not isinstance(item, dict):
+                continue
+            evidence_id = str(item.get("id") or "").strip()
+            if evidence_id:
+                if evidence_id in seen_ids:
+                    continue
+                seen_ids.add(evidence_id)
+            unique_items.append(item)
+        return unique_items
+
+    @staticmethod
+    def _coverage_gap_evidence_ids(coverage_summary: dict) -> list[str]:
+        refs: list[str] = []
+        summary = coverage_summary.get("summary") if isinstance(coverage_summary.get("summary"), dict) else {}
+        primary_gap = summary.get("primary_gap") if isinstance(summary.get("primary_gap"), dict) else {}
+        for item in [primary_gap, *list(coverage_summary.get("top_gaps") or [])]:
+            if not isinstance(item, dict):
+                continue
+            refs.extend(str(ref).strip() for ref in list(item.get("evidence_refs") or []) if str(ref).strip())
+        return list(dict.fromkeys(refs))
+
+    @staticmethod
+    def _merge_coverage_gap_evidence(
+        evidence_items: list[dict],
+        *,
+        all_evidence_items: list[dict],
+        coverage_summary: dict,
+    ) -> tuple[list[dict], list[str]]:
+        evidence_by_id = {
+            str(item.get("id") or "").strip(): item
+            for item in all_evidence_items
+            if isinstance(item, dict) and str(item.get("id") or "").strip()
+        }
+        merged_items = [item for item in evidence_items if isinstance(item, dict)]
+        merged_ids = {str(item.get("id") or "").strip() for item in merged_items if str(item.get("id") or "").strip()}
+        for ref in ServiceWorkflowRuntimeMixin._coverage_gap_evidence_ids(coverage_summary):
+            if ref in merged_ids or ref not in evidence_by_id:
+                continue
+            merged_items.append(evidence_by_id[ref])
+            merged_ids.add(ref)
+        return merged_items, ServiceWorkflowRuntimeMixin._evidence_known_ids(merged_items)
 
     def _prepare_workflow_step_request(
         self,
@@ -223,6 +276,7 @@ class ServiceWorkflowRuntimeMixin:
             if runtime_request.evidence_items_snapshot is not None
             else read_jsonl(layout.evidence_ledger_path)
         )
+        all_evidence_items = self._dedupe_evidence_items(all_evidence_items)
         current_handoffs_for_step = self._filter_handoffs_for_step(step, runtime_request.current_handoffs)
         (
             previous_iteration_same_step_for_step,
@@ -235,17 +289,19 @@ class ServiceWorkflowRuntimeMixin:
             previous_iteration_summary=runtime_request.previous_iteration_summary,
         )
         declares_evidence_query = self._step_declares_evidence_query(step)
-        if declares_evidence_query:
-            evidence_items = self._filter_evidence_for_step(step, all_evidence_items)
-            evidence_known_ids = self._evidence_known_ids(evidence_items)
-        else:
-            evidence_items = all_evidence_items[-40:]
-            evidence_known_ids = self._evidence_known_ids(all_evidence_items)
-        evidence_manifest_summary, evidence_manifest_claims = _manifest_prompt_context(layout, evidence_known_ids)
+        evidence_items = self._filter_evidence_for_step(step, all_evidence_items) if declares_evidence_query else all_evidence_items[-40:]
         evidence_coverage_summary = summarize_evidence_coverage_projection(
             load_or_build_evidence_coverage_projection(layout),
             coverage_path_available=layout.evidence_coverage_path.exists(),
         )
+        evidence_items, evidence_known_ids = self._merge_coverage_gap_evidence(
+            evidence_items,
+            all_evidence_items=all_evidence_items,
+            coverage_summary=evidence_coverage_summary,
+        )
+        if not declares_evidence_query:
+            evidence_known_ids = self._evidence_known_ids(all_evidence_items)
+        evidence_manifest_summary, evidence_manifest_claims = _manifest_prompt_context(layout, evidence_known_ids)
         context_packet = build_step_context_packet(
             StepContextPacketRequest(
                 run_contract=runtime_request.run_contract,

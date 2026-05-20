@@ -26,9 +26,11 @@
 
 **裸目标可以让任务持续推进，却容易让结果变成开盲盒**——任务越跑越完整，但早期偏差、弱证据和伪完成也被一起继承。
 
-Loopora 解决的就是这层问题。当一个任务容易发散、不适合直接交给 `/goal` 裸跑时，先用 `/loopora-plan` 把目标、完成标准、伪完成模式、证据要求、阻断风险和下一轮优先级整理成一份可审查的 Loop Bundle，再用 `/loopora-run` 让 Agent 在这个 Loop 里持续执行。
+Loopora 解决的就是这层问题。当一个任务容易发散、不适合直接交给 `/goal` 裸跑时，先用 `/loopora-plan` 把目标、完成标准、伪完成模式、证据要求、阻断风险和下一轮优先级整理成一份可审查的 Loop 方案文件，再用 `/loopora-run` 让 Agent 在这个 Loop 里持续执行。
 
 Loopora 负责降低误差累积速度，让每轮结果回到同一套判断，从而让长期任务更稳、更健康地运行下去。
+
+Human-shaped Loop 不只是这篇文档的名字。候选 Loop 不能只是任务摘要；每一步都应继承这些判断、行动边界和证据缺口。
 
 想理解这套方法背后的理念，建议阅读 [Human-Shaped Loop](./HUMAN-SHAPED-LOOP.zh-CN.md)。
 
@@ -121,7 +123,7 @@ loopora init opencode
 loopora init codex --check
 ```
 
-`--check` 只诊断，不安装、不修复、不覆盖文件。状态详情仍应通过 Web 查看。
+`--check` 只诊断，不安装、不修复、不覆盖文件。安装前检查失败表示“尚未安装”，并会给出安装命令；安装后检查失败才表示托管入口需要处理。状态详情仍应通过 Web 查看。
 
 然后回到 Agent，用两个阶段入口处理当前任务：
 
@@ -140,7 +142,7 @@ loopora init codex --check
 - 审计链路必须能还原一次退款
 ```
 
-Loopora 会优先使用当前 Agent 上下文里已经明确的判断。若关键判断还不足以决定 Loop 的结构，`/loopora-plan` 会先追问一个聚焦问题，或打开 Web 审查入口继续对齐，而不是替你编造判断。后续如果你要加严证据、修复候选方案、调整角色职责或根据运行结果改进 Loop，也继续使用 `/loopora-plan`。预览确认后，运行 `/loopora-run`，当前 Agent 即进入该 Loop 下的多轮任务执行；之后说"继续""resume""补证据"这类意图，也都属于 `/loopora-run` 阶段。
+Loopora 会优先使用当前 Agent 上下文里已经明确的判断。若关键判断还不足以决定 Loop 的结构，`/loopora-plan` 会先追问一个聚焦问题，或打开 Web 审查入口继续对齐，而不是替你编造判断。后续如果你要加严证据、修复候选方案、调整角色职责或根据运行结果改进 Loop，也继续使用 `/loopora-plan`。预览看起来正确后，运行 `/loopora-run`，当前 Agent 即进入该 Loop 下的多轮任务执行；之后说"继续""resume""补证据"这类意图，也都属于 `/loopora-run` 阶段。
 
 <p align="center">
   <img src="./assets/diagrams/first-run-path.zh.svg" alt="Loopora 推荐从 Agent 内部生成并运行 Loop，Web 同步观察和管理证据" width="1000" />
@@ -182,15 +184,16 @@ Loopora 会优先使用当前 Agent 上下文里已经明确的判断。若关�
 
 | 场景 | Loopora 应如何处理 |
 | --- | --- |
+| `/loopora-plan` 还没有任务上下文 | 先要求补充任务目标、伪完成风险、必要证据和判断取舍，再创建预览 |
 | 当前目录没有已有 Loopora 上下文 | `/loopora-plan` 默认创建新的候选 Loop |
 | 当前目录已有 spec、候选 Loop、run 或证据 | `/loopora-plan` 先展示可用来源；你可以继续、改进，也可以明确重新开始 |
 | 任务执行到一半中断，下次回到同一个 Agent 会话 | `/loopora-run` 用精确绑定恢复同一个 run，不重新规划 |
-| 换了 Agent 会话或存在多个可恢复上下文 | `/loopora-run` 展示选择，并给出 `option:<id>` 恢复 token；你可以选定 token、在 Web 中选定，或回到 `/loopora-plan fresh` 重新开始 |
+| 换了 Agent 会话或存在多个可恢复上下文 | `/loopora-run` 展示选择并给出状态与时间提示；可运行选择会显示 `next_loop_command` 与 `next_cli_command`，不可运行选择会引导你回到 `/loopora-plan` 或 Web review |
 | 上一轮 run 已结束但证据不足 | `/loopora-run` 基于同一个 Loop 启动下一轮，聚焦未证明的缺口 |
 | 上一轮任务裁决已通过 | `/loopora-run` 回放完成状态，不额外创建新 run |
-| 你明确要求重新创建 bundle | 使用 `/loopora-plan` 的重新开始路径；旧 run 与证据保留为历史，不被当作当前判断 |
+| 你明确要求重新创建方案 | 使用 `/loopora-plan` 的重新开始路径；旧 run 与证据保留为历史，不被当作当前判断 |
 | 本地 Agent 绑定或 context card 损坏 | `/loopora-run` 返回修复提示；先运行 `loopora init <adapter> --check` 诊断，再决定修复绑定或 `/loopora-plan fresh` |
-| 删除或替换 bundle 时本地文件清理失败 | 记录删除仍可完成，但 Loopora 会返回 `cleanup_warnings`，说明需要人工清理的路径和错误 |
+| 删除或替换方案文件时本地文件清理失败 | 记录删除仍可完成，但 Loopora 会返回 `cleanup_warnings`，说明需要人工清理的路径和错误 |
 
 单次运行大致遵循以下流程：
 

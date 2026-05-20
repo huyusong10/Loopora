@@ -8,6 +8,7 @@ from typing import Any
 from loopora.agent_adapters import (
     agent_adapter_status,
     check_agent_adapter,
+    agent_loop_json_command,
     agent_loop_command,
     list_agent_adapter_statuses,
     install_agent_adapter,
@@ -29,6 +30,75 @@ from loopora.utils import read_json, utc_now, write_json
 
 
 PASSING_TASK_VERDICT_STATUSES = frozenset({"passed", "passed_with_residual_risk"})
+
+
+def _agent_task_proof_summary(
+    *,
+    complete: bool,
+    task_verdict_status: str,
+    task_verdict_summary: str,
+    task_next_action: dict[str, Any],
+) -> dict[str, Any]:
+    status = str(task_verdict_status or "").strip()
+    action = task_next_action if isinstance(task_next_action, dict) else {}
+    action_kind = str(action.get("kind") or "").strip()
+    if not (complete or status or action_kind):
+        return {}
+
+    task_proven = status in PASSING_TASK_VERDICT_STATUSES
+    if task_proven:
+        task_outcome = "already_proven_no_new_evidence" if action_kind == "already_passed" else "proven"
+    elif action_kind == "continue_evidence":
+        task_outcome = "not_proven_continue_evidence"
+    elif complete:
+        task_outcome = "not_proven"
+    elif status and status != "not_evaluated":
+        task_outcome = "not_proven_continue_evidence"
+    else:
+        task_outcome = "not_yet_evaluated"
+
+    summary: dict[str, Any] = {
+        "task_proven": task_proven,
+        "task_outcome": task_outcome,
+        "lifecycle_vs_task": "run_lifecycle_active_task_proven" if task_proven else "run_lifecycle_active_task_not_proven",
+    }
+    if complete:
+        summary["lifecycle_vs_task"] = (
+            "run_lifecycle_complete_task_proven" if task_proven else "run_lifecycle_complete_task_not_proven"
+        )
+    if action_kind == "continue_evidence":
+        summary["next_loop_command"] = str(action.get("next_loop_command") or "/loopora-run").strip()
+        summary["next_plan_action"] = str(
+            action.get("plan_action") or "open_run_url_improve_with_evidence_if_loop_needs_adjustment"
+        ).strip()
+        next_focus = str(action.get("task_verdict_summary") or task_verdict_summary or "").strip()
+        if next_focus:
+            summary["next_evidence_focus"] = next_focus
+    elif not task_proven and task_outcome == "not_proven_continue_evidence" and task_verdict_summary:
+        summary["next_evidence_focus"] = task_verdict_summary
+    return {key: value for key, value in summary.items() if value not in ("", [], {})}
+
+
+def _agent_next_step_continuation_summary(next_step: dict[str, Any]) -> dict[str, Any]:
+    continuation = next_step.get("continuation") if isinstance(next_step.get("continuation"), dict) else {}
+    if not continuation or continuation.get("active") is not True:
+        return {}
+    previous_verdict = (
+        continuation.get("previous_task_verdict") if isinstance(continuation.get("previous_task_verdict"), dict) else {}
+    )
+    coverage = continuation.get("coverage") if isinstance(continuation.get("coverage"), dict) else {}
+    raw_next_focus = continuation.get("next_focus")
+    next_focus = [str(item).strip() for item in list(raw_next_focus or []) if str(item).strip()] if isinstance(raw_next_focus, list) else []
+    summary: dict[str, Any] = {
+        "active": True,
+        "previous_run_id": str(continuation.get("previous_run_id") or "").strip(),
+        "previous_task_verdict_status": str(previous_verdict.get("status") or "").strip(),
+        "previous_task_verdict_summary": str(previous_verdict.get("summary") or "").strip(),
+        "missing_required_check_count": structured_non_negative_int(coverage.get("missing_check_count")),
+        "missing_target_count": structured_non_negative_int(coverage.get("missing_target_count")),
+        "next_focus": next_focus[:6],
+    }
+    return {"continuation": {key: value for key, value in summary.items() if value not in ("", [], {})}}
 
 
 @dataclass(frozen=True)
@@ -105,7 +175,30 @@ def agent_entry_loop_command(
     context_id: str = "",
     source_option_id: str = "",
 ) -> str:
-    return agent_loop_command(adapter, workdir, entry_source=entry_source, context_id=context_id, source_option_id=source_option_id)
+    return agent_loop_command(
+        adapter,
+        workdir,
+        entry_source=entry_source,
+        context_id=context_id,
+        source_option_id=source_option_id,
+    )
+
+
+def agent_entry_loop_json_command(
+    adapter: str,
+    workdir: Path | str,
+    entry_source: str = "",
+    *,
+    context_id: str = "",
+    source_option_id: str = "",
+) -> str:
+    return agent_loop_json_command(
+        adapter,
+        workdir,
+        entry_source=entry_source,
+        context_id=context_id,
+        source_option_id=source_option_id,
+    )
 
 
 def _agent_entry_loop_projection_messages(next_loop_action: str) -> dict[str, str]:
@@ -415,6 +508,12 @@ class ServiceAgentAdapterMixin:
             started_new_run = True
         else:
             native = self._agent_native_projection_for_run(start_context, run)
+            session = self.repository.update_alignment_session(
+                start_context.session_id,
+                status="running_loop",
+                linked_run_id=run["id"],
+                error_message="",
+            )
         binding = self._write_agent_loop_running_binding(start_context, binding, session, native)
         return self._agent_loop_result_from_native(start_context, session, binding, native, started_new_run=started_new_run)
 
@@ -448,7 +547,12 @@ class ServiceAgentAdapterMixin:
     ) -> dict[str, Any]:
         run = self.start_run(str(session["linked_loop_id"]))
         native = self.prepare_agent_native_run(start_context.adapter, run["id"], entry_source=start_context.entry_source)
-        self.repository.update_alignment_session(start_context.session_id, status="running_loop", linked_run_id=native["run"]["id"])
+        self.repository.update_alignment_session(
+            start_context.session_id,
+            status="running_loop",
+            linked_run_id=native["run"]["id"],
+            error_message="",
+        )
         self.repository.append_alignment_event(start_context.session_id, "alignment_run_started", {"loop_id": session.get("linked_loop_id", ""), "run_id": run["id"]})
         session = self.get_alignment_session(start_context.session_id)
         binding = self._write_agent_loop_running_binding(start_context, binding, session, native)
@@ -466,7 +570,12 @@ class ServiceAgentAdapterMixin:
         run = self.start_run(loop_id)
         self._seed_agent_native_continuation_context(run, previous_run)
         native = self.prepare_agent_native_run(start_context.adapter, run["id"], entry_source=start_context.entry_source)
-        self.repository.update_alignment_session(start_context.session_id, status="running_loop", linked_run_id=native["run"]["id"])
+        self.repository.update_alignment_session(
+            start_context.session_id,
+            status="running_loop",
+            linked_run_id=native["run"]["id"],
+            error_message="",
+        )
         self.repository.append_alignment_event(
             start_context.session_id,
             "alignment_run_started",
@@ -482,7 +591,7 @@ class ServiceAgentAdapterMixin:
 
     def _agent_native_projection_for_run(self, start_context: _AgentLoopStartContext, run: dict[str, Any]) -> dict[str, Any]:
         if run["status"] in TERMINAL_RUN_STATUSES:
-            return {"run": run, "next_step": None, "complete": True}
+            return self._with_agent_native_judgment_contract({"run": run, "next_step": None, "complete": True})
         return self.prepare_agent_native_run(start_context.adapter, run["id"], entry_source=start_context.entry_source)
 
     def _write_agent_loop_running_binding(
@@ -605,6 +714,7 @@ class ServiceAgentAdapterMixin:
                 "started_new_run": started_new_run,
                 "next_step": native.get("next_step"),
                 "complete": native.get("complete", False),
+                "task_next_action": native.get("task_next_action"),
             },
         )
 
@@ -636,7 +746,12 @@ class ServiceAgentAdapterMixin:
                 "entry_source": entry_source,
                 "host_context_id": host_context_id,
                 "workdir": workdir,
-                "loop_command": agent_entry_loop_command(adapter, workdir, entry_source, context_id=host_context_id),
+                "loop_command": agent_entry_loop_json_command(
+                    adapter,
+                    workdir,
+                    entry_source,
+                    context_id=host_context_id,
+                ),
                 "alignment_session_id": str(session.get("id") or "").strip(),
                 "alignment_status": str(session.get("status") or "").strip(),
                 **linked_state,
@@ -921,13 +1036,15 @@ class ServiceAgentAdapterMixin:
         if not session_workdir or Path(session_workdir).expanduser().resolve() != expected:
             raise LooporaConflictError("agent binding references a Loop preview from a different workdir; run /loopora-plan again")
 
-    @staticmethod
-    def _agent_loop_result(adapter: str, root: Path, session: dict, binding: dict, run_result: dict[str, Any]) -> dict[str, Any]:
+    @classmethod
+    def _agent_loop_result(cls, adapter: str, root: Path, session: dict, binding: dict, run_result: dict[str, Any]) -> dict[str, Any]:
         run = run_result["run"]
+        summary = cls._agent_loop_summary(run, run_result)
         return {
             "adapter": adapter,
             "workdir": str(root),
             "status": session["status"],
+            "agent_run_summary": summary,
             "session": session,
             "binding": binding,
             "run": run,
@@ -939,6 +1056,45 @@ class ServiceAgentAdapterMixin:
             "complete": bool(run_result.get("complete", False)),
             "task_next_action": run_result.get("task_next_action") if isinstance(run_result.get("task_next_action"), dict) else {},
         }
+
+    @staticmethod
+    def _agent_loop_summary(run: dict[str, Any], run_result: dict[str, Any]) -> dict[str, Any]:
+        next_step = run_result.get("next_step") if isinstance(run_result.get("next_step"), dict) else {}
+        role_dispatch = next_step.get("role_dispatch") if isinstance(next_step.get("role_dispatch"), dict) else {}
+        task_verdict = run.get("task_verdict") if isinstance(run.get("task_verdict"), dict) else run.get("task_verdict_json")
+        task_verdict = task_verdict if isinstance(task_verdict, dict) else {}
+        task_next_action = run_result.get("task_next_action") if isinstance(run_result.get("task_next_action"), dict) else {}
+        run_id = str(run.get("id") or "").strip()
+        task_verdict_status = str(task_verdict.get("status") or "").strip()
+        task_verdict_summary = str(task_verdict.get("summary") or "").strip()
+        target_agent = str(role_dispatch.get("target_agent") or next_step.get("target_agent") or "").strip()
+        summary = {
+            "schema_version": 1,
+            "run_id": run_id,
+            "run_status": str(run.get("status") or run.get("run_status") or "").strip(),
+            "started_new_run": bool(run_result.get("started_new_run")),
+            "complete": bool(run_result.get("complete", False)),
+            "next_step_id": str(next_step.get("step_id") or "").strip(),
+            "next_target_agent": target_agent,
+            "task_verdict_status": task_verdict_status,
+            "task_verdict_summary": task_verdict_summary,
+            "task_next_action": task_next_action,
+            "run_path": f"/runs/{run_id}" if run_id else "",
+        }
+        if target_agent and role_dispatch.get("target_agent_config_exists") is not False:
+            summary["dispatch_next"] = (
+                f"invoke {target_agent} with the next context/capsule paths below; do not perform this role inline"
+            )
+        summary.update(
+            _agent_task_proof_summary(
+                complete=bool(run_result.get("complete", False)),
+                task_verdict_status=task_verdict_status,
+                task_verdict_summary=task_verdict_summary,
+                task_next_action=task_next_action,
+            )
+        )
+        summary.update(_agent_next_step_continuation_summary(next_step))
+        return summary
 
     @staticmethod
     def _agent_loop_unready_error(adapter: str, binding: dict, session: dict) -> str:

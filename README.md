@@ -26,9 +26,11 @@ The hard part of complex tasks isn't just "keep the Agent going." It's judging a
 
 **Bare goals keep the task moving, but easily turn results into blind boxes**—the run looks more complete, but early drift, weak evidence, and fake completion get inherited too.
 
-Loopora solves this layer. When a task tends to drift and isn't suited for bare `/goal`, first use `/loopora-plan` to turn the objective, completion criteria, fake-done patterns, evidence requirements, blocking risks, and next-round priorities into a reviewable Loop Bundle. Then use `/loopora-run` to let the Agent execute continuously within that Loop.
+Loopora solves this layer. When a task tends to drift and isn't suited for bare `/goal`, first use `/loopora-plan` to turn the objective, completion criteria, fake-done patterns, evidence requirements, blocking risks, and next-round priorities into a reviewable Loop plan file. Then use `/loopora-run` to let the Agent execute continuously within that Loop.
 
 Loopora reduces error accumulation, makes each round return to the same judgment, letting long tasks run more steadily and healthily.
+
+Human-shaped Loop is not just the name of an essay. A candidate Loop cannot be only a task summary; each step should inherit these judgments, action boundaries, and evidence gaps.
 
 To understand the philosophy behind this approach, read [Human-Shaped Loop](./HUMAN-SHAPED-LOOP.md).
 
@@ -55,7 +57,7 @@ The difference isn't command length—it's the reviewable judgment structure add
 
 | With bare `/goal` | With Loopora |
 | --- | --- |
-| Goal is usually one sentence | Goal gets整理成完成标准、伪完成模式、证据要求和阻断风险 |
+| Goal is usually one sentence | Goal becomes completion criteria, fake-done patterns, evidence requirements, and blocking risks |
 | Agent mainly keeps pursuing the objective | Each round carries task judgment, action boundaries, evidence gaps, output requirements |
 | Process can look increasingly complete | Each round must report proven, weak evidence, unproven, blocking items, residual risk |
 | Closure easily relies on Agent declaring done | Task verdict needs supporting evidence; missing required evidence blocks pass |
@@ -65,12 +67,12 @@ Loopora doesn't reject `/goal`. It inherits `/goal`'s core intuition: long tasks
 
 ## When Loopora Replaces `/goal`
 
-Loopora doesn't fit every task. It fits tasks where one Agent response looks smooth, but you worry后续会出现伪完成、证据不足或判断漂移.
+Loopora does not fit every task. It fits tasks where one Agent response looks smooth, but you worry later rounds may drift, fake completion, or lack enough evidence.
 
 | Situation | Recommendation |
 | --- | --- |
 | Goal is small, one Agent pass plus one human review enough | Use Agent or `/goal` directly, no need for Loopora |
-| Stable tests, benchmarks, or proof scripts can directly judge | Prefer these硬性反馈 |
+| Stable tests, evaluation suites, proof scripts, or automated proof can directly judge | Prefer those hard checks first |
 | Task needs multi-round execution, each round creates new evidence | Loopora starts adding value |
 | Result may look done while core risk remains unproven | Strong fit for Loopora |
 | You need to retain, review, reuse, or manage this judgment via Web | Strong fit for Loopora |
@@ -115,13 +117,13 @@ loopora init claude
 loopora init opencode
 ```
 
-To only check whether project Agent entry is complete, still Loopora-managed, missing托管协议文件:
+To only check whether the project Agent entry is complete, still Loopora-managed, and not missing managed protocol files:
 
 ```bash
 loopora init codex --check
 ```
 
-`--check` only diagnoses—doesn't install, repair, or overwrite. Use Web for run status and details.
+`--check` only diagnoses—doesn't install, repair, or overwrite. Before install, a failing check means "not installed yet" and prints the install command; after install, failed checks mean the managed entry needs attention. Use Web for run status and details.
 
 Then return to Agent and use two-stage entries for the current task:
 
@@ -140,7 +142,7 @@ I need to build a refund request backend:
 - audit trail must reconstruct a refund
 ```
 
-Loopora优先使用当前 Agent 上下文里已经明确的判断. If key judgment insufficient to determine Loop structure, `/loopora-plan` will先追问一个聚焦问题 or open Web review to align—not替你编造判断. Later, if you want to tighten evidence, repair candidate plan, adjust role responsibilities, or improve Loop from run results, continue using `/loopora-plan`. After preview confirms, run `/loopora-run`—current Agent enters multi-round task under that Loop; intents like "continue," "resume," "patch evidence" also belong to `/loopora-run` stage.
+Loopora first uses the judgments already clear in the current Agent context. If key judgment is still missing, `/loopora-plan` asks one focused question or opens Web review to align instead of inventing it. Later, if you want to tighten evidence, repair the candidate plan, adjust role responsibilities, or improve the Loop from run results, continue using `/loopora-plan`. After the preview looks right, run `/loopora-run`; the current Agent enters multi-round execution under that Loop. Later intents such as "continue," "resume," or "patch evidence" also belong to the `/loopora-run` stage.
 
 <p align="center">
   <img src="./assets/diagrams/first-run-path.en.svg" alt="Loopora recommends generating and running a Loop inside the Agent while the Web UI observes and manages the evidence" width="1000" />
@@ -148,9 +150,9 @@ Loopora优先使用当前 Agent 上下文里已经明确的判断. If key judgme
 
 ## How `/loopora-plan` Plans
 
-`/loopora-plan` doesn't start execution immediately—it enters Loop planning stage: generate, revise, repair, or tighten一份可审查的任务方案. For first-use readers, think of it as Loop's portable form: turns a long objective into judgment structure后续运行绕不开. If run evidence shows evidence rules, verdict conditions, or role responsibilities are wrong, return to `/loopora-plan` or Web review—not让执行阶段偷偷改方案.
+`/loopora-plan` does not start execution immediately. It enters the Loop planning stage: generate, revise, repair, or tighten a reviewable task plan. For first-use readers, think of it as the reusable Loop shape: it turns a long objective into judgment structure that every later run must carry. If run evidence shows evidence rules, verdict conditions, or role responsibilities are wrong, return to `/loopora-plan` or Web review instead of letting the run stage silently change the plan.
 
-The plan must carry本任务的判断, not just task summary. Important task objects, risks, evidence expectations should enter task contract, Agent responsibilities, run flow.
+The plan must carry this task's judgment, not just a task summary. Important task objects, risks, and evidence expectations should enter the task contract, Agent responsibilities, and run flow.
 
 This plan typically contains:
 
@@ -174,7 +176,7 @@ At runtime, Loopora turns these reader-facing pieces into runnable plan: task co
 
 ## How `/loopora-run` Advances
 
-`/loopora-run` enters Loop run stage: start, continue, resume, or patch evidence gaps. Agent remains main executor: reads code, edits files, runs checks, explains results. Loopora keeps each round tied back to reviewed plan, required evidence, verdict rules—not让任务仅凭聊天记忆或裸目标继续推进. If you ask to change judgment standard during this stage, Agent should stop and route you back to `/loopora-plan` or Web review.
+`/loopora-run` enters the Loop run stage: start, continue, resume, or patch evidence gaps. Agent remains the main executor: it reads code, edits files, runs checks, and explains results. Loopora keeps each round tied back to the reviewed plan, required evidence, and verdict rules instead of letting the task continue only from chat memory or a bare goal. If you ask to change the judgment standard during this stage, Agent should stop and route you back to `/loopora-plan` or Web review.
 
 If current Agent session has exact Loopora binding, `/loopora-run` can resume directly. If workdir has recoverable Loopora runs but current Agent session differs or multiple candidates exist, Loopora should surface choices—not guess which to continue. To create fresh Loop rather than reuse old judgment, return to `/loopora-plan` or Web and explicitly choose fresh start.
 
@@ -182,15 +184,16 @@ Common recovery paths follow user intent:
 
 | Situation | What Loopora should do |
 | --- | --- |
-| Current directory has no Loopora context yet | `/loopora-plan`默认创建新的候选 Loop |
-| Current directory already has spec, candidate Loop, run, or evidence | `/loopora-plan`先展示可用来源; you can continue, improve, or explicitly start fresh |
-| Work stopped halfway and you return to same Agent session | `/loopora-run`用精确绑定恢复同一个 run,不重新规划 |
-| You return from different Agent session or several contexts recoverable | `/loopora-run`展示选择 with `option:<id>` recovery token; you can pick token, pick in Web, or return to `/loopora-plan fresh` |
-| Previous run ended but evidence still insufficient | `/loopora-run`基于同一个 Loop启动下一轮,聚焦未证明的缺口 |
-| Previous task verdict already passed | `/loopora-run`回放完成状态,不额外创建新 run |
-| You explicitly want to recreate bundle | Use fresh path in `/loopora-plan`; old runs and evidence stay history, not current judgment |
-| Local Agent binding or context card damaged | `/loopora-run`返回修复提示; run `loopora init <adapter> --check` first, then repair binding or use `/loopora-plan fresh` |
-| Local file cleanup fails while deleting or replacing bundle | Record deletion can still complete, but Loopora returns `cleanup_warnings` with path and error to clean manually |
+| `/loopora-plan` has no task context yet | It asks for task goal, fake-done risks, required evidence, and judgment tradeoffs before creating a preview |
+| Current directory has no Loopora context yet | `/loopora-plan` creates a new candidate Loop by default |
+| Current directory already has a spec, candidate Loop, run, or evidence | `/loopora-plan` surfaces available sources first; you can continue, improve, or explicitly start fresh |
+| Work stopped halfway and you return to the same Agent session | `/loopora-run` resumes the same run through the exact binding and does not replan |
+| You return from a different Agent session or several contexts are recoverable | `/loopora-run` surfaces choices with status and freshness hints; runnable choices show `next_loop_command` and `next_cli_command`, while non-runnable choices send you back to `/loopora-plan` or Web review |
+| Previous run ended but evidence is still insufficient | `/loopora-run` starts the next round from the same Loop and focuses on unproven gaps |
+| Previous task verdict already passed | `/loopora-run` replays the completed state and does not create an extra run |
+| You explicitly want to recreate the plan | Use the fresh path in `/loopora-plan`; old runs and evidence stay history, not current judgment |
+| Local Agent binding or context card is damaged | `/loopora-run` returns repair hints; run `loopora init <adapter> --check` first, then repair binding or use `/loopora-plan fresh` |
+| Local file cleanup fails while deleting or replacing a plan file | Record deletion can still complete, but Loopora returns `cleanup_warnings` with path and error to clean manually |
 
 A single run roughly follows:
 
@@ -206,13 +209,13 @@ That's the difference between Loopora and ordinary prompt or bare `/goal`: promp
 
 ## Evidence, Tests, and CI
 
-Loopora doesn't replace tests, CI, or benchmarks.相反, judgments that can be written as tests should first become tests; boundaries that can be proven via proof scripts, schemas, lint, type checks, or real external probes should优先成为强证据.
+Loopora does not replace tests, CI, or automated proof. Instead, judgments that can be written as tests should first become tests; boundaries that can be proven via proof scripts, schemas, lint, type checks, or real external probes should become strong evidence first.
 
 Loopora handles the layer around that evidence: when evidence is missing, failing, incomplete, or only proves part of the task, the Agent can't package run completion as task completion.
 
 | Evidence Shape | What it means in Loopora |
 | --- | --- |
-| Tests, CI, benchmarks, proof scripts | Strongest machine evidence for stable contracts |
+| Tests, CI, evaluation suites, proof scripts | Strongest machine evidence for stable contracts |
 | Traceable artifacts, logs, screenshots, structured check results | Useful evidence, but must state what it proves |
 | Independent checks or human review conclusions | Can help judgment, but not automatically hard proof |
 | Agent's own summary | Readable explanation only; cannot support pass by itself |
@@ -225,15 +228,15 @@ Loopora aims to increase trusted autonomy, not unlimited authorization.
 
 - It doesn't acquire new system permissions for Agent; what Agent can do still depends on host tool, workdir, local permissions.
 - Loop's action strategy expresses whether current step is read-only, can write, or can issue final ruling.
-- Within same run, worktree writes should have clear boundaries; parallel review shouldn't become多人同时修改同一片工作区.
-- Task verdict doesn't replace final human approval—it gives human一份可审查的证据摘要、阻断项和残余风险说明.
+- Within the same run, worktree writes should have clear boundaries; parallel review should not become several agents editing the same workspace area at once.
+- Task verdict does not replace final human approval; it gives the human a reviewable evidence summary, blockers, and residual-risk notes.
 - Local runs create evidence and artifacts; if task touches sensitive code, logs, or business data, handle per local project's security rules.
 
-This boundary matters: Loopora's goal isn't让 Agent更敢于宣称完成—it's让它在没有证明时更难宣称完成.
+This boundary matters: Loopora's goal is not to make the Agent more eager to claim completion; it is to make completion harder to claim when proof is missing.
 
 ## What Web Can Do
 
-Web is the fuller observation and management surface. You can start Loop from Agent, or open Web anytime to inspect and manage. When started from Agent, `/loopora-plan` or `/loopora-run` returns Web link and自动启动或复用本地 Web 服务, CLI output reports status.
+Web is the fuller observation and management surface. You can start a Loop from Agent, or open Web anytime to inspect and manage. When started from Agent, `/loopora-plan` or `/loopora-run` returns a Web link, automatically starts or reuses the local Web service, and reports that status in CLI output.
 
 Start local Web service manually:
 
@@ -248,9 +251,9 @@ Web fits these scenarios:
 | Scenario | What you can see or do |
 | --- | --- |
 | Review candidate Loop | Inspect task contract, Agent responsibilities, execution strategy, run flow, evidence rules, verdict rules |
-| Observe run | See where Loop执行到何处、最近一轮发生了什么 |
+| Observe run | See where the Loop is, and what happened in the latest round |
 | Inspect evidence | Separate proven, weak evidence, unproven, blockers, residual risk |
 | Manage entries | Install or update Codex, Claude Code, OpenCode project entries |
 | Adjust plans | Edit candidate plan when needed, or create Loop directly from Web |
 
-Agent entry and Web entry aren't separate worlds. Even if Loop starts inside your Agent, it enters same local records, can be viewed and managed in Web.
+Agent entry and Web entry are not separate worlds. Even if a Loop starts inside your Agent, it enters the same local records and can be viewed and managed in Web.

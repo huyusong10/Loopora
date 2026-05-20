@@ -446,6 +446,11 @@ STEP_CONTEXT_PACKET_SCHEMA = {
                 "missing_check_count",
                 "covered_check_ids",
                 "missing_check_ids",
+                "target_count",
+                "covered_target_count",
+                "weak_target_count",
+                "missing_target_count",
+                "blocked_target_count",
                 "coverage_top_gaps",
                 "consecutive_no_required_coverage_delta",
             ],
@@ -461,6 +466,11 @@ STEP_CONTEXT_PACKET_SCHEMA = {
                 "missing_check_count": {"type": "integer"},
                 "covered_check_ids": {"type": "array", "items": {"type": "string"}},
                 "missing_check_ids": {"type": "array", "items": {"type": "string"}},
+                "target_count": {"type": "integer"},
+                "covered_target_count": {"type": "integer"},
+                "weak_target_count": {"type": "integer"},
+                "missing_target_count": {"type": "integer"},
+                "blocked_target_count": {"type": "integer"},
                 "coverage_top_gaps": {"type": "array", "items": EVIDENCE_COVERAGE_GAP_SCHEMA},
                 "consecutive_no_required_coverage_delta": {"type": "integer"},
             },
@@ -1047,6 +1057,11 @@ def build_step_context_packet(request: StepContextPacketRequest) -> dict:
             "missing_check_count": coverage_summary["missing_check_count"],
             "covered_check_ids": coverage_summary["covered_check_ids"],
             "missing_check_ids": coverage_summary["missing_check_ids"],
+            "target_count": coverage_summary["target_count"],
+            "covered_target_count": coverage_summary["covered_target_count"],
+            "weak_target_count": coverage_summary["weak_target_count"],
+            "missing_target_count": coverage_summary["missing_target_count"],
+            "blocked_target_count": coverage_summary["blocked_target_count"],
             "coverage_top_gaps": coverage_summary["top_gaps"],
             "consecutive_no_required_coverage_delta": _int_value(request.consecutive_no_required_coverage_delta),
         },
@@ -1109,7 +1124,7 @@ def build_step_handoff(result: StepResultContext) -> dict:
         summary = _clean_text(output.get("summary") or output.get("attempted")) or "Builder completed its change pass."
         abandoned = _clean_text(output.get("abandoned"))
         if abandoned:
-            blocking_items.append(abandoned)
+            summary = f"{summary} Out-of-scope or unfinished note: {abandoned}"
         recommended_next_action = _clean_text(output.get("assumption")) or "Validate the visible change with inspection."
     elif archetype == "inspector":
         summary = _clean_text(output.get("tester_observations")) or "Inspector collected workspace evidence."
@@ -1121,10 +1136,14 @@ def build_step_handoff(result: StepResultContext) -> dict:
     elif archetype == "gatekeeper":
         summary = _clean_text(output.get("decision_summary")) or "GateKeeper evaluated the current evidence."
         blocking_items = _gatekeeper_blockers(output)
-        recommended_next_action = (
-            _clean_text(output.get("feedback_to_builder") or output.get("feedback_to_generator")) or "Continue only after the blocking issues are resolved."
-        )
         status = "passed" if structured_bool_is_true(output.get("passed")) else "blocked"
+        recommended_next_action = _clean_text(output.get("feedback_to_builder") or output.get("feedback_to_generator"))
+        if not recommended_next_action:
+            recommended_next_action = (
+                "No further role action is required; the GateKeeper verdict passed."
+                if status == "passed"
+                else "Continue only after the blocking issues are resolved."
+            )
     elif archetype == "guide":
         analysis = output.get("analysis") if isinstance(output.get("analysis"), dict) else {}
         summary = _clean_text(analysis.get("recommended_shift") or output.get("meta_note")) or "Guide proposed a direction shift."
@@ -1190,11 +1209,11 @@ def build_step_handoff(result: StepResultContext) -> dict:
 
 def _output_workspace_artifact_refs(layout: RunArtifactLayout, output: dict) -> list[dict[str, str]]:
     fields = (
-        ("changed_files", "changed-file"),
-        ("generated_files", "generated-file"),
         ("proof_files", "proof-file"),
         ("proof_artifacts", "proof-artifact"),
         ("artifact_paths", "artifact"),
+        ("generated_files", "generated-file"),
+        ("changed_files", "changed-file"),
     )
     refs: list[dict[str, str]] = []
     seen: set[str] = set()
@@ -1250,12 +1269,12 @@ def build_step_evidence_entry(request: StepEvidenceEntryRequest) -> dict:
     handoff = request.handoff
     archetype = str(role["archetype"])
     verifies = _evidence_verifies(archetype, output)
-    related_evidence_ids = _string_list(output.get("evidence_refs"))
+    related_evidence_ids = _unique_string_list(output.get("evidence_refs"))
     for coverage_result in list(output.get("coverage_results") or []):
         if isinstance(coverage_result, dict):
-            related_evidence_ids.extend(_string_list(coverage_result.get("evidence_refs")))
-    if evidence_entry_id(result.iter_id, step_order, step["id"]) in related_evidence_ids:
-        related_evidence_ids = [item for item in related_evidence_ids if item != evidence_entry_id(result.iter_id, step_order, step["id"])]
+            related_evidence_ids.extend(_unique_string_list(coverage_result.get("evidence_refs")))
+    current_evidence_id = evidence_entry_id(result.iter_id, step_order, step["id"])
+    related_evidence_ids = list(dict.fromkeys(item for item in related_evidence_ids if item != current_evidence_id))
     evidence_claims = _string_list(output.get("evidence_claims"))
     claim = _clean_text(output.get("decision_summary") if archetype == "gatekeeper" else handoff.get("summary"))
     if evidence_claims:
@@ -1375,7 +1394,7 @@ def _evidence_coverage_results(value: object) -> list[dict]:
             {
                 "target_id": target_id,
                 "status": _clean_text(item.get("status")) or "unknown",
-                "evidence_refs": _string_list(item.get("evidence_refs"))[:20],
+                "evidence_refs": _unique_string_list(item.get("evidence_refs"))[:20],
                 "note": _clean_text(item.get("note"))[:400],
             }
         )
@@ -1387,6 +1406,10 @@ def _evidence_residual_risk(archetype: str, output: dict, handoff: dict) -> str:
     risks.extend(_string_list(output.get("residual_risks")))
     risks.extend(_string_list(output.get("hard_constraint_violations")))
     risks.extend(_string_list(output.get("blocking_issues")))
+    if archetype == "builder":
+        abandoned = _clean_text(output.get("abandoned"))
+        if abandoned:
+            risks.append(abandoned)
     if not risks:
         risks.extend(_string_list(handoff.get("blocking_items")))
     if archetype == "gatekeeper" and not risks and output.get("passed") is True:
@@ -1666,7 +1689,8 @@ def output_contract_prompt(archetype: str) -> str:
         return (
             "Output contract: return JSON with attempted, abandoned, assumption, summary, changed_files, "
             "proof_files, proof_artifacts, and artifact_paths. Use empty arrays for proof_files, "
-            "proof_artifacts, artifact_paths, and changed_files when no files or proof artifacts were created."
+            "proof_artifacts, artifact_paths, and changed_files when no files or proof artifacts were created. "
+            "Use abandoned only for unfinished work or real downstream risk; use an empty string for deliberate scope limits."
         )
     if archetype == "inspector":
         return (
@@ -2060,6 +2084,11 @@ def _normalize_evidence_coverage_summary(
         "missing_check_count": _int_value(source.get("missing_check_count", fallback_missing_check_count)),
         "covered_check_ids": _string_list(source.get("covered_check_ids")),
         "missing_check_ids": _string_list(source.get("missing_check_ids")),
+        "target_count": _int_value(source.get("target_count")),
+        "covered_target_count": _int_value(source.get("covered_target_count")),
+        "weak_target_count": _int_value(source.get("weak_target_count")),
+        "missing_target_count": _int_value(source.get("missing_target_count")),
+        "blocked_target_count": _int_value(source.get("blocked_target_count")),
         "top_gaps": _normalize_coverage_gap_rows(source.get("top_gaps")),
     }
 
@@ -2220,6 +2249,10 @@ def _string_list(value: object) -> list[str]:
     return [str(item).strip() for item in value if str(item).strip()]
 
 
+def _unique_string_list(value: object) -> list[str]:
+    return list(dict.fromkeys(_string_list(value)))
+
+
 def _inspector_blockers(output: dict) -> list[str]:
     blockers = []
     failed_items = output.get("failed_items")
@@ -2232,7 +2265,7 @@ def _inspector_blockers(output: dict) -> list[str]:
             blocker = str(item.get("title") or item.get("id") or "").strip()
             if blocker:
                 blockers.append(blocker)
-    return blockers
+    return list(dict.fromkeys(item for item in blockers if item))
 
 
 def _gatekeeper_blockers(output: dict) -> list[str]:

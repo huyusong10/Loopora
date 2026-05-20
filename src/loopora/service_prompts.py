@@ -107,7 +107,8 @@ class ServiceRunPromptMixin:
             f"Constraints:\n{constraints}\n\n"
             f"{role_note}"
             "Return JSON with attempted, abandoned, assumption, summary, changed_files, proof_files, proof_artifacts, and artifact_paths. "
-            "Use empty arrays for changed_files, proof_files, proof_artifacts, and artifact_paths when no files or proof artifacts were created."
+            "Use empty arrays for changed_files, proof_files, proof_artifacts, and artifact_paths when no files or proof artifacts were created. "
+            "Use abandoned only for unfinished work or real downstream risk; use an empty string for deliberate scope limits."
         )
 
     def _generator_prior_iteration_feedback(
@@ -305,14 +306,20 @@ GENERATOR_SCHEMA = {
         "artifact_paths",
     ],
     "properties": {
-        "attempted": {"type": "string"},
-        "abandoned": {"type": "string"},
-        "assumption": {"type": "string"},
-        "summary": {"type": "string"},
-        "changed_files": {"type": "array", "items": {"type": "string"}},
-        "proof_files": {"type": "array", "items": {"type": "string"}},
-        "proof_artifacts": {"type": "array", "items": {"type": "string"}},
-        "artifact_paths": {"type": "array", "items": {"type": "string"}},
+        "attempted": {"type": "string", "description": "What the Builder changed or tried to change in this pass."},
+        "abandoned": {
+            "type": "string",
+            "description": "Only unfinished work or real downstream risk; use an empty string for deliberate scope limits.",
+        },
+        "assumption": {
+            "type": "string",
+            "description": "The assumption or validation step downstream roles should check next.",
+        },
+        "summary": {"type": "string", "description": "Short user-facing handoff summary of the completed Builder pass."},
+        "changed_files": {"type": "array", "items": {"type": "string"}, "description": "Workspace files changed by this pass."},
+        "proof_files": {"type": "array", "items": {"type": "string"}, "description": "Files containing reproducible proof or checks."},
+        "proof_artifacts": {"type": "array", "items": {"type": "string"}, "description": "Small inline proof snippets or artifact labels."},
+        "artifact_paths": {"type": "array", "items": {"type": "string"}, "description": "Additional workspace artifact paths."},
     },
     "additionalProperties": False,
 }

@@ -4,6 +4,8 @@
 
 This article explains the engineering thinking and collaboration philosophy behind Loopora. For installation and usage, see [README](./README.md).
 
+Readers do not need to understand Loopora's internal terms first. This article starts from the collaboration problem, then names the structure after the need is clear.
+
 ---
 
 Loopora starts from a simple desire: laziness.

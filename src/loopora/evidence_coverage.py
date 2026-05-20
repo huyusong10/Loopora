@@ -26,7 +26,8 @@ POSITIVE_COVERAGE_STATUSES = {
     "proven",
 }
 WEAK_COVERAGE_STATUSES = {"partial", "weak", "skipped", "unknown", "inconclusive"}
-NEGATIVE_COVERAGE_STATUSES = {"failed", "fail", "error", "errored", "blocked", "rejected", "missing"}
+MISSING_COVERAGE_STATUSES = {"missing"}
+NEGATIVE_COVERAGE_STATUSES = {"failed", "fail", "error", "errored", "blocked", "rejected"}
 def with_coverage_targets(compiled_spec: Mapping[str, Any], *, completion_mode: str = "gatekeeper") -> dict:
     spec = dict(compiled_spec)
     spec["coverage_targets"] = build_coverage_targets(spec, completion_mode=completion_mode)
@@ -377,25 +378,42 @@ def _apply_target_evidence(
         evidence_items_by_id=evidence_items_by_id,
         target_evidence_refs=target_evidence_refs,
     )
-    if normalized in NEGATIVE_COVERAGE_STATUSES:
-        row["status"] = "blocked"
-        row["reason"] = "Evidence reported this coverage target as blocked or failed."
-    elif normalized in POSITIVE_COVERAGE_STATUSES:
-        if supporting_refs:
-            row["status"] = "covered"
-            row["reason"] = "Supporting evidence verified this coverage target."
-        else:
-            row["status"] = "weak"
-            row["reason"] = "Coverage was reported as positive without supporting evidence."
-    elif normalized in WEAK_COVERAGE_STATUSES:
-        row["status"] = "weak"
-        row["reason"] = "Evidence for this coverage target is present but weak or inconclusive."
-    evidence_refs = supporting_refs or ([evidence_id] if evidence_id else [])
+    _apply_target_status(row, normalized=normalized, supporting_refs=supporting_refs)
+    evidence_refs = _target_row_evidence_refs(normalized=normalized, evidence_id=evidence_id, supporting_refs=supporting_refs)
     if evidence_refs:
         row["evidence_refs"] = list(dict.fromkeys([*list(row.get("evidence_refs") or []), *evidence_refs]))
     artifact_refs = _target_artifact_refs(item=item, supporting_refs=supporting_refs, evidence_items_by_id=evidence_items_by_id)
     if artifact_refs:
         row["artifact_refs"] = list(row.get("artifact_refs") or []) + artifact_refs[:8]
+
+
+def _apply_target_status(row: dict, *, normalized: str, supporting_refs: list[str]) -> None:
+    if normalized in NEGATIVE_COVERAGE_STATUSES:
+        row["status"] = "blocked"
+        row["reason"] = "Evidence reported this coverage target as blocked or failed."
+    elif normalized in MISSING_COVERAGE_STATUSES:
+        if row.get("status") not in {"blocked", "covered", "weak"}:
+            row["status"] = "missing"
+            row["reason"] = "Evidence reported this coverage target is still missing."
+    elif normalized in POSITIVE_COVERAGE_STATUSES:
+        if supporting_refs:
+            if row.get("status") != "covered":
+                row["evidence_refs"] = []
+                row["artifact_refs"] = []
+            row["status"] = "covered"
+            row["reason"] = "Supporting evidence verified this coverage target."
+        elif row.get("status") not in {"blocked", "covered"}:
+            row["status"] = "weak"
+            row["reason"] = "Coverage was reported as positive without supporting evidence."
+    elif normalized in WEAK_COVERAGE_STATUSES and row.get("status") not in {"blocked", "covered"}:
+        row["status"] = "weak"
+        row["reason"] = "Evidence for this coverage target is present but weak or inconclusive."
+
+
+def _target_row_evidence_refs(*, normalized: str, evidence_id: str, supporting_refs: list[str]) -> list[str]:
+    if normalized in NEGATIVE_COVERAGE_STATUSES:
+        return list(dict.fromkeys([*([evidence_id] if evidence_id else []), *supporting_refs]))
+    return supporting_refs or ([evidence_id] if evidence_id else [])
 
 
 def _target_supporting_refs(
@@ -515,6 +533,8 @@ def _non_supporting_gatekeeper_refs(
 
 def _gatekeeper_has_self_measured_evidence(item: Mapping[str, Any], *, item_id: str, evidence_refs: list[str]) -> bool:
     if not item_id or item_id not in set(evidence_refs):
+        return False
+    if str(item.get("result") or "").strip().lower() != "passed":
         return False
     return structured_bool_is_true(item.get("measured_evidence")) and _safe_int(item.get("concrete_evidence_claim_count")) > 0
 

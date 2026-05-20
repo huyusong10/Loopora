@@ -67,7 +67,7 @@ class LooporaRepository(
                 sleep_seconds = 0.1 * attempt_number
                 log_event(
                     logger,
-                    logging.WARNING,
+                    logging.INFO,
                     "db.connect.retry",
                     "Retrying database connection after a transient failure",
                     path=self.path,

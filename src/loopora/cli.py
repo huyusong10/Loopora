@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+import click
 import typer
 from typer.core import TyperGroup
 
+from loopora.agent_adapters import adapter_first_task_message_example
 from loopora.branding import APP_NAME
 from loopora.cli_agent_adapter_commands import register_agent_adapter_commands
 from loopora.cli_bundle_commands import register_bundle_commands
 from loopora.cli_diagnose_commands import register_diagnose_commands
+from loopora.cli_common import echo_json
 from loopora.cli_shared import spawn_background_worker as _spawn_background_worker
 from loopora.cli_loop_commands import register_loop_commands
 from loopora.cli_orchestration_commands import register_orchestration_commands
@@ -36,6 +39,133 @@ class LooporaRootHelpGroup(TyperGroup):
         }
         original_order = {name: index for index, name in enumerate(names)}
         return sorted(names, key=lambda name: (first_use_order.get(name, 100), original_order[name]))
+
+    def get_command(self, ctx, cmd_name):
+        command = super().get_command(ctx, cmd_name)
+        if command is None:
+            recovery_command = _normalized_slash_recovery_command(str(cmd_name or ""))
+            if recovery_command:
+                return SlashCommandRecovery(recovery_command)
+        return command
+
+
+class SlashCommandRecovery(click.Command):
+    def __init__(self, slash_command: str):
+        super().__init__(
+            slash_command,
+            context_settings={"allow_extra_args": True, "ignore_unknown_options": True},
+        )
+        self.slash_command = slash_command
+
+    def get_help(self, _ctx):
+        return _slash_command_recovery_message(self.slash_command)
+
+    def invoke(self, ctx):
+        if _slash_recovery_wants_json(ctx):
+            echo_json(_slash_command_recovery_json_payload(self.slash_command))
+        else:
+            typer.echo(_slash_command_recovery_message(self.slash_command))
+        raise typer.Exit(code=2)
+
+
+def _normalized_slash_recovery_command(command: str) -> str:
+    normalized = str(command or "").strip()
+    if normalized.startswith("/"):
+        return normalized
+    if normalized in {"loopora-plan", "loopora-run", "next"}:
+        return f"/{normalized}"
+    return ""
+
+
+def _slash_recovery_wants_json(ctx) -> bool:
+    return any(str(arg or "").strip() == "--json" for arg in list(getattr(ctx, "args", []) or []))
+
+
+def _slash_command_recovery_json_payload(slash_command: str) -> dict:
+    payload = _slash_command_recovery_payload(slash_command)
+    return {"slash_command_recovery_summary": _slash_command_recovery_summary(payload), **payload}
+
+
+def _slash_command_recovery_summary(payload: dict) -> dict:
+    summary_keys = [
+        "ready",
+        "slash_command_recovery",
+        "slash_command",
+        "agent_command",
+        "shell_subcommand",
+        "next_step",
+        "install_first",
+        "if_missing_in_agent",
+        "debug_cli",
+    ]
+    return {key: payload[key] for key in summary_keys if key in payload and payload[key] not in ("", [], {})}
+
+
+def _slash_command_recovery_payload(slash_command: str) -> dict:
+    command = str(slash_command or "").strip()
+    if command == "/loopora-plan":
+        return {
+            "ready": False,
+            "slash_command_recovery": "agent_slash_command_in_shell",
+            "slash_command": "/loopora-plan",
+            "agent_command": True,
+            "shell_subcommand": False,
+            "message": "/loopora-plan is an Agent slash command, not a shell subcommand.",
+            "install_first": 'loopora init codex --workdir "$PWD"  # or claude/opencode',
+            "if_missing_in_agent": 'loopora init codex --workdir "$PWD" --check  # then refresh or restart that Agent',
+            "next_step": "return to that Agent with the task goal, fake-done risk, and required evidence, then run /loopora-plan there.",
+            "first_task_message_example": adapter_first_task_message_example(),
+            "debug_cli": 'loopora agent codex plan --workdir "$PWD" --message "<task goal and evidence expectations>"',
+        }
+    if command == "/loopora-run":
+        return {
+            "ready": False,
+            "slash_command_recovery": "agent_slash_command_in_shell",
+            "slash_command": "/loopora-run",
+            "agent_command": True,
+            "shell_subcommand": False,
+            "message": "/loopora-run is an Agent slash command, not a shell subcommand.",
+            "if_missing_in_agent": 'loopora init codex --workdir "$PWD" --check  # then refresh or restart that Agent',
+            "next_step": "run /loopora-run inside the same Agent session that created or selected the READY Loop preview.",
+            "debug_cli": 'loopora agent codex run --workdir "$PWD"  # use claude/opencode for that adapter',
+        }
+    if command == "/next":
+        return {
+            "ready": False,
+            "slash_command_recovery": "unsupported_loopora_slash_command",
+            "slash_command": "/next",
+            "agent_command": False,
+            "shell_subcommand": False,
+            "message": "Loopora does not install a top-level /next slash command.",
+            "next_step": "use /loopora-run inside the Agent to start, resume, or continue the current Loop.",
+            "debug_cli": 'loopora agent codex next --workdir "$PWD" --run-id <run_id>',
+        }
+    return {
+        "ready": False,
+        "slash_command_recovery": "unknown_loopora_shell_subcommand",
+        "slash_command": command,
+        "agent_command": False,
+        "shell_subcommand": False,
+        "message": f"{command} is not a Loopora shell subcommand.",
+        "known_agent_commands": ["/loopora-plan", "/loopora-run"],
+        "install_first": 'loopora init codex --workdir "$PWD"  # or claude/opencode',
+        "if_missing_in_agent": 'loopora init codex --workdir "$PWD" --check  # then refresh or restart that Agent',
+        "first_task_message_example": adapter_first_task_message_example(),
+        "next_step": "run Loopora slash commands inside the Coding Agent, not in the shell.",
+    }
+
+
+def _slash_command_recovery_message(slash_command: str) -> str:
+    payload = _slash_command_recovery_payload(slash_command)
+    lines = [f"slash_command_recovery: {payload['message']}"]
+    known_agent_commands = payload.get("known_agent_commands")
+    if isinstance(known_agent_commands, list) and known_agent_commands:
+        lines.append("known_agent_commands: " + ", ".join(str(item) for item in known_agent_commands))
+    for key in ("install_first", "if_missing_in_agent", "next_step", "first_task_message_example", "debug_cli"):
+        value = str(payload.get(key) or "").strip()
+        if value:
+            lines.append(f"{key}: {value}")
+    return "\n".join(lines)
 
 
 app = typer.Typer(

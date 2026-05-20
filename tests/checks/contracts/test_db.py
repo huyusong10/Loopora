@@ -158,12 +158,12 @@ def test_create_run_rejects_second_active_run_for_workdir(tmp_path: Path) -> Non
         )
 
 
-def test_repository_retries_transient_open_errors(tmp_path: Path, monkeypatch, caplog) -> None:
+def test_repository_retries_transient_open_errors(tmp_path: Path, monkeypatch, caplog, capsys) -> None:
     target = tmp_path / "app.db"
     real_connect = sqlite3.connect
     attempts = {"count": 0}
     configure_logging()
-    caplog.set_level(logging.WARNING, logger="loopora")
+    caplog.set_level(logging.INFO, logger="loopora")
 
     def flaky_connect(*args, **kwargs):
         attempts["count"] += 1
@@ -181,8 +181,12 @@ def test_repository_retries_transient_open_errors(tmp_path: Path, monkeypatch, c
     assert repository.path.exists()
     records = _read_service_log_records()
     retry_record = next(record for record in records if record["event"] == "db.connect.retry")
+    assert retry_record["level"] == "INFO"
     assert retry_record["context"]["attempt"] == 1
     assert retry_record["context"]["retryable"] is True
+    terminal = capsys.readouterr()
+    assert "db.connect.retry" not in terminal.out
+    assert "db.connect.retry" not in terminal.err
 
 
 def test_append_event_tolerates_jsonl_mirror_failures(tmp_path: Path, monkeypatch) -> None:

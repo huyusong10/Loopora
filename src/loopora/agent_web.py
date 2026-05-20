@@ -10,7 +10,7 @@ from pathlib import Path
 from urllib.error import URLError
 from urllib.request import urlopen
 
-from loopora.settings import logs_dir
+from loopora.settings import app_home, logs_dir
 
 DEFAULT_AGENT_WEB_HOST = "127.0.0.1"
 DEFAULT_AGENT_WEB_PORT = 8742
@@ -22,9 +22,10 @@ AGENT_WEB_PID_FILE_ENV = "LOOPORA_AGENT_WEB_PID_FILE"
 def ensure_local_web_service(*, host: str = DEFAULT_AGENT_WEB_HOST, preferred_port: int = DEFAULT_AGENT_WEB_PORT) -> dict[str, object]:
     selected_host = str(os.environ.get(AGENT_WEB_HOST_ENV) or host)
     selected_port = _agent_web_port_from_env(preferred_port)
+    expected_app_home = str(app_home().resolve())
     for port in range(selected_port, min(selected_port + 25, 65536)):
         base_url = f"http://{selected_host}:{port}"
-        if _loopora_web_responds(base_url):
+        if _loopora_web_responds(base_url, expected_app_home=expected_app_home):
             return {"base_url": base_url, "reused": True, "started": False, "port": port}
         if _port_is_available(selected_host, port):
             process = _start_web_process(host=selected_host, port=port)
@@ -63,13 +64,15 @@ def web_url_for_path(path: str, *, web: dict[str, object]) -> str:
     return base_url + normalized_path
 
 
-def _loopora_web_responds(base_url: str) -> bool:
+def _loopora_web_responds(base_url: str, *, expected_app_home: str = "") -> bool:
     try:
         with urlopen(f"{base_url}/api/runtime/activity", timeout=0.35) as response:
             if int(response.status) != 200:
                 return False
             payload = json.loads(response.read().decode("utf-8"))
-            return isinstance(payload, dict) and {"running_count", "queued_count", "runs"}.issubset(payload)
+            if not isinstance(payload, dict) or not {"running_count", "queued_count", "runs"}.issubset(payload):
+                return False
+            return not (expected_app_home and str(payload.get("app_home") or "") != expected_app_home)
     except (json.JSONDecodeError, OSError, UnicodeDecodeError, URLError, TimeoutError):
         return False
 

@@ -97,6 +97,8 @@ ignore = [
 # Typer command modules expose the public CLI flag surface in callback
 # signatures; internal helpers must keep using structured request objects.
 "src/loopora/cli_agent_adapter_commands.py" = ["FBT002", "PLR0913"]
+"src/loopora/cli_agent_native.py" = ["PLR0913"]
+"src/loopora/cli_agent_submit_repair.py" = ["PLR0913"]
 "src/loopora/cli_diagnose_commands.py" = ["FBT001", "FBT003"]
 "src/loopora/cli_loop_commands.py" = ["FBT002", "PLR0913"]
 "src/loopora/cli_orchestration_commands.py" = ["PLR0913"]
@@ -104,6 +106,10 @@ ignore = [
 "src/loopora/cli_root_commands.py" = ["FBT001", "FBT002", "FBT003", "PLR0913"]
 "src/loopora/cli_spec_commands.py" = ["FBT002"]
 "src/loopora/cli_shared.py" = ["F403"]
+"tests/checks/contracts/agent_adapter_helpers.py" = ["F401"]
+"tests/checks/contracts/test_agent_adapter_*.py" = ["F403", "F405"]
+"tests/checks/contracts/test_agent_bundle_candidates.py" = ["F403", "F405"]
+"tests/checks/contracts/test_agent_native_*.py" = ["F403", "F405"]
 
 [tool.uv]
 package = true
