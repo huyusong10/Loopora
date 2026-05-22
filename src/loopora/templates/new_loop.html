@@ -50,9 +50,13 @@
       <span data-lang="en">Manual composition</span>
     </a>
   </nav>
-  <div class="bundle-sidebar-history">
+  <details class="bundle-sidebar-history">
+    <summary>
+      <span data-lang="zh">最近对话</span>
+      <span data-lang="en">Recent chats</span>
+    </summary>
     <div class="alignment-history-list" id="alignment-history-list" data-testid="alignment-history-list"></div>
-  </div>
+  </details>
 </aside>
 {%- endmacro %}
 {% set create_page_mode = create_page_mode|default("choice") %}
@@ -148,6 +152,11 @@
         <span data-lang="zh">先写任务，再写什么不算完成、需要哪些证据、哪些风险必须阻断收尾。</span>
         <span data-lang="en">Describe the task, what would be fake-done, what evidence is required, and which risks must block closure.</span>
       </p>
+      <details class="alignment-starter-disclosure">
+        <summary>
+          <span data-lang="zh">需要例子时再展开</span>
+          <span data-lang="en">Open examples only when useful</span>
+        </summary>
       <div class="alignment-starter-grid" data-testid="alignment-starter-grid" aria-label="{{ '任务样例' if page_locale == 'zh' else 'Task examples' }}">
         <button
           class="alignment-starter-card"
@@ -201,6 +210,7 @@
           <span data-lang="en">Pin evidence first, then repair</span>
         </button>
       </div>
+      </details>
     </div>
 
     <section class="alignment-chat" id="alignment-chat" data-testid="alignment-chat" hidden>

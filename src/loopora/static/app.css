@@ -832,21 +832,67 @@ html[data-locale="zh"] .hero-lede {
 }
 
 .agent-entry-start-guide {
+  display: block;
+  min-width: 0;
+  max-width: 760px;
+  border: 1px solid rgba(var(--accent-rgb), 0.18);
+  border-radius: 8px;
+  background:
+    linear-gradient(180deg, rgba(var(--accent-rgb), 0.07), rgba(var(--glass-rgb), 0.58));
+  overflow: hidden;
+}
+
+.hero > .agent-entry-start-guide {
+  max-width: min(560px, 100%);
+}
+
+.agent-entry-start-guide > summary::-webkit-details-marker {
+  display: none;
+}
+
+.agent-entry-start-summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  min-width: 0;
+  padding: 14px 16px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.agent-entry-start-summary-copy {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.agent-entry-start-summary-copy strong {
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.agent-entry-start-summary-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 32px;
+  padding: 6px 10px;
+  border: 1px solid rgba(var(--outline-rgb), 0.14);
+  border-radius: 999px;
+  color: var(--accent);
+  font-size: 0.78rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.agent-entry-start-guide-body {
   display: grid;
   grid-template-columns: minmax(0, 0.95fr) minmax(240px, 1.05fr);
   gap: 14px;
   align-items: start;
   min-width: 0;
-  max-width: 760px;
-  padding: 16px;
-  border: 1px solid rgba(var(--accent-rgb), 0.18);
-  border-radius: 8px;
-  background:
-    linear-gradient(180deg, rgba(var(--accent-rgb), 0.07), rgba(var(--glass-rgb), 0.58));
-}
-
-.hero > .agent-entry-start-guide {
-  max-width: min(560px, 100%);
+  padding: 0 16px 16px;
 }
 
 .agent-entry-start-copy,
@@ -1102,8 +1148,13 @@ html[data-locale="zh"] .hero-lede {
 }
 
 @media (max-width: 720px) {
-  .agent-entry-start-guide {
+  .agent-entry-start-summary,
+  .agent-entry-start-guide-body {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .agent-entry-start-summary-action {
+    justify-self: start;
   }
 }
 
@@ -1158,6 +1209,46 @@ html[data-locale="zh"] .eyebrow {
   margin: 16px 0 0;
   color: var(--muted);
   font-size: 0.9rem;
+}
+
+details.panel {
+  display: block;
+}
+
+details > summary {
+  cursor: pointer;
+  list-style: none;
+}
+
+details > summary::-webkit-details-marker {
+  display: none;
+}
+
+.workbench-disclosure-summary {
+  margin-bottom: 0;
+}
+
+.workbench-disclosure-summary::after,
+.workbench-secondary-disclosure > summary::after {
+  content: "";
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  margin-left: 4px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  color: var(--muted);
+  transform: rotate(45deg);
+  transition: transform 150ms ease;
+}
+
+details[open] > .workbench-disclosure-summary {
+  margin-bottom: 18px;
+}
+
+details[open] > .workbench-disclosure-summary::after,
+.workbench-secondary-disclosure[open] > summary::after {
+  transform: rotate(225deg);
 }
 
 .bundle-surface-grid {
@@ -3201,6 +3292,23 @@ html[data-locale="zh"] .callout {
   align-items: center;
   gap: 12px;
   flex-wrap: wrap;
+}
+
+.maintenance-disclosure {
+  background: rgba(var(--glass-rgb), 0.58);
+  box-shadow: var(--shadow-soft);
+}
+
+.maintenance-disclosure:not([open]) {
+  padding-block: 20px;
+}
+
+.maintenance-disclosure[open] > summary {
+  margin-bottom: 18px;
+}
+
+.maintenance-disclosure-help {
+  justify-self: start;
 }
 
 /* ── Agent Adapter Panel ── */
@@ -6560,6 +6668,10 @@ textarea:focus {
   gap: 10px;
 }
 
+.activity-list--secondary {
+  margin-top: 10px;
+}
+
 .activity-row {
   display: flex;
   align-items: center;
@@ -6609,6 +6721,49 @@ textarea:focus {
 .activity-row-main .activity-row-verdict {
   color: var(--ink);
   font-weight: 650;
+}
+
+.workbench-secondary-disclosure {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.workbench-secondary-disclosure > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: max-content;
+  max-width: 100%;
+  color: var(--muted);
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+
+.workbench-secondary-disclosure > summary small {
+  color: var(--accent-2);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.workbench-library-panel {
+  background: rgba(var(--glass-rgb), 0.58);
+}
+
+.workbench-library-panel:not([open]) {
+  box-shadow: var(--shadow-soft);
+}
+
+.workbench-disclosure-summary > span:first-child {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.workbench-disclosure-summary .panel-note {
+  margin: 0;
+  font-size: 0.84rem;
+  font-weight: 500;
 }
 
 .empty-state--compact {

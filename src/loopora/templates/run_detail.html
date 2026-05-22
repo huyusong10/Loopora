@@ -165,50 +165,60 @@
 </section>
 
 {% if agent_entry_start %}
-<section class="agent-entry-start-guide" data-testid="run-agent-entry-start-guide">
-  <div class="agent-entry-start-copy">
-    <span class="agent-entry-start-kicker">
-      <span data-lang="zh">Agent-first 执行边界</span>
-      <span data-lang="en">Agent-first execution boundary</span>
+<details class="agent-entry-start-guide" data-testid="run-agent-entry-start-guide">
+  <summary class="agent-entry-start-summary">
+    <span class="agent-entry-start-summary-copy">
+      <span class="agent-entry-start-kicker">
+        <span data-lang="zh">Agent-first 执行边界</span>
+        <span data-lang="en">Agent-first execution boundary</span>
+      </span>
+      <strong>
+        <span data-lang="zh">继续运行时回到 /loopora-run。</span>
+        <span data-lang="en">Return to /loopora-run for the next run.</span>
+      </strong>
     </span>
-    <strong>
-      <span data-lang="zh">继续运行时回到 /loopora-run。</span>
-      <span data-lang="en">Return to /loopora-run for the next run.</span>
-    </strong>
-    <p>
-      <span data-lang="zh">{{ agent_entry_start.message_zh }}</span>
-      <span data-lang="en">{{ agent_entry_start.message_en }}</span>
-    </p>
-    {% include "partials/agent_entry_continuation.html" %}
-  </div>
-  <div class="agent-entry-start-command">
-    <span><span data-lang="zh">同一 Agent 会话中运行</span><span data-lang="en">Run in the same Agent session</span></span>
-    <div class="agent-entry-start-command-row">
-      <code data-agent-entry-command-value>{{ agent_entry_start.loop_command }}</code>
-      <button
-        class="ghost-button agent-entry-start-copy-button"
-        type="button"
-        data-agent-entry-command-copy
-        data-copy-value="{{ agent_entry_start.loop_command }}"
-        data-testid="run-agent-entry-copy-command"
-        aria-label="{{ '复制 /loopora-run 命令' if page_locale == 'zh' else 'Copy /loopora-run command' }}"
-      >
-        <span aria-hidden="true">⧉</span>
-        <span class="sr-only"><span data-lang="zh">复制 /loopora-run 命令</span><span data-lang="en">Copy /loopora-run command</span></span>
-      </button>
+    <span class="agent-entry-start-summary-action">
+      <span data-lang="zh">命令与上下文</span>
+      <span data-lang="en">Command and context</span>
+    </span>
+  </summary>
+  <div class="agent-entry-start-guide-body">
+    <div class="agent-entry-start-copy">
+      <p>
+        <span data-lang="zh">{{ agent_entry_start.message_zh }}</span>
+        <span data-lang="en">{{ agent_entry_start.message_en }}</span>
+      </p>
+      {% include "partials/agent_entry_continuation.html" %}
     </div>
-    <p class="agent-entry-start-copy-status" data-agent-entry-copy-status aria-live="polite"></p>
-    {% if agent_entry_start.linked_run_id and agent_entry_start.linked_run_id != run.id %}
-    <a class="ghost-button" href="/runs/{{ agent_entry_start.linked_run_id }}">
-      <span data-lang="zh">打开绑定运行</span>
-      <span data-lang="en">Open bound run</span>
-    </a>
-    {% endif %}
+    <div class="agent-entry-start-command">
+      <span><span data-lang="zh">同一 Agent 会话中运行</span><span data-lang="en">Run in the same Agent session</span></span>
+      <div class="agent-entry-start-command-row">
+        <code data-agent-entry-command-value>{{ agent_entry_start.loop_command }}</code>
+        <button
+          class="ghost-button agent-entry-start-copy-button"
+          type="button"
+          data-agent-entry-command-copy
+          data-copy-value="{{ agent_entry_start.loop_command }}"
+          data-testid="run-agent-entry-copy-command"
+          aria-label="{{ '复制 /loopora-run 命令' if page_locale == 'zh' else 'Copy /loopora-run command' }}"
+        >
+          <span aria-hidden="true">⧉</span>
+          <span class="sr-only"><span data-lang="zh">复制 /loopora-run 命令</span><span data-lang="en">Copy /loopora-run command</span></span>
+        </button>
+      </div>
+      <p class="agent-entry-start-copy-status" data-agent-entry-copy-status aria-live="polite"></p>
+      {% if agent_entry_start.linked_run_id and agent_entry_start.linked_run_id != run.id %}
+      <a class="ghost-button" href="/runs/{{ agent_entry_start.linked_run_id }}">
+        <span data-lang="zh">打开绑定运行</span>
+        <span data-lang="en">Open bound run</span>
+      </a>
+      {% endif %}
+    </div>
   </div>
-</section>
+</details>
 {% endif %}
 
-<section class="dashboard-grid">
+<section class="dashboard-grid run-judgment-grid">
   <article class="panel takeaway-panel" data-testid="run-takeaway-panel">
     <header class="panel-header takeaway-panel-header">
       <div>
@@ -368,6 +378,11 @@
       <ol class="agent-handoff-gaps" id="agent-handoff-gaps"></ol>
     </div>
     <div class="takeaway-evidence-strip" id="takeaway-evidence-strip" data-testid="takeaway-evidence-strip" hidden></div>
+    <details class="trace-material-disclosure">
+      <summary>
+        <span data-lang="zh">追查材料路径</span>
+        <span data-lang="en">Trace material paths</span>
+      </summary>
     <div class="takeaway-shortcuts" data-testid="takeaway-trace-shortcuts">
       <div class="takeaway-path-grid">
         <article class="takeaway-path-card">
@@ -403,6 +418,7 @@
         <span class="takeaway-feedback" id="takeaway-feedback"></span>
       </div>
     </div>
+    </details>
     <div class="takeaway-selector-row" id="takeaway-selector-row" hidden>
       <label class="takeaway-selector-label" for="takeaway-iteration-select">
         <span data-lang="zh">查看轮次</span>
@@ -423,8 +439,8 @@
     </div>
   </article>
 
-  <article class="panel progress-panel" data-testid="run-progress-panel">
-    <header class="panel-header progress-panel-header">
+  <details class="panel progress-panel trace-material-panel" data-testid="run-progress-panel">
+    <summary class="panel-header progress-panel-header trace-material-summary">
       <div>
         <h2><span data-lang="zh">运行进度</span><span data-lang="en">Progress</span></h2>
         <p class="progress-panel-copy" id="progress-caption">
@@ -435,7 +451,7 @@
       <div class="progress-status-cluster">
         <span class="status-pill progress-status-pill" id="progress-status-badge" data-status-label="{{ run.status }}"></span>
       </div>
-    </header>
+    </summary>
     {% set checks_stage = progress_stages[0] if progress_stages else None %}
     {% set finished_stage = progress_stages[-1] if progress_stages else None %}
     {% set workflow_stages = progress_stages[1:-1] if progress_stages|length > 2 else [] %}
@@ -555,10 +571,10 @@
         <span class="highlight-meta" id="event-meta">-</span>
       </article>
     </div>
-  </article>
+  </details>
 
-  <article class="panel console-panel" data-testid="run-console-panel">
-    <header class="panel-header console-panel-header">
+  <details class="panel console-panel trace-material-panel" data-testid="run-console-panel">
+    <summary class="panel-header console-panel-header trace-material-summary">
       <div>
         <h2><span data-lang="zh">控制台</span><span data-lang="en">Console</span></h2>
         <p class="console-copy">
@@ -573,7 +589,7 @@
         </span>
         <span id="console-line-count">0 lines</span>
       </div>
-    </header>
+    </summary>
     <div class="console-toolbar" aria-label="{{ '控制台操作' if page_locale == 'zh' else 'Console controls' }}">
       <div class="console-toolbar-actions">
         <a
@@ -598,10 +614,10 @@
         <div class="console-output" id="console-output" data-testid="run-console-output"></div>
       </div>
     </div>
-  </article>
+  </details>
 
-  <article class="panel timeline-panel" data-testid="run-timeline-panel">
-    <header class="panel-header timeline-panel-header">
+  <details class="panel timeline-panel trace-material-panel" data-testid="run-timeline-panel">
+    <summary class="panel-header timeline-panel-header trace-material-summary">
       <div>
         <h2><span data-lang="zh">追查时间线</span><span data-lang="en">Trace timeline</span></h2>
         <p class="timeline-copy">
@@ -610,33 +626,15 @@
         </p>
       </div>
       <span class="timeline-count" id="timeline-count">-</span>
-    </header>
+    </summary>
     <div class="timeline" id="timeline"></div>
     <div class="timeline-empty" id="timeline-empty">
       <span data-lang="zh">还没有里程碑事件，更多信息会在运行推进后出现。</span>
       <span data-lang="en">No milestone events yet. More details will appear as the run progresses.</span>
     </div>
-  </article>
+  </details>
 </section>
 </div>
 
-<script>
-  window.LOOPORA_RUN_DETAIL = {
-    runId: {{ run.id|tojson }},
-    initialRun: {{ run|tojson }},
-  };
-</script>
-<script src="{{ static_asset_url('pages/run_detail_console.js') }}" defer></script>
-<script src="{{ static_asset_url('pages/run_detail_observation.js') }}" defer></script>
-<script src="{{ static_asset_url('pages/run_detail_state.js') }}" defer></script>
-<script src="{{ static_asset_url('pages/run_detail_stream.js') }}" defer></script>
-<script src="{{ static_asset_url('pages/run_detail_api.js') }}" defer></script>
-<script src="{{ static_asset_url('pages/run_detail_scheduler.js') }}" defer></script>
-<script src="{{ static_asset_url('pages/run_detail_progress_time.js') }}" defer></script>
-<script src="{{ static_asset_url('pages/run_detail_progress_activity.js') }}" defer></script>
-<script src="{{ static_asset_url('pages/run_detail_progress.js') }}" defer></script>
-<script src="{{ static_asset_url('pages/run_detail_timeline.js') }}" defer></script>
-<script src="{{ static_asset_url('pages/run_detail_takeaways.js') }}" defer></script>
-<script src="{{ static_asset_url('pages/run_detail_render.js') }}" defer></script>
-<script src="{{ static_asset_url('pages/run_detail.js') }}" defer></script>
+{% include "partials/run_detail_scripts.html" %}
 {% endblock %}

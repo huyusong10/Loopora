@@ -140,20 +140,24 @@
   <div class="field-status" id="agent-adapter-status" data-testid="agent-adapter-status" hidden></div>
 </section>
 
-<section class="panel" data-testid="wake-lock-panel-section">
-  <header class="panel-header">
+<details class="panel maintenance-disclosure" data-testid="wake-lock-panel-section">
+  <summary class="panel-header workbench-disclosure-summary">
     <div class="tools-heading">
       <h2><span data-lang="zh">防止自动休眠</span><span data-lang="en">Keep This Screen Awake</span></h2>
-      <button
-        class="help-dot help-dot--tips"
-        type="button"
-        data-title-zh="只会在检测到有运行正在执行时请求浏览器保持屏幕唤醒，没有运行中的 Loop 会自动释放。保持这个工具页标签可见时更稳；如果浏览器或系统回收防休眠锁，页面也会在重新可见后自动重试。"
-        data-title-en="The page only requests a wake lock while a run is actively executing, and releases it automatically when nothing is running. It works best while this Tools tab stays visible, and retries automatically if the browser or system releases the wake lock."
-        aria-label="{{ '查看提示：只会在检测到有运行正在执行时请求浏览器保持屏幕唤醒，没有运行中的 Loop 会自动释放。保持这个工具页标签可见时更稳；如果浏览器或系统回收防休眠锁，页面也会在重新可见后自动重试。' if page_locale == 'zh' else 'Show tip: The page only requests a wake lock while a run is actively executing, and releases it automatically when nothing is running. It works best while this Tools tab stays visible, and retries automatically if the browser or system releases the wake lock.' }}"
-      >i</button>
     </div>
-  </header>
+    <span class="panel-note">
+      <span data-lang="zh">运行较久时再展开</span>
+      <span data-lang="en">Open for long-running work</span>
+    </span>
+  </summary>
   <div class="wake-lock-panel" id="wake-lock-panel">
+    <button
+      class="help-dot help-dot--tips maintenance-disclosure-help"
+      type="button"
+      data-title-zh="只会在检测到有运行正在执行时请求浏览器保持屏幕唤醒，没有运行中的 Loop 会自动释放。保持这个工具页标签可见时更稳；如果浏览器或系统回收防休眠锁，页面也会在重新可见后自动重试。"
+      data-title-en="The page only requests a wake lock while a run is actively executing, and releases it automatically when nothing is running. It works best while this Tools tab stays visible, and retries automatically if the browser or system releases the wake lock."
+      aria-label="{{ '查看提示：只会在检测到有运行正在执行时请求浏览器保持屏幕唤醒，没有运行中的 Loop 会自动释放。保持这个工具页标签可见时更稳；如果浏览器或系统回收防休眠锁，页面也会在重新可见后自动重试。' if page_locale == 'zh' else 'Show tip: The page only requests a wake lock while a run is actively executing, and releases it automatically if no Loop is running. It works best while this Tools tab is visible, and retries if the browser or system releases the wake lock.' }}"
+    >i</button>
     <label class="checkbox-row wake-lock-toggle-row" for="wake-lock-toggle">
       <input id="wake-lock-toggle" type="checkbox" />
       <span>
@@ -174,10 +178,10 @@
     <div class="field-status" id="wake-lock-status" hidden></div>
     <div class="wake-lock-runs" id="wake-lock-runs"></div>
   </div>
-</section>
+</details>
 
-<section class="panel" data-testid="local-assets-diagnostics-panel">
-  <header class="panel-header">
+<details class="panel maintenance-disclosure" data-testid="local-assets-diagnostics-panel">
+  <summary class="panel-header workbench-disclosure-summary">
     <div>
       <h2><span data-lang="zh">本地资产健康</span><span data-lang="en">Local asset health</span></h2>
       <p class="tools-copy">
@@ -185,7 +189,11 @@
         <span data-lang="en">This read-only scan reports local directories left behind by best-effort cleanup or missing expected directories.</span>
       </p>
     </div>
-  </header>
+    <span class="panel-note">
+      <span data-lang="zh">排查清理问题时再展开</span>
+      <span data-lang="en">Open when diagnosing cleanup</span>
+    </span>
+  </summary>
   <div class="local-assets-summary" data-testid="local-assets-summary">
     <span class="wake-lock-pill wake-lock-pill-neutral" data-local-assets-count="orphan_alignment_dirs">
       <span data-lang="zh">对话编排残留目录：0</span>
@@ -218,7 +226,7 @@
   </div>
   <div class="field-status" id="local-assets-status" data-testid="local-assets-status" hidden></div>
   <div class="local-assets-details" id="local-assets-details" data-testid="local-assets-details" hidden></div>
-</section>
+</details>
 
 <script src="{{ static_asset_url('pages/tools.js') }}" defer></script>
 </div>

@@ -9,8 +9,8 @@
         <span data-lang="en">Loop Workspace</span>
       </h1>
       <p>
-        <span data-lang="zh">这里承接日常回访：查看活动中的 Loop、打开已保存的 Loop 和最近运行。需要创建新的 Loop 时，从顶栏“编排”进入专业工作台。</span>
-        <span data-lang="en">This is the daily workspace: watch active Loops and reopen saved Loops or their latest runs. Use Compose in the top navigation when you need to create a new Loop.</span>
+        <span data-lang="zh">先处理等待 Agent、证据不足或需要复核的 Loop；历史记录和已保存 Loop 仍在本页，但默认退到后面。</span>
+        <span data-lang="en">Start with Loops waiting on Agent work, weak evidence, or review. History and saved Loops stay here, but sit behind the active work.</span>
       </p>
       {% if not loops and not active_loops and not recent_loops %}
       <div class="first-run-judgment-brief" data-testid="home-first-run-judgment-brief">
@@ -46,12 +46,12 @@
     <header class="panel-header">
       <div>
         <h2>
-          <span data-lang="zh">活动 Loop</span>
-          <span data-lang="en">Active Loops</span>
+          <span data-lang="zh">需要处理</span>
+          <span data-lang="en">Needs attention</span>
         </h2>
         <p class="panel-note">
-          <span data-lang="zh">运行不是独立工作区；它是 Loop 的一次活动事实，优先在这里和 Loop 详情里查看。</span>
-          <span data-lang="en">Runs are not a separate workspace; they are Loop activity, shown here and inside each Loop.</span>
+          <span data-lang="zh">默认只把还在推进、等待 Agent 或证据未收束的 Loop 放到第一视野。</span>
+          <span data-lang="en">The first view is reserved for Loops still moving, waiting on Agent work, or lacking closure evidence.</span>
         </p>
       </div>
       <span><span data-lang="zh">运行中</span><span data-lang="en">Active</span> {{ active_loops|length }}</span>
@@ -71,6 +71,17 @@
           <span class="status-pill status-{{ loop_item.latest_status or 'draft' }}" data-status-label="{{ loop_item.latest_status or 'draft' }}"></span>
         </a>
         {% endfor %}
+      </div>
+      {% if recent_loops %}
+      <details class="workbench-secondary-disclosure" {% if not active_loops %}open{% endif %}>
+        <summary>
+          <span>
+            <span data-lang="zh">最近已结束</span>
+            <span data-lang="en">Recent terminal runs</span>
+          </span>
+          <small>{{ recent_loops|length }}</small>
+        </summary>
+        <div class="activity-list activity-list--secondary" data-testid="home-recent-list">
         {% for loop_item in recent_loops %}
         <a class="activity-row" href="{{ loop_item.card_href }}" data-testid="home-recent-loop">
           <span class="activity-row-main">
@@ -88,7 +99,9 @@
           <span class="status-pill status-{{ loop_item.latest_status or 'draft' }}" data-status-label="{{ loop_item.latest_status or 'draft' }}"></span>
         </a>
         {% endfor %}
-      </div>
+        </div>
+      </details>
+      {% endif %}
     {% else %}
       <div class="empty-state empty-state--compact" data-testid="home-activity-empty">
         <h3>
@@ -103,14 +116,20 @@
     {% endif %}
   </section>
 
-  <section class="panel" id="saved-loops" data-testid="home-saved-loops-section">
-    <header class="panel-header">
-      <h2>
-        <span data-lang="zh">已保存 Loop</span>
-        <span data-lang="en">Saved Loops</span>
-      </h2>
+  <details class="panel workbench-library-panel" id="saved-loops" data-testid="home-saved-loops-section" {% if not active_loops and not recent_loops %}open{% endif %}>
+    <summary class="panel-header workbench-disclosure-summary">
+      <span>
+        <strong>
+          <span data-lang="zh">已保存 Loop</span>
+          <span data-lang="en">Saved Loops</span>
+        </strong>
+        <span class="panel-note">
+          <span data-lang="zh">归档、删除和打开旧 Loop 时再展开。</span>
+          <span data-lang="en">Expand when reopening, archiving, or deleting older Loops.</span>
+        </span>
+      </span>
       <span><span id="loop-count">{{ loops|length }}</span> <span data-lang="zh">个</span><span data-lang="en">total</span></span>
-    </header>
+    </summary>
     {% if loops %}
       <div class="loop-grid loop-grid--created" id="loop-grid">
         {% for loop_item in loops %}
@@ -234,6 +253,6 @@
         </p>
       </div>
     {% endif %}
-  </section>
+  </details>
 </div>
 {% endblock %}

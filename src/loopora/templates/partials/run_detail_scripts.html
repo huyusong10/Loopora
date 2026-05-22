@@ -1,0 +1,19 @@
+<script>
+  window.LOOPORA_RUN_DETAIL = {
+    runId: {{ run.id|tojson }},
+    initialRun: {{ run|tojson }},
+  };
+</script>
+<script src="{{ static_asset_url('pages/run_detail_console.js') }}" defer></script>
+<script src="{{ static_asset_url('pages/run_detail_observation.js') }}" defer></script>
+<script src="{{ static_asset_url('pages/run_detail_state.js') }}" defer></script>
+<script src="{{ static_asset_url('pages/run_detail_stream.js') }}" defer></script>
+<script src="{{ static_asset_url('pages/run_detail_api.js') }}" defer></script>
+<script src="{{ static_asset_url('pages/run_detail_scheduler.js') }}" defer></script>
+<script src="{{ static_asset_url('pages/run_detail_progress_time.js') }}" defer></script>
+<script src="{{ static_asset_url('pages/run_detail_progress_activity.js') }}" defer></script>
+<script src="{{ static_asset_url('pages/run_detail_progress.js') }}" defer></script>
+<script src="{{ static_asset_url('pages/run_detail_timeline.js') }}" defer></script>
+<script src="{{ static_asset_url('pages/run_detail_takeaways.js') }}" defer></script>
+<script src="{{ static_asset_url('pages/run_detail_render.js') }}" defer></script>
+<script src="{{ static_asset_url('pages/run_detail.js') }}" defer></script>
