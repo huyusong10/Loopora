@@ -48,6 +48,7 @@ def test_alignment_guidance_assets_are_internal_compiler_material() -> None:
             "branch-aware pressure testing",
             "answer everything you can from the transcript",
             "Follow the user's chosen or corrected branch",
+            "status-only checkpoints",
             "Agent as conversation driver",
             "Backend as compiler guard",
         ),
@@ -61,6 +62,8 @@ def test_alignment_guidance_preserves_product_and_bundle_contracts() -> None:
         (
             "local-first platform for composing human-shaped governance loops",
             "human-in-the-loop -> human-shaped loop",
+            "feedforward governance for slow-feedback work",
+            "Control points are not control capability by themselves",
             "compile the user's task judgment into a runnable Loop candidate",
         ),
     )
@@ -69,6 +72,8 @@ def test_alignment_guidance_preserves_product_and_bundle_contracts() -> None:
         (
             "Loopora fit gate",
             "Branch-aware pressure test",
+            "Make control points decision-capable",
+            "A status-only checkpoint is process theater",
             "confirm the working agreement, review the READY Loop",
             "agreement-to-bundle traceability checklist",
             "long-chain phase workflow",
@@ -83,8 +88,18 @@ def test_alignment_guidance_preserves_product_and_bundle_contracts() -> None:
             "version: 1",
             "GateKeeper",
             "Proven, Weak, Unproven, Blocking, or Residual risk",
+            "what they measure, what decision they trigger, and how they change later execution",
             "Default Web compiler bundles",
             "Do not emit nested Loops, arbitrary branch syntax",
+        ),
+    )
+    assert "A control point that cannot change later execution is also role theater" in assets.system_prompt_template
+    _assert_contains_all(
+        assets.quality_rubric,
+        (
+            "final feedback is too slow",
+            "intermediate control points must measure a task-specific risk",
+            "status-only milestones, reviews, or checkpoints",
         ),
     )
 

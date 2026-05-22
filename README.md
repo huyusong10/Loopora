@@ -20,13 +20,13 @@
 
 **Turn `/goal`-style long tasks into Human-shaped Loops with evidence and verdicts.**
 
-In Coding Agents, persistent-goal mechanisms like `/goal` feel natural: give the Agent an objective, it remembers it, keeps pursuing across turns. This works for clear goals, low risk, simple completion judgment—"fix this error," "keep cleaning this module," "get this test suite green."
+In Coding Agents, persistent-goal mechanisms like `/goal` feel natural: give the Agent an objective, it remembers it, keeps pursuing across turns. This works for clear goals, fast feedback—"fix this error," "keep cleaning this module," "get this test suite green."
 
 The hard part of complex tasks isn't just "keep the Agent going." It's judging after each round: did it actually do the right thing? Is evidence sufficient? Is risk acceptable? Should the next round pivot? Can this close now?
 
-**Bare goals keep the task moving, but easily turn results into blind boxes**—the run looks more complete, but early drift, weak evidence, and fake completion get inherited too.
+Real production feedback, incident feedback, business quality feedback often appears long after the task finishes. By the time final feedback arrives, early drift has already been reinforced by subsequent work. **Bare goals keep the task moving, but easily turn results into blind boxes**—the run looks more complete, but core risks might never have been proven.
 
-Loopora solves this layer. When a task tends to drift and isn't suited for bare `/goal`, first use `/loopora-plan` to turn the objective, completion criteria, fake-done patterns, evidence requirements, blocking risks, and next-round priorities into a reviewable Loop plan file. Then use `/loopora-run` to let the Agent execute continuously within that Loop.
+Loopora solves this layer: when final feedback is too slow, errors cascade, and evidence needs intermediate governance, first use `/loopora-plan` to turn the objective, completion criteria, fake-done patterns, evidence requirements, and blocking risks into a reviewable Loop plan. Then use `/loopora-run` to let the Agent execute continuously within that Loop.
 
 Loopora reduces error accumulation, makes each round return to the same judgment, letting long tasks run more steadily and healthily.
 
@@ -67,17 +67,18 @@ Loopora doesn't reject `/goal`. It inherits `/goal`'s core intuition: long tasks
 
 ## When Loopora Replaces `/goal`
 
-Loopora does not fit every task. It fits tasks where one Agent response looks smooth, but you worry later rounds may drift, fake completion, or lack enough evidence.
+Loopora does not fit every task. Use cases, agile iteration, and automated tests fit systems where feedback can be compressed enough: build a small slice, run a test, know immediately if it's right. Loopora fits slow-feedback systems: final feedback too late, errors cascade, "looks done" doesn't mean "actually done."
 
 | Situation | Recommendation |
 | --- | --- |
 | Goal is small, one Agent pass plus one human review enough | Use Agent or `/goal` directly, no need for Loopora |
 | Stable tests, evaluation suites, proof scripts, or automated proof can directly judge | Prefer those hard checks first |
+| Final feedback fast, errors won't cascade | Use cases or direct Agent fit better |
 | Task needs multi-round execution, each round creates new evidence | Loopora starts adding value |
 | Result may look done while core risk remains unproven | Strong fit for Loopora |
 | You need to retain, review, reuse, or manage this judgment via Web | Strong fit for Loopora |
 
-Typical examples: self-service refunds, billing permission refactors, cross-service payment callback issues, complex migrations, product tasks needing multi-round exploration while preserving judgment standards.
+Typical examples: self-service refunds, billing permission refactors, cross-service payment callback issues—these tasks' real feedback appears after launch, after incidents, after compliance review.
 
 A simple test: if you expect to return in round 2, 3, or N asking "is evidence sufficient, is risk acceptable, where should next round focus, can this close now"—don't just run a bare goal; compile that judgment into a Loop.
 

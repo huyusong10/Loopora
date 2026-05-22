@@ -727,8 +727,9 @@ def alignment_refund_agreement_response() -> dict:
     )
     payload["readiness_evidence"] = {
         "loop_fit": (
-            "The refund task fits Loopora because later rounds must produce new authorization, eligibility, "
-            "provider failure, audit trail, and support handoff evidence before GateKeeper can close."
+            "The refund task fits Loopora because final production and finance feedback arrives too late; later rounds "
+            "must produce intermediate authorization, eligibility, provider failure, audit trail, and support handoff "
+            "evidence that can trigger repair or blocking before GateKeeper can close."
         ),
         "task_scope": (
             "Scope is a refund self-service flow for customer admins: authorized admins request eligible refunds, "
@@ -769,7 +770,8 @@ def alignment_refund_agreement_response() -> dict:
         ),
         "workflow_shape": (
             "Builder -> Inspector -> Guide repair -> Builder -> GateKeeper fits because refund drift must surface "
-            "through evidence before the final GateKeeper verdict."
+            "through evidence before the final GateKeeper verdict, and weak proof must redirect the next pass toward "
+            "evidence-first repair rather than broader implementation."
         ),
         "workdir_facts": ("Observed workdir facts are limited to the target path; billing, payment, and audit code locations must be verified during the run."),
         "open_questions": "Waiting for explicit user confirmation of the working agreement.",
@@ -782,7 +784,7 @@ def alignment_chinese_refund_agreement_response() -> dict:
     payload["assistant_message"] = "请确认退款自助流程工作协议；确认后我会编译授权、资格、审计和支付失败证据。"
     payload["agreement_summary"] = "围绕退款自助流程治理授权、退款资格、审计记录、支付失败、重复退款阻断和客服交接证据。"
     payload["readiness_evidence"] = {
-        "loop_fit": "退款任务适合 Loopora，因为后续轮次必须产生新的授权、退款资格、审计记录、支付失败和客服交接证据，而不是一次回答。",
+        "loop_fit": "退款任务适合 Loopora，因为真正的生产、财务或合规反馈来得太晚；后续轮次必须产生授权、退款资格、审计记录、支付失败和客服交接等中间证据，用来提前触发修复或阻断，而不是等一次最终反馈。",
         "task_scope": "范围是客户管理员的退款自助流程：授权管理员申请符合资格的退款，并控制争议订单、已关账发票、部分退款和重复退款。",
         "success_surface": "成功意味着授权管理员能申请符合资格的退款，系统记录审计轨迹，客服或财务能追踪退款决定。",
         "fake_done_risks": "拒绝只有页面、按钮、模拟资格或 happy path 测试，却没有证明退款授权、审计、支付失败处理和重复退款防护的结果。",
@@ -792,7 +794,7 @@ def alignment_chinese_refund_agreement_response() -> dict:
         "judgment_tradeoffs": "优先选择粗糙但已证明的退款路径，而不是漂亮但未证明授权、审计、支付或客服风险的账单界面。",
         "local_governance": "若存在项目本地治理入口，Builder 先读取适用规则，Inspector 验证相关 design 或 test 义务，GateKeeper 将跳过本地治理视为弱证据、未证明或阻断，且不编造 marker 内容。",
         "role_posture": "Builder 实现退款安全，Inspector 反证授权和审计声明，Guide 在证据薄弱时收窄修复，GateKeeper 阻断未授权或重复退款风险。",
-        "workflow_shape": "Builder -> Inspector -> Guide 修复 -> Builder -> GateKeeper 适合退款任务，因为退款偏差必须在最终裁决前通过证据暴露。",
+        "workflow_shape": "Builder -> Inspector -> Guide 修复 -> Builder -> GateKeeper 适合退款任务，因为退款偏差必须在最终裁决前通过证据暴露，且弱证据要把下一轮转向补证据，而不是继续铺开实现。",
         "workdir_facts": "已观察到的工作区事实只限目标路径；退款、支付、审计代码位置必须在运行中验证。",
         "open_questions": "等待用户明确确认这份工作协议。",
     }
@@ -801,12 +803,19 @@ def alignment_chinese_refund_agreement_response() -> dict:
 
 def alignment_readiness_evidence(*, open_questions: str = "") -> dict:
     return {
-        "loop_fit": "The task is fit for Loopora because future rounds must produce evidence and GateKeeper judgment, not only a one-pass answer.",
+        "loop_fit": (
+            "The task is fit for Loopora because final feedback is too slow to be the only control signal; future rounds "
+            "must produce intermediate evidence and GateKeeper judgment that can redirect, repair, block, or close rather "
+            "than relying on one Agent pass plus human review."
+        ),
         "task_scope": "The user wants a focused starter experience, not an open-ended role or workflow exercise.",
         "success_surface": "Success means the primary user flow works end to end and can be verified from project-owned evidence.",
         "fake_done_risks": "The loop should reject vague completion claims, happy-path-only work, and output without reproducible proof.",
         "evidence_preferences": "The strongest evidence is direct command output, tests, or concrete artifacts created by the project. Final evidence should distinguish Proven, Weak, Unproven, Blocking, and Residual risk buckets before GateKeeper closes.",
-        "execution_strategy": "Future iterations build the focused starter slice first, route Inspector evidence before final judgment, and defer polished breadth until GateKeeper sees direct proof.",
+        "execution_strategy": (
+            "Future iterations build the focused starter slice first, route Inspector evidence before final judgment, "
+            "and use weak-proof control points to shift the next round toward evidence-first repair before polished breadth."
+        ),
         "residual_risk_policy": (
             "Minor polish gaps may remain only when explicitly named, visible, and tracked as an owned follow-up; "
             "unproven primary-flow behavior or weak verification must block closure."
@@ -818,7 +827,10 @@ def alignment_readiness_evidence(*, open_questions: str = "") -> dict:
             "as Weak, Unproven, or Blocking without inventing marker contents."
         ),
         "role_posture": "Builder keeps the patch narrow, Inspector collects evidence, and GateKeeper fails closed on weak proof.",
-        "workflow_shape": "Builder -> Inspector -> GateKeeper fits because a focused slice is built, then inspected, then gated so weak evidence and fake-done drift are exposed early before closure.",
+        "workflow_shape": (
+            "Builder -> Inspector -> GateKeeper fits because the inspection control point measures weak evidence and "
+            "fake-done drift, then redirects the next action toward repair or blocking before closure."
+        ),
         "workdir_facts": "Observed workdir context is limited to the provided target path; exact stack facts are unknown and must be verified during the run.",
         "open_questions": open_questions,
     }
@@ -826,7 +838,11 @@ def alignment_readiness_evidence(*, open_questions: str = "") -> dict:
 
 def alignment_improvement_readiness_evidence(*, open_questions: str = "") -> dict:
     return {
-        "loop_fit": "The revision still fits Loopora because source feedback and future rounds need new evidence plus GateKeeper judgment, not only a one-pass edit.",
+        "loop_fit": (
+            "The revision still fits Loopora because source feedback shows final judgment would arrive too late; future "
+            "rounds need intermediate evidence plus GateKeeper judgment that can redirect, repair, block, or close rather "
+            "than only a one-pass edit."
+        ),
         "task_scope": "Preserve the source bundle's focused starter deliverable, workdir, and executor defaults; change only feedback-driven governance surfaces inside that boundary.",
         "success_surface": "Success means the revised standalone bundle keeps the existing user-facing goal while making evidence gaps observable and verifiable.",
         "fake_done_risks": "Reject a revision that only polishes wording, drops stable source intent, or claims improvement without translating feedback into spec, roles, workflow, or GateKeeper checks.",
@@ -843,7 +859,11 @@ def alignment_improvement_readiness_evidence(*, open_questions: str = "") -> dic
             "test obligations, and GateKeeper treats skipped local governance as Weak, Unproven, or Blocking."
         ),
         "role_posture": "Preserve useful Builder caution, change Inspector responsibilities around evidence gaps, and keep GateKeeper strict with clear blockers and handoffs.",
-        "workflow_shape": "Preserve the basic Builder -> Inspector -> GateKeeper order unless feedback requires an explicit extra review or repair stage; change inputs and handoffs because evidence gaps need explicit review and early exposure before GateKeeper closure.",
+        "workflow_shape": (
+            "Preserve the basic Builder -> Inspector -> GateKeeper order unless feedback requires an explicit extra review "
+            "or repair stage; change inputs and handoffs because evidence gaps need a decision-capable control point that "
+            "redirects repair or blocks closure before GateKeeper finish."
+        ),
         "workdir_facts": "Observed source context is the current bundle or run evidence snapshot; exact stack facts remain unknown assumptions until roles verify them.",
         "open_questions": open_questions,
     }
@@ -851,17 +871,17 @@ def alignment_improvement_readiness_evidence(*, open_questions: str = "") -> dic
 
 def alignment_chinese_readiness_evidence(*, open_questions: str = "") -> dict:
     return {
-        "loop_fit": "这项任务适合 Loopora，因为不是一次 Agent 加人工 review 就够；后续轮次需要新证据和 GateKeeper 裁决。",
+        "loop_fit": "这项任务适合 Loopora，因为最终反馈太慢，不能只靠一次 Agent 加人工 review；后续轮次需要新证据作为中间反馈，并让 GateKeeper 裁决能转向、修复、阻断或收尾。",
         "task_scope": "用户要的是聚焦的 starter experience，而不是开放式角色设定或泛泛流程练习。",
         "success_surface": "成功意味着主流程端到端可用，并能由项目自己的证据验证。",
         "fake_done_risks": "循环应拒绝看起来完成、只覆盖 happy path、没有可复现证明的声称。",
         "evidence_preferences": "优先使用测试、命令输出、项目产物和角色交接作为证明；最终证据必须区分已证明、弱证据、未证明、阻断和残余风险。",
-        "execution_strategy": "先做可证明的最小真实主流程，再补直接证据；当主流程 proof 仍薄弱时，暂缓润色或扩展。",
+        "execution_strategy": "先做可证明的最小真实主流程，再补直接证据；当主流程 proof 仍薄弱时，中间控制点要把下一轮转向补证据，暂缓润色或扩展。",
         "residual_risk_policy": "可接受的残余风险必须显式声明、可见并有人接手跟进；主流程未验证或证据薄弱必须阻断。",
         "judgment_tradeoffs": "优先选择有证据的小而真实主流程，而不是看起来更完整但缺少 proof 的结果；如果速度会隐藏假完成风险，就应拒绝速度收益。",
         "local_governance": "若存在项目本地治理入口，Builder 先读取适用规则，Inspector 验证相关 design 或 test 义务，GateKeeper 将跳过本地治理视为弱证据、未证明或阻断，且不编造 marker 内容。",
         "role_posture": "Builder 聚焦构建，Inspector 收集证据，GateKeeper 严格依据交接与证据裁决。",
-        "workflow_shape": "先由 Builder 实现，再由 Inspector 检查证据，最后 GateKeeper 裁决，因为信息流需要逐步收敛，并让证据薄弱、偏差或假完成尽早暴露。",
+        "workflow_shape": "先由 Builder 实现，再由 Inspector 检查证据，最后 GateKeeper 裁决，因为 Inspector 控制点要测量弱证据和假完成偏差，并把下一步转向修复或阻断，而不只是记录状态。",
         "workdir_facts": "已观察到的工作区事实只限当前目标路径；具体技术栈仍未知，运行时必须验证。",
         "open_questions": open_questions,
     }
@@ -869,7 +889,7 @@ def alignment_chinese_readiness_evidence(*, open_questions: str = "") -> dict:
 
 def alignment_chinese_improvement_readiness_evidence(*, open_questions: str = "") -> dict:
     return {
-        "loop_fit": "这次修订仍适合 Loopora，因为不是一次编辑就够；已有反馈和后续轮次需要新证据与 GateKeeper 裁决。",
+        "loop_fit": "这次修订仍适合 Loopora，因为来源反馈说明最终判断会来得太晚；后续轮次需要中间证据与 GateKeeper 裁决来转向、修复、阻断或收尾，而不是一次编辑。",
         "task_scope": "保留来源 bundle 的聚焦交付物、workdir 和 executor 默认值，只在反馈指向的治理面内调整边界。",
         "success_surface": "成功意味着修订后的独立 bundle 保持既有用户目标，同时让证据缺口可观察、可验证。",
         "fake_done_risks": "应拒绝只润色文案、丢掉稳定来源意图，或没有把反馈转成 spec、roles、workflow、GateKeeper 检查的改进声称。",
@@ -879,7 +899,7 @@ def alignment_chinese_improvement_readiness_evidence(*, open_questions: str = ""
         "judgment_tradeoffs": "优先保留来源 Loop 的稳定意图，而不是为了显得变化大而重写；但如果反馈证明证据或 GateKeeper 严格度不足，就应拒绝只保持原样的改进。",
         "local_governance": "保留来源上下文里已经可见的治理义务；若存在项目本地治理入口，Builder 读取适用规则，Inspector 验证相关 design 或 test 义务，GateKeeper 将跳过本地治理视为弱证据、未证明或阻断。",
         "role_posture": "保留 Builder 的有用谨慎，调整 Inspector 对证据缺口的责任，并让 GateKeeper 继续用清晰 blocker 和 handoff 严格裁决。",
-        "workflow_shape": "保留 Builder -> Inspector -> GateKeeper 的基本顺序，除非反馈要求有界并行检查；因为证据缺口需要显式 review，所以要调整 inputs 和 handoffs，让偏差或证据薄弱在 GateKeeper 收束前提前暴露。",
+        "workflow_shape": "保留 Builder -> Inspector -> GateKeeper 的基本顺序，除非反馈要求有界并行检查；因为证据缺口需要可决策的控制点，所以要调整 inputs 和 handoffs，让偏差或证据薄弱在 GateKeeper 收束前触发修复或阻断。",
         "workdir_facts": "已观察到的来源上下文是当前 bundle 或 run evidence 快照；具体技术栈仍是未知假设，需由后续角色验证。",
         "open_questions": open_questions,
     }
@@ -895,7 +915,7 @@ metadata:
   name: "Aligned Starter Bundle"
   description: "Bundle generated by the Web alignment flow."
 collaboration_summary: |
-  Project the working agreement into a spec task contract for the focused starter slice, role handoffs from Builder / Inspectors / GateKeeper, and a workflow that routes evidence before final judgment. Future iterations stay anchored to this contract as new evidence, blockers, and handoffs appear, rather than treating one Agent pass or one review as enough. Prefer a smaller proven flow over polished but unproven breadth, and let GateKeeper reject speed or surface completeness when evidence is weak. GateKeeper closes only when the spec, role evidence, and workflow handoffs prove the task is truly done. Evidence projection must distinguish Proven direct run proof, Weak indirect evidence, Unproven promised surfaces, Blocking fake-done findings, and visible Residual risk.{local_governance_sentence}
+  Project the working agreement into a spec task contract for the focused starter slice, role handoffs from Builder / Inspectors / GateKeeper, and a workflow that routes evidence before final judgment. Future iterations stay anchored to this contract as new evidence, blockers, and handoffs appear, rather than treating one Agent pass or one review as enough. Prefer a smaller proven flow over polished but unproven breadth, and let GateKeeper reject speed or surface completeness when evidence is weak. Intermediate control points measure weak evidence and fake-done drift, trigger inspect / correct / halt decisions, and keep the required evidence target explicit. GateKeeper closes only when the spec, role evidence, and workflow handoffs prove the task is truly done. Evidence projection must distinguish Proven direct run proof, Weak indirect evidence, Unproven promised surfaces, Blocking fake-done findings, and visible Residual risk.{local_governance_sentence}
 loop:
   name: "Aligned Starter Bundle"
   workdir: "{workdir}"
@@ -940,6 +960,7 @@ spec:
 
     - Prefer project-owned checks, direct run output, and concrete artifacts before screenshots or claims.
     - Each role should leave a clear handoff note explaining what was changed, inspected, or blocked.
+    - Intermediate control points should measure a key risk, trigger a continue / correct / halt decision, and keep the required evidence target explicit.
     - Final evidence should be bucketed as Proven, Weak, Unproven, Blocking, or Residual risk instead of flattened into one summary.
 
     # Residual Risk
@@ -992,7 +1013,7 @@ role_definitions:
       archetype: inspector
       ---
 
-      Inspect the Builder handoff against Done When, Guardrails, Fake Done, Evidence Preferences, Execution Strategy, Judgment Tradeoffs, Local Governance, and Residual Risk. Your handoff must identify contract mismatches, missing proof, sequencing drift, lowered tradeoffs, local-governance gaps, and any blocker that should prevent GateKeeper from finishing.
+      Inspect the Builder handoff against Done When, Guardrails, Fake Done, Evidence Preferences, Execution Strategy, Judgment Tradeoffs, Local Governance, and Residual Risk. Your handoff must identify contract mismatches, missing proof, sequencing drift, lowered tradeoffs, local-governance gaps, and any blocker that should prevent GateKeeper from finishing. When evidence is weak, name the decision it should trigger and how the next execution pass should change.
 {inspector_governance}
     posture_notes: |
       Prefer contract-level proof over broad confidence; block when the delivered slice does not match the agreed scope or leaves fake-done risk unresolved.
@@ -1033,7 +1054,7 @@ role_definitions:
       archetype: gatekeeper
       ---
 
-      Decide from direct evidence and do not accept vague completion claims. Finish only when the Builder and Inspector handoffs prove the task contract, execution strategy, judgment tradeoffs, local governance when present, and residual-risk stance; otherwise block with the smallest next repair.
+      Decide from direct evidence and do not accept vague completion claims. Finish only when the Builder and Inspector handoffs prove the task contract, execution strategy, judgment tradeoffs, local governance when present, and residual-risk stance; otherwise block with the smallest repair. Treat status-only checkpoints as insufficient; the control point must affect correction, closure, or residual-risk handoff.
 {gatekeeper_governance}
     posture_notes: |
       Close only when the task and verification evidence agree; fail closed when handoff evidence is missing or weak.
@@ -1046,7 +1067,7 @@ role_definitions:
 workflow:
   version: 1
   preset: "build_then_review"
-  collaboration_intent: "Build one focused starter slice, inspect the contract and evidence in sequence so weak evidence, drift, or fake done surface early, then let GateKeeper finish only when both inspection views support the task contract."
+  collaboration_intent: "Build one focused starter slice, then inspect the contract and evidence in sequence so weak evidence, drift, or fake done surface early, let those control points trigger repair or blocking, then let GateKeeper finish only when both inspection views support the task contract."
   roles:
     - id: "builder"
       role_definition_key: "builder"
@@ -1092,9 +1113,9 @@ def alignment_chinese_bundle_yaml(workdir: str) -> str:
         '  name: "Aligned Starter Bundle"': '  name: "对齐 Starter Bundle"',
         '  description: "Bundle generated by the Web alignment flow."': ('  description: "由 Web alignment flow 生成的 bundle。"'),
         (
-            "  Project the working agreement into a spec task contract for the focused starter slice, role handoffs from Builder / Inspectors / GateKeeper, and a workflow that routes evidence before final judgment. Future iterations stay anchored to this contract as new evidence, blockers, and handoffs appear, rather than treating one Agent pass or one review as enough. Prefer a smaller proven flow over polished but unproven breadth, and let GateKeeper reject speed or surface completeness when evidence is weak. GateKeeper closes only when the spec, role evidence, and workflow handoffs prove the task is truly done. Evidence projection must distinguish Proven direct run proof, Weak indirect evidence, Unproven promised surfaces, Blocking fake-done findings, and visible Residual risk.\n"
+            "  Project the working agreement into a spec task contract for the focused starter slice, role handoffs from Builder / Inspectors / GateKeeper, and a workflow that routes evidence before final judgment. Future iterations stay anchored to this contract as new evidence, blockers, and handoffs appear, rather than treating one Agent pass or one review as enough. Prefer a smaller proven flow over polished but unproven breadth, and let GateKeeper reject speed or surface completeness when evidence is weak. Intermediate control points measure weak evidence and fake-done drift, trigger inspect / correct / halt decisions, and keep the required evidence target explicit. GateKeeper closes only when the spec, role evidence, and workflow handoffs prove the task is truly done. Evidence projection must distinguish Proven direct run proof, Weak indirect evidence, Unproven promised surfaces, Blocking fake-done findings, and visible Residual risk.\n"
         ): (
-            "  将工作协议投影到 spec 任务契约、Builder / Inspector / GateKeeper 角色交接，以及先汇集证据再裁决的 workflow。后续轮次会随着新证据、阻断项和 handoff 回到这份契约，而不是把一次 Agent 执行或一次 review 当成足够。优先选择小而已证明的主流程，而不是打磨充分但未证明的宽泛功能；证据薄弱时让 GateKeeper 拒绝速度或表面完整性。GateKeeper 只有在任务契约、角色证据和 workflow handoff 都证明真实完成时才收束。证据投影必须区分已证明的直接运行证据、弱证据、未证明的承诺面、阻断类假完成，以及可见残余风险。\n"
+            "  将工作协议投影到 spec 任务契约、Builder / Inspector / GateKeeper 角色交接，以及先汇集证据再裁决的 workflow。后续轮次会随着新证据、阻断项和 handoff 回到这份契约，而不是把一次 Agent 执行或一次 review 当成足够。优先选择小而已证明的主流程，而不是打磨充分但未证明的宽泛功能；证据薄弱时让 GateKeeper 拒绝速度或表面完整性。中间控制点要测量弱证据和假完成偏差，触发检查、纠正或暂停决策，并让所需证据目标保持明确。GateKeeper 只有在任务契约、角色证据和 workflow handoff 都证明真实完成时才收束。证据投影必须区分已证明的直接运行证据、弱证据、未证明的承诺面、阻断类假完成，以及可见残余风险。\n"
         ),
         ("    Ship the focused starter experience in the target workdir with small, maintainable changes that preserve the primary user flow."): (
             "    在目标 workdir 中交付聚焦的 starter experience，用小而可维护的改动保住主流程，并留下能让 Inspector 和 GateKeeper 验证真实完成的证据路径。"
@@ -1114,6 +1135,9 @@ def alignment_chinese_bundle_yaml(workdir: str) -> str:
         ),
         "    - Each role should leave a clear handoff note explaining what was changed, inspected, or blocked.": (
             "    - 每个角色都要留下清晰 handoff，说明改了什么、检查了什么或阻断了什么。"
+        ),
+        "    - Intermediate control points should measure a key risk, trigger a continue / correct / halt decision, and keep the required evidence target explicit.": (
+            "    - 中间控制点应测量关键风险，触发继续、纠正或暂停决策，并让所需证据目标保持明确。"
         ),
         "    - Final evidence should be bucketed as Proven, Weak, Unproven, Blocking, or Residual risk instead of flattened into one summary.": (
             "    - 最终证据应区分为已证明、弱证据、未证明、阻断或残余风险，而不是压平成一段总结。"
@@ -1146,9 +1170,9 @@ def alignment_chinese_bundle_yaml(workdir: str) -> str:
             "      保持实现收窄，让 workspace 更容易验证；优先具体证据和清晰 handoff，而不是铺开很多无法证明的功能。"
         ),
         (
-            "      Inspect the Builder handoff against Done When, Guardrails, Fake Done, Evidence Preferences, Execution Strategy, Judgment Tradeoffs, Local Governance, and Residual Risk. Your handoff must identify contract mismatches, missing proof, sequencing drift, lowered tradeoffs, local-governance gaps, and any blocker that should prevent GateKeeper from finishing."
+            "      Inspect the Builder handoff against Done When, Guardrails, Fake Done, Evidence Preferences, Execution Strategy, Judgment Tradeoffs, Local Governance, and Residual Risk. Your handoff must identify contract mismatches, missing proof, sequencing drift, lowered tradeoffs, local-governance gaps, and any blocker that should prevent GateKeeper from finishing. When evidence is weak, name the decision it should trigger and how the next execution pass should change."
         ): (
-            "      根据 Done When、Guardrails、Fake Done、Evidence Preferences、Execution Strategy、Judgment Tradeoffs、Local Governance 和 Residual Risk 检查 Builder handoff。你的 handoff 必须指出契约不匹配、缺失证明、执行顺序漂移、判断取舍被降低、本地治理缺口，以及应阻止 GateKeeper 收束的 blocker。"
+            "      根据 Done When、Guardrails、Fake Done、Evidence Preferences、Execution Strategy、Judgment Tradeoffs、Local Governance 和 Residual Risk 检查 Builder handoff。你的 handoff 必须指出契约不匹配、缺失证明、执行顺序漂移、判断取舍被降低、本地治理缺口，以及应阻止 GateKeeper 收束的 blocker。证据薄弱时，要说明应触发什么决策，以及下一轮执行应如何改变。"
         ),
         (
             "      Prefer contract-level proof over broad confidence; block when the delivered slice does not match the agreed scope or leaves fake-done risk unresolved."
@@ -1157,9 +1181,9 @@ def alignment_chinese_bundle_yaml(workdir: str) -> str:
             "      Inspect from direct evidence, project-owned commands, and concrete artifacts. Your handoff must identify the strongest proof, missing proof, and any blocker that should prevent GateKeeper from finishing."
         ): ("      从直接证据、项目内命令和具体产物检查。你的 handoff 必须指出最强证明、缺失证明，以及应阻止 GateKeeper 收束的 blocker。"),
         (
-            "      Decide from direct evidence and do not accept vague completion claims. Finish only when the Builder and Inspector handoffs prove the task contract, execution strategy, judgment tradeoffs, local governance when present, and residual-risk stance; otherwise block with the smallest next repair."
+            "      Decide from direct evidence and do not accept vague completion claims. Finish only when the Builder and Inspector handoffs prove the task contract, execution strategy, judgment tradeoffs, local governance when present, and residual-risk stance; otherwise block with the smallest repair. Treat status-only checkpoints as insufficient; the control point must affect correction, closure, or residual-risk handoff."
         ): (
-            "      根据直接证据裁决，不接受笼统完成声明。只有 Builder 和 Inspector handoff 证明任务契约、执行策略、判断取舍、存在时的本地治理和残余风险姿态时才收束；否则用最小下一步修复阻断。"
+            "      根据直接证据裁决，不接受笼统完成声明。只有 Builder 和 Inspector handoff 证明任务契约、执行策略、判断取舍、存在时的本地治理和残余风险姿态时才收束；否则用最小修复阻断。只记录状态的检查点不够，控制点必须影响纠正、收尾或残余风险交接。"
         ),
         (
             "      Prefer reproducible run output and concrete artifacts; block vague completion claims, screenshots without context, or unverified happy paths."
@@ -1171,9 +1195,9 @@ def alignment_chinese_bundle_yaml(workdir: str) -> str:
             "      只有任务和验证证据一致时才收束；handoff evidence 缺失、薄弱或没有覆盖主流程时必须 fail closed。"
         ),
         (
-            '  collaboration_intent: "Build one focused starter slice, inspect the contract and evidence in sequence so weak evidence, drift, or fake done surface early, then let GateKeeper finish only when both inspection views support the task contract."'
+            '  collaboration_intent: "Build one focused starter slice, then inspect the contract and evidence in sequence so weak evidence, drift, or fake done surface early, let those control points trigger repair or blocking, then let GateKeeper finish only when both inspection views support the task contract."'
         ): (
-            '  collaboration_intent: "先构建一个聚焦 starter slice，再顺序检查契约和证据，让证据薄弱、偏差或假完成提前暴露；只有两个检查视角都支持任务契约时，GateKeeper 才能 finish。"'
+            '  collaboration_intent: "先构建一个聚焦 starter slice，然后顺序检查契约和证据，让证据薄弱、偏差或假完成提前暴露，并由这些控制点触发修复或阻断；只有两个检查视角都支持任务契约时，GateKeeper 才能 finish。"'
         ),
     }
     for old, new in replacements.items():
@@ -1266,10 +1290,12 @@ def alignment_improvement_bundle_yaml(workdir: str) -> str:
                 "before final judgment. Future iterations stay anchored to this contract as new evidence, "
                 "blockers, and handoffs appear, rather than treating one Agent pass or one review as enough. "
                 "Prefer a smaller proven flow over polished but unproven breadth, "
-                "and let GateKeeper reject speed or surface completeness when evidence is weak. GateKeeper "
-                "closes only when the spec, role evidence, and workflow handoffs prove the task is truly done. "
-                "Evidence projection must distinguish Proven direct run proof, Weak indirect evidence, Unproven "
-                "promised surfaces, Blocking fake-done findings, and visible Residual risk.\n"
+                "and let GateKeeper reject speed or surface completeness when evidence is weak. "
+                "Intermediate control points measure weak evidence and fake-done drift, trigger inspect / correct / halt "
+                "decisions, and keep the required evidence target explicit. GateKeeper closes only when the spec, role "
+                "evidence, and workflow handoffs prove the task is truly done. Evidence projection must "
+                "distinguish Proven direct run proof, Weak indirect evidence, Unproven promised surfaces, Blocking "
+                "fake-done findings, and visible Residual risk.\n"
             ),
             (
                 "  Preserve the source Loop's stable task intent, workdir, and useful role posture while "
@@ -1285,7 +1311,7 @@ def alignment_improvement_bundle_yaml(workdir: str) -> str:
             "    - Preserve source intent, but tighten evidence expectations from feedback, run evidence, coverage, and GateKeeper verdict before screenshots or claims.\n",
         )
         .replace(
-            '  collaboration_intent: "Build one focused starter slice, inspect the contract and evidence in sequence so weak evidence, drift, or fake done surface early, then let GateKeeper finish only when both inspection views support the task contract."',
+            '  collaboration_intent: "Build one focused starter slice, then inspect the contract and evidence in sequence so weak evidence, drift, or fake done surface early, let those control points trigger repair or blocking, then let GateKeeper finish only when both inspection views support the task contract."',
             '  collaboration_intent: "Preserve the source Loop shape where it still fits, but route the feedback-driven evidence delta through contract and evidence review so weak evidence, evidence gaps, or fake done surface early before GateKeeper closes."',
         )
     )
@@ -1299,6 +1325,7 @@ def alignment_chinese_improvement_bundle_yaml(workdir: str) -> str:
                 "  将工作协议投影到 spec 任务契约、Builder / Inspector / GateKeeper 角色交接，以及先汇集证据再裁决的 workflow。"
                 "后续轮次会随着新证据、阻断项和 handoff 回到这份契约，而不是把一次 Agent 执行或一次 review 当成足够。"
                 "优先选择小而已证明的主流程，而不是打磨充分但未证明的宽泛功能；证据薄弱时让 GateKeeper 拒绝速度或表面完整性。"
+                "中间控制点要测量弱证据和假完成偏差，触发检查、纠正或暂停决策，并让所需证据目标保持明确。"
                 "GateKeeper 只有在任务契约、角色证据和 workflow handoff 都证明真实完成时才收束。"
                 "证据投影必须区分已证明的直接运行证据、弱证据、未证明的承诺面、阻断类假完成，以及可见残余风险。\n"
             ),
@@ -1313,7 +1340,7 @@ def alignment_chinese_improvement_bundle_yaml(workdir: str) -> str:
             "    - 保留来源意图，但根据反馈、运行证据、coverage 和 GateKeeper verdict 收紧证据期望，而不是依赖截图或口头声称。\n",
         )
         .replace(
-            '  collaboration_intent: "先构建一个聚焦 starter slice，再顺序检查契约和证据，让证据薄弱、偏差或假完成提前暴露；只有两个检查视角都支持任务契约时，GateKeeper 才能 finish。"',
+            '  collaboration_intent: "先构建一个聚焦 starter slice，然后顺序检查契约和证据，让证据薄弱、偏差或假完成提前暴露，并由这些控制点触发修复或阻断；只有两个检查视角都支持任务契约时，GateKeeper 才能 finish。"',
             '  collaboration_intent: "保留来源 Loop 中仍然有效的形状，但把反馈驱动的证据变化通过契约和证据 review 暴露出来，让弱证据、证据缺口或假完成在 GateKeeper 收束前可见。"',
         )
     )

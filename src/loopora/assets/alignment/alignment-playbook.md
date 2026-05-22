@@ -23,7 +23,7 @@ Every alignment should serve this main workflow:
 If a question does not improve that Loop, skip it. If a missing answer would change the Loop, ask it.
 If several answers are missing, ask the next answer that would most change the Loop. Do not turn alignment into a long questionnaire.
 
-Start with the Loopora fit gate when fit is not already clear. Loopora is justified only when future human judgment would repeat, later rounds can create new evidence, fake completion is worth blocking, the judgment should survive one chat as run-owned or auditable governance, and the judgment is not already captured by one stable benchmark, one Agent pass plus review, direct answer, or one-off handling.
+Start with the Loopora fit gate when fit is not already clear. Loopora is justified only when final feedback is too slow or costly to be the only control signal, future human judgment would repeat, later rounds can create intermediate evidence, fake completion is worth blocking, the judgment should survive one chat as run-owned or auditable governance, and the judgment is not already captured by one stable benchmark, one Agent pass plus review, direct answer, or one-off handling.
 
 Clarifying turns must be shaped as guided choices:
 
@@ -57,6 +57,10 @@ Good pressure-test question:
 
 > 我先把风险分支压到一个点：如果未来结果“看起来完成但没有可复查证据”，我建议 GateKeeper 直接阻断，因为这会让后续轮次空转。你可以选：A. 证据不足直接阻断（推荐）；B. 允许带残余风险通过；C. 我补充哪种证据才算可信。
 
+Good feedforward-control question:
+
+> 这个任务的最终反馈会来得太晚，所以我建议先设一个中间控制点：如果下一轮没有产出可复查证据，就暂停扩展并转向补证据。你可以选：A. 证据不足先转向补证据（推荐）；B. 允许继续实现但标记残余风险；C. 我指定另一个关键风险作为控制点。
+
 Bad pressure-test question:
 
 > 请列出所有验收标准、风险、证据偏好和角色安排。
@@ -78,7 +82,7 @@ Good question:
 
 Loop-fit question:
 
-> 这看起来可能一次 Agent 加人工 review 就够；我的推荐是只有当“后续轮次会产生新证据，并且需要阻断假完成”时才编排 Loop。你可以选：A. 先不生成 Loop（推荐）；B. 仍然编排，因为这套判断需要被 run 继承；C. 我补充会反复判断的风险。
+> 这看起来可能一次 Agent 加人工 review 就够；我的推荐是只有当“最终反馈太慢、后续轮次会产生中间证据，并且这些控制点会改变下一步行动”时才编排 Loop。你可以选：A. 先不生成 Loop（推荐）；B. 仍然编排，因为这套判断需要被 run 继承；C. 我补充会反复判断的关键风险和中间证据。
 
 Bad question:
 
@@ -116,6 +120,16 @@ Ask which evidence should persuade the loop:
 
 Do not accept “looks done” as evidence for implementation tasks.
 Also ask how evidence should be bucketed when it changes the verdict: what would count as Proven, what would remain Weak, what would be Unproven, what must be Blocking, and what Residual risk may stay visible.
+
+### 3.5. Make control points decision-capable
+
+For each important intermediate control point, privately name three things before compiling:
+
+- measured risk: which fake-done, weak-evidence, drift, local-governance, or residual-risk condition it detects
+- decision: whether the Loop should continue, narrow, repair, block, or accept an explicit residual risk
+- execution change: how the next round's resources change, such as attention focus, workspace write permission, evidence-first work, Guide intervention, closure blocking, or handoff to a follow-up owner
+
+If you cannot name all three, do not add a new role, milestone, review, or checkpoint. A status-only checkpoint is process theater.
 
 ### 4. Set role posture
 
@@ -168,7 +182,9 @@ For long-chain workflows:
 Do not generate a bundle when any of these are missing:
 
 - why this task deserves Loopora instead of one Agent pass, direct chat / direct answer, one-off handling, or benchmark/test-harness-only validation
+- why final feedback is slow, delayed, costly, or too late to be the only control signal
 - why this task's judgment should survive one chat as run-owned evidence, export, reuse, or audit
+- which intermediate control point measures a key risk, triggers a decision, and changes later execution
 - what task is being attempted
 - what success means
 - what fake done must be rejected
@@ -184,6 +200,7 @@ Do not generate a bundle when any of these are missing:
 - whether the agreement-to-bundle traceability checklist is satisfied: every confirmed judgment item has a concrete bundle destination in `collaboration_summary`, `spec.markdown`, `role_definitions`, `workflow.collaboration_intent`, step `inputs`, or GateKeeper evidence rules; metadata and loop names are not enough
 - whether one complete intended run path has been privately rehearsed: Builder output, Inspector / Custom review, optional Guide repair direction, any second Builder pass, GateKeeper verdict, and user evidence audit must all be connected through explicit handoffs, evidence queries, and evidence buckets
 - whether one plausible failed future round has been privately pressure-tested against the candidate Loop: a fake-done, weak-proof, drift, missing-coverage, or unacceptable residual-risk result must be exposed, repaired, or blocked by the proposed `spec`, roles, workflow, handoffs, evidence queries, and GateKeeper rules
+- whether the proposed control points are more than status markers: each must route evidence into a decision that changes the next action, repair path, closure, or residual-risk owner
 
 If the user asks to generate early, say what is missing and ask one focused question.
 

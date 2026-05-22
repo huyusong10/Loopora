@@ -4,7 +4,7 @@ Read this first. Assume you know nothing about Loopora except what is written he
 
 ## The one-sentence model
 
-Loopora is a local-first platform for composing human-shaped governance loops for long-running AI Agent tasks.
+Loopora is a local-first platform for composing human-shaped governance loops for slow-feedback, long-running AI Agent tasks.
 
 It lets the user externalize task-scoped human judgment before execution, compile that judgment into a Loop, run the Loop through AI Agent roles, and inspect white-box evidence and verdicts instead of relying on a fragile Agent conversation.
 
@@ -31,11 +31,15 @@ When those questions repeat, the bottleneck is not generation. The bottleneck is
 
 Loopora moves that judgment earlier. The model learns general capability; the Loop inherits the judgment for this task.
 
+From a control perspective, Loopora is feedforward governance for slow-feedback work. Final production, incident, business, or human-quality feedback often arrives too late, so the Loop must estimate whether the task is still on course before that final feedback exists.
+
 Before compiling anything, establish Loopora fit:
 
 - Would one strong Agent pass plus one human review be enough?
-- Would a later round create new proof, artifact, handoff, observation, or verdict context?
-- Is the judgment harder than a stable benchmark or test can fully express?
+- Is final feedback too slow, costly, or delayed to be the only control signal?
+- Would a later round create new proof, artifact, handoff, observation, or verdict context that can act as an intermediate feedback point?
+- Can the intended control points measure key risk, trigger a real decision, and change later execution resources such as attention, workspace writes, evidence-first repair, Guide intervention, closure, or residual-risk handoff?
+- Is the judgment harder than a stable benchmark or test can fully express? If a benchmark or test can fully collapse the feedback delay, prefer that hard check.
 - Is fake done likely enough that GateKeeper should block closure?
 - Should this judgment survive one chat as a run-owned contract, exportable Loop, reusable governance shape, or audit surface?
 
@@ -57,6 +61,14 @@ The working agreement and bundle must therefore say:
 - what judgment structure the task needs
 - what evidence feedback should return each round
 - where weak evidence, drift, or fake done should be exposed early
+
+Control points are not control capability by themselves. A review, milestone, or GateKeeper step only matters when it:
+
+1. measures a task-specific key risk
+2. triggers a real decision such as continue, narrow, repair, block, or accept residual risk
+3. changes the next allocation of execution resources, such as attention focus, write permission, required proof, Guide intervention, or closure
+
+If a checkpoint only records status, it is process theater, not a Loopora control point.
 
 ## Main workflow vs scenarios
 
@@ -126,7 +138,7 @@ Use this projection when compiling the working agreement:
 | --- | --- |
 | What would the human ask the Agent to prove or preserve? | `spec.markdown` task scope, success surface, fake-done risks, evidence preferences, execution priorities, judgment tradeoffs, and residual-risk policy |
 | Who would catch weak, shallow, risky, or locally noncompliant work? | task-specific Builder / Inspector / Guide / GateKeeper / Custom `role_definitions`, local-governance responsibilities, and posture when those archetypes are used |
-| When should correction, repair, local-governance checks, or stop happen? | `workflow` order, step `inputs`, local-governance checkpoints, GateKeeper finish gate, and advanced fields only in expert mode |
+| When should correction, repair, local-governance checks, resource shifts, or stop happen? | `workflow` order, step `inputs`, local-governance checkpoints, GateKeeper finish gate, and advanced fields only in expert mode |
 | What proof should survive the round? | `inputs.handoffs_from`, `inputs.evidence_query`, evidence ledger expectations, and GateKeeper verdict |
 
 If you cannot explain this projection in the `collaboration_summary`, the bundle is probably still a YAML-shaped sketch rather than a human-shaped Loop.

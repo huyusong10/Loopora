@@ -193,6 +193,8 @@ Use the spec for:
 - execution priorities or deliberate deferrals
 - residual-risk stance
 - task-level judgment tradeoffs
+- slow-feedback / feedforward governance fit when final feedback is too late to be the only control signal
+- intermediate control points when they are part of the task contract: what they measure, what decision they trigger, and how they change later execution
 - project-local governance obligations when they affect the task contract
 - role-specific notes that belong in the task contract
 
@@ -210,6 +212,7 @@ Use role definitions for task-scoped role posture:
 - what it should distrust
 - what evidence should persuade it
 - which evidence bucket it should produce or protect: Proven, Weak, Unproven, Blocking, or Residual risk
+- which key risk this role measures, what decision it can trigger, and what later execution resource it can change when acting as a control point
 
 Use `posture_notes` for the task-specific stance.
 Keep `archetype` stable and use `prompt_markdown` to express the role’s operating behavior.
@@ -224,6 +227,8 @@ Use workflow for execution shape:
 - where Guide intervenes
 - whether the loop is tightly gated or more exploratory
 - what upstream handoffs, evidence, and iteration memory each step should see
+- which intermediate control point exposes weak evidence, drift, fake done, local-governance failure, or residual risk before final feedback arrives
+- what each control point does next: continue, narrow, repair, block, or accept visible residual risk
 
 Use `workflow.collaboration_intent` to capture the high-level execution bias.
 
@@ -241,7 +246,7 @@ Runtime invariant:
 - Long-chain workflows are still one linear `workflow.steps` sequence in version 1. Do not emit nested Loops, arbitrary branch syntax, dynamic DAGs, or sub-workflow entities.
 - Multiple Builder roles or Builder steps must be task-specific, such as API Builder, UI Builder, Migration Builder, Repair Builder, or Evidence Hardening Builder. Do not use `Builder 1` / `Builder 2`, and do not split a single continuous implementation into multiple Builders unless the split creates a clearer evidence boundary.
 - `parallel_group` is an expert / compatibility field, not default compiler output. Preserve or emit it only when an expert source bundle already needs bounded Inspector / Custom fan-out and validation still proves why it exists.
-- `workflow.collaboration_intent` must also explain where weak evidence, drift, or fake done is exposed early. A role order that only says Builder then Inspector then GateKeeper is not yet human-shaped.
+- `workflow.collaboration_intent` must also explain where weak evidence, drift, or fake done is exposed early, what decision that exposure triggers, and how the next execution changes. A role order that only says Builder then Inspector then GateKeeper is not yet human-shaped.
 - Use `inputs.handoffs_from`, `inputs.evidence_query`, and `inputs.iteration_memory` to express information flow when the workflow has multiple review views or repair passes.
 - Multiple Inspector / Custom review steps must name relevant upstream Builder handoffs through `inputs.handoffs_from` and query Builder evidence through `inputs.evidence_query` so each review inspects durable proof, not only a prose handoff.
 - Multiple review steps should declare `inputs.iteration_memory`, usually `summary_only`, so the next run iteration has an explicit memory policy instead of relying on ambient context.
@@ -274,7 +279,7 @@ Expert / compatibility runtime controls:
 - Produce a bundle only after Loopora fit is established; do not use YAML to force direct Agent work, one-review tasks, direct-answer / one-off tasks, or benchmark/test-harness-only work into a governed Loop.
 - Before emitting YAML, privately rehearse one complete intended run path: Builder output and handoff, Inspector / Custom review evidence, optional Guide repair direction, any second Builder pass, GateKeeper evidence-backed verdict, and the user's evidence audit. If any step depends on ambient chat context instead of explicit `inputs.handoffs_from`, `inputs.evidence_query`, role posture, or evidence buckets, revise the bundle or ask one focused question before producing YAML.
 - Before emitting YAML, privately pressure-test the candidate Loop with one plausible future failure: a shallow completion, weak proof, drift, missing coverage, or unacceptable residual risk. If the `spec`, role posture, workflow, handoffs, evidence queries, and GateKeeper rules would not expose, repair, or block it, revise those surfaces or ask another focused question before producing the bundle.
-- Project the working agreement into all governance surfaces: `collaboration_summary` tells why this task needs multi-round Loopora governance and how future human proof demands, user-facing rejection criteria, correction roles, execution priorities, local-governance responsibilities, timing / stop decisions, strict-vs-pragmatic closure choices, and durable proof expectations become `spec`, `roles`, and `workflow`; it must describe that mapping, not merely list the surface names. `spec.markdown` carries concrete task scope / success / fake-done / evidence / residual-risk policy / execution priorities / judgment tradeoffs; `spec.markdown` `# Role Notes` or `role_definitions` carry Builder / Inspector / Guide / GateKeeper / Custom posture, role-level tradeoffs, and project-local governance responsibilities when those archetypes or markers are used; and `workflow.collaboration_intent` plus step `inputs` carry judgment order, build/prove/repair/narrow/expand/defer priorities, local-governance checkpoints, closure choices, error exposure, and evidence flow.
+- Project the working agreement into all governance surfaces: `collaboration_summary` tells why this task needs multi-round Loopora governance and how future human proof demands, user-facing rejection criteria, correction roles, execution priorities, local-governance responsibilities, timing / stop decisions, strict-vs-pragmatic closure choices, intermediate control points, and durable proof expectations become `spec`, `roles`, and `workflow`; it must describe that mapping, not merely list the surface names. `spec.markdown` carries concrete task scope / success / fake-done / evidence / residual-risk policy / execution priorities / judgment tradeoffs; `spec.markdown` `# Role Notes` or `role_definitions` carry Builder / Inspector / Guide / GateKeeper / Custom posture, role-level tradeoffs, and project-local governance responsibilities when those archetypes or markers are used; and `workflow.collaboration_intent` plus step `inputs` carry judgment order, build/prove/repair/narrow/expand/defer priorities, local-governance checkpoints, control-point decisions, closure choices, error exposure, and evidence flow.
 - Run an agreement-to-bundle traceability checklist before final YAML: every confirmed judgment item must land in `collaboration_summary`, `spec.markdown` / `# Role Notes`, `role_definitions[].prompt_markdown` / `posture_notes`, `workflow.collaboration_intent`, step `inputs`, or GateKeeper evidence rules. Metadata and loop names are not enough. If the only copy of a judgment is in `agreement_summary`, readiness evidence, transcript memory, metadata / loop names, or private reasoning, the bundle is not complete.
 - Make it clear how GateKeeper should distinguish Proven, Weak, Unproven, Blocking, and Residual risk evidence. A bundle that lets a normal run status masquerade as task proof is not aligned with Loopora's verdict contract.
 - Preserve one coherent story across summary, spec, roles, and workflow.

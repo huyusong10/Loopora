@@ -74,6 +74,7 @@ def _assert_alignment_language_assets(design_docs: dict[str, str], governance_sc
     assert "Web is full-function" in contracts
     assert "same Core" in contracts
     assert "Run status and Loop verdict are separate" in contracts
+    assert "evidence-bearing control points" in contracts
     assert "`/loopora-plan -> /loopora-run`" in contracts
     assert "`/loopora-plan` is the planning stage" in contracts
     assert "`/loopora-run` is the run stage" in contracts

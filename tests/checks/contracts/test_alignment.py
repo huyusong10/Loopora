@@ -101,6 +101,10 @@ def test_alignment_fake_bundle_keeps_runtime_judgment_surfaces_visible(sample_wo
     assert "Execution Strategy, Judgment Tradeoffs, Local Governance, and Residual Risk" in bundle_text
     assert "sequencing drift, lowered tradeoffs, local-governance gaps" in bundle_text
     assert "prove the task contract, execution strategy, judgment tradeoffs, local governance when present" in bundle_text
+    assert "Intermediate control points measure weak evidence and fake-done drift" in bundle_text
+    assert "trigger a continue / correct / halt decision" in bundle_text
+    assert "keep the required evidence target explicit" in bundle_text
+    assert "Treat status-only checkpoints as insufficient" in bundle_text
 
 
 def _assert_alignment_preview_control_summary(preview: dict) -> None:
