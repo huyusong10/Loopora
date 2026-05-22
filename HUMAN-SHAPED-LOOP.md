@@ -92,11 +92,30 @@ This "looks complete, real problems hidden deep" state is the norm for complex t
 
 Use cases, agile iteration, automated tests excel at shortening feedback distance: build a small slice, run a test, know quickly if it's right. They fit fast-feedback systems—change button copy, run test, know immediately.
 
-But refund flows, permission refactors, cross-service payment callbacks are different: automated checks still matter, but they rarely replace final feedback by themselves. When final feedback is too slow, errors cascade, and "looks done" doesn't mean "actually done," tasks need **feedforward governance**—before final feedback arrives, define key risks upfront, construct intermediate feedback points, make these points capable of changing subsequent action direction.
+But refund flows, permission refactors, cross-service payment callbacks are different: automated checks still matter, but they rarely replace final feedback by themselves.
+
+When final feedback is too late, errors cascade, and "looks done" doesn't mean "actually done," tasks need **feedforward governance**—before final feedback arrives, define key risks upfront, construct intermediate feedback points, make these points capable of changing subsequent action direction.
 
 Mature engineering processes have long known this. Design reviews, gates, staged rollouts, audit trails—all exist because final feedback is too slow, so decision-capable checkpoints must be inserted during execution. Loopora doesn't copy organizational processes; it compresses this governance capability into task-local, reviewable, discardable Agent Loops.
 
-## 4. What Loopora Does: Place Judgment Points That Change Action Upfront
+## 4. The Essence of Human-shaped Loop
+
+**Human-shaped Loop turns human judgment into execution structure that shapes subsequent loops.**
+
+This structure determines:
+- What results will be accepted
+- What evidence counts as sufficient
+- What risks must be blocked
+- Based on current evidence, how the next round turns
+- How the task honestly closes
+
+It's not writing more requirements upfront—that's a longer PRD. It's not making the model reflect more rounds—that's stronger self-checking. It's not replacing human judgment—that would detach the loop from human control.
+
+It solves something else: make human judgment unavoidable material for subsequent work, instead of needing humans to keep emphasizing.
+
+So Human-shaped Loop doesn't focus on "will the model work harder"—it focuses on "can human judgment be previewed, executed, evidenced, traced, and ruled upon."
+
+## 5. What Loopora Does: Place Judgment Points That Change Action Upfront
 
 Loopora doesn't wait for final failure to correct. Before the task starts, it places key risks, evidence standards, and closure rules into the loop.
 
@@ -142,7 +161,7 @@ Results organized into evidence buckets:
 
 Evidence insufficient—next round doesn't freely explore, but gets pulled back to key gaps.
 
-## 5. When Is a Checkpoint Actually Useful
+## 6. When Is a Checkpoint Actually Useful
 
 Control points themselves don't produce control capability.
 
@@ -165,40 +184,73 @@ In Loopora, "resource allocation" isn't human budget, but subsequent execution r
 
 Points that only measure, don't decide, don't redirect—those are recording rituals, not effective control points.
 
-## 6. Relationship with PRD, Tests, Use Cases, Fixed Team Templates
+## 7. Why PRD, Tests, Use Cases, and Fixed Templates Don't Solve This
 
-**PRD and prompt**
-Answer "what to do." Human-shaped Loop answers "is it proven, should it turn, can it close." Different layers.
+The previous analysis naturally raises a question: if we write finer PRDs and design fuller tests upfront, can the Agent just follow along?
 
-PRD reminds Agent what to care about, but may be selectively quoted. Loop requires each round to respond with evidence.
+Of course we should do that. Upfront clarification, detailed PRD, complete test plan—all significantly improve round-one quality.
 
-**Tests and automated checks**
-Judgments that can be written as tests, type checks, lint, proof scripts should be written first. These are hard evidence, machine-adjudicable.
+But they improve opening quality, not judgment callbacks during execution.
 
-Loopora handles the layer around that evidence: when evidence is missing, failing, or incomplete, the Agent can't package run completion as task completion.
+In the real world, even the strongest engineering team can't foresee all problems upfront. Design docs state intent; execution generates new facts. Once multi-round execution begins, each round raises new questions:
+- What code and flow did it actually change?
+- Which hard parts did it bypass?
+- Are new tests proving core risks, or only proving paths that are easier to pass?
+- Did the summary turn "unproven" into "completed"?
 
-**Use cases and agile**
-Fit fast-feedback systems: build small slice, know immediately if it's right.
+These questions only appear after execution, can't be exhausted at design stage.
 
-Loopora fits slow-feedback systems: final feedback too late, errors cascade, "looks done" doesn't mean "actually done."
+**PRD or prompt answers "what to do." Human-shaped Loop answers "is it proven, should it turn, can it close." Different layers.**
 
-**Fixed team templates**
-PM Agent → Architect Agent → Engineer Agent → QA Agent is a specific form of Loop.
+| PRD / prompt | Human-shaped Loop |
+| --- | --- |
+| Describes goals and constraints known before task starts | Turns judgment into control structure that keeps acting during execution |
+| Reminds Agent what to care about | Requires each round to respond with evidence |
+| Improves round-one quality | Controls error propagation across rounds |
+| May be selectively quoted or locally satisfied | Records gaps, blockers, and residual risk |
+| Only guidance, no hard constraint | No proof means no closure |
 
-It answers "who first, who next, who reviews whom," but doesn't answer:
+Judgments that can be written as tests, type checks, lint, proof scripts should be written first whenever possible. These are hard evidence, machine-adjudicable.
+
+But some judgments can't be externalized or quantified as concrete metrics. For example:
+- "Code is bloated, needs refactoring"—this is complexity perception, not testable
+- "This plan is drifting toward easier-to-report work instead of touching the real hard part"—this is execution-direction judgment, needs human ruling
+- "This risk can carry forward, but must be visible and owned"—this is residual-risk strategy, depends on team commitments and business environment
+
+These judgments need to become structure, constraining subsequent action and final evaluation.
+
+**Fixed team templates have similar limitations.**
+
+PM Agent → Architect Agent → Engineer Agent → QA Agent is a specific form of Loop. It fits scenarios where task type, failure mode, and deliverables are all stable. For other scenarios:
+
+- **Light tasks**: Fix button copy, extract a small function—wrapping PM, Architect, QA process is overkill, slows work
+- **Heavy tasks**: Refund flow, data migration—fixed role names won't automatically know which fake-completion pattern this task fears most. "QA" might only check that the page works, tests pass, copy is complete, while missing authorization paths, refund eligibility, and audit trails
+
+The essence of a fixed team template is that it presets role division and handoff order. It answers "who first, who next, who reviews whom." But it doesn't answer:
 - What's the completion standard for this task?
 - What evidence counts as sufficient?
 - Which gap should pull the next round?
+- When can the task honestly close?
 
 These answers change with the task. Fixed templates can't adapt.
 
-One sentence: fixed team templates are one form of Loopora, not the essence.
+One sentence: fixed team templates are one form of Loopora, not the essence. Loopora's full capability is dynamically generating judgment structure per task—light tasks get light process, heavy tasks get heavy evidence.
 
-## 7. When Loopora Is Worth Using
+## 8. When Loopora Is Worth Using
 
 Loopora doesn't fit every complex task. The deciding factor isn't complexity—it's whether **final feedback is too slow, requiring intermediate judgment points during execution.**
 
-Judgment sequence:
+Use cases, agile iteration, automated tests fit systems where feedback can be compressed enough: build a small slice, run a test, know immediately if it's right. Change button copy, fix a clear-stacktrace bug, extract a well-bounded function—these don't need Loop.
+
+But refund flows, billing permissions, cross-service payment callbacks, data migrations are different. Real production feedback, incident feedback, business quality feedback often appears long after the task finishes. During that time, "looks done" gets continuously reinforced—more pages, more tests, smoother summaries—but core risks might never have been proven.
+
+Common characteristics of these tasks:
+- Final feedback too late, errors cascade
+- "Looks done" doesn't mean "actually done"
+- Evidence needs to accumulate and be traceable across rounds
+- High rollback cost once risks surface
+
+Engineering process has cost, but these tasks are worth it. Judgment sequence:
 
 | Gate | If leaning "yes" | If leaning "no" |
 | --- | --- | --- |
@@ -214,28 +266,32 @@ Examples:
 
 Key difference: whether humans need to repeatedly return after key rounds to judge evidence, risk, direction, and closure.
 
-## 8. Can Stronger Models Solve the Judgment Problem?
+## 9. Can Stronger Models Solve the Judgment Problem?
 
-Stronger models of course make many things simpler—like more senior engineers, they can spot more risks upfront, write better first plans.
+Models should learn general capabilities: language, code, planning, tool use, reasoning patterns, broad aesthetics. These should transfer across users and tasks.
 
-But nobody cancels code review, tests, release gates, or audit trails just because the engineer is senior. This isn't distrust of individual ability—delivery judgment never lives only inside personal capability. Which risks are acceptable, what evidence counts as sufficient, when residual risk can ship—all depend on specific task, team commitments, and business environment, and must be explicitly exposed for debate.
+Stronger models of course make many things simpler—like more senior engineers, they can spot more risks upfront, write better first plans, make fewer basic mistakes.
 
-That's why task judgment should be local, temporary, debatable:
+But nobody cancels code review, tests, release gates, audit trails, or incident retrospectives just because the engineer is senior. This isn't distrust of individual ability—delivery judgment never lives only inside personal capability. Which risks are acceptable, what evidence counts as sufficient, when residual risk can ship—all depend on specific task, team commitments, and business environment, and must be explicitly exposed for debate.
+
+That's why judgment in one task should usually be treated as local, temporary, debatable:
 
 - This refund flow must be conservative, doesn't mean every product task must be
+- This prototype can accept rough visuals, doesn't mean all prototypes can
+- This benchmark is credible, doesn't mean all benchmarks are
 - Accepting this residual risk now, doesn't mean it's a long-term preference
 
-These judgments should be explicit, previewable, editable, disposable. They fit better in the Loop layer outside the Agent, not silently baked into model weights.
+These judgments should be explicit, previewable, editable, disposable. They fit better in the Loop layer outside the Agent, not silently baked into model weights or long-term memory.
 
 > Models learn general capability. Loops learn how this task should be judged.
 
-## 9. Conclusion: Less Human Return, Not Human Disappearance
+## 10. Conclusion: Less Human Return, Not Human Disappearance
 
 Future AI-human collaboration won't evolve only along the "smarter models" line.
 
 Models will keep getting stronger, but complex tasks still need human judgment: what's worth doing, what counts as real completion, is evidence credible, is risk acceptable, when to continue, stop, or pivot.
 
-This philosophy isn't from abstract AI theory. It's closer to learning from engineering management practices that proved useful: reviews, gates, evidence, traces, retrospectives, and a healthy distrust of "looks done."
+This philosophy didn't spring from abstract AI theory. It's closer to learning from engineering management practices that proved useful: reviews, gates, evidence, traces, retrospectives, and a healthy distrust of "looks done." Loopora doesn't copy organizational process—it compresses these constraints into Agent-executable task structure.
 
 Higher collaboration isn't pulling humans back into every step, nor pretending humans can fully leave. It's letting human judgment participate in a better temporal shape.
 
@@ -249,4 +305,4 @@ When judgment, evidence, redirect, and closure are all externalized, humans can 
 
 This is Human-shaped Loop.
 
-For installation and running Loopora, return to [README](./README.md).
+For installation and running Loopora, return to [README](./README.md). This article explains why this layer exists; README explains how to use it.
