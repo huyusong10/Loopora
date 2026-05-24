@@ -265,8 +265,8 @@ def test_concept_coherence_design_text_reaches_plan_and_run_contracts(tmp_path: 
 
     assert "The compiler turns task judgment into a reviewable and runnable Loop." in report
     assert "Web dialogue, Agent candidate plans, YAML import/export, preview, and run creation" in report
-    assert "`/loopora-plan` is the planning stage" in report
-    assert "`/loopora-run` is the run stage" in report
+    assert "`/loopora-plan` creates, revises, repairs, or tightens reviewed Loop previews" in report
+    assert "`/loopora-run` starts, resumes, replays, or continues evidence" in report
     assert "The default user model is linear and explainable" in report
 
 

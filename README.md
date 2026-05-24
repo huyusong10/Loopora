@@ -124,7 +124,24 @@ To only check whether the project Agent entry is complete, still Loopora-managed
 loopora init codex --check
 ```
 
-`--check` only diagnoses—doesn't install, repair, or overwrite. Before install, a failing check means "not installed yet" and prints the install command; after install, failed checks mean the managed entry needs attention. Use Web for run status and details.
+You can also check the same entries from the Agent namespace:
+
+```bash
+loopora agent codex check --workdir "$PWD"
+```
+
+`--check` only diagnoses: it does not install, repair, or overwrite. Before install, a failing check means "not installed yet" and prints the install command; after install, failed checks mean the managed entry needs attention.
+
+The Agent-native capability contract is intentionally small:
+
+- Execution stays with the current host Agent in its current workdir. Loopora owns managed project entries plus `.loopora/` state, and it does not change model/provider routing, permissions, approval mode, global config, skills/plugins, MCP setup, credentials, or environment secrets.
+- Activation stays explicit through `/loopora-plan`, `/loopora-run`, or Loopora CLI commands. Host hooks, session-start events, status lines, remote controls, and task trackers are observation or control surfaces, not Loopora phase entries.
+- Role handoff uses the host-native mechanism and never starts a nested Codex, Claude Code, or OpenCode CLI. Handoff stays path-based, and multi-role fan-out happens only when the reviewed Loop declares a parallel group.
+- Task proof comes from submitted Loopora evidence refs and the task verdict. Approval, host memory, compact summaries, injected editor context, external tool output, hook logs, marketplace/registry state, symlinks, and session archives are hints until submitted as Loopora evidence.
+- Packaging stays project-local and thin. Behavior comes from Loopora Core plus managed references; manifests and check commands detect drift; check/init are the explicit update paths; entry visibility is checked through adapter-specific project files and metadata, and some hosts may need a restart or new session to refresh discovery.
+- Recovery trusts exact context binding first. When more than one context is possible, Loopora lists recoverable choices instead of guessing the newest host session or taking over historical sessions.
+
+Use Web for run status and details.
 
 Then return to Agent and use two-stage entries for the current task:
 
@@ -177,7 +194,7 @@ At runtime, Loopora turns these reader-facing pieces into runnable plan: task co
 
 ## How `/loopora-run` Advances
 
-`/loopora-run` enters the Loop run stage: start, continue, resume, or patch evidence gaps. Agent remains the main executor: it reads code, edits files, runs checks, and explains results. Loopora keeps each round tied back to the reviewed plan, required evidence, and verdict rules instead of letting the task continue only from chat memory or a bare goal. If you ask to change the judgment standard during this stage, Agent should stop and route you back to `/loopora-plan` or Web review.
+`/loopora-run` enters the Loop run stage: start, continue, resume, or patch evidence gaps. Agent remains the main executor: it reads code, edits files, runs checks, and explains results. When work needs role handoff, Loopora uses the current host Agent's native role entries instead of starting another nested Codex, Claude Code, or OpenCode CLI process. Loopora's capability contract keeps that boundary explicit: the current host Agent executes in its current workspace, while Loopora manages entries, context binding, role boundaries, evidence, and task verdicts. Loopora keeps each round tied back to the reviewed plan, required evidence, and verdict rules instead of letting the task continue only from chat memory or a bare goal. If you ask to change the judgment standard during this stage, Agent should stop and route you back to `/loopora-plan` or Web review.
 
 If current Agent session has exact Loopora binding, `/loopora-run` can resume directly. If workdir has recoverable Loopora runs but current Agent session differs or multiple candidates exist, Loopora should surface choices—not guess which to continue. To create fresh Loop rather than reuse old judgment, return to `/loopora-plan` or Web and explicitly choose fresh start.
 

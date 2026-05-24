@@ -76,8 +76,8 @@ def _assert_alignment_language_assets(design_docs: dict[str, str], governance_sc
     assert "Run status and Loop verdict are separate" in contracts
     assert "evidence-bearing control points" in contracts
     assert "`/loopora-plan -> /loopora-run`" in contracts
-    assert "`/loopora-plan` is the planning stage" in contracts
-    assert "`/loopora-run` is the run stage" in contracts
+    assert "`/loopora-plan` creates, revises, repairs, or tightens reviewed Loop previews" in contracts
+    assert "`/loopora-run` starts, resumes, replays, or continues evidence" in contracts
     assert "明确确认工作约定后进入 READY" in governance_scenario
     assert "确认方案后进入 READY" not in governance_scenario
 
@@ -331,7 +331,8 @@ def test_design_main_workflow_anchors_separate_run_status_and_loop_verdict() -> 
     assert "READY preview must reflect current canonical content" in contracts
     assert "Run status and Loop verdict are separate" in contracts
     assert "Templates/tests inherit host model/provider defaults" in contracts
-    assert "Loopora only owns `.loopora/` state plus host entry files" in contracts
+    assert "Loopora only owns `.loopora/` state" in contracts
+    assert "Loopora-managed host entry files" in contracts
     assert "Public adapter names stay `loopora-*`" in contracts
 
     for source in design_sources.values():

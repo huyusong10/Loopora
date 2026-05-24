@@ -93,6 +93,7 @@ def test_agent_loop_restarts_after_terminal_insufficient_evidence(
         previous_run_id=previous_run["id"],
         previous_task_verdict_status="insufficient_evidence",
     )
+    _assert_codex_native_surface_summary(continued["agent_run_summary"])
     assert continuation_summary["next_focus"]
     assert continued["next_step"]["execution_plane"] == "agent_native"
     context_packet = json.loads(Path(continued["next_step"]["context_absolute_path"]).read_text(encoding="utf-8"))
@@ -327,6 +328,9 @@ def test_agent_loop_replays_terminal_passed_task_verdict(
     assert continued["agent_run_summary"]["task_proven"] is True
     assert continued["agent_run_summary"]["task_outcome"] == "already_proven_no_new_evidence"
     assert continued["agent_run_summary"]["lifecycle_vs_task"] == "run_lifecycle_complete_task_proven"
+    assert continued["agent_run_summary"]["task_proof_source"] == "run.task_verdict"
+    assert continued["agent_run_summary"]["run_lifecycle_source"] == "result.complete"
+    _assert_codex_native_surface_summary(continued["agent_run_summary"])
     assert continued["agent_run_summary"]["task_next_action"]["kind"] == "already_passed"
     assert continued["task_next_action"]["kind"] == "already_passed"
     assert continued["task_next_action"]["reason"] == "task_verdict_passed"

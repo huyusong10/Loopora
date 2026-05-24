@@ -251,6 +251,7 @@ def test_cli_agent_run_without_exact_binding_reports_recoverable_context(
     assert payload_keys.index("agent_loop_recovery_summary") < payload_keys.index("context_resolution")
     summary = payload["agent_loop_recovery_summary"]
     assert summary["loop_recovery"] == "choose_recoverable_context"
+    _assert_codex_native_surface_summary(summary)
     assert summary["choice_count"] == 1
     assert summary["runnable_choice_count"] == 1
     assert summary["non_runnable_choice_count"] == 0
@@ -340,6 +341,7 @@ def test_cli_agent_next_without_exact_binding_reports_direct_run_recovery(
     assert payload_keys.index("agent_next_recovery_summary") < payload_keys.index("context_resolution")
     summary = payload["agent_next_recovery_summary"]
     assert summary["loop_recovery"] == "choose_recoverable_context"
+    _assert_codex_native_surface_summary(summary)
     assert summary["choice_count"] == 1
     assert summary["runnable_choice_count"] == 1
     assert summary["next_active_run_command"].endswith(f"--run-id {started['run']['id']} --json --entry-source codex_project_skill")
@@ -444,6 +446,7 @@ def test_cli_agent_run_active_workdir_conflict_reports_recovery_commands(sample_
     assert payload_keys.index("agent_loop_recovery_summary") < payload_keys.index("active_runs")
     summary = payload["agent_loop_recovery_summary"]
     assert summary["loop_recovery"] == "active_run_conflict"
+    _assert_codex_native_surface_summary(summary)
     assert summary["active_run_count"] == 1
     assert summary["active_runs"][0]["id"] == "run_active"
     assert summary["active_runs"][0]["status"] == "awaiting_agent"

@@ -257,7 +257,7 @@ def test_cli_agent_gen_without_bundle_reports_web_alignment_needed(sample_workdi
 def test_cli_agent_gen_reports_auto_started_web_review_url(sample_workdir: Path, monkeypatch) -> None:
     runner = CliRunner()
     monkeypatch.setattr(
-        cli_agent_native,
+        cli_agent_runtime_support,
         "ensure_local_web_service",
         lambda: {"base_url": "http://127.0.0.1:9876", "reused": False, "started": True, "port": 9876},
     )
@@ -308,7 +308,7 @@ def test_cli_agent_loop_after_web_review_fallback_reprints_review_url_and_focus(
         ],
     )
     monkeypatch.setattr(
-        cli_agent_native,
+        cli_agent_runtime_support,
         "ensure_local_web_service",
         lambda: {"base_url": "http://127.0.0.1:9988", "reused": False, "started": True, "port": 9988},
     )
@@ -546,6 +546,7 @@ def test_cli_agent_gen_without_bundle_reports_not_fit_fallback(sample_workdir: P
     assert "GateKeeper value" in result.stdout
     assert "review_recommended_action: Skip Loop (Recommended)" in result.stdout
     assert "after_review_ready: return to this Agent session and run /loopora-run" in result.stdout
+    _assert_codex_native_surface_plain(result.stdout)
     assert "preview_url: /loops/new/bundle?alignment_session_id=" in result.stdout
 
 def test_cli_agent_gen_without_bundle_json_reports_not_fit_fallback(sample_workdir: Path) -> None:
@@ -576,10 +577,31 @@ def test_cli_agent_gen_without_bundle_json_reports_not_fit_fallback(sample_workd
     assert payload["loopora_fit_contradiction"] is True
     assert payload["binding"]["loopora_fit_contradiction"] is True
     assert payload["preview_url"].startswith("/loops/new/bundle?alignment_session_id=")
+    _assert_codex_native_surface_summary(payload["agent_plan_summary"])
     assert payload["agent_plan_summary"]["review_status"] == "not runnable; Loopora fit needs to be redefined"
     assert payload["review_status"] == "not runnable; Loopora fit needs to be redefined"
     assert payload["review_focus"][0].startswith("Loopora fit: define later evidence")
     _assert_loopora_agent_command(payload["after_review_command"], "run")
+
+
+def _assert_plan_message_required_summary(summary: dict) -> None:
+    _assert_codex_native_surface_summary(summary)
+    assert summary["ready"] is False
+    assert summary["loop_recovery"] == "plan_message_required"
+    assert summary["next_plan_command"] == "/loopora-plan"
+    assert summary["required_inputs"] == [
+        "task_goal",
+        "fake_done_risks",
+        "required_evidence",
+        "judgment_tradeoffs",
+    ]
+    assert summary["ask_user"].startswith("What long-running task should Loopora govern?")
+    assert summary["question_action"]["subagent_policy"].startswith("Do not ask user questions")
+    assert "fake done would be UI-only deletion" in summary["example_user_reply"]
+    assert summary["first_task_message_example"].startswith("After /loopora-plan, send: Goal:")
+    _assert_loopora_agent_command(summary["debug_cli_example_command"], "plan", json_mode=False)
+    assert summary["next"] == "Ask the user the ask_user question, then rerun /loopora-plan with the user's task context."
+
 
 def test_cli_agent_gen_without_bundle_rejects_missing_task_summary(sample_workdir: Path) -> None:
     runner = CliRunner()
@@ -618,6 +640,7 @@ def test_cli_agent_gen_without_bundle_rejects_missing_task_summary(sample_workdi
     assert "After /loopora-plan, send: Goal:" in text_result.stdout
     assert "debug_cli_example_command:" in text_result.stdout
     _assert_labeled_loopora_agent_command(text_result.stdout, "debug_cli_example_command", "plan", json_mode=False)
+    _assert_codex_native_surface_plain(text_result.stdout)
     assert "next: Ask the user the ask_user question" in text_result.stdout
 
     json_result = runner.invoke(
@@ -638,6 +661,8 @@ def test_cli_agent_gen_without_bundle_rejects_missing_task_summary(sample_workdi
     assert json_result.exit_code == 1
     assert _error_text(json_result) == ""
     payload = json.loads(json_result.stdout)
+    assert next(iter(payload)) == "agent_plan_summary"
+    _assert_plan_message_required_summary(payload["agent_plan_summary"])
     assert payload["ready"] is False
     assert payload["loop_recovery"] == "plan_message_required"
     assert payload["next_plan_command"] == "/loopora-plan"
@@ -739,6 +764,7 @@ def test_cli_agent_gen_ready_output_points_back_to_same_agent_loop(tmp_path: Pat
     assert "ready_slash_command: /loopora-run" in result.stdout
     _assert_labeled_loopora_agent_command(result.stdout, "ready_cli_command", "run")
     _assert_labeled_loopora_agent_command(result.stdout, "ready_run_command", "run")
+    _assert_codex_native_surface_plain(result.stdout)
     assert "preview_url: /loops/new/bundle?alignment_session_id=" in result.stdout
     assert "run_url:" not in result.stdout
     assert "Loopora run:" not in result.stdout

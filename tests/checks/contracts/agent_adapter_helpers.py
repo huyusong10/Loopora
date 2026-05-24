@@ -11,6 +11,7 @@ import yaml
 from loopora import cli
 from loopora import cli_agent_adapter_commands
 from loopora import cli_agent_native
+from loopora import cli_agent_runtime_support
 import loopora.agent_adapters as agent_adapters
 import loopora.agent_web as agent_web
 import loopora.service_agent_native as service_agent_native
@@ -46,6 +47,8 @@ AGENT_ENTRY_GEN_CONTRACT_SNIPPETS = (
     "owner, follow-up, or acceptance path",
     "do not let a bundle pass merely because it repeats one or two object words from the task",
     "Do not invent human judgment just to pass validation",
+    "agent_plan_summary",
+    "native_surface",
     "ready_review_projection",
     "same-session run command",
     "`loop_recovery=plan_message_required`",
@@ -153,6 +156,80 @@ AGENT_ORCHESTRATOR_CONTRACT_SNIPPETS = (
     "task_next_action.kind=already_passed",
     "context_absolute_path",
 )
+EXPECTED_NATIVE_PACKAGING = {
+    "behavior_source": "loopora_core_and_managed_references",
+    "host_entries": "generated_thin_project_local_packaging",
+    "projection_policy": "generated_projections_caches_and_marketplace_metadata_are_not_canonical_behavior",
+    "component_export": "prompt_wrappers_cross_host_skill_exports_and_external_skill_installers_are_guidance_not_adapter_parity_or_install_proof",
+    "install_scope": "project_local_no_global_marketplace_or_skill_cache",
+    "entry_visibility": "adapter_project_entries_checked_not_global_skill_sync_assumed",
+    "shadow_policy": "stale_duplicate_or_shadow_entries_are_visibility_risks_not_loopora_proof",
+    "registry_policy": "remote_marketplaces_are_discovery_not_runtime_dependency_or_proof",
+    "link_policy": "global_or_external_symlinks_are_hints_not_loopora_entry_proof",
+    "runtime_bundle": "entries_roles_references_and_state_checked_together",
+    "manifest": "managed_files_sha256_manifest",
+    "drift_check": "loopora_check_reports_missing_stale_or_unowned_files",
+    "update_policy": "explicit_check_or_init_only_no_background_auto_update",
+    "repair": "regenerate_loopora_managed_packaging_only",
+}
+EXPECTED_NATIVE_CONTEXT_LOADING = {
+    "entry_prompt": "thin_dispatcher",
+    "summary_first": [
+        "agent_plan_summary",
+        "agent_run_summary",
+        "agent_next_summary",
+        "agent_submit_summary",
+        "agent_loop_recovery_summary",
+    ],
+    "reference_loading": "on_demand_from_reference_paths",
+    "full_payload": "open_after_compact_summary",
+    "host_memory": "host_owned_hint_not_binding_or_evidence",
+    "memory_store": "external_memory_stores_indexes_and_memory_mcp_are_hints_not_loopora_context_or_proof",
+    "template_context": "host_command_templates_playbooks_and_dynamic_prompts_are_hints_not_loopora_reviewed_workflow",
+    "workflow_kits": "external_spec_workflows_prd_packs_quality_gate_recipes_and_workflow_kits_are_guidance_not_loopora_reviewed_workflow_install_proof_or_evidence",
+    "role_catalogs": "external_agent_catalogs_subagent_libraries_and_role_marketplaces_are_selection_hints_not_loopora_role_contract_or_policy",
+    "compaction_context": "host_compaction_summaries_are_hints_not_loopora_binding_or_proof",
+    "host_context": "host_loaded_skills_commands_agents_editor_context_and_ide_bridges_are_hints_not_loopora_binding_contract_or_evidence",
+    "catalog_context": "marketplace_catalogs_and_uninstalled_components_are_not_loopora_context_or_proof",
+}
+EXPECTED_NATIVE_PERMISSION_BOUNDARY = {
+    "policy_owner": "host_agent_and_user",
+    "loopora_policy": "do_not_bypass_or_downgrade_host_permissions",
+    "role_scope": "use_host_native_role_tool_allowlists",
+    "approval_prompts": "pause_for_host_approval_or_report_blocked",
+    "mode_switching": "host_agent_user_owned_not_changed_by_loopora",
+    "automation": "auto_approvers_full_access_and_no_sandbox_are_host_opt_in_not_loopora_policy",
+    "sandbox_runners": "external_containers_devcontainers_microvms_and_remote_runners_are_host_isolation_not_loopora_workspace_permission_or_proof",
+    "security_guardrails": "external_security_scanners_guardrails_and_agent_firewalls_are_host_controls_not_loopora_permission_policy_or_evidence",
+    "deny_rules": "respect_host_deny_rules_before_loopora_submit",
+    "proof_boundary": "approval_is_not_task_evidence",
+}
+EXPECTED_NATIVE_TOOLING_BOUNDARY = {
+    "mcp_servers": "host_owned_not_installed_or_enabled_by_loopora",
+    "external_tools": "use_host_available_tools_without_relaxing_permissions",
+    "tool_outputs": "proof_only_when_submitted_as_loopora_evidence",
+}
+EXPECTED_NATIVE_OBSERVABILITY = {
+    "agent_activity": "host_status_or_compact_summary_only",
+    "web_view": "observe_evidence_gaps_and_verdicts",
+    "permission_prompts": "host_agent_owns_approval_flow",
+    "hook_events": "observation_only_until_submitted_as_loopora_evidence",
+    "hook_protocol": "adapter_specific_no_cross_host_parity_assumption",
+    "hook_runners": "external_hook_runners_are_opt_in_host_automation_not_loopora_dispatch",
+    "statusline_metrics": "host_statusline_usage_cost_context_and_git_metrics_are_observation_not_loopora_proof",
+    "task_trackers": "external_task_managers_todos_backlogs_and_subagent_statuses_are_coordination_not_loopora_lifecycle_or_proof",
+    "remote_controls": "ci_actions_pr_bots_comment_triggers_dashboards_webhooks_and_background_consoles_are_host_control_not_loopora_activation_dispatch_or_proof",
+    "diagnostic_traces": "external_trace_viewers_api_proxies_session_recorders_and_usage_analyzers_are_diagnostics_not_loopora_evidence_or_verdict",
+    "progress_signal": "activity_status_is_not_task_proof",
+    "proof_signal": "loopora_evidence_refs_and_task_verdict",
+}
+
+
+def _assert_expected_mapping_values(actual: dict, expected: dict, *, keys: tuple[str, ...] | None = None) -> None:
+    for key in keys or tuple(expected):
+        assert actual[key] == expected[key]
+
+
 def _error_text(result) -> str:
     try:
         return result.stderr
@@ -255,6 +332,7 @@ def _assert_web_review_plain_output(output: str, *, task_message: str) -> None:
     assert "after_review_slash_command: /loopora-run" in output
     _assert_labeled_loopora_agent_command(output, "after_review_cli_command", "run")
     _assert_labeled_loopora_agent_command(output, "after_review_command", "run")
+    _assert_codex_native_surface_plain(output)
     assert "Web alignment" not in output
     assert "preview_url: /loops/new/bundle?alignment_session_id=" in output
     assert "candidate_url:" not in output
@@ -262,6 +340,7 @@ def _assert_web_review_json_payload(payload: dict, *, task_message: str) -> None
     payload_keys = list(payload)
     assert payload_keys.index("agent_plan_summary") < payload_keys.index("session")
     summary = payload["agent_plan_summary"]
+    _assert_codex_native_surface_summary(summary)
     assert summary["loop_recovery"] == "finish_web_review"
     assert summary["review_status"] == "not runnable; no candidate plan file was submitted"
     assert payload["review_status"] == summary["review_status"]
@@ -299,6 +378,7 @@ def _write_ready_bundle(tmp_path: Path, sample_workdir: Path) -> tuple[Path, dic
 def _assert_ready_plan_summary(payload: dict) -> None:
     assert next(iter(payload)) == "agent_plan_summary"
     summary = payload["agent_plan_summary"]
+    _assert_codex_native_surface_summary(summary)
     assert summary["ready"] is True
     assert summary["ready_review_projection"] == payload["ready_review_projection"]
     assert "happy-path claim" in summary["ready_review_projection"]["fake_done_risks"][0]
@@ -345,11 +425,13 @@ def _assert_invalid_candidate_repair_plain_output(output: str, *, task_message: 
     assert "host Agent task summary" in output
     assert "add these missing task objects from --message" in output
     assert all(item in output for item in ("refund", "authorization"))
+    _assert_codex_native_surface_plain(output)
     assert "preview_url: /loops/new/bundle?alignment_session_id=" in output
 def _assert_invalid_candidate_repair_payload(payload: dict, *, task_message: str, bundle_file: Path) -> None:
     payload_keys = list(payload)
     assert payload_keys.index("agent_plan_summary") < payload_keys.index("session")
     summary = payload["agent_plan_summary"]
+    _assert_codex_native_surface_summary(summary)
     assert summary["ready"] is False
     assert summary["loop_recovery"] == "repair_candidate_plan_file"
     assert summary["requires_candidate_repair"] is True
@@ -491,6 +573,7 @@ def _invoke_codex_submit(runner: CliRunner, workdir: Path, **options):
 def _assert_stale_submit_repair_payload(payload: dict, *, active_template: Path) -> None:
     assert next(iter(payload)) == "agent_submit_repair_summary"
     summary = payload["agent_submit_repair_summary"]
+    _assert_codex_native_surface_summary(summary)
     assert summary["active_step_id"] == "contract_inspection_step"
     assert summary["active_iter"] == 0
     assert summary["active_step_order"] == 1
@@ -509,6 +592,7 @@ def _assert_stale_submit_repair_payload(payload: dict, *, active_template: Path)
     assert summary["active_known_evidence_refs"][0]["gatekeeper_support_reason"] == "no proof artifact"
 def _assert_bad_ref_submit_repair_payload(payload: dict) -> None:
     summary = payload["agent_submit_repair_summary"]
+    _assert_codex_native_surface_summary(summary)
     assert summary["active_known_evidence_ids"] == ["ev_000_00_builder_step"]
     assert summary["active_known_evidence_refs"][0]["id"] == "ev_000_00_builder_step"
     assert summary["active_known_evidence_refs"][0]["gatekeeper_support"] == "non_supporting"
@@ -596,6 +680,35 @@ def _assert_cli_list(output: str, key: str, *items: str) -> None:
     assert f"{key}: [" not in output
     for item in items:
         assert f"- {item}" in output
+
+
+def _assert_output_contains(output: str, *snippets: str) -> None:
+    missing = [snippet for snippet in snippets if snippet not in output]
+
+    assert not missing, f"missing output snippets: {missing[:5]}"
+
+
+def _assert_native_context_loading(surface: dict, *, summary_key: str) -> None:
+    context_loading = surface["context_loading"]
+    assert summary_key in context_loading["summary_first"]
+    _assert_expected_mapping_values(
+        context_loading,
+        EXPECTED_NATIVE_CONTEXT_LOADING,
+        keys=(
+            "entry_prompt",
+            "reference_loading",
+            "host_memory",
+            "memory_store",
+            "template_context",
+            "workflow_kits",
+            "role_catalogs",
+            "compaction_context",
+            "host_context",
+            "catalog_context",
+        ),
+    )
+
+
 def _assert_missing_candidate_agent_review(review: dict, *, task_message: str) -> None:
     assert review["source"] == "agent_entry"
     assert review["review_mode"] == "missing_candidate_plan"
@@ -848,6 +961,8 @@ def _drive_agent_native_run_to_success(service, *, adapter: str, started: dict, 
         assert role_dispatch.get("required") is True
         assert role_dispatch.get("inline_allowed") is False
         assert role_dispatch.get("target_agent")
+        assert role_dispatch.get("host_mechanism")
+        assert role_dispatch.get("accepted_native_tools")
         assert role_dispatch.get("target_agent_config_path")
         assert role_dispatch.get("target_agent_config_absolute_path")
         if role.get("archetype") == "gatekeeper":
@@ -913,10 +1028,14 @@ def _assert_claude_loop_entry(loop_skill: str, run_contract: str) -> None:
     assert "thin dispatcher" in loop_skill
     assert "references/loopora-run-contract.md" in loop_skill
     assert "references/loopora-recovery-matrix.md" in loop_skill
+    _assert_loop_entry_native_run_contract(loop_skill)
     assert "--source-option-id" in loop_skill
     assert len(loop_skill.splitlines()) <= 80
     for snippet in AGENT_ENTRY_LOOP_CONTRACT_SNIPPETS:
         assert snippet in run_contract
+    assert "Claude Code native dispatch guidance" in run_contract
+    assert "Agent or Task tool" in run_contract
+    assert "nested provider CLI" in run_contract
     assert '--context-id "${CLAUDE_SESSION_ID}"' in loop_skill
     assert "--entry-source claude_project_skill" in loop_skill
 def _assert_claude_agent_prompts(builder_agent: Path, orchestrator_agent: Path) -> None:
@@ -1020,10 +1139,14 @@ def _assert_opencode_managed_install(workdir: Path, command_paths: dict[str, Pat
     assert "thin dispatcher" in loop_command
     assert ".opencode/loopora/references/loopora-run-contract.md" in loop_command
     assert ".opencode/loopora/references/loopora-recovery-matrix.md" in loop_command
+    _assert_loop_entry_native_run_contract(loop_command)
     assert "--source-option-id" in loop_command
     assert len(loop_command.splitlines()) <= 80
     for snippet in AGENT_ENTRY_LOOP_CONTRACT_SNIPPETS:
         assert snippet in run_contract + recovery_matrix
+    assert "OpenCode native dispatch guidance" in run_contract
+    assert "agent: loopora-orchestrator" in run_contract
+    assert "native task/agent capability" in run_contract
     assert '--context-id "${OPENCODE_SESSION_ID:-}"' in loop_command
     assert "--entry-source opencode_project_command" in loop_command
     builder_agent_text = builder_agent.read_text(encoding="utf-8")
@@ -1096,6 +1219,7 @@ def _assert_codex_managed_install(workdir: Path, skill_paths: dict[str, Path]) -
     assert "thin dispatcher" in loop_skill
     assert "references/loopora-run-contract.md" in loop_skill
     assert "references/loopora-recovery-matrix.md" in loop_skill
+    _assert_loop_entry_native_run_contract(loop_skill)
     assert "--source-option-id" in loop_skill
     assert len(loop_skill.splitlines()) <= 80
     for snippet in AGENT_ENTRY_LOOP_CONTRACT_SNIPPETS:
@@ -1115,6 +1239,14 @@ def _assert_codex_role_agent_files(codex_builder_agent: Path, codex_orchestrator
     assert "Loopora Orchestrator" in codex_orchestrator_agent_text
     for snippet in AGENT_ORCHESTRATOR_CONTRACT_SNIPPETS:
         assert snippet in codex_orchestrator_agent_text
+
+
+def _assert_loop_entry_native_run_contract(loop_entry: str) -> None:
+    assert agent_adapters.NATIVE_RUN_ENTRY_CONTRACT_TITLE in loop_entry
+    for snippet in agent_adapters.NATIVE_RUN_ENTRY_CONTRACT_BULLETS:
+        assert snippet in loop_entry
+
+
 def _assert_codex_manifest(workdir: Path) -> tuple[Path, str]:
     manifest_path = workdir / ".loopora" / "adapters" / "codex" / "manifest.json"
     assert manifest_path.exists()
@@ -1145,6 +1277,7 @@ def _assert_agent_run_summary_for_started_run(started: dict) -> None:
     assert summary["complete"] is False
     assert summary["next_step_id"] == "builder_step"
     assert summary["next_target_agent"] == "loopora-builder"
+    _assert_codex_native_surface_summary(summary)
 def _assert_agent_run_summary_continuation(
     summary: dict,
     *,
@@ -1194,48 +1327,9 @@ def _assert_agent_native_observation_artifacts(service, current_step: dict, star
     assert capsule_path.exists()
     assert template_path.exists()
     capsule = json.loads(capsule_path.read_text(encoding="utf-8"))
-    assert capsule["step_id"] == "builder_step"
-    assert capsule["entry_source"] == "codex_project_skill"
-    assert capsule["role_dispatch"]["target_agent"] == "loopora-builder"
-    assert capsule["known_evidence_count"] == 0
-    assert capsule["known_evidence_ids"] == []
-    assert capsule["role_dispatch"]["target_agent_config_absolute_path"].endswith(".codex/agents/loopora-builder.toml")
-    assert capsule["role_dispatch"]["target_agent_config_exists"] is False
-    _assert_capsule_submit_hint_uses_safe_filled_result_path(capsule["submit_hint"], step_stem="iter000__step00__builder_step")
-    assert "prompt" in capsule
-    assert "output_schema" in capsule
+    _assert_agent_native_observation_capsule(capsule)
     template = json.loads(template_path.read_text(encoding="utf-8"))
-    _assert_result_template_dispatch(template, run_id=started["run"]["id"])
-    assert template["loopora_result_contract"]["ignored_on_submit"] is True
-    assert template["loopora_result_contract"]["result_must_match_output_schema"] is True
-    assert template["loopora_result_contract"]["result_is_schema_shaped_scaffold"] is True
-    assert template["loopora_result_contract"]["result_scaffold_uses_null_placeholders"] is True
-    assert template["loopora_result_contract"]["replace_null_placeholders_before_submit"] is True
-    assert template["loopora_result_contract"]["step_id"] == "builder_step"
-    assert template["loopora_result_contract"]["role"]["name"] == "Focused Builder"
-    assert template["loopora_result_contract"]["action_policy"]["workspace"] == "workspace_write"
-    assert template["loopora_result_contract"]["required_coverage"]["missing_check_count"] == 2
-    assert template["loopora_result_contract"]["required_coverage"]["top_gaps"][0]["target_id"] == "done_when.check_001"
-    assert template["loopora_result_contract"]["result_file_to_write"] == capsule["submit_hint"]["result_file_absolute_path"]
-    assert template["loopora_result_contract"]["submit_command"] == capsule["submit_hint"]["command"]
-    assert template["loopora_result_contract"]["result_template_path"] == capsule["submit_hint"]["result_template_absolute_path"]
-    _assert_result_template_contract_targets(template)
-    assert "known_evidence_ids" in template["loopora_result_contract"]
-    assert template["loopora_result_contract"]["evidence_ref_contract"]["must_copy_exact_ids"] is True
-    assert template["loopora_result_contract"]["output_schema"]["required"] == capsule["output_schema"]["required"]
-    abandoned_schema = template["loopora_result_contract"]["output_schema"]["properties"]["abandoned"]
-    assert "deliberate scope limits" in abandoned_schema["description"]
-    assert "prompt" not in template["loopora_result_contract"]
-    assert template["result"] == {
-        "attempted": None,
-        "abandoned": None,
-        "assumption": None,
-        "summary": None,
-        "changed_files": [None],
-        "proof_files": [None],
-        "proof_artifacts": [None],
-        "artifact_paths": [None],
-    }
+    _assert_agent_native_observation_template(template, capsule, started)
     with pytest.raises(
         LooporaConflictError,
         match=r"agent-native result does not match output_schema: \$\.attempted expected string, got null",
@@ -1258,11 +1352,66 @@ def _assert_agent_native_observation_artifacts(service, current_step: dict, star
 
     layout = RunArtifactLayout(Path(started["run"]["runs_dir"]))
     role_requests = read_jsonl(layout.role_requests_path)
+    assert role_requests
+    assert role_requests[-1]["step_id"] == "builder_step"
     assert role_requests[-1]["context_path"].endswith("input.context.json")
     claimed = [event for event in read_jsonl(layout.legacy_events_path) if event["event_type"] == "agent_native_step_claimed"][-1]
     assert claimed["payload"]["target_agent"] == "loopora-builder"
     assert claimed["payload"]["capsule_path"].endswith("capsule.json")
     assert claimed["payload"]["result_template_path"].endswith(".result.template.json")
+
+
+def _assert_agent_native_observation_capsule(capsule: dict) -> None:
+    assert capsule["step_id"] == "builder_step"
+    assert capsule["entry_source"] == "codex_project_skill"
+    assert capsule["role_dispatch"]["target_agent"] == "loopora-builder"
+    assert capsule["role_dispatch"]["host_mechanism"] == "Codex spawn_agent with agent_type=<role_dispatch.target_agent>"
+    assert capsule["role_dispatch"]["accepted_native_tools"] == ["spawn_agent"]
+    assert capsule["known_evidence_count"] == 0
+    assert capsule["known_evidence_ids"] == []
+    assert capsule["role_dispatch"]["target_agent_config_absolute_path"].endswith(".codex/agents/loopora-builder.toml")
+    assert capsule["role_dispatch"]["target_agent_config_exists"] is False
+    _assert_capsule_submit_hint_uses_safe_filled_result_path(capsule["submit_hint"], step_stem="iter000__step00__builder_step")
+    assert "prompt" in capsule
+    assert "output_schema" in capsule
+
+
+def _assert_agent_native_observation_template(template: dict, capsule: dict, started: dict) -> None:
+    _assert_result_template_dispatch(template, run_id=started["run"]["id"])
+    assert template["loopora_result_contract"]["ignored_on_submit"] is True
+    assert template["loopora_result_contract"]["result_must_match_output_schema"] is True
+    assert template["loopora_result_contract"]["result_is_schema_shaped_scaffold"] is True
+    assert template["loopora_result_contract"]["result_scaffold_uses_null_placeholders"] is True
+    assert template["loopora_result_contract"]["replace_null_placeholders_before_submit"] is True
+    assert template["loopora_result_contract"]["step_id"] == "builder_step"
+    assert template["loopora_result_contract"]["role"]["name"] == "Focused Builder"
+    assert template["loopora_result_contract"]["action_policy"]["workspace"] == "workspace_write"
+    assert template["loopora_result_contract"]["required_coverage"]["missing_check_count"] == 2
+    assert template["loopora_result_contract"]["required_coverage"]["top_gaps"][0]["target_id"] == "done_when.check_001"
+    assert template["loopora_result_contract"]["result_file_to_write"] == capsule["submit_hint"]["result_file_absolute_path"]
+    assert template["loopora_result_contract"]["submit_command"] == capsule["submit_hint"]["command"]
+    assert template["loopora_result_contract"]["result_template_path"] == capsule["submit_hint"]["result_template_absolute_path"]
+    assert template["loopora_result_contract"]["role_dispatch"]["target_agent"] == "loopora-builder"
+    assert template["loopora_result_contract"]["role_dispatch"]["host_mechanism"] == "Codex spawn_agent with agent_type=<role_dispatch.target_agent>"
+    assert template["loopora_result_contract"]["role_dispatch"]["accepted_native_tools"] == ["spawn_agent"]
+    assert template["loopora_result_contract"]["role_dispatch"]["inline_allowed"] is False
+    _assert_result_template_contract_targets(template)
+    assert "known_evidence_ids" in template["loopora_result_contract"]
+    assert template["loopora_result_contract"]["evidence_ref_contract"]["must_copy_exact_ids"] is True
+    assert template["loopora_result_contract"]["output_schema"]["required"] == capsule["output_schema"]["required"]
+    abandoned_schema = template["loopora_result_contract"]["output_schema"]["properties"]["abandoned"]
+    assert "deliberate scope limits" in abandoned_schema["description"]
+    assert "prompt" not in template["loopora_result_contract"]
+    assert template["result"] == {
+        "attempted": None,
+        "abandoned": None,
+        "assumption": None,
+        "summary": None,
+        "changed_files": [None],
+        "proof_files": [None],
+        "proof_artifacts": [None],
+        "artifact_paths": [None],
+    }
 def _assert_capsule_submit_hint_uses_safe_filled_result_path(submit_hint: dict, *, step_stem: str = "") -> None:
     assert submit_hint["result_file_path"].endswith(".result.json")
     assert submit_hint["result_file_absolute_path"].endswith(".result.json")
@@ -1457,6 +1606,192 @@ def _assert_cli_dispatch_unavailable(
     assert f'loopora agent {adapter} check --workdir "$PWD"' in stdout
     assert f'loopora init {adapter} --workdir "$PWD"' in stdout
     assert "dispatch_next: invoke loopora-builder" not in stdout
+
+
+def _assert_codex_native_surface_summary(summary: dict) -> None:
+    surface = summary["native_surface"]
+    assert surface["entry_kind"] == "project_skill"
+    assert surface["entry_paths"]["plan"] == ".agents/skills/loopora-plan/SKILL.md"
+    assert surface["slash_commands"] == {"plan": "/loopora-plan", "run": "/loopora-run"}
+    assert surface["orchestrator"] == "loopora-orchestrator"
+    assert surface["capability_contract"]["execution_owner"] == "current_host_agent"
+    assert surface["capability_contract"]["activation"] == "explicit_loopora_command_or_cli_only"
+    assert surface["capability_contract"]["command_namespace"] == "loopora_plan_run_only_no_generic_host_command_aliases"
+    assert surface["capability_contract"]["role_dispatch"] == "host_native"
+    assert surface["capability_contract"]["workspace_owner"] == "current_host_agent_workdir"
+    assert surface["capability_contract"]["worktree_management"] == "not_created_or_switched_by_loopora"
+    assert surface["capability_contract"]["proof_owner"] == "loopora_evidence_refs_and_task_verdict"
+    assert "loopora-builder" in surface["target_agents"]
+    assert surface["host_mechanism"] == "Codex spawn_agent with agent_type=<role_dispatch.target_agent>"
+    assert surface["accepted_native_tools"] == ["spawn_agent"]
+    assert surface["packaging"] == EXPECTED_NATIVE_PACKAGING
+    _assert_native_context_loading(surface, summary_key="agent_run_summary")
+    assert surface["health_check"]["adapter_check"] == "loopora agent codex check --workdir <project>"
+    assert surface["health_check"]["scope"] == "managed_entries_role_configs_and_loopora_state"
+    assert surface["health_check"]["host_reload"] == "restart_or_new_host_session_may_be_required_for_entry_discovery"
+    assert surface["session_recovery"]["binding"] == "exact_agent_context_binding_first"
+    assert surface["session_recovery"]["ready_resume"] == "/loopora-run option:<recoverable_context_id>"
+    assert (
+        surface["session_recovery"]["host_session_discovery"]
+        == "not_auto_discovered_or_taken_over_by_loopora"
+    )
+    assert (
+        surface["session_recovery"]["checkpoint_restore"]
+        == "host_checkpoints_rewinds_and_session_archives_are_recovery_hints_not_loopora_binding_or_proof"
+    )
+    assert surface["handoff_protocol"]["role_channel"] == "host_native_role_agent"
+    assert surface["handoff_protocol"]["payload_policy"] == "path_based_context_capsule_and_template_not_large_inline_prompt"
+    assert surface["handoff_protocol"]["dispatch_failure"] == "stop_and_report_dispatch_unavailable_before_submit"
+    assert surface["handoff_protocol"]["parallel_dispatch"] == "only_when_loop_workflow_declares_parallel_group"
+    assert surface["handoff_protocol"]["external_orchestration"] == (
+        "host_swarms_party_modes_and_plugin_orchestrators_are_hints_not_loopora_parallel_contract"
+    )
+    assert (
+        surface["handoff_protocol"]["behavioral_activation"]
+        == "host_auto_activation_or_rule_injection_is_hint_not_dispatch_proof"
+    )
+    _assert_codex_native_surface_runtime_boundaries(surface)
+    _assert_codex_native_surface_ownership(surface)
+    assert "CODEX_SESSION_ID" in surface["context_identity_env"]
+    assert surface["submit_contract"] == "loopora_host_dispatch + schema-shaped result template"
+    assert surface["nested_provider_cli"] == "not_used"
+    assert "Loopora evidence refs" in surface["proof_boundary"]
+
+
+def _assert_codex_native_surface_runtime_boundaries(surface: dict) -> None:
+    assert surface["permission_boundary"] == EXPECTED_NATIVE_PERMISSION_BOUNDARY
+    assert surface["tooling_boundary"] == EXPECTED_NATIVE_TOOLING_BOUNDARY
+    assert surface["observability"] == EXPECTED_NATIVE_OBSERVABILITY
+
+
+def _assert_codex_native_surface_ownership(surface: dict) -> None:
+    ownership = surface["ownership_boundary"]
+    assert ownership["loopora_owned"] == [
+        "managed_project_entries",
+        "project_local_role_agent_configs",
+        ".loopora_state",
+    ]
+    assert ownership["managed_hooks"] == []
+    assert "permissions" in ownership["host_owned"]
+    assert "user_skills_and_plugins" in ownership["host_owned"]
+    assert "credentials_and_environment_secrets" in ownership["host_owned"]
+    assert (
+        ownership["model_policy"]
+        == "external_model_routers_provider_proxies_and_model_aliases_are_host_routing_not_loopora_policy_or_task_proof"
+    )
+    assert ownership["skill_policy"] == "host_skills_plugins_not_auto_mutated_by_loopora"
+    assert ownership["credential_policy"] == "host_credentials_env_and_secrets_not_collected_or_used_as_task_proof"
+    assert ownership["repair_policy"] == "check_then_reinstall_loopora_managed_entries_only"
+
+
+def _assert_codex_native_surface_plain(output: str) -> None:
+    assert "native surface:" in output
+    assert "- entry: project_skill plan=.agents/skills/loopora-plan/SKILL.md run=.agents/skills/loopora-run/SKILL.md" in output
+    assert "- slash commands: plan=/loopora-plan run=/loopora-run" in output
+    assert "- dispatch: loopora-orchestrator -> loopora-builder" in output
+    assert "nested provider CLI=not_used" in output
+    assert (
+        "- capabilities: execution=current_host_agent; role_dispatch=host_native; "
+        "workspace=current_host_agent_workdir; worktree=not_created_or_switched_by_loopora; "
+        "proof=loopora_evidence_refs_and_task_verdict"
+    ) in output
+    assert "- activation: explicit_loopora_command_or_cli_only" in output
+    assert "- command namespace: loopora_plan_run_only_no_generic_host_command_aliases" in output
+    assert "- host dispatch: Codex spawn_agent with agent_type=<role_dispatch.target_agent>" in output
+    assert "- accepted native tools: spawn_agent" in output
+    _assert_output_contains(
+        output,
+        "- packaging: source=loopora_core_and_managed_references",
+        "projections=generated_projections_caches_and_marketplace_metadata_are_not_canonical_behavior",
+        "components=prompt_wrappers_cross_host_skill_exports_and_external_skill_installers_are_guidance_not_adapter_parity_or_install_proof",
+        "scope=project_local_no_global_marketplace_or_skill_cache",
+        "visibility=adapter_project_entries_checked_not_global_skill_sync_assumed",
+        "shadow=stale_duplicate_or_shadow_entries_are_visibility_risks_not_loopora_proof",
+        "registry=remote_marketplaces_are_discovery_not_runtime_dependency_or_proof",
+        "links=global_or_external_symlinks_are_hints_not_loopora_entry_proof",
+        "bundle=entries_roles_references_and_state_checked_together",
+        "manifest=managed_files_sha256_manifest",
+        "drift=loopora_check_reports_missing_stale_or_unowned_files",
+        "update=explicit_check_or_init_only_no_background_auto_update",
+    )
+    _assert_output_contains(
+        output,
+        "- context loading: entry=thin_dispatcher",
+        "summary_first=agent_plan_summary, agent_run_summary, agent_next_summary",
+        "references=on_demand_from_reference_paths",
+        "memory=host_owned_hint_not_binding_or_evidence",
+        "memory_store=external_memory_stores_indexes_and_memory_mcp_are_hints_not_loopora_context_or_proof",
+        "templates=host_command_templates_playbooks_and_dynamic_prompts_are_hints_not_loopora_reviewed_workflow",
+        "workflow_kits=external_spec_workflows_prd_packs_quality_gate_recipes_and_workflow_kits_are_guidance_not_loopora_reviewed_workflow_install_proof_or_evidence",
+        "role_catalogs=external_agent_catalogs_subagent_libraries_and_role_marketplaces_are_selection_hints_not_loopora_role_contract_or_policy",
+        "compaction=host_compaction_summaries_are_hints_not_loopora_binding_or_proof",
+        "host_context=host_loaded_skills_commands_agents_editor_context_and_ide_bridges_are_hints_not_loopora_binding_contract_or_evidence",
+        "catalog=marketplace_catalogs_and_uninstalled_components_are_not_loopora_context_or_proof",
+    )
+    assert "- health check: adapter=loopora agent codex check --workdir <project>" in output
+    assert "side_effects=check_commands_do_not_install_or_overwrite" in output
+    assert "reload=restart_or_new_host_session_may_be_required_for_entry_discovery" in output
+    assert "- session recovery: binding=exact_agent_context_binding_first" in output
+    assert "ambiguous=list_recoverable_contexts_before_running" in output
+    assert "provider_resume=not_used_for_loopora_work" in output
+    assert "host_sessions=not_auto_discovered_or_taken_over_by_loopora" in output
+    assert "checkpoints=host_checkpoints_rewinds_and_session_archives_are_recovery_hints_not_loopora_binding_or_proof" in output
+    _assert_output_contains(
+        output,
+        "- handoff: channel=host_native_role_agent",
+        "required=role_dispatch.target_agent, context_path, capsule_path, result_template",
+        "payload=path_based_context_capsule_and_template_not_large_inline_prompt",
+        "dispatch_failure=stop_and_report_dispatch_unavailable_before_submit",
+        "parallel=only_when_loop_workflow_declares_parallel_group",
+        "external=host_swarms_party_modes_and_plugin_orchestrators_are_hints_not_loopora_parallel_contract",
+        "behavioral=host_auto_activation_or_rule_injection_is_hint_not_dispatch_proof",
+    )
+    _assert_codex_native_surface_plain_runtime(output)
+    _assert_codex_native_surface_plain_ownership(output)
+    assert "- submit contract: loopora_host_dispatch + schema-shaped result template" in output
+    assert "- context identity: " in output
+    assert "CODEX_SESSION_ID" in output
+    assert "- proof boundary: native todo/trace may guide host work; Loopora evidence refs" in output
+
+
+def _assert_codex_native_surface_plain_runtime(output: str) -> None:
+    _assert_output_contains(
+        output,
+        "- permission boundary: owner=host_agent_and_user",
+        "loopora=do_not_bypass_or_downgrade_host_permissions",
+        "mode=host_agent_user_owned_not_changed_by_loopora",
+        "automation=auto_approvers_full_access_and_no_sandbox_are_host_opt_in_not_loopora_policy",
+        "sandboxes=external_containers_devcontainers_microvms_and_remote_runners_are_host_isolation_not_loopora_workspace_permission_or_proof",
+        "guardrails=external_security_scanners_guardrails_and_agent_firewalls_are_host_controls_not_loopora_permission_policy_or_evidence",
+        "proof=approval_is_not_task_evidence",
+        "- tooling boundary: mcp=host_owned_not_installed_or_enabled_by_loopora",
+        "tools=use_host_available_tools_without_relaxing_permissions",
+        "proof=proof_only_when_submitted_as_loopora_evidence",
+        "- observability: activity=host_status_or_compact_summary_only",
+        "hooks=observation_only_until_submitted_as_loopora_evidence",
+        "hook_protocol=adapter_specific_no_cross_host_parity_assumption",
+        "hook_runners=external_hook_runners_are_opt_in_host_automation_not_loopora_dispatch",
+        "statusline=host_statusline_usage_cost_context_and_git_metrics_are_observation_not_loopora_proof",
+        "task_trackers=external_task_managers_todos_backlogs_and_subagent_statuses_are_coordination_not_loopora_lifecycle_or_proof",
+        "remote_controls=ci_actions_pr_bots_comment_triggers_dashboards_webhooks_and_background_consoles_are_host_control_not_loopora_activation_dispatch_or_proof",
+        "diagnostic_traces=external_trace_viewers_api_proxies_session_recorders_and_usage_analyzers_are_diagnostics_not_loopora_evidence_or_verdict",
+        "progress=activity_status_is_not_task_proof",
+        "proof=loopora_evidence_refs_and_task_verdict",
+    )
+
+
+def _assert_codex_native_surface_plain_ownership(output: str) -> None:
+    _assert_output_contains(
+        output,
+        "- ownership: loopora=managed_project_entries, project_local_role_agent_configs, .loopora_state",
+        "host=model_provider_defaults, global_user_config, user_skills_and_plugins, mcp_servers, permissions",
+        "models=external_model_routers_provider_proxies_and_model_aliases_are_host_routing_not_loopora_policy_or_task_proof",
+        "skills=host_skills_plugins_not_auto_mutated_by_loopora",
+        "credentials=host_credentials_env_and_secrets_not_collected_or_used_as_task_proof",
+    )
+    assert "hooks=claude_session_context_hook" not in output
+
+
 def _assert_agent_next_json_summary(stdout: str) -> None:
     payload = json.loads(stdout)
     payload_keys = list(payload)
@@ -1471,6 +1806,8 @@ def _assert_agent_next_json_summary(stdout: str) -> None:
     assert summary["task_proven"] is False
     assert summary["task_outcome"] == "not_proven_continue_evidence"
     assert summary["lifecycle_vs_task"] == "run_lifecycle_active_task_not_proven"
+    assert summary["task_proof_source"] == "run.task_verdict"
+    assert summary["run_lifecycle_source"] == "result.complete"
     assert summary["next_evidence_focus"] == "Previous GateKeeper rejected the pass because evidence was non-supporting."
     next_summary = summary["next_step"]
     assert next_summary["step_id"] == "inspector_step"
@@ -1517,5 +1854,6 @@ def _assert_agent_next_json_summary(stdout: str) -> None:
     assert repair["evidence_refs"] == ["ev_gatekeeper_block"]
     assert repair["top_gaps"][0]["target_id"] == "done_when.check_001"
     assert next_summary["required_coverage"] == "weak; required checks 1 covered / 1 missing"
+    _assert_codex_native_surface_summary(summary)
 
 __all__ = [name for name in globals() if not name.startswith("__")]

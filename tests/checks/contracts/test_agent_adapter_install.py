@@ -2,6 +2,205 @@ from __future__ import annotations
 
 from agent_adapter_helpers import *
 
+
+def _adapter_entry_paths_text(adapter: str) -> str:
+    return {
+        "codex": ".agents/skills/loopora-plan/SKILL.md and .agents/skills/loopora-run/SKILL.md",
+        "claude": ".claude/skills/loopora-plan/SKILL.md and .claude/skills/loopora-run/SKILL.md",
+        "opencode": ".opencode/commands/loopora-plan.md and .opencode/commands/loopora-run.md",
+    }[adapter]
+
+
+def _assert_native_surface_plain_output(output: str) -> None:
+    assert "native surface:" in output
+    _assert_output_contains(
+        output,
+        "- entry:",
+        "plan=",
+        "run=",
+        "/loopora-plan",
+        "/loopora-run",
+    )
+    assert "loopora-orchestrator" in output
+    assert "nested provider CLI=not_used" in output
+    _assert_output_contains(
+        output,
+        "execution=current_host_agent",
+        "role_dispatch=host_native",
+        "workspace=current_host_agent_workdir",
+        "worktree=not_created_or_switched_by_loopora",
+        "proof=loopora_evidence_refs_and_task_verdict",
+        "explicit_loopora_command_or_cli_only",
+        "loopora_plan_run_only_no_generic_host_command_aliases",
+        "host dispatch:",
+        "accepted native tools:",
+        "role configs:",
+        "loopora-builder=",
+        "references:",
+        "loopora-run-contract.md",
+    )
+    _assert_output_contains(
+        output,
+        "packaging:",
+        "entries=generated_thin_project_local_packaging",
+        "scope=project_local_no_global_marketplace_or_skill_cache",
+        "visibility=adapter_project_entries_checked_not_global_skill_sync_assumed",
+        "bundle=entries_roles_references_and_state_checked_together",
+        "update=explicit_check_or_init_only_no_background_auto_update",
+    )
+    _assert_output_contains(
+        output,
+        "context loading:",
+        "entry=thin_dispatcher",
+        "summary_first=",
+        "references=on_demand_from_reference_paths",
+        "memory=host_owned_hint_not_binding_or_evidence",
+        "host_context=host_loaded_skills_commands_agents_editor_context_and_ide_bridges_are_hints_not_loopora_binding_contract_or_evidence",
+        "health check:",
+        "scope=managed_entries_role_configs_and_loopora_state",
+        "session recovery:",
+        "ambiguous=list_recoverable_contexts_before_running",
+        "host_sessions=not_auto_discovered_or_taken_over_by_loopora",
+    )
+    _assert_output_contains(
+        output,
+        "handoff:",
+        "required=role_dispatch.target_agent, context_path, capsule_path, result_template",
+        "payload=path_based_context_capsule_and_template_not_large_inline_prompt",
+        "parallel=only_when_loop_workflow_declares_parallel_group",
+        "permission boundary:",
+        "owner=host_agent_and_user",
+        "mode=host_agent_user_owned_not_changed_by_loopora",
+        "tooling boundary:",
+        "mcp=host_owned_not_installed_or_enabled_by_loopora",
+        "observability:",
+        "hook_protocol=adapter_specific_no_cross_host_parity_assumption",
+        "progress=activity_status_is_not_task_proof",
+        "owned state:",
+        ".loopora/",
+    )
+    _assert_native_surface_plain_ownership(output)
+    _assert_output_contains(output, "submit contract:", "loopora_host_dispatch", "proof boundary:", "Loopora evidence refs")
+    assert output.index("native surface:") < output.index("managed files:")
+
+
+def _assert_native_surface_plain_ownership(output: str) -> None:
+    _assert_output_contains(
+        output,
+        "ownership:",
+        "model_provider_defaults",
+        "global_user_config",
+        "user_skills_and_plugins",
+        "mcp_servers",
+        "permissions",
+        "external_model_routers_provider_proxies_and_model_aliases_are_host_routing_not_loopora_policy_or_task_proof",
+        "host_skills_plugins_not_auto_mutated_by_loopora",
+        "host_credentials_env_and_secrets_not_collected_or_used_as_task_proof",
+    )
+
+
+def _assert_native_surface_packaging(surface: dict) -> None:
+    assert surface["packaging"] == EXPECTED_NATIVE_PACKAGING
+
+
+def _assert_native_surface_context_loading(surface: dict) -> None:
+    context_loading = surface["context_loading"]
+    assert "agent_next_summary" in context_loading["summary_first"]
+    assert context_loading == EXPECTED_NATIVE_CONTEXT_LOADING
+
+
+def _assert_native_surface_payload(payload: dict, *, adapter: str, entry_paths: str) -> None:
+    surface = payload["native_surface"]
+    expected_tools = {
+        "codex": ["spawn_agent"],
+        "claude": ["Agent", "Task"],
+        "opencode": ["task"],
+    }[adapter]
+    assert surface["slash_commands"] == {"plan": "/loopora-plan", "run": "/loopora-run"}
+    assert surface["entry_paths"]["plan"] in entry_paths
+    assert surface["entry_paths"]["run"] in entry_paths
+    assert surface["role_agents"]["orchestrator"]["target_agent"] == "loopora-orchestrator"
+    assert any(path.endswith("loopora-run-contract.md") for path in surface["reference_paths"])
+    assert ".loopora/" in surface["owned_state"]
+    _assert_native_surface_packaging(surface)
+    _assert_native_surface_context_loading(surface)
+    assert surface["health_check"]["adapter_check"] == f"loopora agent {adapter} check --workdir <project>"
+    assert surface["health_check"]["side_effects"] == "check_commands_do_not_install_or_overwrite"
+    assert surface["health_check"]["host_reload"] == "restart_or_new_host_session_may_be_required_for_entry_discovery"
+    assert surface["session_recovery"]["binding"] == "exact_agent_context_binding_first"
+    assert surface["session_recovery"]["not_ready"] == "return_to_loopora_plan_or_web_review"
+    assert (
+        surface["session_recovery"]["host_session_discovery"]
+        == "not_auto_discovered_or_taken_over_by_loopora"
+    )
+    assert (
+        surface["session_recovery"]["checkpoint_restore"]
+        == "host_checkpoints_rewinds_and_session_archives_are_recovery_hints_not_loopora_binding_or_proof"
+    )
+    _assert_native_surface_handoff_protocol(surface)
+    _assert_native_surface_runtime_boundaries(surface)
+    _assert_native_surface_payload_ownership(surface, adapter=adapter)
+    _assert_native_dispatch_payload(surface, expected_tools=expected_tools)
+
+
+def _assert_native_surface_handoff_protocol(surface: dict) -> None:
+    handoff = surface["handoff_protocol"]
+    assert handoff["submit_gate"] == "filled_schema_result_with_loopora_host_dispatch"
+    assert "capsule_path" in handoff["required_context"]
+    assert handoff["payload_policy"] == "path_based_context_capsule_and_template_not_large_inline_prompt"
+    assert handoff["parallel_dispatch"] == "only_when_loop_workflow_declares_parallel_group"
+    assert handoff["behavioral_activation"] == "host_auto_activation_or_rule_injection_is_hint_not_dispatch_proof"
+    assert handoff["external_orchestration"] == (
+        "host_swarms_party_modes_and_plugin_orchestrators_are_hints_not_loopora_parallel_contract"
+    )
+
+
+def _assert_native_surface_runtime_boundaries(surface: dict) -> None:
+    assert surface["permission_boundary"] == EXPECTED_NATIVE_PERMISSION_BOUNDARY
+    assert surface["tooling_boundary"] == EXPECTED_NATIVE_TOOLING_BOUNDARY
+    assert surface["observability"] == EXPECTED_NATIVE_OBSERVABILITY
+
+
+def _assert_native_surface_payload_ownership(surface: dict, *, adapter: str) -> None:
+    ownership = surface["ownership_boundary"]
+    assert ownership["repair_policy"] == "check_then_reinstall_loopora_managed_entries_only"
+    assert "permissions" in ownership["host_owned"]
+    assert "user_skills_and_plugins" in ownership["host_owned"]
+    assert "credentials_and_environment_secrets" in ownership["host_owned"]
+    assert (
+        ownership["model_policy"]
+        == "external_model_routers_provider_proxies_and_model_aliases_are_host_routing_not_loopora_policy_or_task_proof"
+    )
+    assert ownership["skill_policy"] == "host_skills_plugins_not_auto_mutated_by_loopora"
+    assert ownership["credential_policy"] == "host_credentials_env_and_secrets_not_collected_or_used_as_task_proof"
+    if adapter == "claude":
+        assert "managed_session_context_hook" in ownership["loopora_owned"]
+        assert ownership["managed_hooks"] == ["claude_session_context_hook"]
+    else:
+        assert ownership["managed_hooks"] == []
+
+
+def _assert_native_dispatch_payload(surface: dict, *, expected_tools: list[str]) -> None:
+    assert surface["capability_contract"]["execution_owner"] == "current_host_agent"
+    assert surface["capability_contract"]["activation"] == "explicit_loopora_command_or_cli_only"
+    assert surface["capability_contract"]["command_namespace"] == "loopora_plan_run_only_no_generic_host_command_aliases"
+    assert surface["capability_contract"]["role_dispatch"] == "host_native"
+    assert surface["capability_contract"]["workspace_owner"] == "current_host_agent_workdir"
+    assert surface["capability_contract"]["worktree_management"] == "not_created_or_switched_by_loopora"
+    assert surface["capability_contract"]["proof_owner"] == "loopora_evidence_refs_and_task_verdict"
+    assert surface["native_dispatch"]["host_mechanism"]
+    assert surface["native_dispatch"]["accepted_native_tools"] == expected_tools
+    assert surface["native_dispatch"]["nested_provider_cli"] == "not_used"
+    assert "Loopora evidence refs" in surface["native_dispatch"]["proof_boundary"]
+
+
+def _assert_first_task_message_example(value: str) -> None:
+    assert "Goal:" in value
+    assert "Fake-done risks:" in value
+    assert "Required evidence:" in value
+    assert "Judgment tradeoffs:" in value
+
+
 def test_agent_native_result_template_uses_schema_shaped_null_scaffold() -> None:
     template = ServiceAgentNativeMixin._agent_native_result_template(
         {
@@ -179,11 +378,7 @@ def test_cli_adapter_install_human_output_points_to_agent_next_steps(tmp_path: P
     workdir = tmp_path / adapter
     workdir.mkdir()
     runner = CliRunner()
-    entry_paths = {
-        "codex": ".agents/skills/loopora-plan/SKILL.md and .agents/skills/loopora-run/SKILL.md",
-        "claude": ".claude/skills/loopora-plan/SKILL.md and .claude/skills/loopora-run/SKILL.md",
-        "opencode": ".opencode/commands/loopora-plan.md and .opencode/commands/loopora-run.md",
-    }
+    entry_paths = _adapter_entry_paths_text(adapter)
 
     result = runner.invoke(cli.app, ["init", adapter, "--workdir", str(workdir)])
 
@@ -198,24 +393,26 @@ def test_cli_adapter_install_human_output_points_to_agent_next_steps(tmp_path: P
     assert "/loopora-run" in result.stdout
     assert "same Agent session" in result.stdout
     assert "If /loopora-plan or /loopora-run is not visible" in result.stdout
-    assert entry_paths[adapter] in result.stdout
+    assert entry_paths in result.stdout
     assert f"refresh or restart {label}" in result.stdout
     assert "observe evidence, gaps, and verdicts" in result.stdout
     assert "first task message example:" in result.stdout
-    assert "Goal:" in result.stdout
-    assert "Fake-done risks:" in result.stdout
-    assert "Required evidence:" in result.stdout
-    assert "Judgment tradeoffs:" in result.stdout
     assert "diagnostics:" in result.stdout
     assert "- verify install:" in result.stdout
     assert f"loopora init {adapter} --workdir {workdir.resolve()} --check" in result.stdout
     assert "- agent-runtime check:" in result.stdout
     assert f"loopora agent {adapter} check --workdir {workdir.resolve()}" in result.stdout
+    _assert_native_surface_plain_output(result.stdout)
+    if adapter == "claude":
+        assert "hooks=claude_session_context_hook" in result.stdout
+    else:
+        assert "hooks=claude_session_context_hook" not in result.stdout
     assert "managed files:" in result.stdout
     assert result.stdout.index("next:") < result.stdout.index("managed files:")
     assert result.stdout.index("diagnostics:") < result.stdout.index("managed files:")
     assert "adapter installed" not in result.stdout
     assert "YAML bundle" not in result.stdout
+    _assert_first_task_message_example(result.stdout)
 
     json_result = runner.invoke(cli.app, ["init", adapter, "--workdir", str(workdir), "--json"])
 
@@ -224,14 +421,12 @@ def test_cli_adapter_install_human_output_points_to_agent_next_steps(tmp_path: P
     assert any(f"Return to {label}" in item for item in payload["next_steps"])
     assert any("/loopora-plan" in item for item in payload["next_steps"])
     assert any("/loopora-run" in item for item in payload["next_steps"])
-    assert any(entry_paths[adapter] in item for item in payload["next_steps"])
+    assert any(entry_paths in item for item in payload["next_steps"])
     assert any(f"refresh or restart {label}" in item for item in payload["next_steps"])
-    assert "Goal:" in payload["first_task_message_example"]
-    assert "Fake-done risks:" in payload["first_task_message_example"]
-    assert "Required evidence:" in payload["first_task_message_example"]
-    assert "Judgment tradeoffs:" in payload["first_task_message_example"]
+    _assert_first_task_message_example(payload["first_task_message_example"])
     assert payload["next_commands"]["plan"] == "/loopora-plan"
     assert payload["next_commands"]["run"] == "/loopora-run"
+    _assert_native_surface_payload(payload, adapter=adapter, entry_paths=entry_paths)
     _assert_loopora_cli_command(
         payload["next_commands"]["check"],
         f"loopora init {adapter} --workdir {workdir.resolve()} --check",
@@ -291,6 +486,10 @@ def test_cli_agent_adapter_check_alias_reports_actionable_install_state(tmp_path
     assert payload["check_recovery"]["check_command"].endswith(f"--workdir {workdir.resolve()} --check")
     assert "first_task_message_example" in payload
     assert payload["next_commands"]["plan"] == "/loopora-plan"
+    assert payload["native_surface"]["entry_kind"] == "project_skill"
+    assert payload["native_surface"]["role_agents"]["builder"]["path"] == ".codex/agents/loopora-builder.toml"
+    assert payload["native_surface"]["native_dispatch"]["accepted_native_tools"] == ["spawn_agent"]
+    assert "CODEX_SESSION_ID" in payload["native_surface"]["context_identity_env"]
 
 def test_cli_adapter_check_validates_managed_supporting_files(tmp_path: Path) -> None:
     workdir = tmp_path / "project"
@@ -315,6 +514,94 @@ def test_cli_adapter_check_validates_managed_supporting_files(tmp_path: Path) ->
     assert unhealthy_payload["check_status"] == "fail"
     assert any(item["name"] == "supporting_file" and item["status"] == "fail" for item in unhealthy_payload["checks"])
     assert not reference.exists()
+
+
+def test_cli_adapter_check_validates_native_run_entry_contract(tmp_path: Path) -> None:
+    workdir = tmp_path / "project"
+    workdir.mkdir()
+    runner = CliRunner()
+
+    install = runner.invoke(cli.app, ["init", "codex", "--workdir", str(workdir), "--json"])
+    assert install.exit_code == 0, install.stdout
+    run_entry = workdir / ".agents" / "skills" / "loopora-run" / "SKILL.md"
+    contract_block = (
+        f"## {agent_adapters.NATIVE_RUN_ENTRY_CONTRACT_TITLE}\n\n"
+        + "\n".join(f"- {item}" for item in agent_adapters.NATIVE_RUN_ENTRY_CONTRACT_BULLETS)
+        + "\n\n"
+    )
+    run_entry_text = run_entry.read_text(encoding="utf-8")
+    assert contract_block in run_entry_text
+    run_entry.write_text(
+        run_entry_text.replace(contract_block, ""),
+        encoding="utf-8",
+    )
+
+    result = runner.invoke(cli.app, ["init", "codex", "--workdir", str(workdir), "--check", "--json"])
+
+    assert result.exit_code == 1
+    payload = json.loads(result.stdout)
+    failed_contract = next(item for item in payload["checks"] if item["name"] == "entry_native_run_contract")
+    assert failed_contract["status"] == "fail"
+    assert failed_contract["path"] == ".agents/skills/loopora-run/SKILL.md"
+    assert "native-run contract" in failed_contract["message"]
+
+
+@pytest.mark.parametrize(
+    "case",
+    [
+        {
+            "adapter": "codex",
+            "entry_path": ".agents/skills/loopora-run/SKILL.md",
+            "old": "name: loopora-run",
+            "new": "name: loopora-start",
+            "expected_message": "name=loopora-run",
+        },
+        {
+            "adapter": "claude",
+            "entry_path": ".claude/skills/loopora-plan/SKILL.md",
+            "old": "disable-model-invocation: true",
+            "new": "disable-model-invocation: false",
+            "expected_message": "disable-model-invocation=true",
+        },
+        {
+            "adapter": "opencode",
+            "entry_path": ".opencode/commands/loopora-run.md",
+            "old": "agent: loopora-orchestrator",
+            "new": "agent: build",
+            "expected_message": "agent=loopora-orchestrator",
+        },
+    ],
+)
+def test_cli_adapter_check_validates_entry_frontmatter_contract(
+    tmp_path: Path,
+    case: dict[str, str],
+) -> None:
+    workdir = tmp_path / "project"
+    workdir.mkdir()
+    runner = CliRunner()
+    adapter = case["adapter"]
+    entry_path = case["entry_path"]
+
+    install = runner.invoke(cli.app, ["init", adapter, "--workdir", str(workdir), "--json"])
+    assert install.exit_code == 0, install.stdout
+    healthy = runner.invoke(cli.app, ["agent", adapter, "check", "--workdir", str(workdir), "--json"])
+    assert healthy.exit_code == 0, healthy.stdout
+    entry = workdir / entry_path
+    entry.write_text(entry.read_text(encoding="utf-8").replace(case["old"], case["new"]), encoding="utf-8")
+
+    result = runner.invoke(cli.app, ["agent", adapter, "check", "--workdir", str(workdir), "--json"])
+
+    assert result.exit_code == 1
+    payload = json.loads(result.stdout)
+    failed_entry = next(
+        item
+        for item in payload["checks"]
+        if item["name"] == "entry_frontmatter_contract" and item["path"] == entry_path
+    )
+    assert failed_entry["status"] == "fail"
+    assert case["expected_message"] in failed_entry["message"]
+    assert "discoverable frontmatter" in failed_entry["message"]
+
 
 def test_cli_agent_adapter_check_explains_missing_role_agent_config(tmp_path: Path) -> None:
     workdir = tmp_path / "project"
@@ -345,6 +632,152 @@ def test_cli_agent_adapter_check_explains_missing_role_agent_config(tmp_path: Pa
     assert failed_role["status"] == "fail"
     assert "managed role agent config for loopora-builder is missing" in failed_role["message"]
     assert "before /loopora-run dispatch" in failed_role["message"]
+
+
+def test_cli_agent_adapter_check_validates_opencode_role_permission_boundary(tmp_path: Path) -> None:
+    workdir = tmp_path / "project"
+    workdir.mkdir()
+    runner = CliRunner()
+
+    install = runner.invoke(cli.app, ["init", "opencode", "--workdir", str(workdir), "--json"])
+    assert install.exit_code == 0, install.stdout
+    healthy = runner.invoke(cli.app, ["agent", "opencode", "check", "--workdir", str(workdir), "--json"])
+    assert healthy.exit_code == 0, healthy.stdout
+
+    orchestrator_agent = workdir / ".opencode" / "agents" / "loopora-orchestrator.md"
+    builder_agent = workdir / ".opencode" / "agents" / "loopora-builder.md"
+    orchestrator_agent.write_text(
+        orchestrator_agent.read_text(encoding="utf-8").replace(
+            "    loopora-inspector: allow",
+            "    loopora-inspector: deny",
+        ),
+        encoding="utf-8",
+    )
+    builder_agent.write_text(
+        builder_agent.read_text(encoding="utf-8").replace(
+            "  task: deny",
+            "  task:\n    external-reviewer: allow",
+        ),
+        encoding="utf-8",
+    )
+
+    text_result = runner.invoke(cli.app, ["agent", "opencode", "check", "--workdir", str(workdir)])
+    assert text_result.exit_code == 1
+    assert "fail: role_permissions (.opencode/agents/loopora-orchestrator.md)" in text_result.stdout
+    assert "allow only Loopora role agents" in text_result.stdout
+    assert "permission.task.loopora-inspector=allow" in text_result.stdout
+    assert "permission.task deny" in text_result.stdout
+
+    json_result = runner.invoke(cli.app, ["agent", "opencode", "check", "--workdir", str(workdir), "--json"])
+    assert json_result.exit_code == 1
+    payload = json.loads(json_result.stdout)
+    assert payload["check_status"] == "fail"
+    failed_permissions = {
+        item["path"]: item
+        for item in payload["checks"]
+        if item["name"] == "role_permissions" and item["status"] == "fail"
+    }
+    assert ".opencode/agents/loopora-orchestrator.md" in failed_permissions
+    assert ".opencode/agents/loopora-builder.md" in failed_permissions
+    assert "permission.task.loopora-inspector=allow" in failed_permissions[".opencode/agents/loopora-orchestrator.md"]["message"]
+    assert "nested subagents/provider flows" in failed_permissions[".opencode/agents/loopora-builder.md"]["message"]
+
+
+def test_cli_agent_adapter_check_validates_claude_role_frontmatter_and_tools(tmp_path: Path) -> None:
+    workdir = tmp_path / "project"
+    workdir.mkdir()
+    runner = CliRunner()
+
+    install = runner.invoke(cli.app, ["init", "claude", "--workdir", str(workdir), "--json"])
+    assert install.exit_code == 0, install.stdout
+    healthy = runner.invoke(cli.app, ["agent", "claude", "check", "--workdir", str(workdir), "--json"])
+    assert healthy.exit_code == 0, healthy.stdout
+
+    inspector_agent = workdir / ".claude" / "agents" / "loopora-inspector.md"
+    orchestrator_agent = workdir / ".claude" / "agents" / "loopora-orchestrator.md"
+    inspector_agent.write_text(
+        inspector_agent.read_text(encoding="utf-8").replace(
+            "tools: Read, Glob, Grep, Bash",
+            "tools: Read, Glob, Grep, Bash, Write",
+        ),
+        encoding="utf-8",
+    )
+    orchestrator_agent.write_text(
+        orchestrator_agent.read_text(encoding="utf-8").replace(
+            "name: loopora-orchestrator",
+            "name: loopora-coordinator",
+        ),
+        encoding="utf-8",
+    )
+
+    text_result = runner.invoke(cli.app, ["agent", "claude", "check", "--workdir", str(workdir)])
+    assert text_result.exit_code == 1
+    assert "fail: role_permissions (.claude/agents/loopora-inspector.md)" in text_result.stdout
+    assert "fail: role_permissions (.claude/agents/loopora-orchestrator.md)" in text_result.stdout
+    assert "discoverable frontmatter and role tool allowlist" in text_result.stdout
+    assert "tools=Bash,Glob,Grep,Read" in text_result.stdout
+    assert "name=loopora-orchestrator" in text_result.stdout
+
+    json_result = runner.invoke(cli.app, ["agent", "claude", "check", "--workdir", str(workdir), "--json"])
+    assert json_result.exit_code == 1
+    payload = json.loads(json_result.stdout)
+    assert payload["check_status"] == "fail"
+    failed_permissions = {
+        item["path"]: item
+        for item in payload["checks"]
+        if item["name"] == "role_permissions" and item["status"] == "fail"
+    }
+    assert "tools=Bash,Glob,Grep,Read" in failed_permissions[".claude/agents/loopora-inspector.md"]["message"]
+    assert "name=loopora-orchestrator" in failed_permissions[".claude/agents/loopora-orchestrator.md"]["message"]
+
+
+def test_cli_agent_adapter_check_validates_codex_role_toml_and_contract(tmp_path: Path) -> None:
+    workdir = tmp_path / "project"
+    workdir.mkdir()
+    runner = CliRunner()
+
+    install = runner.invoke(cli.app, ["init", "codex", "--workdir", str(workdir), "--json"])
+    assert install.exit_code == 0, install.stdout
+    healthy = runner.invoke(cli.app, ["agent", "codex", "check", "--workdir", str(workdir), "--json"])
+    assert healthy.exit_code == 0, healthy.stdout
+
+    builder_agent = workdir / ".codex" / "agents" / "loopora-builder.toml"
+    guide_agent = workdir / ".codex" / "agents" / "loopora-guide.toml"
+    builder_agent.write_text(
+        builder_agent.read_text(encoding="utf-8").replace(
+            'name = "loopora-builder"',
+            'name = "loopora-maker"',
+        ),
+        encoding="utf-8",
+    )
+    guide_agent.write_text(
+        guide_agent.read_text(encoding="utf-8").replace(
+            "Do not launch codex, claude, or opencode from inside this role.",
+            "Nested provider CLIs may be launched from inside this role.",
+        ),
+        encoding="utf-8",
+    )
+
+    text_result = runner.invoke(cli.app, ["agent", "codex", "check", "--workdir", str(workdir)])
+    assert text_result.exit_code == 1
+    assert "fail: role_permissions (.codex/agents/loopora-builder.toml)" in text_result.stdout
+    assert "fail: role_permissions (.codex/agents/loopora-guide.toml)" in text_result.stdout
+    assert "discoverable TOML metadata and the Loopora role contract" in text_result.stdout
+    assert "name=loopora-builder" in text_result.stdout
+    assert "Do not launch codex, claude, or opencode" in text_result.stdout
+
+    json_result = runner.invoke(cli.app, ["agent", "codex", "check", "--workdir", str(workdir), "--json"])
+    assert json_result.exit_code == 1
+    payload = json.loads(json_result.stdout)
+    assert payload["check_status"] == "fail"
+    failed_permissions = {
+        item["path"]: item
+        for item in payload["checks"]
+        if item["name"] == "role_permissions" and item["status"] == "fail"
+    }
+    assert "name=loopora-builder" in failed_permissions[".codex/agents/loopora-builder.toml"]["message"]
+    assert "Do not launch codex, claude, or opencode" in failed_permissions[".codex/agents/loopora-guide.toml"]["message"]
+
 
 def test_cli_codex_adapter_install_conflict_guides_recovery_without_overwriting(tmp_path: Path) -> None:
     workdir = tmp_path / "project"

@@ -68,7 +68,7 @@ def test_cli_recoverable_context_attaches_preview_urls_to_choices(monkeypatch) -
     }
 
     monkeypatch.setattr(
-        cli_agent_native,
+        cli_agent_runtime_support,
         "ensure_local_web_service",
         lambda: {"base_url": "http://127.0.0.1:8749"},
     )
@@ -854,6 +854,7 @@ def test_agent_next_summary_reports_dispatch_recovery_commands_when_target_confi
     )
 
     next_step = summary["next_step"]
+    _assert_codex_native_surface_summary(summary)
     assert "dispatch_next" not in next_step
     assert next_step["target_agent_config_exists"] is False
     dispatch_unavailable = next_step["dispatch_unavailable"]

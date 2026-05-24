@@ -44,13 +44,13 @@ from loopora.service_cleanup_diagnostics import best_effort_rmtree, cleanup_diag
 from loopora.service_types import LooporaConflictError, LooporaError, LooporaNotFoundError, TERMINAL_RUN_STATUSES
 from loopora.specs import SpecError, compile_markdown_spec
 from loopora.structured_numbers import structured_non_negative_int
+from loopora.task_verdicts import PASSING_TASK_VERDICT_STATUSES
 from loopora.utils import make_id, utc_now
 
 logger = get_logger(__name__)
 
 ALIGNMENT_ACTIVE_STATUSES = {"running", "validating", "repairing"}
 ALIGNMENT_CONFIRMED_STAGES = {"confirmed", "compiling", "ready_review"}
-PASSING_TASK_VERDICT_STATUSES = frozenset({"passed", "passed_with_residual_risk"})
 ALIGNMENT_READINESS_KEYS = [
     "loop_fit",
     "task_scope",

@@ -2,10 +2,17 @@ from __future__ import annotations
 
 from agent_adapter_helpers import *
 
-def test_cli_agent_loop_terminal_unproven_reports_lifecycle_without_complete(monkeypatch, tmp_path: Path) -> None:
-    workdir = tmp_path / "project"
-    workdir.mkdir()
-    layout = RunArtifactLayout(tmp_path / "runs" / "run_terminal_loop")
+
+def _assert_cli_native_dispatch_contract(output: str, target_agent: str) -> None:
+    _assert_codex_native_surface_plain(output)
+    assert f"dispatch_next: invoke {target_agent} with the next context/capsule paths below; do not perform this role inline" in output
+    assert f"native_dispatch_contract: host-native {target_agent}; nested_provider_cli=not_used" in output
+    assert "submit_contract=loopora_host_dispatch + schema-shaped result template" in output
+    assert "native_dispatch_mechanism: Codex spawn_agent with agent_type=<role_dispatch.target_agent>" in output
+    assert "native_proof_boundary: native todo/trace may guide host work; Loopora evidence refs" in output
+
+
+def _write_terminal_unproven_run_contract(layout: RunArtifactLayout) -> None:
     layout.initialize()
     layout.run_contract_path.write_text(
         json.dumps(
@@ -32,32 +39,43 @@ def test_cli_agent_loop_terminal_unproven_reports_lifecycle_without_complete(mon
         encoding="utf-8",
     )
 
+
+def _terminal_unproven_loop_payload(layout: RunArtifactLayout) -> dict:
+    return {
+        "execution_plane": "agent_native",
+        "run": {
+            "id": "run_terminal_loop",
+            "status": "succeeded",
+            "run_status": "succeeded",
+            "runs_dir": str(layout.run_dir),
+            "task_verdict": {
+                "status": "insufficient_evidence",
+                "source": "gatekeeper",
+                "summary": "Audit proof is still missing.",
+            },
+        },
+        "run_path": "/runs/run_terminal_loop",
+        "started_new_run": False,
+        "complete": True,
+        "task_next_action": {
+            "kind": "continue_evidence",
+            "next_loop_command": "/loopora-run",
+            "guidance": "Run lifecycle is complete, but the task is not proven.",
+            "task_verdict_summary": "Audit proof is still missing.",
+        },
+    }
+
+
+def test_cli_agent_loop_terminal_unproven_reports_lifecycle_without_complete(monkeypatch, tmp_path: Path) -> None:
+    workdir = tmp_path / "project"
+    workdir.mkdir()
+    layout = RunArtifactLayout(tmp_path / "runs" / "run_terminal_loop")
+    _write_terminal_unproven_run_contract(layout)
+
     class FakeService:
         def start_agent_loop(self, _adapter: str, *, workdir: Path, context_id: str = "", entry_source: str = "", execute_async: bool = True):
             _ = (workdir, context_id, entry_source, execute_async)
-            return {
-                "execution_plane": "agent_native",
-                "run": {
-                    "id": "run_terminal_loop",
-                    "status": "succeeded",
-                    "run_status": "succeeded",
-                    "runs_dir": str(layout.run_dir),
-                    "task_verdict": {
-                        "status": "insufficient_evidence",
-                        "source": "gatekeeper",
-                        "summary": "Audit proof is still missing.",
-                    },
-                },
-                "run_path": "/runs/run_terminal_loop",
-                "started_new_run": False,
-                "complete": True,
-                "task_next_action": {
-                    "kind": "continue_evidence",
-                    "next_loop_command": "/loopora-run",
-                    "guidance": "Run lifecycle is complete, but the task is not proven.",
-                    "task_verdict_summary": "Audit proof is still missing.",
-                },
-            }
+            return _terminal_unproven_loop_payload(layout)
 
     monkeypatch.setattr(cli, "create_service", FakeService)
     runner = CliRunner()
@@ -70,6 +88,7 @@ def test_cli_agent_loop_terminal_unproven_reports_lifecycle_without_complete(mon
     assert result.exit_code == 0, result.stdout
     assert "run_status: succeeded" in result.stdout
     assert "run_start: replayed_existing_terminal_run" in result.stdout
+    _assert_codex_native_surface_plain(result.stdout)
     assert f"run_contract_path: {layout.run_contract_path}" in result.stdout
     assert "task_verdict: insufficient_evidence" in result.stdout
     assert "task_next_action: Run lifecycle is complete, but the task is not proven." in result.stdout
@@ -77,7 +96,47 @@ def test_cli_agent_loop_terminal_unproven_reports_lifecycle_without_complete(mon
     assert "next_evidence_focus: Audit proof is still missing." in result.stdout
     assert "agent_native: lifecycle_closed_task_unproven" in result.stdout
     assert "agent_native_task_verdict: insufficient_evidence" in result.stdout
+    assert "task_proof_source: run.task_verdict" in result.stdout
+    assert "run_lifecycle_source: result.complete" in result.stdout
     assert "agent_native: complete" not in result.stdout
+
+
+def test_cli_agent_loop_json_reports_terminal_task_proof_summary(monkeypatch, tmp_path: Path) -> None:
+    workdir = tmp_path / "project"
+    workdir.mkdir()
+    layout = RunArtifactLayout(tmp_path / "runs" / "run_terminal_loop")
+    _write_terminal_unproven_run_contract(layout)
+
+    class FakeService:
+        def start_agent_loop(self, _adapter: str, *, workdir: Path, context_id: str = "", entry_source: str = "", execute_async: bool = True):
+            _ = (workdir, context_id, entry_source, execute_async)
+            return _terminal_unproven_loop_payload(layout)
+
+    monkeypatch.setattr(cli, "create_service", FakeService)
+    runner = CliRunner()
+
+    result = runner.invoke(
+        cli.app,
+        ["agent", "codex", "run", "--workdir", str(workdir), "--context-id", "thread-1", "--no-web", "--json"],
+    )
+
+    assert result.exit_code == 0, result.stdout
+    payload = json.loads(result.stdout)
+    summary = payload["agent_run_summary"]
+    assert summary["run_id"] == "run_terminal_loop"
+    assert summary["run_status"] == "succeeded"
+    assert summary["complete"] is True
+    assert summary["task_verdict_status"] == "insufficient_evidence"
+    assert summary["task_proven"] is False
+    assert summary["task_outcome"] == "not_proven_continue_evidence"
+    assert summary["lifecycle_vs_task"] == "run_lifecycle_complete_task_not_proven"
+    assert summary["task_proof_source"] == "run.task_verdict"
+    assert summary["run_lifecycle_source"] == "result.complete"
+    assert summary["next_loop_command"] == "/loopora-run"
+    assert summary["next_evidence_focus"] == "Audit proof is still missing."
+    assert "next_step" not in summary
+    _assert_codex_native_surface_summary(summary)
+
 
 def test_cli_agent_next_prints_run_contract_for_intermediate_capsule(monkeypatch, tmp_path: Path) -> None:
     workdir = tmp_path / "project"
@@ -257,7 +316,7 @@ def test_cli_agent_next_prints_run_contract_for_intermediate_capsule(monkeypatch
     assert "next_role: Inspector" in result.stdout
     assert "next_target_agent: loopora-inspector" in result.stdout
     assert "next_target_agent_config: .codex/agents/loopora-inspector.toml" in result.stdout
-    assert "dispatch_next: invoke loopora-inspector with the next context/capsule paths below; do not perform this role inline" in result.stdout
+    _assert_cli_native_dispatch_contract(result.stdout, "loopora-inspector")
     assert "next_action_policy: read_only, can_block" in result.stdout
     assert "required_coverage: weak; required checks 1 covered / 1 missing" in result.stdout
     assert "- done_when.check_001: [weak] Authorization proof is still weak." in result.stdout
@@ -397,6 +456,7 @@ def test_cli_agent_submit_prints_terminal_task_verdict(monkeypatch, tmp_path: Pa
 
     assert result.exit_code == 0, result.stdout
     assert "run_status: succeeded" in result.stdout
+    _assert_codex_native_surface_plain(result.stdout)
     assert "submitted_step_id: gatekeeper_step" in result.stdout
     assert "submitted_status: blocked" in result.stdout
     _assert_cli_list(result.stdout, "submitted_evidence_refs", "ev_000_03_gatekeeper_step")
@@ -426,6 +486,8 @@ def test_cli_agent_submit_prints_terminal_task_verdict(monkeypatch, tmp_path: Pa
     assert "next_evidence_focus: Required coverage still lacks direct evidence." in result.stdout
     assert "agent_native: lifecycle_closed_task_unproven" in result.stdout
     assert "agent_native_task_verdict: insufficient_evidence" in result.stdout
+    assert "task_proof_source: run.task_verdict" in result.stdout
+    assert "run_lifecycle_source: result.complete" in result.stdout
     assert "agent_native: complete" not in result.stdout
 
 def test_cli_agent_submit_json_preserves_terminal_task_next_action(monkeypatch, tmp_path: Path) -> None:
@@ -525,10 +587,13 @@ def test_cli_agent_submit_json_preserves_terminal_task_next_action(monkeypatch, 
     assert summary["task_proven"] is False
     assert summary["task_outcome"] == "not_proven_continue_evidence"
     assert summary["lifecycle_vs_task"] == "run_lifecycle_complete_task_not_proven"
+    assert summary["task_proof_source"] == "run.task_verdict"
+    assert summary["run_lifecycle_source"] == "result.complete"
     assert summary["next_loop_command"] == "/loopora-run"
     assert summary["next_plan_action"] == "open_run_url_improve_with_evidence_if_loop_needs_adjustment"
     assert summary["next_evidence_focus"] == "Required coverage still lacks direct evidence."
     assert summary["task_next_action"]["kind"] == "continue_evidence"
+    _assert_codex_native_surface_summary(summary)
     assert payload["complete"] is True
     assert payload["run"]["task_verdict"]["status"] == "insufficient_evidence"
     assert payload["task_next_action"]["kind"] == "continue_evidence"
@@ -634,6 +699,9 @@ def test_cli_agent_submit_json_separates_active_step_lifecycle_from_task_proof(m
     assert summary["task_proven"] is False
     assert summary["task_outcome"] == "not_yet_evaluated"
     assert summary["lifecycle_vs_task"] == "run_lifecycle_active_task_not_proven"
+    assert summary["task_proof_source"] == "run.task_verdict"
+    assert summary["run_lifecycle_source"] == "result.complete"
+    _assert_codex_native_surface_summary(summary)
 
 def test_cli_agent_submit_json_marks_active_failed_verdict_as_continue_evidence(monkeypatch, tmp_path: Path) -> None:
     workdir = tmp_path / "project"

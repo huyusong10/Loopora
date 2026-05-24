@@ -5,21 +5,29 @@ from typing import Annotated
 
 import typer
 
+from loopora import cli_agent_runtime_support as _agent_runtime_support
+from loopora import cli_agent_context_recovery_output as _agent_context_recovery_output
 from loopora import cli_agent_native as _agent_native
 from loopora import cli_agent_step_presenters as _agent_step_presenters
+from loopora import cli_agent_adapter_output as _agent_adapter_output
 from loopora import cli_agent_submit_repair as _agent_submit_repair
+from loopora import cli_agent_current_step_output as _agent_current_step_output
+from loopora.cli_agent_adapter_output import (
+    handle_adapter_install_conflict as _handle_adapter_install_conflict,
+    print_adapter_check_result as _print_adapter_check_result,
+    print_adapter_mutation_result as _print_adapter_mutation_result,
+)
 from loopora.cli_agent_native import (
-    _attach_web_url as _attach_web_url,
-    _handle_adapter_install_conflict as _handle_adapter_install_conflict,
-    _print_adapter_check_result as _print_adapter_check_result,
-    _print_adapter_mutation_result as _print_adapter_mutation_result,
-    _print_agent_gen_result as _print_agent_gen_result,
     _print_agent_loop_unready_guidance as _print_agent_loop_unready_guidance,
     _print_agent_next_recovery_guidance as _print_agent_next_recovery_guidance,
     _print_agent_plan_recovery_guidance as _print_agent_plan_recovery_guidance,
-    _read_result_json as _read_result_json,
-    _resolved_entry_source as _resolved_entry_source,
-    _spawn_agent_loop_worker_if_needed as _spawn_agent_loop_worker_if_needed,
+)
+from loopora.cli_agent_plan_output import _print_agent_gen_result as _print_agent_gen_result
+from loopora.cli_agent_runtime_support import (
+    attach_web_url as _attach_web_url,
+    read_result_json as _read_result_json,
+    resolved_entry_source as _resolved_entry_source,
+    spawn_agent_loop_worker_if_needed as _spawn_agent_loop_worker_if_needed,
 )
 from loopora.cli_agent_step_presenters import (
     _print_agent_loop_result as _print_agent_loop_result,
@@ -77,10 +85,19 @@ NoWebOption = Annotated[bool, typer.Option("--no-web", hidden=True, help="Skip l
 CheckOption = Annotated[bool, typer.Option("--check", help="Check the Loopora Agent entry without installing or repairing files.")]
 SourceOptionIdOption = Annotated[str, typer.Option("--source-option-id", help="Recoverable Loopora context option id selected by the user.")]
 
+_agent_plan_cli_command = _agent_runtime_support.agent_plan_cli_command
+_agent_next_command_hint = _agent_runtime_support.agent_next_command_hint
+
 
 def __getattr__(name: str):
     if name.startswith("_") and hasattr(_agent_native, name):
         return getattr(_agent_native, name)
+    if name.startswith("_") and hasattr(_agent_adapter_output, name):
+        return getattr(_agent_adapter_output, name)
+    if name.startswith("_") and hasattr(_agent_context_recovery_output, name):
+        return getattr(_agent_context_recovery_output, name)
+    if name.startswith("_") and hasattr(_agent_current_step_output, name):
+        return getattr(_agent_current_step_output, name)
     if name.startswith("_") and hasattr(_agent_step_presenters, name):
         return getattr(_agent_step_presenters, name)
     if name.startswith("_") and hasattr(_agent_submit_repair, name):
@@ -437,11 +454,3 @@ def _start_agent_loop_from_cli(
     if source_option_id:
         start_kwargs["source_option_id"] = source_option_id
     return service.start_agent_loop(adapter, **start_kwargs)
-
-
-def _adapter_label(adapter: str) -> str:
-    return {
-        "codex": "Codex",
-        "claude": "Claude Code",
-        "opencode": "OpenCode",
-    }.get(adapter, adapter or "Agent")

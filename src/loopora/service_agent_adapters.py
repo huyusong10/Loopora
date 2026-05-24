@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -8,8 +7,6 @@ from typing import Any
 from loopora.agent_adapters import (
     agent_adapter_status,
     check_agent_adapter,
-    agent_loop_json_command,
-    agent_loop_command,
     list_agent_adapter_statuses,
     install_agent_adapter,
     normalize_agent_adapter_kind,
@@ -19,86 +16,41 @@ from loopora.agent_adapters import (
     uninstall_agent_adapter,
     write_agent_binding,
 )
+from loopora.agent_entry_candidate import (
+    agent_ready_review_projection,
+    candidate_yaml_provenance,
+    normalized_candidate_yaml,
+    ready_candidate_yaml_provenance,
+    ready_candidate_yaml_provenance_from_validation,
+)
+from loopora.agent_entry_continuation import (
+    agent_entry_continuation_summary,
+    agent_native_continuation_context_for_terminal_run,
+    agent_native_continuation_focus,
+    bucket_focus_text,
+    coverage_context_for_run,
+    dedupe_strings,
+    list_of_dicts,
+    non_negative_int,
+    read_json_object,
+    string_list,
+    task_verdict_context_for_run,
+    task_verdict_status_for_run,
+    terminal_agent_run_needs_next_pass,
+)
+from loopora.agent_entry_run_projection import (
+    adapter_label_for_error as _adapter_label_for_error,
+    agent_entry_loop_command as agent_entry_loop_command,
+    agent_entry_loop_json_command as agent_entry_loop_json_command,
+    agent_entry_loop_projection_messages as _agent_entry_loop_projection_messages,
+    agent_loop_result,
+    agent_loop_unready_error,
+    append_agent_entry_invocation,
+)
 from loopora.alignment_semantics import text_mentions_loop_fit_contradiction
 from loopora.bundles import BundleError, read_bundle_file_text
-from loopora.evidence_coverage import summarize_evidence_coverage_projection
-from loopora.run_takeaways import build_judgment_contract
 from loopora.service_types import LooporaConflictError, LooporaError, LooporaNotFoundError, TERMINAL_RUN_STATUSES
-from loopora.structured_numbers import structured_non_negative_int
-from loopora.task_verdicts import normalize_task_verdict
-from loopora.utils import read_json, utc_now, write_json
-
-
-PASSING_TASK_VERDICT_STATUSES = frozenset({"passed", "passed_with_residual_risk"})
-
-
-def _agent_task_proof_summary(
-    *,
-    complete: bool,
-    task_verdict_status: str,
-    task_verdict_summary: str,
-    task_next_action: dict[str, Any],
-) -> dict[str, Any]:
-    status = str(task_verdict_status or "").strip()
-    action = task_next_action if isinstance(task_next_action, dict) else {}
-    action_kind = str(action.get("kind") or "").strip()
-    if not (complete or status or action_kind):
-        return {}
-
-    task_proven = status in PASSING_TASK_VERDICT_STATUSES
-    if task_proven:
-        task_outcome = "already_proven_no_new_evidence" if action_kind == "already_passed" else "proven"
-    elif action_kind == "continue_evidence":
-        task_outcome = "not_proven_continue_evidence"
-    elif complete:
-        task_outcome = "not_proven"
-    elif status and status != "not_evaluated":
-        task_outcome = "not_proven_continue_evidence"
-    else:
-        task_outcome = "not_yet_evaluated"
-
-    summary: dict[str, Any] = {
-        "task_proven": task_proven,
-        "task_outcome": task_outcome,
-        "lifecycle_vs_task": "run_lifecycle_active_task_proven" if task_proven else "run_lifecycle_active_task_not_proven",
-    }
-    if complete:
-        summary["lifecycle_vs_task"] = (
-            "run_lifecycle_complete_task_proven" if task_proven else "run_lifecycle_complete_task_not_proven"
-        )
-    if action_kind == "continue_evidence":
-        summary["next_loop_command"] = str(action.get("next_loop_command") or "/loopora-run").strip()
-        summary["next_plan_action"] = str(
-            action.get("plan_action") or "open_run_url_improve_with_evidence_if_loop_needs_adjustment"
-        ).strip()
-        next_focus = str(action.get("task_verdict_summary") or task_verdict_summary or "").strip()
-        if next_focus:
-            summary["next_evidence_focus"] = next_focus
-    elif not task_proven and task_outcome == "not_proven_continue_evidence" and task_verdict_summary:
-        summary["next_evidence_focus"] = task_verdict_summary
-    return {key: value for key, value in summary.items() if value not in ("", [], {})}
-
-
-def _agent_next_step_continuation_summary(next_step: dict[str, Any]) -> dict[str, Any]:
-    continuation = next_step.get("continuation") if isinstance(next_step.get("continuation"), dict) else {}
-    if not continuation or continuation.get("active") is not True:
-        return {}
-    previous_verdict = (
-        continuation.get("previous_task_verdict") if isinstance(continuation.get("previous_task_verdict"), dict) else {}
-    )
-    coverage = continuation.get("coverage") if isinstance(continuation.get("coverage"), dict) else {}
-    raw_next_focus = continuation.get("next_focus")
-    next_focus = [str(item).strip() for item in list(raw_next_focus or []) if str(item).strip()] if isinstance(raw_next_focus, list) else []
-    summary: dict[str, Any] = {
-        "active": True,
-        "previous_run_id": str(continuation.get("previous_run_id") or "").strip(),
-        "previous_task_verdict_status": str(previous_verdict.get("status") or "").strip(),
-        "previous_task_verdict_summary": str(previous_verdict.get("summary") or "").strip(),
-        "missing_required_check_count": structured_non_negative_int(coverage.get("missing_check_count")),
-        "missing_target_count": structured_non_negative_int(coverage.get("missing_target_count")),
-        "next_focus": next_focus[:6],
-    }
-    return {"continuation": {key: value for key, value in summary.items() if value not in ("", [], {})}}
+from loopora.utils import write_json
 
 
 @dataclass(frozen=True)
@@ -120,109 +72,6 @@ class _AgentLoopStartContext:
     context_id: str
     entry_source: str
     binding_extra: dict[str, Any] | None = None
-
-
-def _normalized_candidate_yaml(raw_yaml: str) -> str:
-    return raw_yaml.rstrip() + "\n" if raw_yaml.strip() else ""
-
-
-def _candidate_yaml_provenance(candidate_text: str) -> dict[str, Any]:
-    if not candidate_text:
-        return {"candidate_sha256": "", "candidate_bytes": 0}
-    data = candidate_text.encode("utf-8")
-    return {"candidate_sha256": hashlib.sha256(data).hexdigest(), "candidate_bytes": len(data)}
-
-
-def _ready_candidate_yaml_provenance(session: dict) -> dict[str, Any]:
-    empty = {"ready_candidate_sha256": "", "ready_candidate_bytes": 0}
-    if str(session.get("status") or "") != "ready":
-        return empty
-    try:
-        candidate_text = _normalized_candidate_yaml(read_bundle_file_text(Path(session.get("bundle_path", ""))))
-    except (BundleError, OSError, ValueError):
-        return empty
-    if not candidate_text:
-        return empty
-    data = candidate_text.encode("utf-8")
-    return {"ready_candidate_sha256": hashlib.sha256(data).hexdigest(), "ready_candidate_bytes": len(data)}
-
-
-def _ready_candidate_yaml_provenance_from_validation(session: dict) -> dict[str, Any]:
-    validation = session.get("validation") if isinstance(session, dict) else {}
-    if not isinstance(validation, dict):
-        return {}
-    digest = str(validation.get("bundle_sha256") or "").strip()
-    try:
-        byte_count = int(validation.get("bundle_bytes") or 0)
-    except (TypeError, ValueError):
-        byte_count = 0
-    if not digest or byte_count <= 0:
-        return {}
-    return {"ready_candidate_sha256": digest, "ready_candidate_bytes": byte_count}
-
-
-def _first_review_items(value: object, *, limit: int = 2) -> list[str]:
-    if not isinstance(value, list):
-        return []
-    return [str(item).strip() for item in value if str(item).strip()][:limit]
-
-
-def agent_entry_loop_command(
-    adapter: str,
-    workdir: Path | str,
-    entry_source: str = "",
-    *,
-    context_id: str = "",
-    source_option_id: str = "",
-) -> str:
-    return agent_loop_command(
-        adapter,
-        workdir,
-        entry_source=entry_source,
-        context_id=context_id,
-        source_option_id=source_option_id,
-    )
-
-
-def agent_entry_loop_json_command(
-    adapter: str,
-    workdir: Path | str,
-    entry_source: str = "",
-    *,
-    context_id: str = "",
-    source_option_id: str = "",
-) -> str:
-    return agent_loop_json_command(
-        adapter,
-        workdir,
-        entry_source=entry_source,
-        context_id=context_id,
-        source_option_id=source_option_id,
-    )
-
-
-def _agent_entry_loop_projection_messages(next_loop_action: str) -> dict[str, str]:
-    if next_loop_action == "start_next_run_for_unproven_verdict":
-        return {
-            "message_zh": (
-                "上一轮已经到达终态，但 Loop 裁决仍未证明任务通过；回到同一个 Agent 执行 /loopora-run "
-                "会基于这份已审查 Loop 开启下一轮，继续补齐证据缺口。"
-            ),
-            "message_en": (
-                "The previous run reached a terminal lifecycle state, but the task verdict is still not proven; "
-                "run /loopora-run in the same Agent to start the next run from this reviewed Loop and keep closing evidence gaps."
-            ),
-        }
-    return {
-        "message_zh": (
-            "这个 Loop 来自当前 Coding Agent 的 /loopora-plan；继续运行必须回到同一个 Agent 执行 /loopora-run，"
-            "避免 Web 悄悄切到后台 headless worker。"
-        ),
-        "message_en": (
-            "This Loop came from the current Coding Agent via /loopora-plan; continue it from the same Agent "
-            "with /loopora-run so Web does not silently switch to a headless worker."
-        ),
-    }
 
 
 class ServiceAgentAdapterMixin:
@@ -256,8 +105,8 @@ class ServiceAgentAdapterMixin:
             except OSError as exc:
                 raise LooporaError(str(exc)) from exc
             source_path = str(bundle_path)
-        candidate_text = _normalized_candidate_yaml(raw_yaml)
-        candidate_provenance = _candidate_yaml_provenance(candidate_text)
+        candidate_text = normalized_candidate_yaml(raw_yaml)
+        candidate_provenance = candidate_yaml_provenance(candidate_text)
         task_message = str(request.message or "").strip()
         if not task_message:
             raise LooporaError("agent candidate requires --message task summary for traceability")
@@ -334,7 +183,7 @@ class ServiceAgentAdapterMixin:
                 ),
             )
         requires_candidate_repair = bool(candidate_text) and session["status"] != "ready"
-        ready_candidate_provenance = _ready_candidate_yaml_provenance(session)
+        ready_candidate_provenance = ready_candidate_yaml_provenance(session)
         if ready_candidate_provenance["ready_candidate_sha256"]:
             self.repository.append_alignment_event(
                 session["id"],
@@ -369,7 +218,7 @@ class ServiceAgentAdapterMixin:
                 **candidate_provenance,
                 **ready_candidate_provenance,
                 "preview_path": f"/loops/new/bundle?alignment_session_id={session['id']}",
-                "entry_invocations": self._append_agent_entry_invocation(
+                "entry_invocations": append_agent_entry_invocation(
                     existing_binding,
                     action="plan",
                     entry_source=entry_source,
@@ -401,37 +250,7 @@ class ServiceAgentAdapterMixin:
             preview = self.get_alignment_bundle(str(session.get("id") or ""))
         except (LooporaError, BundleError, OSError, ValueError):
             return {}
-        summary = preview.get("control_summary") if isinstance(preview, dict) else {}
-        if not isinstance(summary, dict):
-            return {}
-        coverage = summary.get("coverage") if isinstance(summary.get("coverage"), dict) else {}
-        traceability = summary.get("traceability") if isinstance(summary.get("traceability"), dict) else {}
-        diagnostics = [dict(item) for item in list(summary.get("diagnostics") or []) if isinstance(item, dict)]
-        gatekeeper = summary.get("gatekeeper") if isinstance(summary.get("gatekeeper"), dict) else {}
-        return {
-            "loopora_fit_reasons": _first_review_items(summary.get("loop_fit_reasons")),
-            "success_surface": _first_review_items(summary.get("success_surface")),
-            "fake_done_risks": _first_review_items(summary.get("fake_done_risks")),
-            "evidence_preferences": _first_review_items(summary.get("evidence_preferences")),
-            "execution_strategy": _first_review_items(summary.get("execution_strategy")),
-            "judgment_tradeoffs": _first_review_items(summary.get("judgment_tradeoffs")),
-            "residual_risk_policy": _first_review_items(summary.get("residual_risk_policy"), limit=1),
-            "local_governance": _first_review_items(summary.get("local_governance"), limit=1),
-            "coverage": {
-                "check_count": structured_non_negative_int(coverage.get("check_count"), default=0),
-                "target_count": structured_non_negative_int(coverage.get("target_count"), default=0),
-                "required_target_count": structured_non_negative_int(coverage.get("required_target_count"), default=0),
-            },
-            "traceability": {
-                "mapped_count": structured_non_negative_int(traceability.get("mapped_count"), default=0),
-                "required_count": structured_non_negative_int(traceability.get("required_count"), default=0),
-            },
-            "gatekeeper": {
-                "enabled": gatekeeper.get("enabled") is True,
-                "requires_evidence_refs": gatekeeper.get("requires_evidence_refs") is True,
-            },
-            "diagnostic_count": len([item for item in diagnostics if str(item.get("severity") or "") != "info"]),
-        }
+        return agent_ready_review_projection(preview)
 
     def start_agent_loop(  # noqa: PLR0913 - public CLI/service bridge keeps explicit recovery option.
         self,
@@ -488,7 +307,7 @@ class ServiceAgentAdapterMixin:
         if session["status"] == "imported" and session.get("linked_loop_id"):
             return self._start_agent_loop_from_imported_session(start_context, session, binding)
 
-        unready_error = self._agent_loop_unready_error(adapter, binding, session)
+        unready_error = agent_loop_unready_error(adapter, binding, session)
         if unready_error:
             raise LooporaConflictError(unready_error)
         raise LooporaConflictError(
@@ -601,7 +420,7 @@ class ServiceAgentAdapterMixin:
         session: dict[str, Any],
         native: dict[str, Any],
     ) -> dict[str, Any]:
-        ready_candidate_provenance = _ready_candidate_yaml_provenance_from_validation(session)
+        ready_candidate_provenance = ready_candidate_yaml_provenance_from_validation(session)
         return write_agent_binding(
             start_context.adapter,
             start_context.root,
@@ -616,7 +435,11 @@ class ServiceAgentAdapterMixin:
                 "linked_run_id": native["run"]["id"],
                 "run_path": f"/runs/{native['run']['id']}",
                 "execution_plane": "agent_native",
-            "entry_invocations": self._append_agent_entry_invocation(binding, action="run", entry_source=start_context.entry_source),
+                "entry_invocations": append_agent_entry_invocation(
+                    binding,
+                    action="run",
+                    entry_source=start_context.entry_source,
+                ),
             },
             context_id=start_context.context_id,
         )
@@ -686,7 +509,7 @@ class ServiceAgentAdapterMixin:
                 "selected_option_id": source_option_id,
                 "linked_run_id": str(selected.get("linked_run_id") or ""),
                 "preview_path": f"/loops/new/bundle?alignment_session_id={session_id}",
-                "entry_invocations": self._append_agent_entry_invocation(
+                "entry_invocations": append_agent_entry_invocation(
                     existing_binding,
                     action="run_select",
                     entry_source=entry_source,
@@ -704,7 +527,7 @@ class ServiceAgentAdapterMixin:
         *,
         started_new_run: bool,
     ) -> dict[str, Any]:
-        return self._agent_loop_result(
+        return agent_loop_result(
             start_context.adapter,
             start_context.root,
             session,
@@ -796,42 +619,7 @@ class ServiceAgentAdapterMixin:
 
     def _agent_entry_continuation_summary(self, run: dict) -> dict[str, Any]:
         continuation = self._agent_native_continuation_context_for_terminal_run(run)
-        coverage = continuation.get("coverage") if isinstance(continuation.get("coverage"), dict) else {}
-        verdict = continuation.get("previous_task_verdict") if isinstance(continuation.get("previous_task_verdict"), dict) else {}
-        buckets = verdict.get("buckets") if isinstance(verdict.get("buckets"), dict) else {}
-        return {
-            "reason": str(continuation.get("reason") or "").strip(),
-            "previous_run_id": str(continuation.get("previous_run_id") or "").strip(),
-            "previous_run_status": str(continuation.get("previous_run_status") or "").strip(),
-            "previous_task_verdict": verdict,
-            "coverage": {
-                "status": str(coverage.get("status") or "").strip(),
-                "covered_check_count": self._non_negative_int(coverage.get("covered_check_count")),
-                "missing_check_count": self._non_negative_int(coverage.get("missing_check_count")),
-                "target_count": self._non_negative_int(coverage.get("target_count")),
-                "covered_target_count": self._non_negative_int(coverage.get("covered_target_count")),
-                "weak_target_count": self._non_negative_int(coverage.get("weak_target_count")),
-                "missing_target_count": self._non_negative_int(coverage.get("missing_target_count")),
-                "blocked_target_count": self._non_negative_int(coverage.get("blocked_target_count")),
-                "missing_check_ids": self._string_list(coverage.get("missing_check_ids"), limit=8),
-                "top_gaps": self._list_of_dicts(coverage.get("top_gaps"), limit=4),
-            },
-            "next_focus": self._string_list(continuation.get("next_focus"), limit=5),
-            "focus_blocking": self._string_list(
-                [self._bucket_focus_text(item) for item in self._list_of_dicts(buckets.get("blocking"), limit=4)],
-                limit=4,
-            ),
-            "focus_unproven": self._string_list(
-                [self._bucket_focus_text(item) for item in self._list_of_dicts(buckets.get("unproven"), limit=4)],
-                limit=4,
-            ),
-            "focus_weak": self._string_list(
-                [self._bucket_focus_text(item) for item in self._list_of_dicts(buckets.get("weak"), limit=4)],
-                limit=4,
-            ),
-            "previous_task_verdict_path": str(continuation.get("previous_task_verdict_path") or "").strip(),
-            "previous_evidence_coverage_path": str(continuation.get("previous_evidence_coverage_path") or "").strip(),
-        }
+        return agent_entry_continuation_summary(continuation)
 
     def _agent_entry_sessions_for_loop(self, loop_id: str) -> list[dict[str, Any]]:
         list_sessions = getattr(self.repository, "list_all_alignment_sessions", None)
@@ -870,136 +658,41 @@ class ServiceAgentAdapterMixin:
 
     def _agent_native_continuation_context_for_terminal_run(self, previous_run: dict) -> dict[str, Any]:
         previous_layout = self._run_artifact_layout(Path(previous_run["runs_dir"]))
-        task_verdict = self._task_verdict_context_for_run(previous_run, previous_layout)
-        coverage = self._coverage_context_for_run(previous_layout)
-        return {
-            "active": True,
-            "reason": "terminal_task_verdict_requires_next_run",
-            "previous_run_id": str(previous_run.get("id") or "").strip(),
-            "previous_run_path": f"/runs/{previous_run.get('id')}",
-            "previous_run_status": str(previous_run.get("status") or "").strip(),
-            "previous_task_verdict": task_verdict,
-            "previous_task_verdict_path": str(previous_layout.task_verdict_path.resolve()) if previous_layout.task_verdict_path.exists() else "",
-            "previous_evidence_coverage_path": str(previous_layout.evidence_coverage_path.resolve())
-            if previous_layout.evidence_coverage_path.exists()
-            else "",
-            "coverage": coverage,
-            "next_focus": self._agent_native_continuation_focus(task_verdict, coverage),
-        }
+        return agent_native_continuation_context_for_terminal_run(previous_run, previous_layout)
 
     def _task_verdict_context_for_run(self, run: dict, layout) -> dict[str, Any]:
-        task_verdict = normalize_task_verdict(run.get("task_verdict") or run.get("task_verdict_json"))
-        if not task_verdict and layout.task_verdict_path.exists():
-            task_verdict = normalize_task_verdict(self._read_json_object(layout.task_verdict_path))
-        buckets = task_verdict.get("buckets") if isinstance(task_verdict.get("buckets"), dict) else {}
-        return {
-            "status": str(task_verdict.get("status") or "").strip(),
-            "source": str(task_verdict.get("source") or "").strip(),
-            "summary": str(task_verdict.get("summary") or "").strip(),
-            "buckets": {
-                "proven": self._list_of_dicts(buckets.get("proven")),
-                "weak": self._list_of_dicts(buckets.get("weak")),
-                "unproven": self._list_of_dicts(buckets.get("unproven")),
-                "blocking": self._list_of_dicts(buckets.get("blocking")),
-                "residual_risk": self._list_of_dicts(buckets.get("residual_risk")),
-            },
-        }
+        return task_verdict_context_for_run(run, layout)
 
     def _coverage_context_for_run(self, layout) -> dict[str, Any]:
-        coverage_projection = self._read_json_object(layout.evidence_coverage_path)
-        coverage_summary = summarize_evidence_coverage_projection(
-            coverage_projection,
-            coverage_path_available=layout.evidence_coverage_path.exists(),
-        )
-        return {
-            "status": str(coverage_summary.get("status") or "pending"),
-            "covered_check_count": self._non_negative_int(coverage_summary.get("covered_check_count")),
-            "missing_check_count": self._non_negative_int(coverage_summary.get("missing_check_count")),
-            "target_count": self._non_negative_int(coverage_summary.get("target_count")),
-            "covered_target_count": self._non_negative_int(coverage_summary.get("covered_target_count")),
-            "weak_target_count": self._non_negative_int(coverage_summary.get("weak_target_count")),
-            "missing_target_count": self._non_negative_int(coverage_summary.get("missing_target_count")),
-            "blocked_target_count": self._non_negative_int(coverage_summary.get("blocked_target_count")),
-            "covered_check_ids": self._string_list(coverage_summary.get("covered_check_ids"), limit=20),
-            "missing_check_ids": self._string_list(coverage_summary.get("missing_check_ids"), limit=20),
-            "top_gaps": self._list_of_dicts(coverage_summary.get("top_gaps"), limit=5),
-        }
+        return coverage_context_for_run(layout)
 
-    @classmethod
-    def _agent_native_continuation_focus(cls, task_verdict: dict, coverage: dict) -> list[str]:
-        focus: list[str] = []
-        summary = str(task_verdict.get("summary") or "").strip()
-        if summary:
-            focus.append(summary)
-        buckets = task_verdict.get("buckets") if isinstance(task_verdict.get("buckets"), dict) else {}
-        for bucket_name in ("blocking", "unproven", "weak"):
-            for item in cls._list_of_dicts(buckets.get(bucket_name), limit=4):
-                text = cls._bucket_focus_text(item)
-                if text:
-                    focus.append(text)
-        for gap in cls._list_of_dicts(coverage.get("top_gaps"), limit=5):
-            target_id = str(gap.get("target_id") or "").strip()
-            text = str(gap.get("text") or gap.get("reason") or "").strip()
-            if target_id or text:
-                focus.append(f"{target_id}: {text}".strip(": "))
-        return cls._dedupe_strings(focus, limit=8)
+    @staticmethod
+    def _agent_native_continuation_focus(task_verdict: dict, coverage: dict) -> list[str]:
+        return agent_native_continuation_focus(task_verdict, coverage)
 
     @staticmethod
     def _bucket_focus_text(item: dict) -> str:
-        return str(
-            item.get("summary")
-            or item.get("text")
-            or item.get("label")
-            or item.get("reason")
-            or item.get("id")
-            or ""
-        ).strip()
+        return bucket_focus_text(item)
 
     @staticmethod
     def _read_json_object(path: Path) -> dict:
-        try:
-            payload = read_json(path)
-        except (OSError, UnicodeError, ValueError):
-            return {}
-        return dict(payload) if isinstance(payload, dict) else {}
+        return read_json_object(path)
 
     @staticmethod
     def _string_list(value: object, *, limit: int | None = None) -> list[str]:
-        if not isinstance(value, list):
-            return []
-        items = [str(item).strip() for item in value if str(item).strip()]
-        return items[:limit] if limit is not None else items
+        return string_list(value, limit=limit)
 
     @staticmethod
     def _list_of_dicts(value: object, *, limit: int | None = None) -> list[dict]:
-        if not isinstance(value, list):
-            return []
-        items = [dict(item) for item in value if isinstance(item, dict)]
-        return items[:limit] if limit is not None else items
+        return list_of_dicts(value, limit=limit)
 
     @staticmethod
     def _non_negative_int(value: object) -> int:
-        if isinstance(value, bool):
-            return 0
-        try:
-            integer = int(value)
-        except (TypeError, ValueError):
-            return 0
-        return max(0, integer)
+        return non_negative_int(value)
 
     @staticmethod
     def _dedupe_strings(values: list[str], *, limit: int) -> list[str]:
-        seen: set[str] = set()
-        deduped: list[str] = []
-        for value in values:
-            text = str(value or "").strip()
-            if not text or text in seen:
-                continue
-            seen.add(text)
-            deduped.append(text)
-            if len(deduped) >= limit:
-                break
-        return deduped
+        return dedupe_strings(values, limit=limit)
 
     def _agent_bound_run(self, session: dict) -> dict | None:
         run_id = str(session.get("linked_run_id") or "").strip()
@@ -1015,16 +708,11 @@ class ServiceAgentAdapterMixin:
 
     @staticmethod
     def _task_verdict_status_for_run(run: dict) -> str:
-        verdict = run.get("task_verdict") if isinstance(run.get("task_verdict"), dict) else run.get("task_verdict_json")
-        if not isinstance(verdict, dict):
-            return ""
-        return str(verdict.get("status") or "").strip()
+        return task_verdict_status_for_run(run)
 
-    @classmethod
-    def _terminal_agent_run_needs_next_pass(cls, run: dict) -> bool:
-        if str(run.get("status") or "").strip() not in TERMINAL_RUN_STATUSES:
-            return False
-        return cls._task_verdict_status_for_run(run) not in PASSING_TASK_VERDICT_STATUSES
+    @staticmethod
+    def _terminal_agent_run_needs_next_pass(run: dict) -> bool:
+        return terminal_agent_run_needs_next_pass(run)
 
     @staticmethod
     def _assert_agent_binding_matches_workdir(binding: dict, session: dict, *, expected_workdir: Path) -> None:
@@ -1035,125 +723,3 @@ class ServiceAgentAdapterMixin:
         session_workdir = str(session.get("workdir") or "").strip()
         if not session_workdir or Path(session_workdir).expanduser().resolve() != expected:
             raise LooporaConflictError("agent binding references a Loop preview from a different workdir; run /loopora-plan again")
-
-    @classmethod
-    def _agent_loop_result(cls, adapter: str, root: Path, session: dict, binding: dict, run_result: dict[str, Any]) -> dict[str, Any]:
-        run = run_result["run"]
-        summary = cls._agent_loop_summary(run, run_result)
-        return {
-            "adapter": adapter,
-            "workdir": str(root),
-            "status": session["status"],
-            "agent_run_summary": summary,
-            "session": session,
-            "binding": binding,
-            "run": run,
-            "judgment_contract": build_judgment_contract(run),
-            "run_path": f"/runs/{run['id']}",
-            "started_new_run": bool(run_result["started_new_run"]),
-            "execution_plane": "agent_native",
-            "next_step": run_result.get("next_step"),
-            "complete": bool(run_result.get("complete", False)),
-            "task_next_action": run_result.get("task_next_action") if isinstance(run_result.get("task_next_action"), dict) else {},
-        }
-
-    @staticmethod
-    def _agent_loop_summary(run: dict[str, Any], run_result: dict[str, Any]) -> dict[str, Any]:
-        next_step = run_result.get("next_step") if isinstance(run_result.get("next_step"), dict) else {}
-        role_dispatch = next_step.get("role_dispatch") if isinstance(next_step.get("role_dispatch"), dict) else {}
-        task_verdict = run.get("task_verdict") if isinstance(run.get("task_verdict"), dict) else run.get("task_verdict_json")
-        task_verdict = task_verdict if isinstance(task_verdict, dict) else {}
-        task_next_action = run_result.get("task_next_action") if isinstance(run_result.get("task_next_action"), dict) else {}
-        run_id = str(run.get("id") or "").strip()
-        task_verdict_status = str(task_verdict.get("status") or "").strip()
-        task_verdict_summary = str(task_verdict.get("summary") or "").strip()
-        target_agent = str(role_dispatch.get("target_agent") or next_step.get("target_agent") or "").strip()
-        summary = {
-            "schema_version": 1,
-            "run_id": run_id,
-            "run_status": str(run.get("status") or run.get("run_status") or "").strip(),
-            "started_new_run": bool(run_result.get("started_new_run")),
-            "complete": bool(run_result.get("complete", False)),
-            "next_step_id": str(next_step.get("step_id") or "").strip(),
-            "next_target_agent": target_agent,
-            "task_verdict_status": task_verdict_status,
-            "task_verdict_summary": task_verdict_summary,
-            "task_next_action": task_next_action,
-            "run_path": f"/runs/{run_id}" if run_id else "",
-        }
-        if target_agent and role_dispatch.get("target_agent_config_exists") is not False:
-            summary["dispatch_next"] = (
-                f"invoke {target_agent} with the next context/capsule paths below; do not perform this role inline"
-            )
-        native_todo = next_step.get("native_todo") if isinstance(next_step.get("native_todo"), dict) else {}
-        if native_todo:
-            summary["native_todo"] = native_todo
-        native_trace_contract = role_dispatch.get("native_trace_contract") if isinstance(role_dispatch.get("native_trace_contract"), dict) else {}
-        if native_trace_contract:
-            summary["native_trace_contract"] = native_trace_contract
-        summary.update(
-            _agent_task_proof_summary(
-                complete=bool(run_result.get("complete", False)),
-                task_verdict_status=task_verdict_status,
-                task_verdict_summary=task_verdict_summary,
-                task_next_action=task_next_action,
-            )
-        )
-        summary.update(_agent_next_step_continuation_summary(next_step))
-        return summary
-
-    @staticmethod
-    def _agent_loop_unready_error(adapter: str, binding: dict, session: dict) -> str:
-        label = _adapter_label_for_error(adapter)
-        status = str(session.get("status") or "").strip() or "unknown"
-        if binding.get("requires_candidate_repair"):
-            validation = session.get("validation") if isinstance(session.get("validation"), dict) else {}
-            error = str(session.get("error_message") or validation.get("error") or "").strip()
-            detail = f": {error}" if error else ""
-            if binding.get("loopora_fit_contradiction"):
-                return (
-                    f"{label} Loop preview is blocked before /loopora-run because the task summary looked one-off, "
-                    f"direct-answer, no-new-evidence, or benchmark/test-harness-only (current status: {status}); define later evidence, handoff, "
-                    f"or GateKeeper value, then rerun /loopora-plan with a reframed or repaired candidate{detail}"
-                )
-            return (
-                f"{label} Loop preview needs plan file repair before /loopora-run "
-                f"(current status: {status}); rerun /loopora-plan with a repaired candidate or continue Web review{detail}"
-            )
-        if binding.get("requires_web_alignment"):
-            if binding.get("loopora_fit_contradiction"):
-                return (
-                    f"{label} Loop preview needs Web review before /loopora-run "
-                    f"(current status: {status}); the task summary looked one-off, direct-answer, no-new-evidence, or benchmark/test-harness-only, "
-                    "so define later evidence, handoff, or GateKeeper value in /loopora-plan or Web review first"
-                )
-            return (
-                f"{label} Loop preview needs Web review before /loopora-run "
-                f"(current status: {status}); continue /loopora-plan or Web review first"
-            )
-        return ""
-
-    @staticmethod
-    def _append_agent_entry_invocation(binding: dict[str, Any], *, action: str, entry_source: str) -> list[dict[str, str]]:
-        existing = binding.get("entry_invocations") if isinstance(binding, dict) else []
-        invocations = [item for item in existing if isinstance(item, dict)] if isinstance(existing, list) else []
-        source = str(entry_source or "").strip() or "direct_cli"
-        next_invocations = [
-            {
-                "action": str(item.get("action") or ""),
-                "entry_source": str(item.get("entry_source") or ""),
-                "at": str(item.get("at") or ""),
-            }
-            for item in invocations
-            if item.get("action")
-        ]
-        next_invocations.append({"action": action, "entry_source": source, "at": utc_now()})
-        return next_invocations[-20:]
-
-
-def _adapter_label_for_error(adapter: str) -> str:
-    return {
-        "codex": "Codex",
-        "claude": "Claude Code",
-        "opencode": "OpenCode",
-    }.get(adapter, adapter)

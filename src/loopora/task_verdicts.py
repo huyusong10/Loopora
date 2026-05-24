@@ -21,6 +21,7 @@ TASK_VERDICT_STATUSES = {
     "insufficient_evidence",
     "passed_with_residual_risk",
 }
+PASSING_TASK_VERDICT_STATUSES = frozenset({"passed", "passed_with_residual_risk"})
 TASK_VERDICT_SOURCES = {"gatekeeper", "rounds_completion", "run_status", "legacy"}
 TERMINAL_RUN_STATUSES = {"succeeded", "failed", "stopped"}
 BUCKET_KEYS = ("proven", "weak", "unproven", "blocking", "residual_risk")

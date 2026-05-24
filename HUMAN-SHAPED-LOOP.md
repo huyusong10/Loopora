@@ -242,6 +242,20 @@ These answers change with the task. Fixed templates can't adapt.
 
 One sentence: fixed team templates are one form of Loopora, not the essence. Loopora's full capability is dynamically generating judgment structure per task—light tasks get light process, heavy tasks get heavy evidence.
 
+This also shapes how Loopora integrates with Agents. It should not recreate a generic plugin runtime, and it should not start another nested Codex, Claude Code, or OpenCode layer during execution. The steadier pattern is to place project-local, discoverable commands, skills, or role entries where the current host Agent can read them, then let that host Agent hand off through its native role or task mechanism.
+
+Loopora's capability contract makes that boundary explicit:
+
+- The current host Agent executes in its current workspace. Loopora manages entries, context binding, role boundaries, evidence, task verdicts, and `.loopora/` state.
+- Activation stays explicit through `/loopora-plan`, `/loopora-run`, or Loopora CLI commands. Generic host commands, hooks, session-start events, status lines, and remote control surfaces do not become Loopora phase entries.
+- Model/provider routing, external routers, permissions, approval mode, MCP servers, external tools, host memory, host skills/plugins, credentials, environment secrets, and global configuration stay owned by the host Agent and user.
+- Host entries are thin project-local packaging. Behavior comes from Loopora Core and managed references; manifests and checks detect drift; generated projections, marketplaces, registries, symlinks, and prompt-only exports are discovery or guidance rather than runtime dependency, install proof, or task proof.
+- Entries present compact summaries first and open reference files or full payloads only when needed. Host memory, compacted summaries, loaded skills, injected editor context, workflow kits, role catalogs, checkpoints, and archived sessions are hints, not Loopora context binding or evidence.
+- Role handoff stays path-based, uses the host-native mechanism, and stops before inline work if dispatch is unavailable. Multi-role fan-out happens only when the reviewed Loop workflow declares a parallel group.
+- Task proof comes from submitted Loopora evidence and the task verdict. Approval, host activity, hook logs, status metrics, external tool output, task trackers, security scanners, and remote runners are not proof unless their outputs are submitted as evidence and judged by Loopora.
+
+Actual execution stays inside the current Agent's context, permissions, and tool boundary.
+
 ## 8. When Loopora Is Worth Using
 
 Loopora doesn't fit every complex task. The deciding factor isn't complexity—it's whether **final feedback is too slow, requiring intermediate judgment points during execution.**

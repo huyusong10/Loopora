@@ -438,13 +438,14 @@ def test_agent_run_summary_exposes_dispatch_next_when_role_agent_is_available() 
         },
     }
 
-    cli_agent_adapter_commands._attach_agent_run_dispatch_summary(result)
+    cli_agent_adapter_commands._attach_agent_run_summary(result)
 
     summary = result["agent_run_summary"]
     assert summary["dispatch_next"] == (
         "invoke loopora-builder with the next context/capsule paths below; do not perform this role inline"
     )
     assert summary["next_step"]["dispatch_next"] == summary["dispatch_next"]
+    _assert_codex_native_surface_summary(summary)
 
 
 def _assert_agent_native_official_tool_contract(started: dict) -> None:
@@ -453,6 +454,7 @@ def _assert_agent_native_official_tool_contract(started: dict) -> None:
     assert native_todo["not_evidence"] is True
     assert "official todo" in native_todo["host_policy"]
     assert started["next_step"]["native_todo"]["not_evidence"] is True
+    assert started["next_step"]["role_dispatch"]["host_mechanism"] == "Codex spawn_agent with agent_type=<role_dispatch.target_agent>"
     assert "spawn_agent" in started["next_step"]["role_dispatch"]["accepted_native_tools"]
     assert started["next_step"]["role_dispatch"]["native_trace_contract"]["field"] == "native_trace"
 

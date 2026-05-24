@@ -16,9 +16,9 @@ from loopora.cli_workflow_support import LoopBuildRequest, build_loop_kwargs
 from loopora.diagnostics import log_event, log_exception
 from loopora.run_takeaways import build_judgment_contract
 from loopora.service import LooporaError
+from loopora.task_verdicts import PASSING_TASK_VERDICT_STATUSES
 from loopora.utils import utc_now
 
-PASSING_TASK_VERDICT_STATUSES = {"passed", "passed_with_residual_risk"}
 TASK_VERDICT_BUCKET_KEYS = ("proven", "weak", "unproven", "blocking", "residual_risk")
 
 

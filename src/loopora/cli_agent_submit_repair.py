@@ -1,15 +1,25 @@
 from __future__ import annotations
 
 import json
-import re
 from pathlib import Path
 
-import typer
-
-from loopora.cli_agent_native import _agent_next_command_hint, _non_bool_int, _set_summary_list, _set_summary_text
-from loopora.cli_agent_step_presenters import _agent_known_evidence_ref_summaries
+from loopora.agent_native_evidence_refs import agent_known_evidence_ref_summaries as _agent_known_evidence_ref_summaries
+from loopora.agent_native_surface import attach_native_run_surface
+from loopora.cli_agent_runtime_support import agent_next_command_hint as _agent_next_command_hint
+from loopora.cli_agent_submit_repair_output import print_agent_submit_repair_plain as _print_agent_submit_repair_plain
+from loopora.cli_agent_submit_repair_schema import (
+    active_step_coverage_target_ids as _active_step_coverage_target_ids,
+    output_schema_error_hints as _output_schema_error_hints,
+    result_file_null_placeholder_focus as _result_file_null_placeholder_focus,
+)
 from loopora.cli_shared import echo_json
+from loopora.cli_summary_helpers import (
+    non_bool_int as _non_bool_int,
+    set_summary_list as _set_summary_list,
+    set_summary_text as _set_summary_text,
+)
 from loopora.service import LooporaError
+
 
 def _print_agent_submit_repair_guidance(
     exc: Exception,
@@ -38,98 +48,8 @@ def _print_agent_submit_repair_guidance(
     if json_output:
         echo_json(_agent_submit_repair_json_payload(result))
         return True
-    _print_agent_submit_repair_header(result)
-    _print_agent_submit_repair_context(result)
-    _print_agent_submit_repair_focus(result)
-    typer.echo(f"next_repair_step: {result.get('next_repair_step')}", err=True)
-    if result.get("schema_lookup"):
-        typer.echo(f"schema_lookup: {result.get('schema_lookup')}", err=True)
+    _print_agent_submit_repair_plain(result)
     return True
-
-
-def _print_agent_submit_repair_header(result: dict) -> None:
-    typer.echo("submit_repair: result JSON needs repair before this Loopora step can advance", err=True)
-    typer.echo(f"result_file_to_repair: {result.get('result_file_to_repair')}", err=True)
-    for key in (
-        "active_step_id",
-        "active_role",
-        "active_target_agent",
-        "active_context_path",
-        "active_result_template",
-        "active_result_file_to_write",
-        "result_outbox_dir",
-    ):
-        value = result.get(key)
-        if value:
-            typer.echo(f"{key}: {value}", err=True)
-    _print_agent_submit_submitted_dispatch(result)
-
-
-def _print_agent_submit_repair_focus(result: dict) -> None:
-    focus = [str(item) for item in list(result.get("repair_focus") or []) if str(item).strip()]
-    if not focus:
-        return
-    typer.echo("repair_focus:", err=True)
-    for item in focus:
-        typer.echo(f"- {item}", err=True)
-
-
-def _print_agent_submit_repair_context(result: dict) -> None:
-    known_ids = [str(item).strip() for item in list(result.get("active_known_evidence_ids") or []) if str(item).strip()]
-    if known_ids:
-        _print_agent_submit_repair_plain_list("active_known_evidence_ids", known_ids, limit=8)
-    refs = result.get("active_known_evidence_refs")
-    if isinstance(refs, list) and refs:
-        _print_agent_submit_repair_known_evidence_refs(refs)
-    target_ids = [str(item).strip() for item in list(result.get("active_coverage_target_ids") or []) if str(item).strip()]
-    if target_ids:
-        _print_agent_submit_repair_plain_list("active_coverage_target_ids", target_ids, limit=16)
-
-
-def _print_agent_submit_repair_plain_list(label: str, items: list[str], *, limit: int) -> None:
-    displayed = items[:limit]
-    typer.echo(f"{label}:", err=True)
-    for item in displayed:
-        typer.echo(f"- {item}", err=True)
-    if len(items) > len(displayed):
-        typer.echo(f"{label}_more: {len(items) - len(displayed)}", err=True)
-
-
-def _print_agent_submit_repair_known_evidence_refs(refs: list[object]) -> None:
-    summaries = [item for item in refs if isinstance(item, dict)]
-    if not summaries:
-        return
-    typer.echo("active_known_evidence_refs:", err=True)
-    for item in summaries[:5]:
-        parts = [str(item.get("id") or "").strip()]
-        result = str(item.get("result") or "").strip()
-        if result:
-            parts.append(f"result={result}")
-        support = str(item.get("gatekeeper_support") or "").strip()
-        if support:
-            parts.append(f"support={support}")
-        reason = str(item.get("gatekeeper_support_reason") or "").strip()
-        if reason:
-            parts.append(f"reason={reason}")
-        typer.echo(f"- {' '.join(part for part in parts if part)}", err=True)
-        claim = str(item.get("claim") or "").strip()
-        if claim:
-            typer.echo(f"  claim: {claim}", err=True)
-        coverage_targets = item.get("coverage_target_ids") if isinstance(item.get("coverage_target_ids"), list) else []
-        coverage = [str(target).strip() for target in coverage_targets if str(target).strip()]
-        if coverage:
-            typer.echo(f"  coverage_targets: {', '.join(coverage[:6])}", err=True)
-    if len(summaries) > 5:
-        typer.echo(f"active_known_evidence_refs_more: {len(summaries) - 5}", err=True)
-
-
-def _print_agent_submit_submitted_dispatch(result: dict) -> None:
-    submitted_dispatch = result.get("submitted_dispatch")
-    if not isinstance(submitted_dispatch, dict) or not submitted_dispatch:
-        return
-    plain_parts = _agent_submit_dispatch_plain_parts(submitted_dispatch)
-    if plain_parts:
-        typer.echo(f"submitted_dispatch: {', '.join(plain_parts)}", err=True)
 
 
 def _agent_submit_repair_result(
@@ -188,6 +108,7 @@ def _agent_submit_repair_summary(result: dict) -> dict:
         "ready": bool(result.get("ready")),
         "submit_repair": str(result.get("submit_repair") or "").strip(),
     }
+    attach_native_run_surface(summary, result)
     for key in (
         "run_id",
         "context_id",
@@ -357,16 +278,6 @@ def _agent_submit_result_file_dispatch_summary(result_file: Path) -> dict:
     return summary
 
 
-def _agent_submit_dispatch_plain_parts(dispatch: dict) -> list[str]:
-    parts: list[str] = []
-    for key in ("run_id", "step_id", "iter", "step_order", "target_agent", "actual_agent", "dispatch_mode", "inline"):
-        value = dispatch.get(key)
-        if value in ("", None):
-            continue
-        parts.append(f"{key}={value}")
-    return parts
-
-
 def _agent_submit_stale_dispatch_detail(result: dict) -> str:
     submitted = result.get("submitted_dispatch")
     if not isinstance(submitted, dict) or not submitted:
@@ -396,32 +307,6 @@ def _agent_submit_stale_dispatch_detail(result: dict) -> str:
     if active_bits:
         active_label = f"{active_label} ({', '.join(active_bits)})"
     return f"submitted file is for {submitted_label}, but active step is {active_label}"
-
-
-def _result_file_null_placeholder_focus(result_file: Path) -> str:
-    try:
-        payload = json.loads(result_file.read_text(encoding="utf-8"))
-    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
-        return ""
-    result = payload.get("result") if isinstance(payload, dict) else None
-    paths: list[str] = []
-    _collect_null_paths(result, "$", paths)
-    if not paths:
-        return ""
-    return "replace null placeholders before submit: " + _format_bounded_list(paths, limit=12)
-
-
-def _collect_null_paths(value: object, path: str, paths: list[str]) -> None:
-    if value is None:
-        paths.append(path)
-        return
-    if isinstance(value, dict):
-        for key, child in value.items():
-            _collect_null_paths(child, f"{path}.{key}", paths)
-        return
-    if isinstance(value, list):
-        for index, child in enumerate(value):
-            _collect_null_paths(child, f"{path}[{index}]", paths)
 
 
 def _agent_submit_error_is_repairable(error: str) -> bool:
@@ -541,104 +426,3 @@ def _coverage_target_repair_focus(error: str, active_step: dict) -> list[str]:
     if target_ids:
         return ["use only frozen coverage target IDs: " + ", ".join(target_ids[:8])]
     return ["coverage_results.target_id must come from the active judgment_contract coverage targets"]
-
-
-_SCHEMA_TYPE_ERROR_RE = re.compile(r"(?P<path>\$(?:\.[A-Za-z0-9_-]+|\[\d+\])*) expected (?P<expected>[A-Za-z_]+), got (?P<actual>[A-Za-z_]+)")
-_SCHEMA_REQUIRED_ERROR_RE = re.compile(r"(?P<path>\$(?:\.[A-Za-z0-9_-]+|\[\d+\])*) is required")
-_SCHEMA_EXTRA_ERROR_RE = re.compile(r"(?P<path>\$(?:\.[A-Za-z0-9_-]+|\[\d+\])*) is not allowed by output_schema")
-_SCHEMA_ENUM_ERROR_RE = re.compile(r"(?P<path>\$(?:\.[A-Za-z0-9_-]+|\[\d+\])*) must be one of (?P<values>\[[^\]]+\])")
-
-
-def _output_schema_error_hint(error: str, schema: dict) -> str:
-    hints = _output_schema_error_hints(error, schema)
-    return hints[0] if hints else ""
-
-
-def _output_schema_error_hints(error: str, schema: dict, *, limit: int = 6) -> list[str]:
-    hints: list[str] = []
-    type_matches = list(_SCHEMA_TYPE_ERROR_RE.finditer(error))
-    null_paths = [match.group("path") for match in type_matches if match.group("actual") == "null"]
-    if len(null_paths) > 1:
-        hints.append("replace null placeholders before submit: " + _format_bounded_list(null_paths, limit=6))
-    for match in type_matches:
-        hints.append(_schema_type_error_hint(match, schema))
-        if len(hints) >= limit:
-            return list(dict.fromkeys(hints))[:limit]
-    for match in _SCHEMA_REQUIRED_ERROR_RE.finditer(error):
-        hints.append(f"add missing result field {match.group('path').removeprefix('$.')}")
-        if len(hints) >= limit:
-            return list(dict.fromkeys(hints))[:limit]
-    for match in _SCHEMA_EXTRA_ERROR_RE.finditer(error):
-        hints.append(f"remove non-schema result field {match.group('path').removeprefix('$.')}")
-        if len(hints) >= limit:
-            return list(dict.fromkeys(hints))[:limit]
-    for match in _SCHEMA_ENUM_ERROR_RE.finditer(error):
-        hints.append(f"{match.group('path')} must use one allowed value: {match.group('values')}")
-        if len(hints) >= limit:
-            return list(dict.fromkeys(hints))[:limit]
-    return list(dict.fromkeys(hints))[:limit]
-
-
-def _schema_type_error_hint(match: re.Match[str], schema: dict) -> str:
-    path = match.group("path")
-    expected = match.group("expected")
-    node = _schema_node_at_path(schema, path)
-    shape = _schema_shape_hint(node)
-    if shape:
-        return f"{path} must be {shape}"
-    return f"{path} must be {expected}; rewrite that value inside result"
-
-
-def _format_bounded_list(items: list[str], *, limit: int) -> str:
-    visible = items[:limit]
-    suffix = f" (+{len(items) - limit} more)" if len(items) > limit else ""
-    return ", ".join(visible) + suffix
-
-
-def _schema_node_at_path(schema: dict, path: str) -> dict:
-    node: object = schema
-    for segment in _schema_path_segments(path):
-        if not isinstance(node, dict):
-            return {}
-        if isinstance(segment, int):
-            node = node.get("items")
-        else:
-            properties = node.get("properties") if isinstance(node.get("properties"), dict) else {}
-            node = properties.get(segment)
-    return node if isinstance(node, dict) else {}
-
-
-def _schema_path_segments(path: str) -> list[str | int]:
-    segments: list[str | int] = []
-    for match in re.finditer(r"\.([A-Za-z0-9_-]+)|\[(\d+)\]", path):
-        if match.group(1) is not None:
-            segments.append(match.group(1))
-        else:
-            segments.append(int(match.group(2)))
-    return segments
-
-
-def _schema_shape_hint(node: dict) -> str:
-    schema_type = str(node.get("type") or "").strip()
-    if schema_type == "object":
-        required = [str(item) for item in list(node.get("required") or []) if str(item).strip()]
-        if required:
-            return "an object with required fields: " + ", ".join(required)
-        return "an object"
-    if schema_type == "array":
-        item_shape = _schema_shape_hint(node.get("items") if isinstance(node.get("items"), dict) else {})
-        return f"an array of {item_shape}" if item_shape else "an array"
-    if schema_type:
-        return schema_type
-    return ""
-
-
-def _active_step_coverage_target_ids(active_step: dict) -> list[str]:
-    judgment_contract = active_step.get("judgment_contract") if isinstance(active_step.get("judgment_contract"), dict) else {}
-    ids: list[str] = []
-    for item in list(judgment_contract.get("coverage_targets") or []):
-        if isinstance(item, dict):
-            target_id = str(item.get("id") or item.get("target_id") or "").strip()
-            if target_id:
-                ids.append(target_id)
-    return list(dict.fromkeys(ids))
