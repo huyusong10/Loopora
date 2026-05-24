@@ -12,6 +12,7 @@ import typer
 
 from loopora.branding import RUN_SUMMARY_TITLE
 from loopora.cli_common import call_spawn_background_worker, get_service, logger
+from loopora.cli_runtime import set_worker_spawner
 from loopora.cli_workflow_support import LoopBuildRequest, build_loop_kwargs
 from loopora.diagnostics import log_event, log_exception
 from loopora.run_takeaways import build_judgment_contract
@@ -379,6 +380,9 @@ def spawn_background_worker(service, run: dict) -> dict:
         command=command,
     )
     return service.get_run(run["id"])
+
+
+set_worker_spawner(spawn_background_worker)
 
 
 def start_run(service, loop_id: str, *, background: bool) -> dict:

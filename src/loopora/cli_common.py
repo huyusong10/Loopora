@@ -5,7 +5,8 @@ import logging
 import typer
 
 from loopora.diagnostics import get_logger, log_event
-from loopora.service import create_service as _default_create_service
+from loopora.cli_runtime import get_service as _runtime_get_service
+from loopora.cli_runtime import spawn_background_worker as _runtime_spawn_background_worker
 
 logger = get_logger(__name__)
 
@@ -30,16 +31,8 @@ def echo_json(payload: object) -> None:
 
 
 def get_service():
-    import loopora.cli as cli_module
-
-    factory = getattr(cli_module, "create_service", _default_create_service)
-    return factory()
+    return _runtime_get_service()
 
 
 def call_spawn_background_worker(service, run: dict) -> dict:
-    import loopora.cli as cli_module
-
-    from loopora.cli_run_support import spawn_background_worker
-
-    callback = getattr(cli_module, "_spawn_background_worker", spawn_background_worker)
-    return callback(service, run)
+    return _runtime_spawn_background_worker(service, run)

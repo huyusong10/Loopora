@@ -51,12 +51,13 @@ python tests/probes/real_environment/run_real_probes.py --show-playbook
 Common entries:
 
 ```bash
+python tests/probes/real_environment/run_real_probes.py --suite release
 python tests/probes/real_environment/run_real_probes.py --suite real-agent --agent-targets codex,claude,opencode
 python tests/probes/real_environment/run_real_probes.py --suite real-cli --cli-targets codex,claude,opencode
 python tests/probes/real_environment/run_real_probes.py --suite release-web
 ```
 
-The GitHub manual Real Probe workflow is only a wrapper around this runner. Its release profile selects `real-agent`, `real-cli`, and `release-web`; real workflow experiments remain opt-in through the experiment gate below and are not mixed into the release probe by default.
+The GitHub manual Real Probe workflow is only a wrapper around this runner. Its `release` suite selects `real-agent`, `real-cli`, and `release-web`; real workflow experiments remain opt-in through the experiment gate below and are not mixed into the release probe by default.
 
 Real probes may skip on ordinary developer machines, but the skip reason must name the missing environment switch or command template. Phase reports are written under `.loopora/real-probes/` so a failing run exposes process, model, artifact, state, and command evidence without forcing the operator to infer progress from quiet stdout.
 

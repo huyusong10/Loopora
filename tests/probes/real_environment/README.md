@@ -34,6 +34,7 @@ Prefer the real probe runner over direct pytest invocation because the runner en
 
 ```bash
 python tests/probes/real_environment/run_real_probes.py --show-playbook
+python tests/probes/real_environment/run_real_probes.py --suite release --max-parallel 3
 python tests/probes/real_environment/run_real_probes.py --suite real-agent --agent-targets codex,claude,opencode --max-parallel 3
 python tests/probes/real_environment/run_real_probes.py --suite real-cli --cli-targets codex,claude,opencode --max-parallel 3
 python tests/probes/real_environment/run_real_probes.py --suite all --max-parallel 3

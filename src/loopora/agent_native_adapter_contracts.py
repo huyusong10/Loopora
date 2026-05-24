@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from loopora.agent_native_surface_schema import NATIVE_RUN_SURFACE_FIELDS, compact_surface_fields
 from loopora.service_types import LooporaError
 
 AGENT_ADAPTER_KINDS = ("codex", "claude", "opencode")
@@ -104,7 +105,7 @@ def agent_adapter_native_run_surface_summary(adapter: str) -> dict[str, Any]:
         "proof_boundary": native_dispatch.get("proof_boundary"),
         "nested_provider_cli": native_dispatch.get("nested_provider_cli"),
     }
-    return {key: value for key, value in summary.items() if value not in ("", [], {})}
+    return compact_surface_fields(summary, NATIVE_RUN_SURFACE_FIELDS)
 
 
 def agent_adapter_native_capability_contract(adapter: str) -> dict[str, str]:

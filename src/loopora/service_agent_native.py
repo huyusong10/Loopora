@@ -133,6 +133,32 @@ class _AgentNativeSubmitResponseRequest:
     entry_source: str
 
 
+@dataclass(frozen=True)
+class _AgentNativeSubmitContext:
+    kind: str
+    run: dict[str, Any]
+    layout: RunArtifactLayout
+    state: dict[str, Any]
+    active: dict[str, Any]
+    step: dict[str, Any]
+    step_id: str
+    iter_id: int
+    step_order: int
+    context: _WorkflowRunContext
+    iteration: _WorkflowIterationState
+    role: dict[str, Any]
+    runtime_role: str
+    context_packet: dict[str, Any]
+    host_dispatch: dict[str, Any]
+
+
+@dataclass(frozen=True)
+class _AgentNativeNormalizedSubmit:
+    submitted_step: dict[str, Any]
+    finish_result: dict[str, Any] | None
+    is_control_step: bool
+
+
 class ServiceAgentNativeMixin:
     @staticmethod
     def _with_agent_native_judgment_contract(result: dict[str, Any]) -> dict[str, Any]:
@@ -412,6 +438,28 @@ class ServiceAgentNativeMixin:
         layout: RunArtifactLayout,
         output: dict[str, Any],
     ) -> dict[str, Any]:
+        submit_context = self._agent_native_submit_context(request, kind=kind, run=run, layout=layout)
+        normalized = self._agent_native_normalized_submit(
+            request,
+            run=run,
+            layout=layout,
+            output=output,
+            submit_context=submit_context,
+        )
+        return self._agent_native_commit_submit(
+            request,
+            submit_context=submit_context,
+            normalized=normalized,
+        )
+
+    def _agent_native_submit_context(
+        self,
+        request: AgentNativeStepSubmitRequest,
+        *,
+        kind: str,
+        run: dict[str, Any],
+        layout: RunArtifactLayout,
+    ) -> _AgentNativeSubmitContext:
         state = self._agent_native_state(layout, adapter=kind, run=run)
         active = state.get("active_step") if isinstance(state.get("active_step"), dict) else {}
         if not active:
@@ -443,6 +491,44 @@ class ServiceAgentNativeMixin:
             },
             request.host_dispatch,
         )
+        return _AgentNativeSubmitContext(
+            kind=kind,
+            run=run,
+            layout=layout,
+            state=state,
+            active=active,
+            step=step,
+            step_id=step_id,
+            iter_id=iter_id,
+            step_order=step_order,
+            context=context,
+            iteration=iteration,
+            role=role,
+            runtime_role=runtime_role,
+            context_packet=context_packet,
+            host_dispatch=host_dispatch,
+        )
+
+    def _agent_native_normalized_submit(
+        self,
+        request: AgentNativeStepSubmitRequest,
+        *,
+        run: dict[str, Any],
+        layout: RunArtifactLayout,
+        output: dict[str, Any],
+        submit_context: _AgentNativeSubmitContext,
+    ) -> _AgentNativeNormalizedSubmit:
+        active = submit_context.active
+        step = submit_context.step
+        iter_id = submit_context.iter_id
+        step_order = submit_context.step_order
+        step_id = submit_context.step_id
+        context = submit_context.context
+        iteration = submit_context.iteration
+        role = submit_context.role
+        runtime_role = submit_context.runtime_role
+        context_packet = submit_context.context_packet
+        host_dispatch = submit_context.host_dispatch
         self._validate_agent_native_step_output_contract(output, active=active)
         if role["archetype"] != "gatekeeper":
             unknown_refs = _agent_native_unknown_evidence_refs(output, active=active, context_packet=context_packet)
@@ -494,6 +580,33 @@ class ServiceAgentNativeMixin:
         )
         submitted_step["host_dispatch"] = host_dispatch
         is_control_step = self._agent_native_record_control_completion(run, result)
+        return _AgentNativeNormalizedSubmit(
+            submitted_step=submitted_step,
+            finish_result=finish_result,
+            is_control_step=is_control_step,
+        )
+
+    def _agent_native_commit_submit(
+        self,
+        request: AgentNativeStepSubmitRequest,
+        *,
+        submit_context: _AgentNativeSubmitContext,
+        normalized: _AgentNativeNormalizedSubmit,
+    ) -> dict[str, Any]:
+        kind = submit_context.kind
+        run = submit_context.run
+        layout = submit_context.layout
+        state = submit_context.state
+        context = submit_context.context
+        iteration = submit_context.iteration
+        step = submit_context.step
+        iter_id = submit_context.iter_id
+        step_order = submit_context.step_order
+        runtime_role = submit_context.runtime_role
+        role = submit_context.role
+        host_dispatch = submit_context.host_dispatch
+        step_id = submit_context.step_id
+        submitted_step = normalized.submitted_step
         self.append_run_event(
             run["id"],
             "agent_native_step_submitted",
@@ -522,7 +635,7 @@ class ServiceAgentNativeMixin:
                 iter_id=iter_id,
                 step=step,
                 step_order=step_order,
-                is_control_step=is_control_step,
+                is_control_step=normalized.is_control_step,
             )
         )
         self._write_agent_native_state(layout, state)
@@ -532,7 +645,7 @@ class ServiceAgentNativeMixin:
                 run=run,
                 state=state,
                 layout=layout,
-                finish_result=finish_result,
+                finish_result=normalized.finish_result,
                 submitted_step=submitted_step,
                 entry_source=str(request.entry_source or "").strip(),
             )

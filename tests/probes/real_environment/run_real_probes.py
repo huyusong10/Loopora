@@ -16,6 +16,7 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 SRC_ROOT = REPO_ROOT / "src"
 REAL_PROBE_PLAYBOOK = REPO_ROOT / "tests" / "probes" / "real_environment" / "README.md"
 SUITES = ("real-agent", "real-cli", "release-web")
+RELEASE_PROFILE_SUITES = SUITES
 HOST_TARGETS = ("codex", "claude", "opencode")
 TARGET_ALIASES = {
     "claude-code": "claude",
@@ -66,13 +67,13 @@ def _normalize_targets(raw: str | None, *, default: tuple[str, ...], label: str)
 
 def _normalize_suites(raw_values: list[str] | None) -> tuple[str, ...]:
     if not raw_values:
-        return SUITES
+        return RELEASE_PROFILE_SUITES
     normalized: list[str] = []
     invalid: list[str] = []
     for raw in raw_values:
         for token in _split_csv(raw):
             lowered = token.lower()
-            candidates = list(SUITES) if lowered == "all" else [lowered]
+            candidates = list(RELEASE_PROFILE_SUITES) if lowered in {"all", "release"} else [lowered]
             for candidate in candidates:
                 if candidate not in SUITES:
                     invalid.append(token)
@@ -248,7 +249,11 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Run independent Loopora real-environment probes in parallel. Read tests/probes/real_environment/README.md before using this runner."
     )
-    parser.add_argument("--suite", action="append", help="Real probe suite to run: real-agent, real-cli, release-web, or all. Repeatable or comma-separated.")
+    parser.add_argument(
+        "--suite",
+        action="append",
+        help="Real probe suite to run: release, real-agent, real-cli, release-web, or all. Repeatable or comma-separated.",
+    )
     parser.add_argument("--agent-targets", help="Comma-separated real Agent targets. Defaults to LOOPORA_REAL_AGENT_TARGETS or codex,claude,opencode.")
     parser.add_argument("--cli-targets", help="Comma-separated real CLI targets. Defaults to LOOPORA_REAL_CLI_TARGETS or codex,claude,opencode.")
     parser.add_argument(

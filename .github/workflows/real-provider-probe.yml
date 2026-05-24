@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       suites:
-        description: "Comma-separated suites: real-agent, real-cli, release-web, or all"
+        description: "Comma-separated suites: release, real-agent, real-cli, release-web, or all"
         required: false
-        default: "all"
+        default: "release"
       agent_targets:
         description: "Comma-separated real Agent host targets, for example codex,claude,opencode"
         required: false
@@ -79,7 +79,7 @@ jobs:
         run: ${{ inputs.setup_command }}
 
       - name: Install browser runtime for release-web
-        if: inputs.suites == '' || inputs.suites == 'all' || contains(inputs.suites, 'release-web')
+        if: inputs.suites == '' || inputs.suites == 'release' || inputs.suites == 'all' || contains(inputs.suites, 'release-web')
         run: uv run playwright install --with-deps chromium
 
       - name: Summarize real probe selection
@@ -110,7 +110,7 @@ jobs:
           REAL_PROBE_MAX_PARALLEL: ${{ inputs.max_parallel }}
           REAL_PROBE_PYTEST_ARGS: ${{ inputs.pytest_args }}
         run: |
-          suites="${REAL_PROBE_SUITES:-all}"
+          suites="${REAL_PROBE_SUITES:-release}"
           max_parallel="${REAL_PROBE_MAX_PARALLEL:-3}"
           args=(--suite "$suites" --max-parallel "$max_parallel" --keep-logs)
           if [[ -n "${REAL_PROBE_AGENT_TARGETS:-}" ]]; then

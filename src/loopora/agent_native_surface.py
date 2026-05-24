@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from loopora.agent_native_adapter_contracts import agent_adapter_native_run_surface_summary
+from loopora.agent_native_surface_schema import surface_dict_sections
 
 
 def attach_native_run_surface(summary: dict[str, Any], result: dict | None = None, *sources: object, adapter: str = "") -> None:
@@ -49,27 +50,9 @@ def native_surface_plain_lines(surface: dict, *, include_role_configs: bool = Fa
 
 
 def _native_surface_dict_fields(surface: dict) -> dict[str, dict]:
-    return {
-        "entry_paths": _native_surface_dict(surface, "entry_paths"),
-        "slash_commands": _native_surface_dict(surface, "slash_commands"),
-        "dispatch": _native_surface_dict(surface, "native_dispatch") or surface,
-        "role_agents": _native_surface_dict(surface, "role_agents"),
-        "capability_contract": _native_surface_dict(surface, "capability_contract"),
-        "packaging": _native_surface_dict(surface, "packaging"),
-        "context_loading": _native_surface_dict(surface, "context_loading"),
-        "health_check": _native_surface_dict(surface, "health_check"),
-        "session_recovery": _native_surface_dict(surface, "session_recovery"),
-        "handoff_protocol": _native_surface_dict(surface, "handoff_protocol"),
-        "permission_boundary": _native_surface_dict(surface, "permission_boundary"),
-        "tooling_boundary": _native_surface_dict(surface, "tooling_boundary"),
-        "observability": _native_surface_dict(surface, "observability"),
-        "ownership_boundary": _native_surface_dict(surface, "ownership_boundary"),
-    }
-
-
-def _native_surface_dict(surface: dict, key: str) -> dict:
-    value = surface.get(key)
-    return value if isinstance(value, dict) else {}
+    fields = surface_dict_sections(surface)
+    fields["dispatch"] = surface.get("native_dispatch") if isinstance(surface.get("native_dispatch"), dict) else surface
+    return fields
 
 
 def _native_surface_entry_lines(surface: dict, entry_paths: dict) -> list[str]:

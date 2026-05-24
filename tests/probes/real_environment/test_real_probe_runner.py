@@ -72,6 +72,19 @@ def test_real_probe_runner_expands_all_suites_without_shared_targets() -> None:
     assert "LOOPORA_REAL_CLI_TARGETS=codex" in output
 
 
+def test_real_probe_runner_expands_release_suite_to_release_profile() -> None:
+    output = _dry_run("--suite", "release", "--agent-targets", "codex", "--cli-targets", "claude")
+
+    assert "real-agent:codex" in output
+    assert "LOOPORA_ENABLE_REAL_AGENT_PROBE=1" in output
+    assert "LOOPORA_REAL_AGENT_TARGETS=codex" in output
+    assert "real-cli:claude" in output
+    assert "LOOPORA_ENABLE_REAL_CLI_PROBE=1" in output
+    assert "LOOPORA_REAL_CLI_TARGETS=claude" in output
+    assert "release-web" in output
+    assert "LOOPORA_ENABLE_RELEASE_WEB_PROBE=1" in output
+
+
 def test_real_probe_runner_show_playbook_is_the_documented_entry() -> None:
     completed = subprocess.run(
         [sys.executable, str(RUNNER), "--show-playbook"],

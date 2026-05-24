@@ -10,6 +10,7 @@ from loopora.cli_agent_adapter_commands import register_agent_adapter_commands
 from loopora.cli_bundle_commands import register_bundle_commands
 from loopora.cli_diagnose_commands import register_diagnose_commands
 from loopora.cli_common import echo_json
+from loopora.cli_runtime import set_service_factory, set_worker_spawner
 from loopora.cli_shared import spawn_background_worker as _spawn_background_worker
 from loopora.cli_loop_commands import register_loop_commands
 from loopora.cli_orchestration_commands import register_orchestration_commands
@@ -18,6 +19,18 @@ from loopora.cli_role_commands import register_role_commands
 from loopora.cli_root_commands import register_root_commands
 from loopora.cli_spec_commands import register_spec_commands
 from loopora.service import create_service
+
+
+def _current_service_factory():
+    return create_service()
+
+
+def _current_worker_spawner(service, run):
+    return _spawn_background_worker(service, run)
+
+
+set_service_factory(_current_service_factory)
+set_worker_spawner(_current_worker_spawner)
 
 
 class LooporaRootHelpGroup(TyperGroup):

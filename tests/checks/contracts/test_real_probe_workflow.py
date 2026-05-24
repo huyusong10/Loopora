@@ -13,6 +13,7 @@ def test_github_real_probe_workflow_uses_handbook_runner_for_all_release_suites(
     assert "name: Real Probe" in workflow
     assert "tests/probes/real_environment/run_real_probes.py" in workflow
     assert "suites:" in workflow
+    assert 'default: "release"' in workflow
     assert "agent_targets:" in workflow
     assert "cli_targets:" in workflow
     assert "real-agent" in workflow
