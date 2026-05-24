@@ -228,6 +228,10 @@ def _agent_submitted_step_summary(submitted_step: object) -> dict:
         next_action = _actionable_next_action(raw_next_action, blocking_items)
         _set_summary_text(summary, "recommended_next_action", next_action)
     _set_summary_text(summary, "handoff_path", submitted_step.get("handoff_absolute_path") or submitted_step.get("handoff_path"))
+    host_dispatch = submitted_step.get("host_dispatch") if isinstance(submitted_step.get("host_dispatch"), dict) else {}
+    native_trace = host_dispatch.get("native_trace") if isinstance(host_dispatch.get("native_trace"), dict) else {}
+    if native_trace:
+        summary["native_trace"] = native_trace
     _set_summary_text(summary, "summary", _clip_inline(str(submitted_step.get("summary") or ""), 220))
     return summary
 
@@ -248,6 +252,12 @@ def _agent_next_step_summary(next_step: dict, *, adapter: str = "", workdir: str
         summary["target_agent_config_exists"] = role_dispatch.get("target_agent_config_exists") is True
     dispatch_next = _agent_dispatch_next_summary(role_dispatch)
     _set_summary_text(summary, "dispatch_next", dispatch_next)
+    native_todo = next_step.get("native_todo") if isinstance(next_step.get("native_todo"), dict) else {}
+    if native_todo:
+        summary["native_todo"] = _agent_native_todo_summary(native_todo)
+    native_trace_contract = role_dispatch.get("native_trace_contract") if isinstance(role_dispatch.get("native_trace_contract"), dict) else {}
+    if native_trace_contract:
+        summary["native_trace_contract"] = native_trace_contract
     dispatch_unavailable = _agent_dispatch_unavailable_summary(
         adapter=str(next_step.get("adapter") or adapter or "").strip() or "codex",
         workdir=str(workdir or "").strip() or "$PWD",
@@ -263,6 +273,16 @@ def _agent_next_step_summary(next_step: dict, *, adapter: str = "", workdir: str
     if iteration_repair:
         summary["iteration_repair"] = iteration_repair
     summary.update(_agent_next_step_continuation_summary(next_step))
+    return {key: value for key, value in summary.items() if value not in ("", [], {})}
+
+
+def _agent_native_todo_summary(native_todo: dict) -> dict[str, object]:
+    summary: dict[str, object] = {
+        "recommended": native_todo.get("recommended") is True,
+        "not_evidence": native_todo.get("not_evidence") is True,
+    }
+    _set_summary_text(summary, "host_policy", native_todo.get("host_policy"))
+    _set_summary_list(summary, "items", native_todo.get("items"))
     return {key: value for key, value in summary.items() if value not in ("", [], {})}
 
 
@@ -409,9 +429,23 @@ def _print_agent_submitted_step(submitted_step: object) -> None:
     handoff_path = str(submitted_step.get("handoff_absolute_path") or submitted_step.get("handoff_path") or "").strip()
     if handoff_path:
         typer.echo(f"submitted_handoff_path: {handoff_path}")
+    _print_agent_submitted_native_trace(submitted_step)
     summary = str(submitted_step.get("summary") or "").strip()
     if summary:
         typer.echo(f"submitted_summary: {_clip(summary, 220)}")
+
+
+def _print_agent_submitted_native_trace(submitted_step: dict[str, object]) -> None:
+    host_dispatch = submitted_step.get("host_dispatch") if isinstance(submitted_step.get("host_dispatch"), dict) else {}
+    native_trace = host_dispatch.get("native_trace") if isinstance(host_dispatch.get("native_trace"), dict) else {}
+    if not native_trace:
+        return
+    trace_ref = str(native_trace.get("trace_ref") or native_trace.get("event_ref") or "").strip()
+    tool_name = str(native_trace.get("tool_name") or "").strip()
+    if tool_name:
+        typer.echo(f"submitted_native_tool: {_clip(tool_name, 120)}")
+    if trace_ref:
+        typer.echo(f"submitted_native_trace: {_clip(trace_ref, 180)}")
 
 
 def _submitted_step_is_blocked(status: str) -> bool:
@@ -697,6 +731,7 @@ def _print_agent_current_step(next_step: dict) -> None:
             typer.echo(
                 f"dispatch_next: invoke {target_agent} with the next context/capsule paths below; do not perform this role inline"
             )
+    _print_agent_native_todo(next_step.get("native_todo"))
     _print_agent_continuation(next_step.get("continuation"))
     action_summary = _action_policy_summary(action_policy)
     if action_summary:
@@ -710,6 +745,19 @@ def _print_agent_current_step(next_step: dict) -> None:
     _print_top_coverage_gaps(next_step.get("required_coverage"))
     _print_agent_current_step_paths(next_step, submit_hint)
     _print_agent_current_step_submit_hint(submit_hint)
+
+
+def _print_agent_native_todo(native_todo: object) -> None:
+    if not isinstance(native_todo, dict) or native_todo.get("recommended") is not True:
+        return
+    policy = str(native_todo.get("host_policy") or "").strip()
+    if policy:
+        typer.echo(f"native_todo: {_clip(policy, 220)}")
+    items = [str(item).strip() for item in list(native_todo.get("items") or []) if str(item).strip()]
+    if items:
+        typer.echo("native_todo_items:")
+        for item in items[:6]:
+            typer.echo(f"- {_clip(item, 180)}")
 
 
 def _print_agent_iteration_context(next_step: dict) -> None:

@@ -1085,6 +1085,12 @@ class ServiceAgentAdapterMixin:
             summary["dispatch_next"] = (
                 f"invoke {target_agent} with the next context/capsule paths below; do not perform this role inline"
             )
+        native_todo = next_step.get("native_todo") if isinstance(next_step.get("native_todo"), dict) else {}
+        if native_todo:
+            summary["native_todo"] = native_todo
+        native_trace_contract = role_dispatch.get("native_trace_contract") if isinstance(role_dispatch.get("native_trace_contract"), dict) else {}
+        if native_trace_contract:
+            summary["native_trace_contract"] = native_trace_contract
         summary.update(
             _agent_task_proof_summary(
                 complete=bool(run_result.get("complete", False)),

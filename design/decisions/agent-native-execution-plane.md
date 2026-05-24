@@ -23,6 +23,8 @@ Agent-first `/loopora-run` must create or reuse an `agent_native` run. It may re
 
 The execution capsule is the handoff contract between Loopora Core and the host Agent. It must carry the full step prompt, target native role agent, frozen `judgment_contract`, required coverage summary, context refs, evidence rules and output schema. The host may choose the native subagent / task mechanism, but it must not reconstruct these fields from memory or from a shortened prompt.
 
+Host-native todo/progress lists and user-question affordances are adapter experience projections, not proof. They should mirror Loopora's current handoff when available, while Core still treats evidence refs, handoffs, coverage and task verdicts as the fact source. Host-native subagent/task trace ids are optional dispatch proof enrichments: preserve them when exposed by the host, but do not invent them or block older hosts solely because no trace id is available.
+
 The headless path remains a first-class automation path and the execution plane for Web-owned runs. It uses the executor subsystem, structured output contracts, timeout handling and legacy compatibility rules. It is not the default implementation of the Agent-first entry.
 
 ## Consequences
@@ -35,7 +37,7 @@ The headless path remains a first-class automation path and the execution plane 
 
 ## Validation
 
-- The split Agent adapter contract tests cover `/loopora-plan -> /loopora-run`, READY binding, imported-session handoff, `agent_native` state, dispatch proof, frozen `next_step.judgment_contract`, required coverage, no inline submit, control capsules and CLI behavior that does not spawn a nested worker.
+- The split Agent adapter contract tests cover `/loopora-plan -> /loopora-run`, READY binding, imported-session handoff, `agent_native` state, dispatch proof, optional native trace, native todo/question projections, frozen `next_step.judgment_contract`, required coverage, no inline submit, control capsules and CLI behavior that does not spawn a nested worker.
 - `tests/checks/contracts/test_runner_artifacts.py` covers the typed StepContextPacket contract that feeds the capsule.
 - `tests/probes/real_environment/run_real_probes.py --suite real-agent` is the release-profile real-host check for managed Agent entries.
 - `tests/probes/real_environment/run_real_probes.py --suite real-cli` keeps the explicit headless/provider CLI boundary covered separately.

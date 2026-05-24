@@ -4,6 +4,12 @@
 
 This article explains the engineering thinking behind Loopora. For installation and usage, see [README](./README.md).
 
+Readers do not need to understand Loopora's internal terms first; the idea starts from a familiar problem: long Agent tasks often look complete before they are proven.
+
+<p align="center">
+  <img src="./assets/diagrams/refund-evidence-loop.en.svg" alt="A refund task loops through implementation, evidence, risk review, and focused follow-up until the result is proven" width="1000" />
+</p>
+
 ---
 
 Loopora starts from a simple desire: not wanting to come back every round to correct drift.

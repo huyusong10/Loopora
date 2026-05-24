@@ -455,8 +455,8 @@
           `${knownEvidenceCount} known evidence id${knownEvidenceCount === 1 ? "" : "s"}; refs must be copied exactly from the template set.`
         );
       const fillRuleText = localeText(
-        "只填写 result，替换 null 占位，保留 loopora_host_dispatch。",
-        "Fill only result, replace null placeholders, and keep loopora_host_dispatch."
+        "只填写 result，替换 null 占位，保留 loopora_host_dispatch；宿主有官方 trace 时填入 native_trace。",
+        "Fill only result, replace null placeholders, and keep loopora_host_dispatch; add native_trace only when the host exposes an official trace."
       );
       const contextCopyValue = String(step.context_absolute_path || contextPath || "").trim();
       const normalizedContextCopyValue = contextCopyValue && contextCopyValue !== "-"

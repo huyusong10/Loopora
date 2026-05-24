@@ -263,6 +263,62 @@ def test_agent_native_submit_requires_matching_host_dispatch_proof(
         )
     assert not raw_output_path.exists()
 
+def test_agent_native_submit_preserves_optional_official_native_trace(
+    service_factory,
+    tmp_path: Path,
+    sample_workdir: Path,
+) -> None:
+    service = service_factory(scenario="success")
+    bundle_file = tmp_path / "bundle.yml"
+    bundle_yaml = alignment_bundle_yaml(str(sample_workdir.resolve())).replace(
+        "Future iterations stay anchored to this contract",
+        "Preserve native subagent trace proof when the host exposes it. Future iterations stay anchored to this contract",
+    )
+    bundle_file.write_text(bundle_yaml, encoding="utf-8")
+    service.create_agent_bundle_candidate(
+        AgentBundleCandidateRequest(
+            adapter="codex",
+            workdir=sample_workdir,
+            message="Preserve native subagent trace proof when the host exposes it.",
+            bundle_file=bundle_file,
+            entry_source="codex_project_skill",
+        )
+    )
+    started = service.start_agent_loop("codex", workdir=sample_workdir, entry_source="codex_project_skill", execute_async=False)
+    step = started["next_step"]
+    dispatch = _agent_native_host_dispatch("codex", step)
+    dispatch["native_tool_name"] = "spawn_agent"
+    dispatch["native_trace_ref"] = "codex-tool-call-123"
+    dispatch["native_trace"] = {
+        "available": True,
+        "tool_name": "spawn_agent",
+        "tool_call_id": "toolu_codex_123",
+        "subagent_run_id": "subagent-run-1",
+        "event_ref": "events.jsonl#12",
+    }
+
+    result = service.submit_agent_native_step(
+        AgentNativeStepSubmitRequest(
+            adapter="codex",
+            workdir=sample_workdir,
+            run_id=str(step["run_id"]),
+            step_id=str(step["step_id"]),
+            output=_agent_native_step_output(step),
+            host_dispatch=dispatch,
+            entry_source="codex_project_skill",
+        )
+    )
+
+    native_trace = result["submitted_step"]["host_dispatch"]["native_trace"]
+    assert native_trace["available"] is True
+    assert native_trace["tool_name"] == "spawn_agent"
+    assert native_trace["official_tool_match"] is True
+    assert native_trace["trace_ref"] == "codex-tool-call-123"
+    assert native_trace["tool_call_id"] == "toolu_codex_123"
+    state_path = RunArtifactLayout(Path(result["run"]["runs_dir"])).run_dir / "agent_native" / "state.json"
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    assert state["host_dispatches"][-1]["native_trace"]["subagent_run_id"] == "subagent-run-1"
+
 def test_agent_native_host_dispatch_requires_literal_role_dispatch_booleans(service_factory) -> None:
     service = service_factory(scenario="success")
     context = {

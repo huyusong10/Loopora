@@ -1122,7 +1122,7 @@ def test_cli_agent_submit_host_dispatch_errors_report_repair_guidance(monkeypatc
     assert mismatch_payload["active_target_agent"] == "loopora-builder"
     assert (
         "set loopora_host_dispatch.target_agent and actual_agent to loopora-builder, inline to false, "
-        "and keep adapter/run_id/iter/step_id/step_order exact"
+        "keep adapter/run_id/iter/step_id/step_order exact, and preserve optional native_trace fields when the host exposed them"
     ) in mismatch_payload["repair_focus"]
     assert "fix loopora_host_dispatch to match the active role dispatch" in mismatch_payload["next_repair_step"]
     assert "loopora-builder" in mismatch_payload["next_repair_step"]

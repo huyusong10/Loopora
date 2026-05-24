@@ -49,6 +49,7 @@ AGENT_ENTRY_GEN_CONTRACT_SNIPPETS = (
     "ready_review_projection",
     "same-session run command",
     "`loop_recovery=plan_message_required`",
+    "question_action",
     "task_message_template",
     "first_task_message_example",
     "debug_cli_example_command",
@@ -86,6 +87,7 @@ AGENT_ENTRY_LOOP_CONTRACT_SNIPPETS = (
     "next_step.action_policy",
     "next_step.known_evidence_ids",
     "next_step.known_evidence_refs",
+    "next_step.native_todo",
     "next_step.submit_hint.result_template_absolute_path",
     "Read the returned JSON, even if the command exits nonzero",
     "`loop_recovery=choose_recoverable_context`",
@@ -93,7 +95,7 @@ AGENT_ENTRY_LOOP_CONTRACT_SNIPPETS = (
     "runnable/non-runnable counts",
     "non-runnable choices' `preview_path`, `validation_error`, `repair_focus`",
     "`loop_recovery=plan_first`",
-    "Report `required_inputs`, `ask_user`, `example_user_reply`, `task_message_template`, `first_task_message_example`, and `next_plan_command`",
+    "Report `required_inputs`, `ask_user`, `question_action`, `example_user_reply`, `task_message_template`, `first_task_message_example`, and `next_plan_command`",
     "`loop_recovery=active_run_conflict`",
     "`loop_recovery=finish_web_review`",
     "review_status",
@@ -105,6 +107,7 @@ AGENT_ENTRY_LOOP_CONTRACT_SNIPPETS = (
     "terminal `task_verdict_status` / `task_verdict_summary`",
     "If the command returns `loop_recovery`, report that recovery path and stop",
     "loopora_result_contract",
+    "native_trace_contract",
     "Do not hand-write the wrapper from memory",
     "Fill only the `result` object",
     "submit_repair=repair_result_json",
@@ -139,7 +142,9 @@ AGENT_ORCHESTRATOR_CONTRACT_SNIPPETS = (
     "next_step.action_policy",
     "next_step.known_evidence_ids",
     "next_step.known_evidence_refs",
+    "next_step.native_todo",
     "next_step.submit_hint.result_template_absolute_path",
+    "native_trace_ref",
     "loopora_result_contract",
     "schema-shaped `result` scaffold",
     "replace every `null` placeholder",
@@ -903,6 +908,7 @@ def _assert_claude_loop_entry(loop_skill: str, run_contract: str) -> None:
     assert "LOOPORA_AGENT_ENTRY_SOURCE=claude_project_skill" in loop_skill
     assert 'loopora agent claude run --workdir "$PWD"' in loop_skill
     assert "loopora agent claude submit" in run_contract
+    assert "Agent" in loop_skill
     assert "Task" in loop_skill
     assert "thin dispatcher" in loop_skill
     assert "references/loopora-run-contract.md" in loop_skill
@@ -919,7 +925,7 @@ def _assert_claude_agent_prompts(builder_agent: Path, orchestrator_agent: Path) 
     assert "Loopora Builder" in builder_agent_text
     assert "tools: Read, Glob, Grep, Bash, Write, Edit, MultiEdit" in builder_agent_text
     assert "Loopora Orchestrator" in orchestrator_agent_text
-    assert "tools: Task, Read, Write, Bash" in orchestrator_agent_text
+    assert "tools: Agent, Task, Read, Write, Bash" in orchestrator_agent_text
     for snippet in AGENT_ORCHESTRATOR_CONTRACT_SNIPPETS:
         assert snippet in orchestrator_agent_text
 def _assert_claude_manifest(manifest_path: Path) -> str:

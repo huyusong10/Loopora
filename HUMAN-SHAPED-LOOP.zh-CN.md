@@ -4,6 +4,12 @@
 
 本文阐述 Loopora 背后的工程思考。想安装和运行，请参见 [README](./README.zh-CN.md)。
 
+读者不需要先理解 Loopora 的内部名词；它先从一个常见问题说起：长期 Agent 任务经常先看起来完成，再被证明并没有完成。
+
+<p align="center">
+  <img src="./assets/diagrams/refund-evidence-loop.zh.svg" alt="退款任务在实现、证据、风险检查和聚焦后续之间循环，直到结果被证明" width="1000" />
+</p>
+
 ---
 
 Loopora 的出发点很朴素：不想每轮都回来纠偏。

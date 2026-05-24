@@ -40,7 +40,9 @@ Look for:
 
 - The host creating the candidate bundle from the conversation brief instead of relying on a prewritten candidate.
 - `/loopora-plan` preceding `/loopora-run` through the managed entry surface, with provenance visible in binding evidence.
-- Role work being claimed and submitted through the host-native role/subagent mechanism instead of silently completed inline.
+- Role work being claimed and submitted through the host-native role/subagent mechanism; the host should use the host's native role/subagent mechanism named by `role_dispatch.target_agent` instead of silently completing work inline.
+- Native todo/progress updates mirroring the Loopora handoff when the host supports them, without treating todo state as task evidence.
+- Optional native subagent/task trace ids being preserved when the host exposes them, without inventing trace proof when unavailable.
 - Builder evidence being concrete enough for GateKeeper to cite, and GateKeeper citing known evidence rather than a self-report.
 - The host avoiding nested calls to its own CLI from inside the Loopora run.
 - Failure triage evidence being understandable without watching stdout live.

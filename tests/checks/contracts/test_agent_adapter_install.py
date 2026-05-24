@@ -8,7 +8,19 @@ def test_agent_native_result_template_uses_schema_shaped_null_scaffold() -> None
             "adapter": "codex",
             "run_id": "run-scaffold",
             "step_id": "builder_step",
-            "role_dispatch": {"target_agent": "loopora-builder"},
+            "role_dispatch": {
+                "target_agent": "loopora-builder",
+                "native_trace_contract": {
+                    "optional": True,
+                    "field": "native_trace",
+                    "trace_ref_field": "native_trace_ref",
+                },
+            },
+            "native_todo": {
+                "recommended": True,
+                "not_evidence": True,
+                "items": ["Dispatch loopora-builder through the native task tool."],
+            },
             "output_schema": {
                 "type": "object",
                 "required": ["summary", "checks", "nested"],
@@ -75,6 +87,11 @@ def test_agent_native_result_template_uses_schema_shaped_null_scaffold() -> None
     assert template["loopora_result_contract"]["result_file_to_write"] == "/tmp/builder.result.json"
     assert template["loopora_result_contract"]["submit_command"].endswith("--json")
     assert template["loopora_result_contract"]["result_template_path"] == "/tmp/builder.result.template.json"
+    assert template["loopora_result_contract"]["native_todo"]["not_evidence"] is True
+    assert template["loopora_result_contract"]["native_trace_contract"]["field"] == "native_trace"
+    assert template["loopora_host_dispatch"]["native_trace"]["available"] is False
+    assert template["loopora_host_dispatch"]["native_tool_name"] == ""
+    assert template["loopora_host_dispatch"]["native_trace_ref"] == ""
     assert template["result"] == {
         "summary": None,
         "checks": [None],
@@ -398,6 +415,7 @@ def test_cli_codex_loop_requires_ready_bundle(tmp_path: Path) -> None:
     assert "- required_evidence" in output_text
     assert "- judgment_tradeoffs" in output_text
     assert "ask_user: What long-running task should Loopora govern?" in output_text
+    assert "question_action: Use the host's official user-question or follow-up capability" in output_text
     assert "example_user_reply:" in output_text
     assert (
         "task_message_template: Goal: ...; Fake-done risks: ...; Required evidence: ...; Judgment tradeoffs: ..."

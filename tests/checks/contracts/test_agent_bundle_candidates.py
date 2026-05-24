@@ -489,6 +489,8 @@ def test_cli_agent_loop_json_without_plan_returns_structured_plan_first_recovery
     assert summary["next_plan_command"] == "/loopora-plan"
     assert summary["required_inputs"] == ["task_goal", "fake_done_risks", "required_evidence", "judgment_tradeoffs"]
     assert summary["ask_user"].startswith("What long-running task should Loopora govern?")
+    assert summary["question_action"]["kind"] == "ask_user"
+    assert "official user-question" in summary["question_action"]["native_tool_policy"]
     assert summary["example_user_reply"].startswith("Build the account-deletion audit flow")
     assert (
         summary["task_message_template"]
@@ -502,6 +504,7 @@ def test_cli_agent_loop_json_without_plan_returns_structured_plan_first_recovery
     assert payload["next_plan_command"] == "/loopora-plan"
     assert payload["required_inputs"] == ["task_goal", "fake_done_risks", "required_evidence", "judgment_tradeoffs"]
     assert payload["ask_user"].startswith("What long-running task should Loopora govern?")
+    assert payload["question_action"]["target"] == "main_agent_session"
     assert payload["example_user_reply"].startswith("Build the account-deletion audit flow")
     assert (
         payload["task_message_template"]
@@ -605,6 +608,7 @@ def test_cli_agent_gen_without_bundle_rejects_missing_task_summary(sample_workdi
     assert "- required_evidence" in text_result.stdout
     assert "- judgment_tradeoffs" in text_result.stdout
     assert "ask_user: What long-running task should Loopora govern?" in text_result.stdout
+    assert "question_action: Use the host's official user-question or follow-up capability" in text_result.stdout
     assert "example_user_reply: Build the account-deletion audit flow;" in text_result.stdout
     assert (
         "task_message_template: Goal: ...; Fake-done risks: ...; Required evidence: ...; Judgment tradeoffs: ..."
@@ -644,6 +648,7 @@ def test_cli_agent_gen_without_bundle_rejects_missing_task_summary(sample_workdi
         "judgment_tradeoffs",
     ]
     assert payload["ask_user"].startswith("What long-running task should Loopora govern?")
+    assert payload["question_action"]["subagent_policy"].startswith("Do not ask user questions")
     assert "fake done would be UI-only deletion" in payload["example_user_reply"]
     assert (
         payload["task_message_template"]

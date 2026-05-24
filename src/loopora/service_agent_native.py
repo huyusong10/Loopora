@@ -693,6 +693,7 @@ class ServiceAgentNativeMixin:
                 handoff=iteration.current_handoffs[-1] if iteration.current_handoffs else {},
             )
         )
+        submitted_step["host_dispatch"] = host_dispatch
         is_control_step = self._agent_native_record_control_completion(run, result)
         self.append_run_event(
             run["id"],
@@ -1345,6 +1346,27 @@ class ServiceAgentNativeMixin:
         target_agent = self._agent_native_target_agent(role["archetype"])
         target_agent_config_path = self._agent_native_target_agent_config_path(adapter, target_agent)
         target_agent_config_absolute_path = str((layout.workdir_path / target_agent_config_path).resolve()) if target_agent_config_path else ""
+        role_dispatch = {
+            "required": True,
+            "dispatch_contract": "host_native_subagent",
+            "target_agent": target_agent,
+            "target_agent_config_path": target_agent_config_path,
+            "target_agent_config_absolute_path": target_agent_config_absolute_path,
+            "target_agent_config_exists": Path(target_agent_config_absolute_path).exists() if target_agent_config_absolute_path else False,
+            "target_role_archetype": role["archetype"],
+            "inline_allowed": False,
+            "proof_field": "loopora_host_dispatch",
+            "result_field": "result",
+            "accepted_dispatch_modes": ["host_subagent", "host_task", "host_agent"],
+            "accepted_native_tools": self._agent_native_accepted_native_tools(adapter),
+            "native_trace_contract": {
+                "optional": True,
+                "field": "native_trace",
+                "trace_ref_field": "native_trace_ref",
+                "tool_name_field": "native_tool_name",
+                "purpose": "Cite the host's official subagent/task invocation trace when available; absence does not by itself fail submit.",
+            },
+        }
         return {
             "execution_plane": "agent_native",
             "adapter": adapter,
@@ -1363,19 +1385,8 @@ class ServiceAgentNativeMixin:
                 "posture_notes": str(role.get("posture_notes") or "").strip(),
                 "runtime_role": runtime_role,
             },
-            "role_dispatch": {
-                "required": True,
-                "dispatch_contract": "host_native_subagent",
-                "target_agent": target_agent,
-                "target_agent_config_path": target_agent_config_path,
-                "target_agent_config_absolute_path": target_agent_config_absolute_path,
-                "target_agent_config_exists": Path(target_agent_config_absolute_path).exists() if target_agent_config_absolute_path else False,
-                "target_role_archetype": role["archetype"],
-                "inline_allowed": False,
-                "proof_field": "loopora_host_dispatch",
-                "result_field": "result",
-                "accepted_dispatch_modes": ["host_subagent", "host_task", "host_agent"],
-            },
+            "role_dispatch": role_dispatch,
+            "native_todo": self._agent_native_todo_contract(step_id=str(step["id"]), target_agent=target_agent),
             "inputs": dict(step.get("inputs") or {}) if isinstance(step.get("inputs"), dict) else {},
             "action_policy": dict(step.get("action_policy") or {}),
             "required_coverage": self._agent_native_required_coverage(context_packet),
@@ -1477,6 +1488,12 @@ class ServiceAgentNativeMixin:
             result_contract["result_template_path"] = result_template_path
         if iteration_repair.get("active") is True:
             result_contract["iteration_repair"] = iteration_repair
+        native_todo = capsule.get("native_todo") if isinstance(capsule.get("native_todo"), dict) else {}
+        if native_todo:
+            result_contract["native_todo"] = native_todo
+        native_trace_contract = dispatch.get("native_trace_contract") if isinstance(dispatch.get("native_trace_contract"), dict) else {}
+        if native_trace_contract:
+            result_contract["native_trace_contract"] = native_trace_contract
         return {
             "loopora_host_dispatch": {
                 "schema_version": 1,
@@ -1489,6 +1506,16 @@ class ServiceAgentNativeMixin:
                 "actual_agent": target_agent,
                 "dispatch_mode": "host_subagent",
                 "inline": False,
+                "native_tool_name": "",
+                "native_trace_ref": "",
+                "native_trace": {
+                    "available": False,
+                    "tool_name": "",
+                    "tool_call_id": "",
+                    "subagent_run_id": "",
+                    "event_ref": "",
+                    "notes": "",
+                },
                 "attestation": "The host invoked the named Loopora role agent for this step.",
             },
             "loopora_result_contract": result_contract,
@@ -1516,6 +1543,12 @@ class ServiceAgentNativeMixin:
             normalized["evidence_rules"] = cls._agent_native_evidence_rules(archetype)
         cls._refresh_agent_native_submit_hint(normalized)
         cls._refresh_agent_native_role_dispatch_availability(normalized)
+        normalized["native_todo"] = cls._agent_native_todo_contract(
+            step_id=str(normalized.get("step_id") or ""),
+            target_agent=str((normalized.get("role_dispatch") or {}).get("target_agent") or "")
+            if isinstance(normalized.get("role_dispatch"), dict)
+            else "",
+        )
         known_evidence_ids = normalized.get("known_evidence_ids")
         if isinstance(known_evidence_ids, list):
             known_evidence_ids = list(dict.fromkeys(str(item) for item in known_evidence_ids if isinstance(item, str)))
@@ -1728,6 +1761,33 @@ class ServiceAgentNativeMixin:
         return ""
 
     @staticmethod
+    def _agent_native_accepted_native_tools(adapter: str) -> list[str]:
+        normalized = str(adapter or "").strip().lower()
+        if normalized == "codex":
+            return ["spawn_agent"]
+        if normalized == "claude":
+            return ["Agent", "Task"]
+        if normalized == "opencode":
+            return ["task"]
+        return []
+
+    @staticmethod
+    def _agent_native_todo_contract(*, step_id: str, target_agent: str) -> dict[str, Any]:
+        step_text = str(step_id or "").strip() or "current_step"
+        target_text = str(target_agent or "").strip() or "the role agent"
+        return {
+            "recommended": True,
+            "not_evidence": True,
+            "host_policy": "Use the host's official todo/progress-list capability when available; otherwise continue with the capsule and result template.",
+            "items": [
+                f"Read agent_run_summary and capsule for {step_text}.",
+                f"Invoke {target_text} through the host's official subagent/task mechanism.",
+                "Fill the provided result template without changing Loopora's frozen contract fields.",
+                "Submit the filled result and read agent_submit_summary before deciding whether the task is proven.",
+            ],
+        }
+
+    @staticmethod
     def _required_agent_native_dispatch_text(dispatch: dict[str, Any], field: str) -> str:
         value = str(dispatch.get(field) or "").strip()
         if not value:
@@ -1881,7 +1941,59 @@ class ServiceAgentNativeMixin:
             "attestation": str(dispatch.get("attestation") or "").strip(),
         }
         normalized.update(dispatch_position)
+        native_trace = self._agent_native_dispatch_trace(adapter, dispatch=dispatch, role_dispatch=role_dispatch)
+        if native_trace:
+            normalized["native_trace"] = native_trace
         return normalized
+
+    @classmethod
+    def _agent_native_dispatch_trace(
+        cls,
+        adapter: str,
+        *,
+        dispatch: dict[str, Any],
+        role_dispatch: dict[str, Any],
+    ) -> dict[str, Any]:
+        trace_payload = dispatch.get("native_trace") if isinstance(dispatch.get("native_trace"), dict) else {}
+        accepted_tools = [
+            str(item).strip()
+            for item in list(role_dispatch.get("accepted_native_tools") or cls._agent_native_accepted_native_tools(adapter))
+            if str(item).strip()
+        ]
+        accepted_tool_set = {item.lower() for item in accepted_tools}
+        tool_name = cls._agent_native_optional_dispatch_text(dispatch.get("native_tool_name") or dispatch.get("tool_name") or trace_payload.get("tool_name"))
+        trace_ref = cls._agent_native_optional_dispatch_text(dispatch.get("native_trace_ref") or trace_payload.get("event_ref"))
+        trace: dict[str, Any] = {}
+        if tool_name:
+            trace["tool_name"] = tool_name
+            if accepted_tool_set:
+                trace["official_tool_match"] = tool_name.lower() in accepted_tool_set
+                trace["accepted_native_tools"] = accepted_tools
+        if trace_ref:
+            trace["trace_ref"] = trace_ref
+        if isinstance(trace_payload.get("available"), bool):
+            trace["available"] = trace_payload["available"]
+        for source_key, target_key in (
+            ("tool_call_id", "tool_call_id"),
+            ("parent_tool_use_id", "parent_tool_use_id"),
+            ("subagent_run_id", "subagent_run_id"),
+            ("event_ref", "event_ref"),
+            ("transcript_ref", "transcript_ref"),
+            ("notes", "notes"),
+        ):
+            value = cls._agent_native_optional_dispatch_text(trace_payload.get(source_key))
+            if value:
+                trace[target_key] = value
+        if trace and "available" not in trace:
+            trace["available"] = True
+        return trace
+
+    @staticmethod
+    def _agent_native_optional_dispatch_text(value: object, *, limit: int = 320) -> str:
+        text = str(value or "").strip()
+        if not text:
+            return ""
+        return text[:limit]
 
     def _agent_native_dispatch_position(self, active: dict[str, Any], dispatch: dict[str, Any]) -> dict[str, int]:
         position: dict[str, int] = {}

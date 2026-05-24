@@ -692,7 +692,8 @@ def _semantic_text_mentions_evidence_bucket_projection(text: object) -> bool:
         "blocking": r"\bblocking\b|阻断",
         "residual": r"\bresidual risk\b|残余风险",
     }
-    return all(re.search(pattern, value, re.I) for pattern in bucket_patterns.values())
+    segments = [segment.strip() for segment in re.split(r"[\n.;。；]", value) if segment.strip()]
+    return any(all(re.search(pattern, segment, re.I) for pattern in bucket_patterns.values()) for segment in segments)
 
 
 def _semantic_text_mentions_workflow_judgment_flow(text: object) -> bool:

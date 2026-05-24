@@ -497,10 +497,10 @@ def _host_dispatch_repair_focus(error: str, active_step: dict) -> list[str]:
     if target_agent:
         return [
             f"set loopora_host_dispatch.target_agent and actual_agent to {target_agent}, inline to false, "
-            "and keep adapter/run_id/iter/step_id/step_order exact"
+            "keep adapter/run_id/iter/step_id/step_order exact, and preserve optional native_trace fields when the host exposed them"
         ]
     return [
-        "preserve loopora_host_dispatch with exact adapter, run_id, iter, step_id, step_order, target_agent, actual_agent, dispatch_mode, and inline=false"
+        "preserve loopora_host_dispatch with exact adapter, run_id, iter, step_id, step_order, target_agent, actual_agent, dispatch_mode, inline=false, and optional native_trace fields"
     ]
 
 

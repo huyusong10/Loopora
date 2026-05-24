@@ -446,6 +446,17 @@ def test_agent_run_summary_exposes_dispatch_next_when_role_agent_is_available() 
     )
     assert summary["next_step"]["dispatch_next"] == summary["dispatch_next"]
 
+
+def _assert_agent_native_official_tool_contract(started: dict) -> None:
+    native_todo = started["agent_run_summary"]["native_todo"]
+    assert native_todo["recommended"] is True
+    assert native_todo["not_evidence"] is True
+    assert "official todo" in native_todo["host_policy"]
+    assert started["next_step"]["native_todo"]["not_evidence"] is True
+    assert "spawn_agent" in started["next_step"]["role_dispatch"]["accepted_native_tools"]
+    assert started["next_step"]["role_dispatch"]["native_trace_contract"]["field"] == "native_trace"
+
+
 def test_agent_native_step_capsule_projects_full_judgment_contract(
     service_factory,
     tmp_path: Path,
@@ -468,6 +479,7 @@ def test_agent_native_step_capsule_projects_full_judgment_contract(
         )
     )
     started = service.start_agent_loop("codex", workdir=sample_workdir, entry_source="codex_project_skill", execute_async=False)
+    _assert_agent_native_official_tool_contract(started)
     step_judgment_contract = started["next_step"]["judgment_contract"]
     context_contract = json.loads(Path(started["next_step"]["context_absolute_path"]).read_text(encoding="utf-8"))["contract"]
     snapshot_contract = service.run_observation_snapshot(started["run"]["id"])["key_takeaways"]["judgment_contract"]

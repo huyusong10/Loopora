@@ -188,6 +188,10 @@ def _agent_plan_context_guidance_fields(
 
 
 def _agent_plan_context_request_fields() -> dict:
+    ask_user = (
+        "What long-running task should Loopora govern? Please include the goal, fake-done risks, required evidence, "
+        "and any judgment tradeoff that should guide later rounds."
+    )
     return {
         "required_inputs": [
             "task_goal",
@@ -195,10 +199,14 @@ def _agent_plan_context_request_fields() -> dict:
             "required_evidence",
             "judgment_tradeoffs",
         ],
-        "ask_user": (
-            "What long-running task should Loopora govern? Please include the goal, fake-done risks, required evidence, "
-            "and any judgment tradeoff that should guide later rounds."
-        ),
+        "ask_user": ask_user,
+        "question_action": {
+            "kind": "ask_user",
+            "target": "main_agent_session",
+            "prompt": ask_user,
+            "native_tool_policy": "Use the host's official user-question or follow-up capability when available; otherwise ask this question in the main chat.",
+            "subagent_policy": "Do not ask user questions from a role subagent; collect missing judgment in the parent Agent session.",
+        },
         "example_user_reply": (
             "Build the account-deletion audit flow; fake done would be UI-only deletion or missing provider-failure handling; "
             "required evidence is contract tests plus an audit-log artifact; prefer a smaller proven flow over broad unverified polish."
@@ -224,6 +232,12 @@ def _print_agent_plan_context_request_fields(result: dict) -> None:
     ask_user = str(result.get("ask_user") or "").strip()
     if ask_user:
         typer.echo(f"ask_user: {ask_user}")
+    question_action = result.get("question_action") if isinstance(result.get("question_action"), dict) else {}
+    if question_action:
+        typer.echo(
+            "question_action: "
+            + str(question_action.get("native_tool_policy") or "Ask the user in the main Agent session.").strip()
+        )
     example = str(result.get("example_user_reply") or "").strip()
     if example:
         typer.echo(f"example_user_reply: {example}")
@@ -1312,6 +1326,7 @@ def _agent_loop_recovery_summary(result: dict) -> dict:
         _set_summary_text(summary, "next_plan_command", result.get("next_plan_command"))
         _set_summary_list(summary, "required_inputs", result.get("required_inputs"))
         _set_summary_text(summary, "ask_user", result.get("ask_user"))
+        _set_summary_mapping(summary, "question_action", result.get("question_action"))
         _set_summary_text(summary, "example_user_reply", result.get("example_user_reply"))
         _set_summary_text(summary, "task_message_template", result.get("task_message_template"))
         _set_summary_text(summary, "first_task_message_example", result.get("first_task_message_example"))
