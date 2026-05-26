@@ -302,9 +302,10 @@ def test_agent_native_handbook_reaches_real_probe_boundaries(tmp_path: Path) -> 
 
     assert "Agent Native lets the current Coding Agent remain the execution subject" in report
     assert "Real probes protect the real-environment boundary" in report
-    assert "use the host's native role/subagent mechanism named by `role_dispatch.target_agent`" in report
-    assert "set `inline` to false" in report
-    assert "step capsule's `output_schema`" in report
+    assert "host-native dispatch" in report
+    assert "native subagent / task mechanism" in report
+    assert "`inline` to false" in report
+    assert "output_schema" in report
     assert "known_evidence_ids" in report
     assert "Nested host CLI sentinels must remain silent." in report
     assert "Use these requirements to author, not copy, the candidate" in report

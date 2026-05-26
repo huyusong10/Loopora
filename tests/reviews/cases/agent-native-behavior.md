@@ -16,6 +16,7 @@ targets:
     globs:
       - design/contracts.md
       - design/decisions/agent-native-execution-plane.md
+      - src/loopora/agent_adapter_role_contracts.py
       - tests/probes/real_environment/README.md
       - tests/probes/real_environment/test_real_agent_adapter_probe.py
       - tests/probes/real_environment/run_real_probes.py
@@ -40,9 +41,12 @@ Look for:
 
 - The host creating the candidate bundle from the conversation brief instead of relying on a prewritten candidate.
 - `/loopora-plan` preceding `/loopora-run` through the managed entry surface, with provenance visible in binding evidence.
+- First-screen summaries exposing an `agent_work_panel` that tells the host Agent the current state, next action, evidence focus, gaps, user question, todo items, and run URL before technical handoff paths.
 - Role work being claimed and submitted through the host-native role/subagent mechanism; the host should use the host's native role/subagent mechanism named by `role_dispatch.target_agent` instead of silently completing work inline.
 - Native todo/progress updates mirroring the Loopora handoff when the host supports them, without treating todo state as task evidence.
+- Missing Loop-shaping information being routed to the main Agent session as one clear user question with reply shape and decision impact, not asked by a role subagent.
 - Optional native subagent/task trace ids being preserved when the host exposes them, without inventing trace proof when unavailable.
+- `diagnostics.experience_health` showing whether the work panel, todo guidance, not-evidence marker, user-question guidance, role-dispatch guidance, native trace, and auto-repair events were observed in the recorded phase report.
 - Builder evidence being concrete enough for GateKeeper to cite, and GateKeeper citing known evidence rather than a self-report.
 - The host avoiding nested calls to its own CLI from inside the Loopora run.
 - Failure triage evidence being understandable without watching stdout live.

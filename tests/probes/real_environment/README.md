@@ -16,7 +16,7 @@ Real probes protect the real-environment boundary that deterministic contract an
 
 Use larger realistic workflows only as manual scenarios or explicitly marked experiments. They should not become the default release-profile blocker unless the feature being released is about that workflow.
 
-The old Agent-first adapter scenario is now split by evidence type: this handbook and the real-agent probe cover stable hard invariants, while `tests/reviews/cases/agent-native-behavior.md` reviews recorded phase reports for fuzzy Agent-native behavior such as whether the host experience reads like a managed Loop instead of an inline shortcut.
+The old Agent-first adapter scenario is now split by evidence type: this handbook and the real-agent probe cover stable hard invariants, while `tests/reviews/cases/agent-native-behavior.md` reviews recorded phase reports for fuzzy Agent-native behavior such as whether the host experience reads like a managed Loop instead of an inline shortcut. Phase reports may record `diagnostics.experience_health` for `agent_work_panel`, native todo, user-question, role-dispatch, native-trace, and auto-repair guidance signals, but those signals are not task proof.
 
 Design-to-evidence traceability:
 
@@ -35,7 +35,7 @@ Prefer the real probe runner over direct pytest invocation because the runner en
 ```bash
 python tests/probes/real_environment/run_real_probes.py --show-playbook
 python tests/probes/real_environment/run_real_probes.py --suite release --max-parallel 3
-python tests/probes/real_environment/run_real_probes.py --suite real-agent --agent-targets codex,claude,opencode --max-parallel 3
+LOOPORA_REAL_AGENT_TIMEOUT_SECONDS=1200 python tests/probes/real_environment/run_real_probes.py --suite real-agent --agent-targets codex,claude,opencode --max-parallel 3
 python tests/probes/real_environment/run_real_probes.py --suite real-cli --cli-targets codex,claude,opencode --max-parallel 3
 python tests/probes/real_environment/run_real_probes.py --suite all --max-parallel 3
 ```
@@ -74,15 +74,18 @@ While a job is still running, inspect evidence rather than waiting blindly:
 2. Phase report: inspect `.loopora/real-probes/*-phase-report.json` for the latest process, model, artifact, and state projection.
 3. Candidate bundle path: confirm the host created `.loopora/agent_inbox/<adapter>/conversation-candidate.yml`.
 4. Alignment validation: inspect `.loopora/alignment_sessions/*/artifacts/validation.json`.
-5. Binding: inspect `.loopora/agent_adapters/<adapter>/bindings/*.json` for `gen` before `loop`, linked bundle, linked loop, and linked run.
+5. Binding: inspect `.loopora/agent_adapters/<adapter>/bindings/*.json` for `plan` before `run` (older reports may say `gen` before `loop`), linked bundle, linked loop, and linked run.
 6. Runtime activity: confirm the linked run appears while non-terminal.
 7. Run events: tail `.loopora/runs/<run-id>/events.jsonl`.
 8. Agent-native state: inspect `.loopora/runs/<run-id>/agent_native/state.json`.
-9. Evidence: inspect `evidence/ledger.jsonl`, `evidence/coverage.json`, and `evidence/task_verdict.json`.
-10. Role outputs: inspect `iterations/iter_*/steps/*/output.raw.json` and `output.normalized.json`.
-11. Sentinel log: confirm no nested `codex`, `claude`, or `opencode` command was invoked from inside the run.
+9. Summary projection: confirm recorded v3 envelopes expose `agent_v3_envelope.summary.agent_work_panel`, todo guidance when available, and main-session user-question guidance when a Loop-shaping answer is missing; legacy summary keys may appear only under `raw.legacy`; check `diagnostics.experience_health` for the review-only markers.
+10. Evidence: inspect `evidence/ledger.jsonl`, `evidence/coverage.json`, and `evidence/task_verdict.json`.
+11. Role outputs: inspect `iterations/iter_*/steps/*/output.raw.json` and `output.normalized.json`.
+12. Sentinel log: confirm no nested `codex`, `claude`, or `opencode` command was invoked from inside the run.
 
 Soft waiting signal: a phase takes longer than expected but new artifacts or events are still appearing. Keep observing.
+
+Terminal proof grace: after the phase report observes a terminal `passed` task verdict, the harness gives the host a short grace period to print its final summary. If the host CLI stays open after that proof is complete, the harness stops it and preserves the phase report instead of treating an already-proven Loop as a timeout.
 
 Hard waiting signal: the job reaches its timeout, the host exits non-zero, the linked run fails terminally, or a required contract is missing. Then use the preserved log and artifacts to diagnose.
 
@@ -108,6 +111,7 @@ Do not make these fuzzy observations into hard assertions unless they become sta
 - Provider dashboard call counts.
 - Exact model prose, timing, or validation repair wording.
 - Temporary `weak` or `partial` coverage before terminal GateKeeper submission.
+- Whether `agent_work_panel`, todo guidance, question guidance, auto-repair explanations, or native trace links were visually pleasant in the host UI. Record them in phase reports and review them, but keep task proof anchored to evidence refs and task verdict.
 
 ## 6. Failure Triage Order
 
@@ -140,7 +144,8 @@ Use generous real-environment timeouts. A single Agent-host target may need seve
 
 Recommended defaults:
 
-- Real Agent target timeout: `LOOPORA_REAL_AGENT_TIMEOUT_SECONDS=900`.
+- Real Agent target timeout: `LOOPORA_REAL_AGENT_TIMEOUT_SECONDS=1200`.
+- Terminal proof grace: `LOOPORA_REAL_AGENT_TERMINAL_PROOF_GRACE_SECONDS=30`.
 - Real CLI target timeout: `LOOPORA_REAL_CLI_TIMEOUT_SECONDS=600`.
 - Runner heartbeat: `LOOPORA_REAL_PROBE_STATUS_INTERVAL_SECONDS=30`.
 - Parallel target count: up to `3` for Codex / Claude Code / OpenCode when quotas allow it.

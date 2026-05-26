@@ -30,6 +30,7 @@ CLAUDE_COMMAND_TEMPLATE_ENV = "LOOPORA_REAL_CLAUDE_AGENT_COMMAND_TEMPLATE"
 OPENCODE_COMMAND_TEMPLATE_ENV = "LOOPORA_REAL_OPENCODE_AGENT_COMMAND_TEMPLATE"
 TARGETS_ENV = "LOOPORA_REAL_AGENT_TARGETS"
 TIMEOUT_ENV = "LOOPORA_REAL_AGENT_TIMEOUT_SECONDS"
+TERMINAL_PROOF_GRACE_ENV = "LOOPORA_REAL_AGENT_TERMINAL_PROOF_GRACE_SECONDS"
 REAL_PROBE_MODEL_OVERRIDE_ENV = "LOOPORA_REAL_PROBE_ALLOW_MODEL_OVERRIDE"
 AGENT_TARGETS = ("codex", "claude", "opencode")
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -64,6 +65,13 @@ class PhaseStatusInput:
     activity_snapshots: list[dict]
     events: list[dict]
     validation_summaries: list[dict]
+
+
+@dataclass(frozen=True, slots=True)
+class PhaseReportHostSignals:
+    command: str
+    stdout: str = ""
+    stderr: str = ""
 
 
 def _selected_real_agent_targets() -> set[str]:
@@ -214,6 +222,20 @@ def _safe_read_json(path: Path) -> dict:
 def _truncate_text(value: object, *, limit: int = 600) -> str:
     text = str(value or "")
     return text if len(text) <= limit else text[:limit] + "...[truncated]"
+
+
+def _tail_text(value: object, *, limit: int = 4000) -> str:
+    text = str(value or "")
+    if len(text) <= limit:
+        return text
+    return "...[truncated]\n" + text[-limit:]
+
+
+def _read_tail_text(path: Path, *, limit: int = 4000) -> str:
+    try:
+        return _tail_text(path.read_text(encoding="utf-8", errors="replace"), limit=limit)
+    except OSError:
+        return ""
 
 
 def _terminate_pid_file(pid_file: Path) -> None:
@@ -417,9 +439,160 @@ def _role_outputs_summary(run_path: Path) -> dict:
     return rows
 
 
+def _experience_health_summary(
+    *,
+    workdir: Path,
+    run_path: Path,
+    host_stdout: str = "",
+    host_stderr: str = "",
+) -> dict:
+    stdout_text = str(host_stdout or "")
+    stderr_text = str(host_stderr or "")
+    stdout_tail = _tail_text(host_stdout)
+    stderr_tail = _tail_text(host_stderr)
+    host_text = "\n".join(item for item in (stdout_text, stderr_text) if item).lower()
+    host_tail_text = "\n".join(item for item in (stdout_tail, stderr_tail) if item).lower()
+    artifact_contracts = _experience_artifact_contracts(workdir, run_path)
+    native_trace_observed = _experience_native_trace_observed(run_path)
+    auto_repair_events = _experience_auto_repair_events(stdout_tail, stderr_tail)
+    agent_work_panel_sources = _experience_marker_sources(
+        "agent_work_panel",
+        host_stdout=stdout_text,
+        host_stderr=stderr_text,
+        host_stdout_tail=stdout_tail,
+        host_stderr_tail=stderr_tail,
+    )
+    notes = ["experience_health_is_review_signal_not_task_proof"]
+    if host_tail_text:
+        notes.append("host_stdout_stderr_tail_scanned")
+    if artifact_contracts["native_todo_seen"]:
+        notes.append("native_todo_contract_seen")
+    if native_trace_observed:
+        notes.append("native_trace_seen_in_agent_native_state")
+    if not any((agent_work_panel_sources, artifact_contracts["native_todo_seen"], native_trace_observed, auto_repair_events)):
+        notes.append("no_experience_markers_seen_in_available_sources")
+    return {
+        "agent_work_panel_seen": bool(agent_work_panel_sources),
+        "agent_work_panel_sources": agent_work_panel_sources,
+        "todo_guidance_seen": _any_marker(host_text, "native_todo", "todo_items", "todo guidance")
+        or artifact_contracts["native_todo_seen"],
+        "todo_not_evidence_confirmed": _todo_not_evidence_seen(host_text) or artifact_contracts["native_todo_not_evidence"],
+        "user_question_guidance_available": _any_marker(
+            host_text,
+            "question_action",
+            "recommended_reply_shape",
+            "loop-shaping",
+            "main_agent_session",
+        ),
+        "role_dispatch_guidance_seen": _any_marker(
+            host_text,
+            "role_dispatch",
+            "dispatch_next",
+            "host-native role",
+            "native dispatch guidance",
+        )
+        or artifact_contracts["role_dispatch_seen"],
+        "native_trace_observed": native_trace_observed,
+        "auto_repair_events": auto_repair_events,
+        "experience_notes": notes,
+    }
+
+
+def _experience_marker_sources(
+    marker: str,
+    *,
+    host_stdout: str,
+    host_stderr: str,
+    host_stdout_tail: str,
+    host_stderr_tail: str,
+) -> list[str]:
+    sources: list[str] = []
+    if marker in host_stdout_tail.lower():
+        sources.append("host_stdout_tail")
+    elif marker in host_stdout.lower():
+        sources.append("host_stdout")
+    if marker in host_stderr_tail.lower():
+        sources.append("host_stderr_tail")
+    elif marker in host_stderr.lower():
+        sources.append("host_stderr")
+    return sources
+
+
+def _any_marker(text: str, *markers: str) -> bool:
+    return any(marker.lower() in text for marker in markers)
+
+
+def _todo_not_evidence_seen(text: str) -> bool:
+    return "not_evidence" in text or "not evidence" in text
+
+
+def _experience_auto_repair_events(host_stdout: str, host_stderr: str) -> list[dict]:
+    rows: list[dict] = []
+    for source, text in (("host_stdout_tail", host_stdout), ("host_stderr_tail", host_stderr)):
+        for line in text.splitlines():
+            line_lower = line.lower()
+            if "auto_repair" in line_lower or "auto repair" in line_lower:
+                rows.append({"source": source, "line": _truncate_text(line.strip(), limit=240)})
+    return rows[:8]
+
+
+def _experience_artifact_contracts(workdir: Path, run_path: Path) -> dict[str, bool]:
+    contracts = {"native_todo_seen": False, "native_todo_not_evidence": False, "role_dispatch_seen": False}
+    for payload in _experience_contract_payloads(workdir, run_path):
+        native_todos = [item for item in _iter_nested_key(payload, "native_todo") if isinstance(item, dict)]
+        if native_todos:
+            contracts["native_todo_seen"] = True
+        if any(item.get("not_evidence") is True for item in native_todos):
+            contracts["native_todo_not_evidence"] = True
+        if any(isinstance(item, dict) and item for item in _iter_nested_key(payload, "role_dispatch")):
+            contracts["role_dispatch_seen"] = True
+    return contracts
+
+
+def _experience_contract_payloads(workdir: Path, run_path: Path) -> list[dict]:
+    paths: list[Path] = []
+    if run_path != Path():
+        paths.extend(sorted(run_path.glob("iterations/**/capsule.json"))[-12:])
+    paths.extend(sorted((state_dir_for_workdir(workdir) / "agent_outbox").glob("**/*.result.template.json"))[-12:])
+    return [payload for path in paths if (payload := _safe_read_json(path))]
+
+
+def _iter_nested_key(value: object, key: str):
+    if isinstance(value, dict):
+        if key in value:
+            yield value[key]
+        for child in value.values():
+            yield from _iter_nested_key(child, key)
+    elif isinstance(value, list):
+        for child in value:
+            yield from _iter_nested_key(child, key)
+
+
+def _experience_native_trace_observed(run_path: Path) -> bool:
+    if run_path == Path():
+        return False
+    state = _safe_read_json(run_path / "agent_native" / "state.json")
+    dispatches = state.get("host_dispatches") if isinstance(state.get("host_dispatches"), list) else []
+    for item in dispatches:
+        if not isinstance(item, dict):
+            continue
+        native_trace = item.get("native_trace")
+        native_trace_ref = str(item.get("native_trace_ref") or "").strip()
+        if native_trace_ref:
+            return True
+        if isinstance(native_trace, dict) and native_trace:
+            return True
+        if isinstance(native_trace, str) and native_trace.strip():
+            return True
+    return False
+
+
 def _phase_statuses(inputs: PhaseStatusInput) -> dict[str, dict]:
     run_id = str(inputs.binding.get("linked_run_id") or "").strip()
     invocations = list(inputs.binding.get("entry_invocations") or []) if isinstance(inputs.binding.get("entry_invocations"), list) else []
+    actions = [str(item.get("action") or "") for item in invocations if isinstance(item, dict)]
+    plan_seen = any(action in {"plan", "gen"} for action in actions)
+    run_seen = any(action in {"run", "loop"} for action in actions)
 
     def event_seen(event_type: str, step_id: str | None = None) -> bool:
         return any(
@@ -434,9 +607,11 @@ def _phase_statuses(inputs: PhaseStatusInput) -> dict[str, dict]:
             "ok": _candidate_file(inputs.adapter, inputs.workdir).exists(),
             "path": str(_candidate_file(inputs.adapter, inputs.workdir)),
         },
-        "gen_invocation_observed": {"ok": any((item.get("action") if isinstance(item, dict) else None) == "gen" for item in invocations)},
+        "plan_invocation_observed": {"ok": plan_seen},
+        "gen_invocation_observed": {"ok": plan_seen},
         "ready_validation_observed": {"ok": any(item.get("ok") is True for item in inputs.validation_summaries)},
-        "loop_invocation_observed": {"ok": any((item.get("action") if isinstance(item, dict) else None) == "loop" for item in invocations)},
+        "run_invocation_observed": {"ok": run_seen},
+        "loop_invocation_observed": {"ok": run_seen},
         "linked_run_created": {"ok": bool(run_id), "run_id": run_id},
         "runtime_activity_observed_run": {
             "ok": bool(run_id)
@@ -469,7 +644,7 @@ def _build_real_probe_phase_report(
     workdir: Path,
     activity_snapshots: list[dict],
     sentinel_log: Path,
-    command: str,
+    host_signals: PhaseReportHostSignals,
 ) -> dict:
     binding = _latest_binding(adapter, workdir)
     run_id = str(binding.get("linked_run_id") or "").strip()
@@ -482,8 +657,8 @@ def _build_real_probe_phase_report(
         "schema_version": 1,
         "adapter": adapter,
         "workdir": str(workdir),
-        "command_preview": _truncate_text(command, limit=500),
-        "model_policy": _model_policy_summary(adapter, command),
+        "command_preview": _truncate_text(host_signals.command, limit=500),
+        "model_policy": _model_policy_summary(adapter, host_signals.command),
         "phase_statuses": _phase_statuses(
             PhaseStatusInput(
                 adapter=adapter,
@@ -506,6 +681,12 @@ def _build_real_probe_phase_report(
             "runtime_activity": _activity_summaries(activity_snapshots),
             "events_tail": _event_summaries(events),
             "agent_native_state": _state_summary(run_path / "agent_native" / "state.json") if run_id else {},
+            "experience_health": _experience_health_summary(
+                workdir=workdir,
+                run_path=run_path,
+                host_stdout=host_signals.stdout,
+                host_stderr=host_signals.stderr,
+            ),
             "coverage": _projection_summary(
                 run_path / "evidence" / "coverage.json",
                 keys=("status", "covered_check_count", "missing_check_count", "missing_check_ids", "latest_gatekeeper", "top_gaps"),
@@ -532,14 +713,14 @@ def _write_real_probe_phase_report(
     workdir: Path,
     activity_snapshots: list[dict],
     sentinel_log: Path,
-    command: str,
+    host_signals: PhaseReportHostSignals,
 ) -> tuple[dict, Path]:
     raw_report = _build_real_probe_phase_report(
         adapter=adapter,
         workdir=workdir,
         activity_snapshots=activity_snapshots,
         sentinel_log=sentinel_log,
-        command=command,
+        host_signals=host_signals,
     )
     report = redact_sensitive_value("", raw_report)
     if not isinstance(report, dict):
@@ -559,6 +740,7 @@ def _compact_phase_report(report: dict) -> dict:
         "phase_statuses": report.get("phase_statuses"),
         "binding": diagnostics.get("binding"),
         "alignment_validations": diagnostics.get("alignment_validations"),
+        "experience_health": diagnostics.get("experience_health"),
         "coverage": diagnostics.get("coverage"),
         "task_verdict": diagnostics.get("task_verdict"),
         "events_tail": diagnostics.get("events_tail"),
@@ -719,13 +901,16 @@ def _stop_host_process(process: subprocess.Popen[str], *, graceful: bool = False
 def _write_monitor_phase_report(
     request: HostCommandMonitorRequest,
     activity_snapshots: list[dict],
+    *,
+    host_stdout: str = "",
+    host_stderr: str = "",
 ) -> tuple[dict, Path]:
     return _write_real_probe_phase_report(
         adapter=request.adapter,
         workdir=request.workdir,
         activity_snapshots=activity_snapshots,
         sentinel_log=request.sentinel_log,
-        command=request.command,
+        host_signals=PhaseReportHostSignals(command=request.command, stdout=host_stdout, stderr=host_stderr),
     )
 
 
@@ -749,7 +934,12 @@ def _raise_host_command_timeout(
     stderr_file.flush()
     stdout = Path(stdout_file.name).read_text(encoding="utf-8", errors="replace")
     stderr = Path(stderr_file.name).read_text(encoding="utf-8", errors="replace")
-    phase_report, phase_report_path = _write_monitor_phase_report(request, activity_snapshots)
+    phase_report, phase_report_path = _write_monitor_phase_report(
+        request,
+        activity_snapshots,
+        host_stdout=stdout,
+        host_stderr=stderr,
+    )
     raise AssertionError(
         _format_real_probe_diagnostic_failure(
             f"timed out waiting for real {request.adapter} Agent host command\nstdout:\n{stdout}\nstderr:\n{stderr}",
@@ -764,7 +954,12 @@ def _raise_host_command_failure(
     completed: subprocess.CompletedProcess[str],
     activity_snapshots: list[dict],
 ) -> None:
-    phase_report, phase_report_path = _write_monitor_phase_report(request, activity_snapshots)
+    phase_report, phase_report_path = _write_monitor_phase_report(
+        request,
+        activity_snapshots,
+        host_stdout=completed.stdout,
+        host_stderr=completed.stderr,
+    )
     raise AssertionError(
         _format_real_probe_diagnostic_failure(
             f"real {request.adapter} Agent host command exited {completed.returncode}\nstdout:\n{completed.stdout}\nstderr:\n{completed.stderr}",
@@ -776,6 +971,9 @@ def _raise_host_command_failure(
 
 def _wait_for_host_command_with_runtime_monitoring(request: HostCommandMonitorRequest) -> HostCommandMonitorResult:
     deadline = time.monotonic() + request.timeout
+    terminal_proof_grace = float(os.environ.get(TERMINAL_PROOF_GRACE_ENV, "30"))
+    terminal_proof_seen_at: float | None = None
+    returncode_override: int | None = None
     activity_snapshots: list[dict] = []
     with tempfile.NamedTemporaryFile(
         "w+", prefix="loopora-real-agent-stdout-", suffix=".log", encoding="utf-8", delete=False
@@ -791,8 +989,24 @@ def _wait_for_host_command_with_runtime_monitoring(request: HostCommandMonitorRe
                     _raise_host_command_timeout(request, process, stdout_file, stderr_file, activity_snapshots)
                 _record_runtime_activity(request, activity_snapshots)
                 if now - last_report_at >= 2:
-                    _write_monitor_phase_report(request, activity_snapshots)
+                    stdout_file.flush()
+                    stderr_file.flush()
+                    phase_report, _ = _write_monitor_phase_report(
+                        request,
+                        activity_snapshots,
+                        host_stdout=_read_tail_text(Path(stdout_file.name)),
+                        host_stderr=_read_tail_text(Path(stderr_file.name)),
+                    )
                     last_report_at = now
+                    task_proven = bool(phase_report.get("phase_statuses", {}).get("task_verdict_passed", {}).get("ok"))
+                    if task_proven:
+                        terminal_proof_seen_at = terminal_proof_seen_at or now
+                        if now - terminal_proof_seen_at >= terminal_proof_grace:
+                            _stop_host_process(process, graceful=True)
+                            returncode_override = 0
+                            break
+                    else:
+                        terminal_proof_seen_at = None
                 time.sleep(0.5)
         finally:
             _stop_host_process(process)
@@ -802,7 +1016,7 @@ def _wait_for_host_command_with_runtime_monitoring(request: HostCommandMonitorRe
     stderr = stderr_path.read_text(encoding="utf-8", errors="replace")
     stdout_path.unlink(missing_ok=True)
     stderr_path.unlink(missing_ok=True)
-    completed = subprocess.CompletedProcess(request.command, int(process.returncode or 0), stdout, stderr)
+    completed = subprocess.CompletedProcess(request.command, returncode_override if returncode_override is not None else int(process.returncode or 0), stdout, stderr)
     if completed.returncode != 0:
         _raise_host_command_failure(request, completed, activity_snapshots)
     binding = _linked_run_binding(request.adapter, request.workdir)
@@ -810,7 +1024,12 @@ def _wait_for_host_command_with_runtime_monitoring(request: HostCommandMonitorRe
         try:
             binding = _wait_for_run_binding(request.adapter, request.workdir, timeout=30)
         except AssertionError as exc:
-            phase_report, phase_report_path = _write_monitor_phase_report(request, activity_snapshots)
+            phase_report, phase_report_path = _write_monitor_phase_report(
+                request,
+                activity_snapshots,
+                host_stdout=completed.stdout,
+                host_stderr=completed.stderr,
+            )
             message = (
                 f"{exc}\n"
                 f"host returncode: {completed.returncode}\n"
@@ -818,7 +1037,12 @@ def _wait_for_host_command_with_runtime_monitoring(request: HostCommandMonitorRe
                 f"host stderr:\n{completed.stderr}"
             )
             raise AssertionError(_format_real_probe_diagnostic_failure(message, report=phase_report, report_path=phase_report_path)) from None
-    phase_report, phase_report_path = _write_monitor_phase_report(request, activity_snapshots)
+    phase_report, phase_report_path = _write_monitor_phase_report(
+        request,
+        activity_snapshots,
+        host_stdout=completed.stdout,
+        host_stderr=completed.stderr,
+    )
     return HostCommandMonitorResult(
         completed=completed,
         binding=binding,
@@ -908,6 +1132,7 @@ Before invoking anything, read these installed project entry files: `{_entry_fil
 Use these requirements to author, not copy, the candidate:
 
 - Produce one raw `version: 1` Loopora bundle file, with no Markdown fences or prose outside YAML.
+- The first non-whitespace characters in the file must be exactly `version: 1`; do not add a heading, explanation, code fence, or document separator before it.
 - Use metadata name `agent-adapter-release-profile-probe` and describe it as a release-profile probe for Loopora Agent managed entry and Agent-native submission.
 - Explain in `collaboration_summary` that one Agent pass cannot prove the whole managed-entry contract, so Loopora must govern candidate validation, managed run binding, runtime visibility, native role dispatch, exact evidence refs, and evidence-backed verdict buckets.
 - Use `completion_mode: gatekeeper`, `executor_kind: custom`, `executor_mode: command`, `command_cli: {sys.executable}`, and this executor script for both the loop defaults and the role definitions: `{executor_script}`.
@@ -916,10 +1141,11 @@ Use these requirements to author, not copy, the candidate:
 - Keep the workflow minimal and explicit: `builder_step` runs first; `gatekeeper_step` reads `handoffs_from: [builder_step]`, queries Builder evidence, and uses `on_pass: finish_run`.
 - The Builder role must create `loopora-agent-release-proof.json` and return it in `proof_files`.
 - The GateKeeper role must cite only exact upstream Builder evidence ids from `known_evidence_ids`, use `covered` as the coverage status for satisfied targets, and keep Proven, Weak, Unproven, Blocking, and Residual risk as verdict bucket prose.
+- The GateKeeper result for this release gate must keep `residual_risks: []`. If any residual risk remains, set `passed: false`; do not submit a residual-risk pass.
 - The spec must include Task, Done When, Success Surface, Guardrails, Fake Done, Evidence Preferences, and Residual Risk sections covering managed entry provenance, runtime visibility, Builder proof evidence, GateKeeper exact evidence refs, task verdict buckets, no nested host CLI, and the limited residual risk of non-interactive host-native role dispatch.
 - `# Done When` becomes the required coverage contract for this deterministic probe. It must contain exactly three top-level bullet items, no more and no fewer: candidate validation plus managed run binding/runtime visibility; Builder proof file plus `proof_files`; GateKeeper exact upstream evidence refs plus `covered` coverage status before `finish_run`.
 - Do not put terminal run status, task verdict, fake-done risks, guardrails, or evidence preferences in `# Done When`; those belong in `# Success Surface`, `# Guardrails`, `# Fake Done`, or `# Evidence Preferences`. Extra Done When bullets create uncovered required targets and fail this release gate.
-- The Success Surface must require terminal run status `succeeded` with task verdict `passed`; do not author a residual-risk pass for this release gate.
+- `# Success Surface` must contain exactly one top-level bullet item requiring terminal run status `succeeded` with task verdict `passed`; do not author a residual-risk pass for this release gate.
 - `# Fake Done` must contain exactly two top-level bullet items: run visibility alone is not enough without Builder proof; GateKeeper cannot pass without citing exact upstream Builder evidence ids.
 - `# Evidence Preferences` must contain exactly two top-level bullet items: task verdict buckets are Proven, Weak, Unproven, Blocking, and Residual risk; evidence references must use exact ids from `known_evidence_ids`.
 - `collaboration_summary` must explicitly describe GateKeeper / final judgment posture, not just setup or execution mechanics.
@@ -934,10 +1160,13 @@ Required bundle structure checklist:
 - `metadata` contains only identity fields such as `name` and `description`; do not place `collaboration_summary`, `completion_mode`, executor settings, roles, or steps inside `metadata`.
 - `loop` is the run configuration object and must include `name`, `workdir`, `completion_mode`, `executor_kind`, `executor_mode`, `command_cli`, `command_args_text`, `model`, and `reasoning_effort`.
 - Every custom `command_args_text` block must preserve the literal placeholders `{{output_path}}` and `{{prompt}}`; do not replace them with concrete paths while authoring the bundle.
+- The only placeholders allowed in custom command args are `{{output_path}}` and `{{prompt}}`; never use `{{role}}`, `{{step}}`, or any other placeholder.
+- Write the loop and Builder `command_args_text` as one block containing exactly this shape: `{executor_script} builder {{output_path}} {{prompt}}`.
+- Write the GateKeeper `command_args_text` as one block containing exactly this shape: `{executor_script} gatekeeper {{output_path}} {{prompt}}`.
 - `spec` is an object with `markdown` containing the Task, Done When, Success Surface, Guardrails, Fake Done, Evidence Preferences, and Residual Risk sections.
 - `spec.markdown` must use these exact top-level Markdown headings: `# Task`, `# Done When`, `# Success Surface`, `# Guardrails`, `# Fake Done`, `# Evidence Preferences`, and `# Residual Risk`.
 - `role_definitions` is a list containing one Builder role definition with key `release-proof-builder` and one GateKeeper role definition with key `release-gatekeeper`; each role has `key`, `name`, `description`, `archetype`, `prompt_ref`, `prompt_markdown`, `posture_notes`, repeats the custom command executor settings, and keeps `model` / `reasoning_effort` blank.
-- Each role `prompt_markdown` must start with YAML front matter: `---`, then `version: 1`, then the matching `archetype`, then `---`, followed by role guidance.
+- Each role `prompt_markdown` must start with these exact YAML front matter lines, with no blank line before `version: 1`: `---`, then `version: 1`, then the matching `archetype: builder` or `archetype: gatekeeper`, then `---`, followed by role guidance.
 - `workflow` is the workflow object, not the `loop` object. It should define `roles` as objects such as `{{id, role_definition_key}}`; use role id `builder` with `role_definition_key: release-proof-builder` and role id `gatekeeper` with `role_definition_key: release-gatekeeper`.
 - `workflow.collaboration_intent` is required and must explain evidence flow, GateKeeper closure, and weak-evidence or fake-done exposure: Builder creates durable proof first, then GateKeeper queries exact Builder evidence before `finish_run`.
 - `workflow.steps` must be a list. Each step object must use an explicit `id`; do not use `key`, generated names, or omitted ids. The exact step id `builder_step` uses `role_id: builder` and runs first. The exact step id `gatekeeper_step` uses `role_id: gatekeeper`, has `inputs.handoffs_from: [builder_step]`, has `inputs.evidence_query.archetypes: [builder]`, has `inputs.evidence_query.limit` set to a small integer, and sets `on_pass: finish_run`. Do not use unsupported evidence query keys such as `from_steps`.
@@ -951,7 +1180,7 @@ Required order:
 4. While the run is active, observe the local Loopora runtime activity endpoint or the returned run URL enough to confirm the run is visible before terminal completion.
 5. Return a short summary with the candidate URL, run URL, runtime activity observation, and terminal run status.
 
-Keep each role dispatch small and deterministic for this release-profile probe. Builder must create `loopora-agent-release-proof.json` in the workdir and return `proof_files: ["loopora-agent-release-proof.json"]`; it may still return empty `changed_files`, `proof_artifacts`, and `artifact_paths`. GateKeeper should cite only the exact Builder evidence id returned in `known_evidence_ids`. For every satisfied `coverage_results` target, set `status` to `covered`; do not use verdict bucket words such as `proven` or `unproven` as coverage status values. For Codex, if you use `spawn_agent`, set `agent_type` to the exact target agent, omit `fork_context`, and wait with a bounded timeout shorter than this harness timeout. For Claude Code, use the official Agent tool when available and accept Task as the compatibility spelling; for OpenCode, use the configured task/subagent mechanism.
+Keep each role dispatch small and deterministic for this release-profile probe. Builder must create `loopora-agent-release-proof.json` in the workdir and return `proof_files: ["loopora-agent-release-proof.json"]`; it may still return empty `changed_files`, `proof_artifacts`, and `artifact_paths`. GateKeeper should cite only the exact Builder evidence id returned in `known_evidence_ids`. For every satisfied `coverage_results` target, set `status` to `covered`; do not use verdict bucket words such as `proven` or `unproven` as coverage status values. GateKeeper must return `residual_risks: []` when passing; place the fact that this is a bounded release probe in `decision_summary` or `evidence_claims`, not in `residual_risks`. For Codex, if you use `spawn_agent`, set `agent_type` to the exact target agent, omit `fork_context`, and wait with a bounded timeout shorter than this harness timeout. For Claude Code, use the official Agent tool when available and accept Task as the compatibility spelling; for OpenCode, use the configured task/subagent mechanism.
 
 For every result file, use the installed entry's wrapper format: top-level `loopora_host_dispatch` plus top-level `result`. The `result` object must use the exact top-level keys required by the step capsule's `output_schema`. For GateKeeper, write `passed`, `decision_summary`, `metrics`, `metric_scores`, `evidence_refs`, `evidence_claims`, and the other schema fields inside `result`; do not use a `verdict` or `task_verdict` envelope. In `loopora_host_dispatch`, set both `target_agent` and `actual_agent` to the exact `role_dispatch.target_agent`, set `dispatch_mode` to `host_subagent`, `host_task`, or `host_agent`, and set `inline` to false. If the host exposes an official subagent/task trace id or tool-call id, copy it into `native_trace` or `native_trace_ref`; if not, leave those optional trace fields empty. Every `evidence_refs` list, including inside `coverage_results`, must contain only exact strings copied from `known_evidence_ids`. If `known_evidence_ids` contains only `ev_000_00_builder_step`, use only `ev_000_00_builder_step`; do not invent suffixes such as `_binding`, `_output`, `_preference`, or `_fake_done_risk`. Artifact labels and file names belong in evidence_claims or notes.
 
@@ -961,19 +1190,32 @@ Do not invoke codex, claude, or opencode from inside this Agent session; this re
 """
 
 
-def _assert_managed_gen_before_loop(adapter: str, entry_invocations: list[dict]) -> None:
+def _canonical_entry_action(action: object) -> str:
+    raw = str(action or "")
+    if raw == "gen":
+        return "plan"
+    if raw == "loop":
+        return "run"
+    return raw
+
+
+def _assert_managed_plan_before_run(adapter: str, entry_invocations: list[dict]) -> None:
     expected_source = _entry_source(adapter)
-    normalized = [(item.get("action"), item.get("entry_source")) for item in entry_invocations if isinstance(item, dict)]
-    managed_gen_indexes = [index for index, item in enumerate(normalized) if item == ("gen", expected_source)]
-    assert managed_gen_indexes, normalized
-    assert any(item == ("loop", expected_source) for item in normalized[managed_gen_indexes[0] + 1 :]), normalized
-    assert normalized[-1] == ("loop", expected_source)
+    normalized = [
+        (_canonical_entry_action(item.get("action")), item.get("entry_source"))
+        for item in entry_invocations
+        if isinstance(item, dict)
+    ]
+    managed_plan_indexes = [index for index, item in enumerate(normalized) if item == ("plan", expected_source)]
+    assert managed_plan_indexes, normalized
+    assert any(item == ("run", expected_source) for item in normalized[managed_plan_indexes[0] + 1 :]), normalized
+    assert normalized[-1] == ("run", expected_source)
 
 
 @pytest.mark.parametrize("adapter", AGENT_TARGETS)
 def test_real_agent_host_can_guide_bundle_then_monitor_loop(adapter: str, tmp_path: Path, monkeypatch) -> None:  # noqa: PLR0915
     template = _require_real_agent_template(adapter)
-    timeout = float(os.environ.get(TIMEOUT_ENV, "900"))
+    timeout = float(os.environ.get(TIMEOUT_ENV, "1200"))
     loopora_home = tmp_path / "loopora-home"
     monkeypatch.setenv("LOOPORA_HOME", str(loopora_home))
     sentinel_dir, sentinel_log = _write_nested_agent_sentinels(tmp_path)
@@ -1040,7 +1282,7 @@ def test_real_agent_host_can_guide_bundle_then_monitor_loop(adapter: str, tmp_pa
         assert str(binding["run_path"]).startswith("/runs/")
         entry_invocations = binding.get("entry_invocations")
         assert isinstance(entry_invocations, list)
-        _assert_managed_gen_before_loop(adapter, entry_invocations)
+        _assert_managed_plan_before_run(adapter, entry_invocations)
         _assert_runtime_activity_observed_run(activity_snapshots, str(binding["linked_run_id"]))
         _assert_alignment_session_came_from_conversation(workdir, str(binding["linked_run_id"]))
         _assert_run_observation_chain(workdir, str(binding["linked_run_id"]), adapter)
@@ -1055,7 +1297,7 @@ def test_real_agent_host_can_guide_bundle_then_monitor_loop(adapter: str, tmp_pa
             workdir=workdir,
             activity_snapshots=activity_snapshots,
             sentinel_log=sentinel_log,
-            command=command,
+            host_signals=PhaseReportHostSignals(command=command),
         )
         raise AssertionError(_format_real_probe_diagnostic_failure(exc, report=report, report_path=report_path)) from None
     finally:

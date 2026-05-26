@@ -31,8 +31,7 @@ def _write_jsonl(path: Path, rows: list[dict]) -> None:
     path.write_text("".join(json.dumps(row, ensure_ascii=False) + "\n" for row in rows), encoding="utf-8")
 
 
-def test_real_agent_phase_report_summarizes_real_probe_milestones(tmp_path: Path) -> None:
-    module = _load_real_agent_module()
+def _write_phase_report_fixture(module, tmp_path: Path) -> tuple[dict, Path]:
     workdir = tmp_path / "work"
     workdir.mkdir()
     state_dir = workdir / ".loopora"
@@ -57,8 +56,8 @@ def test_real_agent_phase_report_summarizes_real_probe_milestones(tmp_path: Path
             "run_path": f"/runs/{run_id}",
             "execution_plane": "agent_native",
             "entry_invocations": [
-                {"action": "gen", "entry_source": "opencode_project_command"},
-                {"action": "loop", "entry_source": "opencode_project_command"},
+                {"action": "plan", "entry_source": "opencode_project_command"},
+                {"action": "run", "entry_source": "opencode_project_command"},
             ],
         },
     )
@@ -72,9 +71,36 @@ def test_real_agent_phase_report_summarizes_real_probe_milestones(tmp_path: Path
             {"id": 5, "event_type": "run_finished", "payload": {"status": "succeeded", "task_verdict_status": "passed"}},
         ],
     )
-    _write_json(run_dir / "agent_native" / "state.json", {"status": "completed", "host_dispatches": []})
+    _write_json(
+        run_dir / "agent_native" / "state.json",
+        {
+            "status": "completed",
+            "host_dispatches": [
+                {
+                    "step_id": "builder_step",
+                    "target_agent": "loopora-builder",
+                    "actual_agent": "loopora-builder",
+                    "dispatch_mode": "host_task",
+                    "inline": False,
+                    "native_trace": {"tool_call_id": "task_trace_123"},
+                }
+            ],
+        },
+    )
     _write_json(run_dir / "evidence" / "coverage.json", {"status": "covered", "covered_check_count": 3, "missing_check_ids": []})
     _write_json(run_dir / "evidence" / "task_verdict.json", {"status": "passed", "source": "gatekeeper", "summary": "passed"})
+    _write_json(
+        run_dir / "iterations" / "iter_000" / "steps" / "00__builder_step" / "capsule.json",
+        {
+            "step_id": "builder_step",
+            "role_dispatch": {"target_agent": "loopora-builder"},
+            "native_todo": {
+                "recommended": True,
+                "not_evidence": True,
+                "items": ["Read agent_work_panel.", "Submit and read agent_v3_envelope.summary."],
+            },
+        },
+    )
     _write_json(
         run_dir / "iterations" / "iter_000" / "steps" / "01__gatekeeper_step" / "output.normalized.json",
         {"passed": True, "evidence_gate_status": "passed", "evidence_refs": ["ev_000_00_builder_step"]},
@@ -85,15 +111,34 @@ def test_real_agent_phase_report_summarizes_real_probe_milestones(tmp_path: Path
         workdir=workdir,
         activity_snapshots=[{"running_count": 1, "queued_count": 0, "runs": [{"id": run_id, "status": "awaiting_agent"}]}],
         sentinel_log=sentinel_log,
-        command='opencode run --api-key AGENT_PHASE_SECRET_MARKER "...prompt..."',
+        host_signals=module.PhaseReportHostSignals(
+            command='opencode run --api-key AGENT_PHASE_SECRET_MARKER "...prompt..."',
+            stdout=(
+                "agent_work_panel:\n"
+                "question_action: ask one Loop-shaping question in main_agent_session\n"
+                "recommended_reply_shape: Goal: ...\n"
+                "dispatch_next: invoke loopora-builder with role_dispatch.target_agent\n"
+                "auto_repair: submitted result format repaired before submit; Core still blocked evidence_refs_unknown\n"
+            ),
+            stderr="native_todo not_evidence=true role_dispatch guidance observed\n",
+        ),
     )
 
-    assert report_path == workdir / ".loopora" / "real-probes" / "real-agent-phase-report.json"
+    return report, report_path
+
+
+def test_real_agent_phase_report_summarizes_real_probe_milestones(tmp_path: Path) -> None:
+    module = _load_real_agent_module()
+    report, report_path = _write_phase_report_fixture(module, tmp_path)
+
+    assert report_path == tmp_path / "work" / ".loopora" / "real-probes" / "real-agent-phase-report.json"
     assert report_path.exists()
     phases = report["phase_statuses"]
     assert phases["candidate_file_created"]["ok"] is True
+    assert phases["plan_invocation_observed"]["ok"] is True
     assert phases["gen_invocation_observed"]["ok"] is True
     assert phases["ready_validation_observed"]["ok"] is True
+    assert phases["run_invocation_observed"]["ok"] is True
     assert phases["loop_invocation_observed"]["ok"] is True
     assert phases["runtime_activity_observed_run"]["ok"] is True
     assert phases["builder_submitted"]["ok"] is True
@@ -107,6 +152,36 @@ def test_real_agent_phase_report_summarizes_real_probe_milestones(tmp_path: Path
     assert "AGENT_PHASE_SECRET_MARKER" not in json.dumps(report, ensure_ascii=False)
     assert "--api-key <secret omitted>" in report["command_preview"]
     assert report["model_policy"]["delegates_to_host_default"] is True
+    health = report["diagnostics"]["experience_health"]
+    assert health["agent_work_panel_seen"] is True
+    assert health["agent_work_panel_sources"] == ["host_stdout_tail"]
+    assert health["todo_guidance_seen"] is True
+    assert health["todo_not_evidence_confirmed"] is True
+    assert health["user_question_guidance_available"] is True
+    assert health["role_dispatch_guidance_seen"] is True
+    assert health["native_trace_observed"] is True
+    assert health["auto_repair_events"] == [
+        {
+            "source": "host_stdout_tail",
+            "line": "auto_repair: submitted result format repaired before submit; Core still blocked evidence_refs_unknown",
+        }
+    ]
+    assert "experience_health_is_review_signal_not_task_proof" in health["experience_notes"]
+    assert module._compact_phase_report(report)["experience_health"] == health
+
+
+def test_real_agent_experience_health_scans_full_output_without_storing_transcript(tmp_path: Path) -> None:
+    module = _load_real_agent_module()
+    health = module._experience_health_summary(
+        workdir=tmp_path,
+        run_path=Path(),
+        host_stdout="agent_work_panel\n" + ("quiet completion line\n" * 500),
+        host_stderr="",
+    )
+
+    assert health["agent_work_panel_seen"] is True
+    assert health["agent_work_panel_sources"] == ["host_stdout"]
+    assert "quiet completion line" not in json.dumps(health, ensure_ascii=False)
 
 
 def test_real_agent_phase_report_requires_plain_passed_task_verdict(tmp_path: Path) -> None:
@@ -201,7 +276,9 @@ def test_real_agent_prompt_requires_authoring_without_embedded_candidate_yaml(tm
     assert "verify that" in prompt
     assert "Required bundle structure checklist" in prompt
     assert "`workflow` is the workflow object, not the `loop` object" in prompt
-    assert "must start with YAML front matter" in prompt
+    assert "YAML front matter lines" in prompt
+    assert "archetype: builder" in prompt
+    assert "archetype: gatekeeper" in prompt
     assert "role_definition_key: release-proof-builder" in prompt
     assert "Do not claim an observed workdir stack" in prompt
     assert "`workflow.collaboration_intent` is required" in prompt
