@@ -76,6 +76,11 @@ def agent_plan_context_request_fields() -> dict:
             "kind": "ask_user",
             "target": "main_agent_session",
             "prompt": ask_user,
+            "recommended_reply_shape": "Goal: ...; Fake-done risks: ...; Required evidence: ...; Judgment tradeoffs: ...",
+            "decision_impact": (
+                "This answer decides the Loop's task contract, evidence strategy, GateKeeper strictness, "
+                "and whether Loopora is a better fit than one direct Agent pass."
+            ),
             "native_tool_policy": (
                 "Use the host's official user-question or follow-up capability when available; "
                 "otherwise ask this question in the main chat."
@@ -90,11 +95,10 @@ def agent_plan_context_request_fields() -> dict:
 
 
 def print_agent_plan_message_required(result: dict) -> None:
-    typer.echo("loop_recovery: provide task context before /loopora-plan can create a preview")
+    typer.echo("loop_recovery: ask one Loop-shaping question before /loopora-plan can create a preview")
     typer.echo(f"message: {result.get('message')}")
     typer.echo(f"next_plan_command: {result.get('next_plan_command') or '/loopora-plan'}")
     print_agent_plan_context_request_fields(result)
-    print_agent_plan_context_guidance_fields(result)
     _print_agent_native_run_surface(result)
     typer.echo(f"next: {result.get('next')}")
 
@@ -114,6 +118,12 @@ def print_agent_plan_context_request_fields(result: dict) -> None:
             "question_action: "
             + str(question_action.get("native_tool_policy") or "Ask the user in the main Agent session.").strip()
         )
+        recommended_shape = str(question_action.get("recommended_reply_shape") or "").strip()
+        if recommended_shape:
+            typer.echo(f"recommended_reply_shape: {recommended_shape}")
+        impact = str(question_action.get("decision_impact") or "").strip()
+        if impact:
+            typer.echo(f"decision_impact: {impact}")
     example = str(result.get("example_user_reply") or "").strip()
     if example:
         typer.echo(f"example_user_reply: {example}")

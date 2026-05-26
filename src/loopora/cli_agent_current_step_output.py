@@ -66,8 +66,7 @@ def _print_agent_current_step(next_step: dict) -> None:
     if coverage_note:
         typer.echo(f"coverage_classification_note: {coverage_note}")
     _print_top_coverage_gaps(next_step.get("required_coverage"))
-    _print_agent_current_step_paths(next_step, submit_hint)
-    _print_agent_current_step_submit_hint(submit_hint)
+    _print_agent_current_step_technical_handoff(next_step, submit_hint)
 
 
 def _print_agent_native_todo(native_todo: object) -> None:
@@ -81,6 +80,12 @@ def _print_agent_native_todo(native_todo: object) -> None:
         typer.echo("native_todo_items:")
         for item in items[:6]:
             typer.echo(f"- {_clip(item, 180)}")
+
+
+def _print_agent_current_step_technical_handoff(next_step: dict, submit_hint: dict) -> None:
+    typer.echo("technical_handoff:")
+    _print_agent_current_step_paths(next_step, submit_hint)
+    _print_agent_current_step_submit_hint(submit_hint)
 
 
 def _print_agent_native_dispatch_contract(next_step: dict, target_agent: str) -> None:

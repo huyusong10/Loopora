@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-import re
-
 import typer
 
+from loopora.agent_native_guidance import actionable_blocking_item as _shared_actionable_blocking_item
+from loopora.agent_native_guidance import actionable_next_action as _shared_actionable_next_action
+from loopora.agent_native_guidance import coverage_target_blocker_explanation as _shared_coverage_target_blocker_explanation
 from loopora.cli_summary_helpers import clip as _clip
 from loopora.cli_summary_helpers import clip_inline as _clip_inline
 
@@ -55,82 +56,15 @@ def _submitted_step_is_blocked(status: str) -> bool:
 
 
 def _actionable_blocking_item(item: str) -> str:
-    cleaned = str(item or "").strip()
-    if not cleaned or ":" in cleaned:
-        return cleaned
-    target_explanation = _coverage_target_blocker_explanation(cleaned)
-    if target_explanation:
-        return f"{cleaned}: {target_explanation}"
-    explanations = {
-        "gatekeeper_pass_has_unmanaged_residual_risk": (
-            "residual_risks must name an owner, follow-up, or acceptance path; otherwise move the risk to blocking_issues before passing"
-        ),
-        "gatekeeper_pass_violates_no_residual_risk_policy": (
-            "the run contract disallows accepted residual risk; resolve the risk or report it as blocking before passing"
-        ),
-        "gatekeeper_pass_refs_not_supporting_evidence": (
-            "a pass must cite upstream evidence that is not blocked, failed, rejected, or errored; produce direct project-owned proof or mark passed=false"
-        ),
-        "gatekeeper_pass_requires_evidence_refs": (
-            "a pass must cite exact supporting evidence_refs from known_evidence_ids; copy a supporting id or mark passed=false"
-        ),
-        "gatekeeper_pass_requires_upstream_or_measured_evidence": (
-            "a pass needs supporting upstream evidence or measured self evidence; produce that proof before asking GateKeeper to pass"
-        ),
-    }
-    explanation = explanations.get(cleaned)
-    return f"{cleaned}: {explanation}" if explanation else cleaned
+    return _shared_actionable_blocking_item(item)
 
 
 def _coverage_target_blocker_explanation(cleaned: str) -> str:
-    if re.fullmatch(r"check_\d+", cleaned):
-        return "required check id; see required_coverage.missing_check_ids and top_coverage_gaps for the contract text"
-    if re.fullmatch(r"done_when\.check_\d+", cleaned):
-        return "coverage target id; see required_coverage.top_coverage_gaps for status, text, and evidence refs"
-    if re.fullmatch(r"(?:fake_done\.risk|evidence_preference\.pref|success_surface\.surface)_\d+", cleaned):
-        return "coverage target id; see top_coverage_gaps for status, text, and evidence refs"
-    if cleaned == "gatekeeper.finish":
-        return "GateKeeper finish target; cite supporting evidence or keep the run blocked"
-    return ""
+    return _shared_coverage_target_blocker_explanation(cleaned)
 
 
 def _actionable_next_action(action: str, blocking_items: list[str]) -> str:
-    cleaned = str(action or "").strip()
-    normalized_cleaned = cleaned.strip(".").strip().lower()
-    generic_actions = {
-        "",
-        "Continue only after the blocking issues are resolved.",
-        "Continue only after the blocking issues are resolved",
-        "None.",
-        "None",
-        "No action needed.",
-        "No action needed",
-        "No action required.",
-        "No action required",
-        "N/A",
-        "n/a",
-        "na",
-    }
-    if cleaned not in generic_actions and normalized_cleaned not in {"none", "n/a", "na", "not applicable", "no action needed", "no action required"}:
-        return cleaned
-    joined = " ".join(blocking_items)
-    actionable = cleaned
-    if "gatekeeper_pass_has_unmanaged_residual_risk" in joined:
-        actionable = (
-            "Resolve the residual risk or make it managed with an owner, follow-up, or acceptance path before asking GateKeeper to pass again."
-        )
-    elif "gatekeeper_pass_violates_no_residual_risk_policy" in joined:
-        actionable = "Resolve the residual risk or report it as blocking before asking GateKeeper to pass again."
-    elif "gatekeeper_pass_refs_not_supporting_evidence" in joined:
-        actionable = (
-            "Produce new project-owned proof or cite a non-blocked supporting evidence ref before asking GateKeeper to pass again; "
-            "otherwise submit GateKeeper with passed=false and blocking_issues."
-        )
-    elif "gatekeeper_pass_requires_evidence_refs" in joined:
-        actionable = "Copy exact supporting evidence_refs from known_evidence_ids before asking GateKeeper to pass again."
-    elif "gatekeeper_pass_requires_upstream_or_measured_evidence" in joined:
-        actionable = "Add upstream or measured evidence for the required targets before asking GateKeeper to pass again."
-    return actionable
+    return _shared_actionable_next_action(action, blocking_items)
 
 
 def _print_agent_submitted_step_list(label: str, items: list[str], *, limit: int, clip_items: bool = False) -> None:

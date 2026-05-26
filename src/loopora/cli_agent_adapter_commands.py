@@ -25,10 +25,10 @@ from loopora.cli_agent_native import (
 from loopora.cli_agent_plan_output import _print_agent_gen_result as _print_agent_gen_result
 from loopora.cli_agent_runtime_support import (
     attach_web_url as _attach_web_url,
-    read_result_json as _read_result_json,
     resolved_entry_source as _resolved_entry_source,
     spawn_agent_loop_worker_if_needed as _spawn_agent_loop_worker_if_needed,
 )
+from loopora.cli_agent_submit_auto_repair import read_result_json_with_auto_repair as _read_result_json_with_auto_repair
 from loopora.cli_agent_step_presenters import (
     _print_agent_loop_result as _print_agent_loop_result,
     _print_agent_next_result as _print_agent_next_result,
@@ -312,8 +312,14 @@ def _register_agent_runtime_for(agent_app: typer.Typer, *, adapter: str, help_te
         resolved_entry_source = _resolved_entry_source(entry_source)
         result_payload: dict = {}
         host_dispatch: dict = {}
+        auto_repair_actions: list[str] = []
         try:
-            result_payload, host_dispatch = _read_result_json(result_file)
+            result_payload, host_dispatch, auto_repair_actions = _read_result_json_with_auto_repair(
+                result_file,
+                service=service,
+                run_id=run_id,
+                workdir=workdir,
+            )
             result = service.submit_agent_native_step(
                 AgentNativeStepSubmitRequest(
                     adapter=adapter,
@@ -326,6 +332,9 @@ def _register_agent_runtime_for(agent_app: typer.Typer, *, adapter: str, help_te
                     entry_source=resolved_entry_source,
                 )
             )
+            if auto_repair_actions:
+                result["auto_repair_applied"] = True
+                result["auto_repair_actions"] = auto_repair_actions
             _attach_web_url(result, path_key="run_path", url_key="run_url", no_web=no_web)
             _print_agent_step_result(result, json_output=json_output)
         except (LooporaError, WorkflowError) as exc:
@@ -339,6 +348,7 @@ def _register_agent_runtime_for(agent_app: typer.Typer, *, adapter: str, help_te
                 result_file=result_file,
                 workdir=workdir,
                 json_output=json_output,
+                auto_repair_actions=auto_repair_actions,
             )
 
 
@@ -399,6 +409,7 @@ def _handle_agent_submit_error(
     result_file: Path,
     workdir: Path,
     json_output: bool,
+    auto_repair_actions: list[str] | None = None,
 ) -> None:
     if _print_agent_submit_repair_guidance(
         exc,
@@ -410,6 +421,7 @@ def _handle_agent_submit_error(
         result_file=result_file,
         workdir=workdir,
         json_output=json_output,
+        auto_repair_actions=auto_repair_actions or [],
     ):
         raise typer.Exit(code=1) from exc
     handle_error(exc)

@@ -11,7 +11,7 @@ NATIVE_SUBMIT_CONTRACT = "loopora_host_dispatch + schema-shaped result template"
 NATIVE_PROOF_BOUNDARY = "native todo/trace may guide host work; Loopora evidence refs and task verdict remain the proof source"
 NATIVE_RUN_ENTRY_CONTRACT_TITLE = "Native Run Contract"
 NATIVE_RUN_ENTRY_CONTRACT_BULLETS = (
-    "Read `agent_run_summary` or `agent_next_summary` before the full payload.",
+    "Read root `agent_v3_envelope.summary` before raw legacy diagnostics.",
     "Start only from `/loopora-plan`, `/loopora-run`, or explicit Loopora CLI commands; host hooks or session start must not auto-trigger Loopora work.",
     "Dispatch only through the host-native role agent named by `next_step.role_dispatch.target_agent`; if unavailable, stop before submit.",
     "Treat host auto-activation, compatibility routing, or rule injection as context hints, not Loopora dispatch proof.",
@@ -61,6 +61,7 @@ def agent_adapter_native_surface_summary(adapter: str) -> dict[str, Any]:
         "permission_boundary": agent_adapter_permission_boundary(kind),
         "tooling_boundary": agent_adapter_tooling_boundary(kind),
         "observability": agent_adapter_observability_policy(kind),
+        "experience_capabilities": agent_adapter_experience_capabilities(kind),
         "ownership_boundary": agent_adapter_ownership_boundary(kind),
         "native_dispatch": {
             "orchestrator": "loopora-orchestrator",
@@ -100,6 +101,7 @@ def agent_adapter_native_run_surface_summary(adapter: str) -> dict[str, Any]:
         "permission_boundary": surface.get("permission_boundary"),
         "tooling_boundary": surface.get("tooling_boundary"),
         "observability": surface.get("observability"),
+        "experience_capabilities": surface.get("experience_capabilities"),
         "ownership_boundary": surface.get("ownership_boundary"),
         "submit_contract": native_dispatch.get("submit_contract"),
         "proof_boundary": native_dispatch.get("proof_boundary"),
@@ -151,11 +153,7 @@ def agent_adapter_context_loading_policy(adapter: str) -> dict[str, list[str] | 
     return {
         "entry_prompt": "thin_dispatcher",
         "summary_first": [
-            "agent_plan_summary",
-            "agent_run_summary",
-            "agent_next_summary",
-            "agent_submit_summary",
-            "agent_loop_recovery_summary",
+            "agent_v3_envelope.summary",
         ],
         "reference_loading": "on_demand_from_reference_paths",
         "full_payload": "open_after_compact_summary",
@@ -185,6 +183,17 @@ def agent_adapter_observability_policy(adapter: str) -> dict[str, str]:
         "diagnostic_traces": "external_trace_viewers_api_proxies_session_recorders_and_usage_analyzers_are_diagnostics_not_loopora_evidence_or_verdict",
         "progress_signal": "activity_status_is_not_task_proof",
         "proof_signal": "loopora_evidence_refs_and_task_verdict",
+    }
+
+
+def agent_adapter_experience_capabilities(adapter: str) -> dict[str, str]:
+    normalize_agent_adapter_kind(adapter)
+    return {
+        "role_dispatch_guidance": "managed_entries_name_the_host_native_role_agent_and_stop_before_inline_submit",
+        "todo_guidance": "native_todo_should_create_or_update_host_todo_when_available_not_evidence",
+        "user_question_guidance": "ask_user_routes_missing_loop_judgment_to_main_agent_session",
+        "native_trace_optional": "preserve_official_subagent_or_task_trace_when_available_do_not_invent",
+        "technical_handoff_paths": "context_capsule_result_template_and_submit_command_remain_available_below_work_panel",
     }
 
 

@@ -7,6 +7,8 @@ import typer
 
 from loopora.agent_adapters import prefix_loopora_command, resolve_adapter_project_root
 from loopora.agent_native_surface import native_surface_plain_lines
+from loopora.agent_native_v3 import agent_v3_envelope
+from loopora.agent_native_v3 import agent_v3_legacy_raw
 from loopora.cli_shared import echo_json
 from loopora.service_types import LooporaConflictError
 
@@ -31,7 +33,7 @@ def print_adapter_mutation_result(result: dict, *, action: str, json_output: boo
 
 def print_adapter_check_result(result: dict, *, json_output: bool) -> None:
     if json_output:
-        echo_json(result)
+        echo_json(_adapter_check_json_payload(result))
         return
     label = str(result.get("label") or adapter_label(str(result.get("adapter") or "")))
     check_status = str(result.get("check_status") or "fail")
@@ -99,6 +101,39 @@ def handle_adapter_install_conflict(adapter: str, *, workdir: Path, exc: Loopora
     typer.echo(f"- {recovery['user_owned_action']}", err=True)
     typer.echo(f"- Then rerun: {recovery['install_command']}", err=True)
     raise typer.Exit(code=1)
+
+
+def _adapter_check_json_payload(result: dict) -> dict:
+    summary = _adapter_check_summary(result)
+    return agent_v3_envelope(
+        kind="agent_check",
+        status=str(result.get("check_status") or "fail"),
+        summary=summary,
+        extras={
+            "diagnostics": {"legacy_summary_key": "agent_check_summary"},
+            "raw": agent_v3_legacy_raw(summary_key="agent_check_summary", summary=summary, payload=result),
+        },
+    )
+
+
+def _adapter_check_summary(result: dict) -> dict:
+    recovery = result.get("check_recovery") if isinstance(result.get("check_recovery"), dict) else {}
+    summary: dict[str, object] = {
+        "schema_version": 3,
+        "adapter": str(result.get("adapter") or "").strip(),
+        "label": str(result.get("label") or "").strip(),
+        "workdir": str(result.get("workdir") or "").strip(),
+        "check_status": str(result.get("check_status") or "fail").strip(),
+    }
+    if recovery:
+        summary["check_recovery"] = recovery
+    surface = result.get("native_surface") if isinstance(result.get("native_surface"), dict) else {}
+    if surface:
+        summary["native_surface"] = surface
+        capabilities = surface.get("experience_capabilities") if isinstance(surface.get("experience_capabilities"), dict) else {}
+        if capabilities:
+            summary["experience_capabilities"] = capabilities
+    return {key: value for key, value in summary.items() if value not in ("", [], {})}
 
 
 def adapter_label(adapter: str) -> str:

@@ -6,6 +6,7 @@ import typer
 def print_agent_submit_repair_plain(result: dict) -> None:
     _print_agent_submit_repair_header(result)
     _print_agent_submit_repair_context(result)
+    _print_agent_submit_auto_repair_context(result)
     _print_agent_submit_repair_focus(result)
     typer.echo(f"next_repair_step: {result.get('next_repair_step')}", err=True)
     if result.get("schema_lookup"):
@@ -49,6 +50,19 @@ def _print_agent_submit_repair_context(result: dict) -> None:
     target_ids = [str(item).strip() for item in list(result.get("active_coverage_target_ids") or []) if str(item).strip()]
     if target_ids:
         _print_agent_submit_repair_plain_list("active_coverage_target_ids", target_ids, limit=16)
+
+
+def _print_agent_submit_auto_repair_context(result: dict) -> None:
+    if result.get("auto_repair_attempted") is not True:
+        return
+    kind = str(result.get("core_blocker_kind") or "other_core_validation").strip()
+    actions = [str(item).strip() for item in list(result.get("auto_repair_actions") or []) if str(item).strip()]
+    action_text = f" ({', '.join(actions[:4])})" if actions else ""
+    typer.echo(
+        "auto_repair: submitted result format repaired before submit"
+        f"{action_text}; Core still blocked {kind}",
+        err=True,
+    )
 
 
 def _print_agent_submit_repair_plain_list(label: str, items: list[str], *, limit: int) -> None:

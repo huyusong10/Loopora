@@ -16,6 +16,10 @@ from loopora.agent_native_task_proof import (
 from loopora.agent_native_surface import attach_native_run_surface, agent_native_run_surface_for_result, native_surface_plain_lines
 from loopora.cli_agent_current_step_output import _print_agent_current_step
 from loopora.cli_agent_runtime_support import print_web_status as _print_web_status
+from loopora.agent_native_v3 import agent_v3_envelope as _agent_v3_envelope
+from loopora.agent_native_v3 import agent_v3_legacy_raw as _agent_v3_legacy_raw
+from loopora.agent_native_v3 import agent_v3_status as _agent_v3_status
+from loopora.agent_native_v3 import agent_v3_technical_handoff as _agent_v3_technical_handoff
 from loopora.cli_agent_submitted_step_output import (
     _actionable_blocking_item,
     _actionable_next_action,
@@ -24,6 +28,8 @@ from loopora.cli_agent_submitted_step_output import (
     _submitted_coverage_result_summaries,
     _submitted_step_is_blocked,
 )
+from loopora.cli_agent_work_panel import agent_work_panel as _agent_work_panel
+from loopora.cli_agent_work_panel import print_agent_work_panel as _print_agent_work_panel
 from loopora.cli_run_support import print_run_contract_summary, print_task_verdict
 from loopora.cli_shared import echo_json
 from loopora.cli_summary_helpers import (
@@ -36,8 +42,9 @@ from loopora.cli_summary_helpers import (
 def _print_agent_loop_result(result: dict, *, json_output: bool) -> None:
     if json_output:
         _attach_agent_run_summary(result)
-        echo_json(result)
+        echo_json(result["agent_v3_envelope"])
         return
+    _print_agent_work_panel(result)
     run = result.get("run") if isinstance(result.get("run"), dict) else {}
     typer.echo(f"Loopora run: {run.get('id')}")
     typer.echo(f"run_status: {run.get('run_status') or run.get('status')}")
@@ -65,7 +72,7 @@ def _attach_agent_run_summary(result: dict) -> None:
     workdir = str(result.get("workdir") or run.get("workdir") or "").strip() or "$PWD"
     if not summary:
         summary = {
-            "schema_version": 1,
+            "schema_version": 3,
             "run_id": str(run.get("id") or "").strip(),
             "run_status": str(run.get("run_status") or run.get("status") or "").strip(),
             "started_new_run": bool(result.get("started_new_run")),
@@ -93,6 +100,8 @@ def _attach_agent_run_summary(result: dict) -> None:
     )
     attach_native_run_surface(summary, adapter=adapter)
     if not role_dispatch:
+        summary["agent_work_panel"] = _agent_work_panel(result, summary=summary)
+        _attach_agent_v3_run_envelope(result, summary)
         return
     target_config = str(role_dispatch.get("target_agent_config_absolute_path") or role_dispatch.get("target_agent_config_path") or "").strip()
     if target_config:
@@ -111,6 +120,21 @@ def _attach_agent_run_summary(result: dict) -> None:
     if dispatch_unavailable:
         summary["dispatch_unavailable"] = dispatch_unavailable
     summary.update(_agent_next_step_continuation_summary(next_step))
+    summary["agent_work_panel"] = _agent_work_panel(result, summary=summary)
+    _attach_agent_v3_run_envelope(result, summary)
+
+
+def _attach_agent_v3_run_envelope(result: dict, summary: dict) -> None:
+    result["agent_v3_envelope"] = _agent_v3_envelope(
+        kind="agent_run",
+        status=_agent_v3_status(complete=result.get("complete")),
+        summary=summary,
+        extras={
+            "technical_handoff": _agent_v3_technical_handoff(summary),
+            "diagnostics": {"legacy_summary_key": "agent_run_summary"},
+            "raw": _agent_v3_legacy_raw(summary_key="agent_run_summary", summary=summary, payload=result),
+        },
+    )
 
 
 def _attach_agent_run_dispatch_summary(result: dict) -> None:
@@ -132,6 +156,11 @@ def _print_agent_step_result(result: dict, *, json_output: bool) -> None:
     if json_output:
         echo_json(_agent_submit_json_payload(result))
         return
+    _print_agent_work_panel(result)
+    if result.get("auto_repair_applied") is True:
+        actions = [str(item).strip() for item in list(result.get("auto_repair_actions") or []) if str(item).strip()]
+        rendered = ", ".join(actions[:4]) if actions else "safe wrapper repair"
+        typer.echo(f"auto_repair: submitted result format repaired before submit ({rendered})")
     run = result.get("run") if isinstance(result.get("run"), dict) else {}
     typer.echo(f"Loopora run: {run.get('id')}")
     typer.echo(f"run_status: {run.get('run_status') or run.get('status')}")
@@ -166,9 +195,17 @@ def _print_agent_native_run_surface(result: dict) -> None:
 
 
 def _agent_next_json_payload(result: dict) -> dict:
-    payload = {"agent_next_summary": _agent_next_summary(result)}
-    payload.update(result)
-    return payload
+    summary = _agent_next_summary(result)
+    return _agent_v3_envelope(
+        kind="agent_next",
+        status=_agent_v3_status(complete=result.get("complete")),
+        summary=summary,
+        extras={
+            "technical_handoff": _agent_v3_technical_handoff(summary),
+            "diagnostics": {"legacy_summary_key": "agent_next_summary"},
+            "raw": _agent_v3_legacy_raw(summary_key="agent_next_summary", summary=summary, payload=result),
+        },
+    )
 
 
 def _agent_next_summary(result: dict) -> dict:
@@ -178,7 +215,7 @@ def _agent_next_summary(result: dict) -> dict:
     workdir = str(result.get("workdir") or run.get("workdir") or "").strip() or "$PWD"
     task_verdict = run.get("task_verdict") or run.get("task_verdict_json")
     summary: dict[str, object] = {
-        "schema_version": 1,
+        "schema_version": 3,
         "run_id": str(run.get("id") or "").strip(),
         "run_status": str(run.get("run_status") or run.get("status") or "").strip(),
         "complete": bool(result.get("complete")),
@@ -205,13 +242,22 @@ def _agent_next_summary(result: dict) -> dict:
             normalize_next_evidence_focus=_agent_task_proof_focus,
         )
     )
+    summary["agent_work_panel"] = _agent_work_panel(result, summary=summary)
     return {key: value for key, value in summary.items() if value not in ("", [], {})}
 
 
 def _agent_submit_json_payload(result: dict) -> dict:
-    payload = {"agent_submit_summary": _agent_submit_summary(result)}
-    payload.update(result)
-    return payload
+    summary = _agent_submit_summary(result)
+    return _agent_v3_envelope(
+        kind="agent_submit",
+        status=_agent_v3_status(complete=result.get("complete")),
+        summary=summary,
+        extras={
+            "technical_handoff": _agent_v3_technical_handoff(summary),
+            "diagnostics": {"legacy_summary_key": "agent_submit_summary"},
+            "raw": _agent_v3_legacy_raw(summary_key="agent_submit_summary", summary=summary, payload=result),
+        },
+    )
 
 
 def _agent_submit_summary(result: dict) -> dict:
@@ -221,7 +267,7 @@ def _agent_submit_summary(result: dict) -> dict:
     workdir = str(result.get("workdir") or run.get("workdir") or "").strip() or "$PWD"
     task_verdict = run.get("task_verdict") or run.get("task_verdict_json")
     summary: dict[str, object] = {
-        "schema_version": 1,
+        "schema_version": 3,
         "run_id": str(run.get("id") or "").strip(),
         "run_status": str(run.get("run_status") or run.get("status") or "").strip(),
         "complete": bool(result.get("complete")),
@@ -243,6 +289,11 @@ def _agent_submit_summary(result: dict) -> dict:
     task_next_action = result.get("task_next_action") if isinstance(result.get("task_next_action"), dict) else {}
     if task_next_action:
         summary["task_next_action"] = task_next_action
+    if result.get("auto_repair_applied") is True:
+        summary["auto_repair_applied"] = True
+        actions = [str(item).strip() for item in list(result.get("auto_repair_actions") or []) if str(item).strip()]
+        if actions:
+            summary["auto_repair_actions"] = actions
     summary.update(
         agent_task_proof_summary(
             complete=bool(result.get("complete")),
@@ -252,6 +303,7 @@ def _agent_submit_summary(result: dict) -> dict:
             normalize_next_evidence_focus=_agent_task_proof_focus,
         )
     )
+    summary["agent_work_panel"] = _agent_work_panel(result, summary=summary)
     return {key: value for key, value in summary.items() if value not in ("", [], {})}
 
 

@@ -4,7 +4,11 @@ import json
 from pathlib import Path
 
 from loopora.agent_native_evidence_refs import agent_known_evidence_ref_summaries as _agent_known_evidence_ref_summaries
+from loopora.agent_native_guidance import core_blocker_kind as _core_blocker_kind
 from loopora.agent_native_surface import attach_native_run_surface
+from loopora.agent_native_v3 import agent_v3_envelope as _agent_v3_envelope
+from loopora.agent_native_v3 import agent_v3_legacy_raw as _agent_v3_legacy_raw
+from loopora.agent_native_v3 import agent_v3_technical_handoff as _agent_v3_technical_handoff
 from loopora.cli_agent_runtime_support import agent_next_command_hint as _agent_next_command_hint
 from loopora.cli_agent_submit_repair_output import print_agent_submit_repair_plain as _print_agent_submit_repair_plain
 from loopora.cli_agent_submit_repair_schema import (
@@ -32,6 +36,7 @@ def _print_agent_submit_repair_guidance(
     result_file: Path,
     workdir: Path,
     json_output: bool,
+    auto_repair_actions: list[str] | None = None,
 ) -> bool:
     result = _agent_submit_repair_result(
         exc,
@@ -42,6 +47,7 @@ def _print_agent_submit_repair_guidance(
         entry_source=entry_source,
         result_file=result_file,
         workdir=workdir,
+        auto_repair_actions=auto_repair_actions or [],
     )
     if not result:
         return False
@@ -62,6 +68,7 @@ def _agent_submit_repair_result(
     entry_source: str,
     result_file: Path,
     workdir: Path,
+    auto_repair_actions: list[str] | None = None,
 ) -> dict:
     error = str(exc)
     if not _agent_submit_error_is_repairable(error):
@@ -79,6 +86,7 @@ def _agent_submit_repair_result(
         result["run_id"] = run_id
     if context_id:
         result["context_id"] = context_id
+    _attach_auto_repair_blocker_context(result, error, auto_repair_actions or [])
     submitted_dispatch = _agent_submit_result_file_dispatch_summary(result_file)
     if submitted_dispatch:
         result["submitted_dispatch"] = submitted_dispatch
@@ -97,10 +105,28 @@ def _agent_submit_repair_result(
     return result
 
 
+def _attach_auto_repair_blocker_context(result: dict, error: str, auto_repair_actions: list[str]) -> None:
+    actions = [str(item).strip() for item in auto_repair_actions if str(item).strip()]
+    if not actions:
+        return
+    result["auto_repair_attempted"] = True
+    result["auto_repair_actions"] = list(dict.fromkeys(actions))
+    result["core_blocker_preserved"] = True
+    result["core_blocker_kind"] = _agent_submit_core_blocker_kind(error)
+
+
 def _agent_submit_repair_json_payload(result: dict) -> dict:
-    payload = {"agent_submit_repair_summary": _agent_submit_repair_summary(result)}
-    payload.update(result)
-    return payload
+    summary = _agent_submit_repair_summary(result)
+    return _agent_v3_envelope(
+        kind="agent_submit_repair",
+        status="blocked",
+        summary=summary,
+        extras={
+            "technical_handoff": _agent_v3_technical_handoff(summary),
+            "diagnostics": {"legacy_summary_key": "agent_submit_repair_summary"},
+            "raw": _agent_v3_legacy_raw(summary_key="agent_submit_repair_summary", summary=summary, payload=result),
+        },
+    )
 
 
 def _agent_submit_repair_summary(result: dict) -> dict:
@@ -120,8 +146,14 @@ def _agent_submit_repair_summary(result: dict) -> dict:
         "active_result_file_to_write",
         "next_repair_step",
         "schema_lookup",
+        "core_blocker_kind",
     ):
         _set_summary_text(summary, key, result.get(key))
+    if result.get("auto_repair_attempted") is True:
+        summary["auto_repair_attempted"] = True
+    if result.get("core_blocker_preserved") is True:
+        summary["core_blocker_preserved"] = True
+    _set_summary_list(summary, "auto_repair_actions", result.get("auto_repair_actions"))
     for key in ("active_iter", "active_step_order"):
         value = result.get(key)
         if isinstance(value, int) and not isinstance(value, bool):
@@ -327,6 +359,10 @@ def _agent_submit_error_is_repairable(error: str) -> bool:
         "agent-native step was already submitted",
     )
     return any(marker in error for marker in markers)
+
+
+def _agent_submit_core_blocker_kind(error: str) -> str:
+    return _core_blocker_kind(error)
 
 
 def _active_agent_native_step(service, *, run_id: str) -> dict:

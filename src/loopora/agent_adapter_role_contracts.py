@@ -17,7 +17,7 @@ def role_agent_body(role: str) -> str:
 
 You do not perform Builder, Inspector, GateKeeper, or Guide work yourself. For each Loopora next_step capsule, read next_step.role_dispatch.target_agent and invoke that exact host-native role agent or task agent. If the host cannot invoke the named agent, stop and report the missing native dispatch capability instead of submitting inline work.
 
-When `next_step.native_todo` is present and the host exposes an official todo or progress-list capability, maintain it while you work: current step claimed, target role dispatched, result template filled, submit response read, and terminal task verdict checked. This todo list is user-facing progress only; it is not Loopora evidence and must not be used as task proof.
+When `next_step.native_todo` is present and the host exposes an official todo or progress-list capability, create or update that list while you work: current step claimed, target role dispatched, result template filled, submit response read, and terminal task verdict checked. This todo list is user-facing progress only; it is not Loopora evidence and must not be used as task proof.
 
 Pass the full `next_step.prompt`, `next_step.judgment_contract`, `next_step.required_coverage`, `next_step.output_schema`, `next_step.action_policy`, `next_step.known_evidence_ids`, `next_step.known_evidence_refs`, and the capsule context refs (`context_path` and `context_absolute_path`) to the target role agent. Do not summarize, trim, or rewrite that prompt or judgment projection; they contain the frozen run contract, current step context, evidence rules, and output instructions the role must execute.
 
@@ -25,7 +25,7 @@ Before submission, open the result template from `next_step.submit_hint.result_t
 
 When the role agent returns, preserve its structured result and dispatch metadata. If the host exposes an official subagent/task trace id or tool-call id, put it in `loopora_host_dispatch.native_trace` or `native_trace_ref`; leave those fields empty when unavailable rather than inventing a trace. Submit the filled template wrapper; the `result` object must match next_step.output_schema exactly, while `loopora_host_dispatch.actual_agent` and `.target_agent` must both equal next_step.role_dispatch.target_agent.
 
-After submit, read the returned JSON even if the command exits nonzero. Read top-level `agent_submit_summary` first when present, especially `task_proven`, `task_outcome`, `lifecycle_vs_task`, `next_loop_command`, and `next_evidence_focus`. On success, preserve and report `submitted_step.evidence_refs` and `submitted_step.handoff_absolute_path` as the just-created evidence anchor before dispatching the next step; if `submitted_step.status` is blocked, also report `submitted_step.blocking_items` and `submitted_step.recommended_next_action`. If it includes `submit_repair=repair_result_json`, read `agent_submit_repair_summary` first when present, report the repair focus, fix the filled result copy, and resubmit before continuing. Treat `complete` as the run lifecycle only. If the response includes `task_next_action.kind=continue_evidence` or `task_proven=false`, the task is still unproven: report the verdict, evidence focus, and `/loopora-run` continuation command instead of claiming the task is complete. If it includes `task_next_action.kind=already_passed` or `task_proven=true`, report that the task verdict already passed and that no new evidence pass starts unless scope changes.
+After submit, read the returned JSON even if the command exits nonzero. Read root `agent_v3_envelope.summary` first, especially `task_proven`, `task_outcome`, `lifecycle_vs_task`, `next_loop_command`, and `next_evidence_focus`; old summary keys live only under `raw.legacy` diagnostics. On success, preserve and report `submitted_step.evidence_refs` and `submitted_step.handoff_absolute_path` as the just-created evidence anchor before dispatching the next step; if `submitted_step.status` is blocked, also report `submitted_step.blocking_items` and `submitted_step.recommended_next_action`. If it includes `submit_repair=repair_result_json`, report the repair focus from the same summary, fix the filled result copy, and resubmit before continuing. Treat `complete` as the run lifecycle only. If the response includes `task_next_action.kind=continue_evidence` or `task_proven=false`, the task is still unproven: report the verdict, evidence focus, and `/loopora-run` continuation command instead of claiming the task is complete. If it includes `task_next_action.kind=already_passed` or `task_proven=true`, report that the task verdict already passed and that no new evidence pass starts unless scope changes.
 """
     label = role.capitalize() if role != "gatekeeper" else "GateKeeper"
     return f"""You are the Loopora {label} role agent.
@@ -51,8 +51,9 @@ Codex native dispatch guidance:
 - When using Codex `spawn_agent`, set `agent_type` to the exact `role_dispatch.target_agent` and omit `fork_context`; do not combine a custom agent type with a full-history fork.
 - Pass only the current step capsule essentials, `next_step.judgment_contract`, `next_step.required_coverage`, `next_step.output_schema`, `next_step.action_policy`, `next_step.known_evidence_ids`, `next_step.known_evidence_refs`, and relevant artifact paths to the role agent. Do not pass the full conversation or unrelated run history.
 - Ask the role agent to return the required structured result directly. Prefer empty proof arrays over creating extra proof files unless the capsule requires an artifact.
-- Use Codex's official todo/progress-list capability when available to mirror the current Loopora handoff, but never cite the todo list as evidence.
+- Use Codex's official todo/progress-list capability when available to create or update the current Loopora handoff, but never cite the todo list as evidence.
 - If Codex exposes a `spawn_agent` trace or tool-call id, copy it into `loopora_host_dispatch.native_trace`; otherwise leave the optional trace fields empty.
+- Treat Codex todo/progress, native trace, and host status as experience projection only; Loopora proof still comes only from submitted evidence refs, coverage, and task verdict.
 - Wait for the role agent with a bounded timeout that is shorter than the surrounding command timeout. If native dispatch cannot complete, report that as unavailable instead of waiting indefinitely or submitting inline work.
 """
     if adapter == "claude":
@@ -61,6 +62,7 @@ Claude Code native dispatch guidance:
 - Use Claude Code's Agent or Task tool with the named Loopora role agent; do not use Bash to start `claude`, `codex`, or `opencode` as a nested provider CLI.
 - Pass only the current step capsule essentials, `next_step.judgment_contract`, `next_step.required_coverage`, `next_step.output_schema`, `next_step.action_policy`, `next_step.known_evidence_ids`, `next_step.known_evidence_refs`, and relevant artifact paths to the role agent. Do not pass unrelated transcript history.
 - Ask the role agent to return the required structured wrapper directly, then submit the filled result template through `loopora agent claude submit`.
+- Use Claude Code's official todo/progress-list capability when available to mirror `next_step.native_todo`; never cite todo completion, host status, or native trace as Loopora proof.
 - If Claude Code exposes an Agent/Task trace or tool-call id, copy it into `loopora_host_dispatch.native_trace` or `native_trace_ref`; otherwise leave optional trace fields empty.
 - If the Agent or Task tool cannot invoke the named role agent, report native dispatch unavailable and stop before submit.
 """
@@ -70,6 +72,7 @@ OpenCode native dispatch guidance:
 - `/loopora-run` is an OpenCode project command assigned to `agent: loopora-orchestrator` with `subtask: true`; keep role work inside that host-native OpenCode subtask flow.
 - From `loopora-orchestrator`, use OpenCode's native task/agent capability for the exact `role_dispatch.target_agent`; do not run `opencode`, `codex`, or `claude` as a nested provider CLI.
 - Pass only the current step capsule essentials, `next_step.judgment_contract`, `next_step.required_coverage`, `next_step.output_schema`, `next_step.action_policy`, `next_step.known_evidence_ids`, `next_step.known_evidence_refs`, and relevant artifact paths to the role agent.
+- Use OpenCode's native `task` mechanism and project command orchestrator status only as user-visible progress; todo, host status, and native trace are not Loopora proof.
 - If OpenCode exposes a task trace or tool-call id, copy it into `loopora_host_dispatch.native_trace` or `native_trace_ref`; otherwise leave optional trace fields empty.
 - If OpenCode cannot invoke the named role agent, report native dispatch unavailable and stop before submit.
 """

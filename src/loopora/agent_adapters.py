@@ -53,6 +53,7 @@ from loopora.agent_adapter_managed_files import (
     sha256_text as _sha256_text,
 )
 from loopora.agent_adapter_templates import (
+    ADAPTER_MANAGED_SCHEMA_VERSION as ADAPTER_MANAGED_SCHEMA_VERSION,
     ADAPTER_VERSION as ADAPTER_VERSION,
     CLAUDE_ADAPTER_VERSION as CLAUDE_ADAPTER_VERSION,
     CLAUDE_MANAGED_MARKER as CLAUDE_MANAGED_MARKER,

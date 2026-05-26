@@ -3,6 +3,9 @@ from __future__ import annotations
 import typer
 
 from loopora.agent_native_surface import attach_native_run_surface
+from loopora.agent_native_v3 import agent_v3_envelope
+from loopora.agent_native_v3 import agent_v3_legacy_raw
+from loopora.agent_native_v3 import agent_v3_technical_handoff
 from loopora.cli_agent_plan_repair_hints import validation_repair_hints as _validation_repair_hints
 from loopora.cli_summary_helpers import (
     clip_inline as _clip_inline,
@@ -14,15 +17,26 @@ from loopora.cli_summary_helpers import (
 
 
 def _agent_loop_recovery_json_payload(result: dict) -> dict:
-    payload = {"agent_loop_recovery_summary": _agent_loop_recovery_summary(result)}
-    payload.update(result)
-    return payload
+    summary = _agent_loop_recovery_summary(result)
+    return _agent_recovery_v3_envelope(result, summary, legacy_summary_key="agent_loop_recovery_summary")
 
 
 def _agent_next_recovery_json_payload(result: dict) -> dict:
-    payload = {"agent_next_recovery_summary": _agent_loop_recovery_summary(result)}
-    payload.update(result)
-    return payload
+    summary = _agent_loop_recovery_summary(result)
+    return _agent_recovery_v3_envelope(result, summary, legacy_summary_key="agent_next_recovery_summary")
+
+
+def _agent_recovery_v3_envelope(result: dict, summary: dict, *, legacy_summary_key: str) -> dict:
+    return agent_v3_envelope(
+        kind="agent_recovery",
+        status="blocked",
+        summary=summary,
+        extras={
+            "technical_handoff": agent_v3_technical_handoff(summary),
+            "diagnostics": {"legacy_summary_key": legacy_summary_key},
+            "raw": agent_v3_legacy_raw(summary_key=legacy_summary_key, summary=summary, payload=result),
+        },
+    )
 
 
 def _agent_loop_recovery_summary(result: dict) -> dict:

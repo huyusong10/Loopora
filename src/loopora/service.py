@@ -1,35 +1,18 @@
 from __future__ import annotations
 
-import threading
 from collections.abc import Callable
-from typing import ClassVar
 
-from loopora.asset_catalog import AssetCatalogError, AssetCatalogNotFoundError, WorkflowAssetCatalog
 from loopora.db import LooporaRepository
 from loopora.executor import CodexExecutor, executor_from_environment
-from loopora.service_assets import ServiceAssetMixin
-from loopora.service_agent_adapters import ServiceAgentAdapterMixin
-from loopora.service_agent_native import ServiceAgentNativeMixin
-from loopora.service_alignment import ServiceAlignmentMixin
-from loopora.service_iteration_reporting import ServiceIterationReportingMixin
-from loopora.service_legacy_execution import ServiceLegacyExecutionMixin
+from loopora.service_app import LooporaAppServices, _LooporaServiceRuntime
 from loopora.service_prompts import (
     CHALLENGER_SCHEMA,
     CHECK_PLANNER_SCHEMA,
     GENERATOR_SCHEMA,
-    ServiceRunPromptMixin,
     TESTER_SCHEMA,
     VERIFIER_SCHEMA,
 )
-from loopora.service_role_execution import ServiceRoleExecutionMixin
-from loopora.service_run_lifecycle import ServiceRunLifecycleMixin
-from loopora.service_role_requests import ServiceRoleRequestMixin
-from loopora.service_run_finalization import ServiceRunFinalizationMixin
-from loopora.service_types import LooporaError, LooporaNotFoundError
-from loopora.service_workflow_execution import ServiceWorkflowExecutionMixin
-from loopora.service_workflow_support import ServiceWorkflowSupportMixin
-from loopora.service_workflow_runtime import ServiceWorkflowRuntimeMixin
-from loopora.service_workspace import ServiceWorkspaceMixin
+from loopora.service_types import LooporaError
 from loopora.settings import AppSettings, configure_logging, db_path, load_settings
 from loopora.workflows import (
     ARCHETYPES,
@@ -46,6 +29,7 @@ __all__ = [
     "LOOP_ROLE_NAMES",
     "TESTER_SCHEMA",
     "VERIFIER_SCHEMA",
+    "LooporaAppServices",
     "LooporaService",
     "create_service",
     "normalize_role_models",
@@ -59,25 +43,9 @@ def normalize_role_models(role_models: dict | None) -> dict[str, str]:
         raise LooporaError(str(exc)) from exc
 
 
-class LooporaService(
-    ServiceAgentAdapterMixin,
-    ServiceAgentNativeMixin,
-    ServiceAssetMixin,
-    ServiceAlignmentMixin,
-    ServiceLegacyExecutionMixin,
-    ServiceRunPromptMixin,
-    ServiceWorkflowSupportMixin,
-    ServiceWorkflowRuntimeMixin,
-    ServiceWorkflowExecutionMixin,
-    ServiceRunFinalizationMixin,
-    ServiceRoleRequestMixin,
-    ServiceIterationReportingMixin,
-    ServiceRoleExecutionMixin,
-    ServiceRunLifecycleMixin,
-    ServiceWorkspaceMixin,
-):
-    _process_active_runs: ClassVar[set[str]] = set()
-    _process_active_runs_lock: ClassVar[threading.Lock] = threading.Lock()
+class LooporaService:
+    _process_active_runs = _LooporaServiceRuntime._process_active_runs
+    _process_active_runs_lock = _LooporaServiceRuntime._process_active_runs_lock
 
     def __init__(
         self,
@@ -85,40 +53,24 @@ class LooporaService(
         settings: AppSettings,
         executor_factory: Callable[[], CodexExecutor] | None = None,
     ) -> None:
-        self.repository = repository
-        self.asset_catalog = WorkflowAssetCatalog(repository)
-        self.settings = settings
-        self.executor_factory = executor_factory or executor_from_environment
-        self._threads: dict[str, threading.Thread] = {}
-        self._reconcile_stale_runs()
-        self._backfill_missing_run_takeaway_projections()
+        self.app_services = LooporaAppServices.create(
+            repository=repository,
+            settings=settings,
+            executor_factory=executor_factory or executor_from_environment,
+        )
 
-    def _loop_log_context(self, loop: dict | None, **context) -> dict[str, object]:
-        payload = dict(context)
-        if loop:
-            payload.setdefault("loop_id", loop.get("id"))
-            payload.setdefault("workdir", loop.get("workdir"))
-            payload.setdefault("orchestration_id", loop.get("orchestration_id"))
-        return payload
+    def __getattr__(self, name: str):
+        return getattr(self.app_services.runtime, name)
 
-    def _run_log_context(self, run: dict | None, **context) -> dict[str, object]:
-        payload = dict(context)
-        if run:
-            payload.setdefault("run_id", run.get("id"))
-            payload.setdefault("loop_id", run.get("loop_id"))
-            payload.setdefault("workdir", run.get("workdir"))
-            payload.setdefault("orchestration_id", run.get("orchestration_id"))
-        return payload
-
-    def _asset_call(self, callback: Callable, *args, **kwargs):
-        try:
-            return callback(*args, **kwargs)
-        except AssetCatalogNotFoundError as exc:
-            raise LooporaNotFoundError(str(exc)) from exc
-        except AssetCatalogError as exc:
-            raise LooporaError(str(exc)) from exc
-        except (WorkflowError, ValueError) as exc:
-            raise LooporaError(str(exc)) from exc
+    def __setattr__(self, name: str, value) -> None:
+        if name == "app_services" or "app_services" not in self.__dict__:
+            object.__setattr__(self, name, value)
+            return
+        runtime = self.app_services.runtime
+        if hasattr(runtime, name):
+            setattr(runtime, name, value)
+            return
+        object.__setattr__(self, name, value)
 
 
 def create_service(executor_factory: Callable[[], CodexExecutor] | None = None) -> LooporaService:

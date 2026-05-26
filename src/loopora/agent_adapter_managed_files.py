@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from loopora.agent_adapter_check_utils import adapter_label
-from loopora.agent_adapter_templates import ADAPTER_VERSION, MANAGED_MARKERS
+from loopora.agent_adapter_templates import ADAPTER_MANAGED_SCHEMA_VERSION, ADAPTER_VERSION, MANAGED_MARKERS
 from loopora.service_types import LooporaConflictError
 from loopora.utils import utc_now
 
@@ -119,6 +119,7 @@ def manifest_payload(kind: str, root: Path, managed_files: list[dict[str, str]])
         installed_at = str(existing_manifest.get("installed_at") or "").strip()
     return {
         "adapter": kind,
+        "managed_schema_version": ADAPTER_MANAGED_SCHEMA_VERSION,
         "version": ADAPTER_VERSION,
         "installed_at": installed_at or utc_now(),
         "managed_files": managed_files,

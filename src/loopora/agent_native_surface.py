@@ -43,6 +43,7 @@ def native_surface_plain_lines(surface: dict, *, include_role_configs: bool = Fa
     lines.extend(_native_surface_permission_boundary_lines(fields["permission_boundary"]))
     lines.extend(_native_surface_tooling_boundary_lines(fields["tooling_boundary"]))
     lines.extend(_native_surface_observability_lines(fields["observability"]))
+    lines.extend(_native_surface_experience_lines(fields["experience_capabilities"]))
     lines.extend(_native_surface_owned_state_lines(surface))
     lines.extend(_native_surface_ownership_lines(fields["ownership_boundary"]))
     lines.extend(_native_surface_tail_lines(fields["dispatch"], context_env))
@@ -275,6 +276,20 @@ def _native_surface_observability_lines(observability: dict) -> list[str]:
             ("diagnostic_traces", "diagnostic_traces"),
             ("progress", "progress_signal"),
             ("proof", "proof_signal"),
+        ),
+    )
+
+
+def _native_surface_experience_lines(experience_capabilities: dict) -> list[str]:
+    return _native_surface_kv_line(
+        "experience",
+        experience_capabilities,
+        (
+            ("role_dispatch", "role_dispatch_guidance"),
+            ("todo", "todo_guidance"),
+            ("user_question", "user_question_guidance"),
+            ("trace", "native_trace_optional"),
+            ("technical_handoff", "technical_handoff_paths"),
         ),
     )
 

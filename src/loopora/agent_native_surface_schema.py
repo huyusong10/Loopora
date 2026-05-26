@@ -15,6 +15,7 @@ NATIVE_SURFACE_DICT_SECTIONS = (
     "permission_boundary",
     "tooling_boundary",
     "observability",
+    "experience_capabilities",
     "ownership_boundary",
 )
 
@@ -36,6 +37,7 @@ NATIVE_RUN_SURFACE_FIELDS = (
     "permission_boundary",
     "tooling_boundary",
     "observability",
+    "experience_capabilities",
     "ownership_boundary",
     "submit_contract",
     "proof_boundary",

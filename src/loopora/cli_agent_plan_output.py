@@ -6,6 +6,10 @@ import typer
 
 from loopora.agent_adapters import agent_loop_json_command
 from loopora.agent_native_surface import attach_native_run_surface, agent_native_run_surface_for_result, native_surface_plain_lines
+from loopora.agent_native_v3 import agent_v3_envelope as _agent_v3_envelope
+from loopora.agent_native_v3 import agent_v3_legacy_raw as _agent_v3_legacy_raw
+from loopora.agent_native_v3 import agent_v3_status as _agent_v3_status
+from loopora.agent_native_v3 import agent_v3_technical_handoff as _agent_v3_technical_handoff
 from loopora.cli_agent_plan_repair_hints import validation_repair_hints as _validation_repair_hints
 from loopora.cli_agent_runtime_support import agent_plan_cli_command as _agent_plan_cli_command
 from loopora.cli_agent_runtime_support import print_web_status as _print_web_status
@@ -61,9 +65,17 @@ def _print_agent_gen_result(result: dict, *, json_output: bool) -> None:
 
 
 def _agent_gen_json_payload(result: dict) -> dict:
-    payload = {"agent_plan_summary": _agent_plan_summary(result)}
-    payload.update(result)
-    return payload
+    summary = _agent_plan_summary(result)
+    return _agent_v3_envelope(
+        kind="agent_plan",
+        status=_agent_v3_status(ready=result.get("ready"), error=result.get("validation_error") or result.get("error")),
+        summary=summary,
+        extras={
+            "technical_handoff": _agent_v3_technical_handoff(summary),
+            "diagnostics": {"legacy_summary_key": "agent_plan_summary"},
+            "raw": _agent_v3_legacy_raw(summary_key="agent_plan_summary", summary=summary, payload=result),
+        },
+    )
 
 
 def _agent_plan_summary(result: dict) -> dict:

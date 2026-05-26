@@ -125,12 +125,15 @@ def agent_native_todo_contract(*, step_id: str, target_agent: str) -> dict[str, 
     return {
         "recommended": True,
         "not_evidence": True,
-        "host_policy": "Use the host's official todo/progress-list capability when available; otherwise continue with the capsule and result template.",
+        "host_policy": (
+            "Create or update the host's official todo/progress-list when available; otherwise continue with "
+            "the capsule and result template. Todo state is user-visible progress only, not Loopora evidence."
+        ),
         "items": [
-            f"Read agent_run_summary and capsule for {step_text}.",
+            f"Read agent_v3_envelope.summary and capsule for {step_text}.",
             f"Invoke {target_text} through the host's official subagent/task mechanism.",
             "Fill the provided result template without changing Loopora's frozen contract fields.",
-            "Submit the filled result and read agent_submit_summary before deciding whether the task is proven.",
+            "Submit the filled result and read agent_v3_envelope.summary before deciding whether the task is proven.",
         ],
     }
 
