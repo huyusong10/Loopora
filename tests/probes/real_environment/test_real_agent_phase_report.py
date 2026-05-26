@@ -155,6 +155,8 @@ def test_real_agent_phase_report_summarizes_real_probe_milestones(tmp_path: Path
     health = report["diagnostics"]["experience_health"]
     assert health["agent_work_panel_seen"] is True
     assert health["agent_work_panel_sources"] == ["host_stdout_tail"]
+    assert health["agent_work_panel_artifact_exposed"] is False
+    assert health["agent_work_panel_artifact_sources"] == []
     assert health["todo_guidance_seen"] is True
     assert health["todo_not_evidence_confirmed"] is True
     assert health["user_question_guidance_available"] is True
@@ -181,7 +183,54 @@ def test_real_agent_experience_health_scans_full_output_without_storing_transcri
 
     assert health["agent_work_panel_seen"] is True
     assert health["agent_work_panel_sources"] == ["host_stdout"]
+    assert health["agent_work_panel_artifact_exposed"] is False
     assert "quiet completion line" not in json.dumps(health, ensure_ascii=False)
+
+
+def test_real_agent_experience_health_separates_host_visible_and_artifact_work_panel(tmp_path: Path) -> None:
+    module = _load_real_agent_module()
+    workdir = tmp_path / "work"
+    run_path = workdir / ".loopora" / "runs" / "run_artifact_panel"
+    _write_json(
+        run_path / "agent_native" / "state.json",
+        {
+            "last_agent_v3_envelope": {
+                "summary": {
+                    "agent_work_panel": {
+                        "state": "awaiting_agent",
+                        "next_action": "Dispatch loopora-builder.",
+                    }
+                }
+            }
+        },
+    )
+
+    health = module._experience_health_summary(
+        workdir=workdir,
+        run_path=run_path,
+        host_stdout="",
+        host_stderr="",
+    )
+
+    assert health["agent_work_panel_seen"] is False
+    assert health["agent_work_panel_sources"] == []
+    assert health["agent_work_panel_artifact_exposed"] is True
+    assert health["agent_work_panel_artifact_sources"] == ["run_agent_native_artifact"]
+    assert "agent_work_panel_exposed_in_loopora_artifact" in health["experience_notes"]
+
+
+def test_real_agent_experience_health_reports_missing_work_panel_sources(tmp_path: Path) -> None:
+    module = _load_real_agent_module()
+    health = module._experience_health_summary(
+        workdir=tmp_path / "work",
+        run_path=Path(),
+        host_stdout="quiet\n",
+        host_stderr="",
+    )
+
+    assert health["agent_work_panel_seen"] is False
+    assert health["agent_work_panel_artifact_exposed"] is False
+    assert health["agent_work_panel_artifact_sources"] == []
 
 
 def test_real_agent_phase_report_requires_plain_passed_task_verdict(tmp_path: Path) -> None:
@@ -273,6 +322,11 @@ def test_real_agent_prompt_requires_authoring_without_embedded_candidate_yaml(tm
     assert "do not return a todo-only response" in prompt
     assert "do not end a response after preparatory commands" in prompt
     assert "a run binding exists" in prompt
+    assert "final main-session answer visibly includes a literal `agent_work_panel:` block" in prompt
+    assert "agent_work_panel:" in prompt
+    assert "Final response format" in prompt
+    assert "Your final stdout must include the literal line `agent_work_panel:`" in prompt
+    assert "Do not omit the block even when the task verdict passed" in prompt
     assert "verify that" in prompt
     assert "Required bundle structure checklist" in prompt
     assert "`workflow` is the workflow object, not the `loop` object" in prompt

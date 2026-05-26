@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
 import shlex
@@ -205,6 +206,14 @@ def _fetch_runtime_activity(base_url: str) -> dict:
     return payload
 
 
+def _fetch_returned_run_url(base_url: str, run_id: str) -> dict:
+    with urllib.request.urlopen(f"{base_url}/api/runs/{run_id}", timeout=1) as response:
+        payload = json.loads(response.read().decode("utf-8"))
+    if not isinstance(payload, dict) or str(payload.get("id") or "") != run_id:
+        raise AssertionError(f"invalid run URL payload for {run_id}: {payload!r}")
+    return payload
+
+
 def _read_jsonl(path: Path) -> list[dict]:
     if not path.exists():
         return []
@@ -351,6 +360,7 @@ def _activity_summaries(activity_snapshots: list[dict]) -> list[dict]:
         runs = snapshot.get("runs") if isinstance(snapshot.get("runs"), list) else []
         rows.append(
             {
+                "runtime_visibility_source": snapshot.get("runtime_visibility_source") or "runtime_activity",
                 "running_count": snapshot.get("running_count"),
                 "queued_count": snapshot.get("queued_count"),
                 "runs": [
@@ -465,6 +475,8 @@ def _experience_health_summary(
     notes = ["experience_health_is_review_signal_not_task_proof"]
     if host_tail_text:
         notes.append("host_stdout_stderr_tail_scanned")
+    if artifact_contracts["agent_work_panel_exposed"]:
+        notes.append("agent_work_panel_exposed_in_loopora_artifact")
     if artifact_contracts["native_todo_seen"]:
         notes.append("native_todo_contract_seen")
     if native_trace_observed:
@@ -474,6 +486,8 @@ def _experience_health_summary(
     return {
         "agent_work_panel_seen": bool(agent_work_panel_sources),
         "agent_work_panel_sources": agent_work_panel_sources,
+        "agent_work_panel_artifact_exposed": artifact_contracts["agent_work_panel_exposed"],
+        "agent_work_panel_artifact_sources": artifact_contracts["agent_work_panel_sources"],
         "todo_guidance_seen": _any_marker(host_text, "native_todo", "todo_items", "todo guidance")
         or artifact_contracts["native_todo_seen"],
         "todo_not_evidence_confirmed": _todo_not_evidence_seen(host_text) or artifact_contracts["native_todo_not_evidence"],
@@ -536,9 +550,20 @@ def _experience_auto_repair_events(host_stdout: str, host_stderr: str) -> list[d
     return rows[:8]
 
 
-def _experience_artifact_contracts(workdir: Path, run_path: Path) -> dict[str, bool]:
-    contracts = {"native_todo_seen": False, "native_todo_not_evidence": False, "role_dispatch_seen": False}
-    for payload in _experience_contract_payloads(workdir, run_path):
+def _experience_artifact_contracts(workdir: Path, run_path: Path) -> dict[str, object]:
+    contracts: dict[str, object] = {
+        "agent_work_panel_exposed": False,
+        "agent_work_panel_sources": [],
+        "native_todo_seen": False,
+        "native_todo_not_evidence": False,
+        "role_dispatch_seen": False,
+    }
+    work_panel_sources: list[str] = []
+    for path, payload in _experience_contract_payloads(workdir, run_path):
+        work_panels = [item for item in _iter_nested_key(payload, "agent_work_panel") if isinstance(item, dict)]
+        if work_panels:
+            contracts["agent_work_panel_exposed"] = True
+            work_panel_sources.append(_experience_artifact_source(path, workdir=workdir, run_path=run_path))
         native_todos = [item for item in _iter_nested_key(payload, "native_todo") if isinstance(item, dict)]
         if native_todos:
             contracts["native_todo_seen"] = True
@@ -546,15 +571,32 @@ def _experience_artifact_contracts(workdir: Path, run_path: Path) -> dict[str, b
             contracts["native_todo_not_evidence"] = True
         if any(isinstance(item, dict) and item for item in _iter_nested_key(payload, "role_dispatch")):
             contracts["role_dispatch_seen"] = True
+    contracts["agent_work_panel_sources"] = list(dict.fromkeys(work_panel_sources))[:8]
     return contracts
 
 
-def _experience_contract_payloads(workdir: Path, run_path: Path) -> list[dict]:
+def _experience_contract_payloads(workdir: Path, run_path: Path) -> list[tuple[Path, dict]]:
     paths: list[Path] = []
     if run_path != Path():
+        paths.extend(sorted(run_path.glob("agent_native/**/*.json"))[-12:])
         paths.extend(sorted(run_path.glob("iterations/**/capsule.json"))[-12:])
     paths.extend(sorted((state_dir_for_workdir(workdir) / "agent_outbox").glob("**/*.result.template.json"))[-12:])
-    return [payload for path in paths if (payload := _safe_read_json(path))]
+    return [(path, payload) for path in paths if (payload := _safe_read_json(path))]
+
+
+def _experience_artifact_source(path: Path, *, workdir: Path, run_path: Path) -> str:
+    if run_path != Path():
+        with suppress(ValueError):
+            relative = path.relative_to(run_path)
+            if relative.parts[:1] == ("agent_native",):
+                return "run_agent_native_artifact"
+            if "capsule.json" in relative.parts:
+                return "step_capsule"
+    with suppress(ValueError):
+        relative = path.relative_to(state_dir_for_workdir(workdir))
+        if relative.parts[:1] == ("agent_outbox",):
+            return "result_template"
+    return "loopora_artifact"
 
 
 def _iter_nested_key(value: object, key: str):
@@ -613,15 +655,7 @@ def _phase_statuses(inputs: PhaseStatusInput) -> dict[str, dict]:
         "run_invocation_observed": {"ok": run_seen},
         "loop_invocation_observed": {"ok": run_seen},
         "linked_run_created": {"ok": bool(run_id), "run_id": run_id},
-        "runtime_activity_observed_run": {
-            "ok": bool(run_id)
-            and any(
-                item.get("id") == run_id and item.get("status") in {"queued", "running", "awaiting_agent"}
-                for snapshot in inputs.activity_snapshots
-                for item in list(snapshot.get("runs") or [])
-                if isinstance(item, dict)
-            )
-        },
+        "runtime_activity_observed_run": {"ok": bool(run_id) and _runtime_visibility_observed_run(inputs.activity_snapshots, run_id)},
         "builder_claimed": {"ok": event_seen("agent_native_step_claimed", "builder_step")},
         "builder_submitted": {"ok": event_seen("agent_native_step_submitted", "builder_step")},
         "gatekeeper_claimed": {"ok": event_seen("agent_native_step_claimed", "gatekeeper_step")},
@@ -636,6 +670,21 @@ def _phase_statuses(inputs: PhaseStatusInput) -> dict[str, dict]:
             )
         },
     }
+
+
+def _runtime_visibility_observed_run(activity_snapshots: list[dict], run_id: str) -> bool:
+    active_or_returned_statuses = {"queued", "running", "awaiting_agent", *TERMINAL_RUN_STATUSES}
+    return any(
+        item.get("id") == run_id
+        and item.get("status") in active_or_returned_statuses
+        and (
+            item.get("status") in {"queued", "running", "awaiting_agent"}
+            or snapshot.get("runtime_visibility_source") == "returned_run_url"
+        )
+        for snapshot in activity_snapshots
+        for item in list(snapshot.get("runs") or [])
+        if isinstance(item, dict)
+    )
 
 
 def _build_real_probe_phase_report(
@@ -922,6 +971,27 @@ def _record_runtime_activity(request: HostCommandMonitorRequest, activity_snapsh
         pass
 
 
+def _record_returned_run_url_visibility(request: HostCommandMonitorRequest, activity_snapshots: list[dict]) -> None:
+    binding = _linked_run_binding(request.adapter, request.workdir)
+    run_id = str((binding or {}).get("linked_run_id") or "").strip()
+    if not run_id:
+        return
+    try:
+        run = _fetch_returned_run_url(request.agent_web_url, run_id)
+    except (AssertionError, json.JSONDecodeError, OSError, TimeoutError):
+        return
+    status = str(run.get("status") or "").strip()
+    activity_snapshots.append(
+        {
+            "runtime_visibility_source": "returned_run_url",
+            "running_count": 1 if status == "running" else 0,
+            "queued_count": 1 if status == "queued" else 0,
+            "awaiting_agent_count": 1 if status == "awaiting_agent" else 0,
+            "runs": [{"id": run_id, "status": status, "run_path": f"/runs/{run_id}"}],
+        }
+    )
+
+
 def _raise_host_command_timeout(
     request: HostCommandMonitorRequest,
     process: subprocess.Popen[str],
@@ -969,6 +1039,19 @@ def _raise_host_command_failure(
     ) from None
 
 
+def _phase_report_has_terminal_proof_and_work_panel(phase_report: dict) -> bool:
+    statuses = phase_report.get("phase_statuses", {})
+    health = phase_report.get("diagnostics", {}).get("experience_health", {})
+    return bool(statuses.get("task_verdict_passed", {}).get("ok")) and bool(health.get("agent_work_panel_seen"))
+
+
+def _read_and_remove_temp_text(path: str) -> str:
+    temp_path = Path(path)
+    text = temp_path.read_text(encoding="utf-8", errors="replace")
+    temp_path.unlink(missing_ok=True)
+    return text
+
+
 def _wait_for_host_command_with_runtime_monitoring(request: HostCommandMonitorRequest) -> HostCommandMonitorResult:
     deadline = time.monotonic() + request.timeout
     terminal_proof_grace = float(os.environ.get(TERMINAL_PROOF_GRACE_ENV, "30"))
@@ -989,6 +1072,7 @@ def _wait_for_host_command_with_runtime_monitoring(request: HostCommandMonitorRe
                     _raise_host_command_timeout(request, process, stdout_file, stderr_file, activity_snapshots)
                 _record_runtime_activity(request, activity_snapshots)
                 if now - last_report_at >= 2:
+                    _record_returned_run_url_visibility(request, activity_snapshots)
                     stdout_file.flush()
                     stderr_file.flush()
                     phase_report, _ = _write_monitor_phase_report(
@@ -998,8 +1082,7 @@ def _wait_for_host_command_with_runtime_monitoring(request: HostCommandMonitorRe
                         host_stderr=_read_tail_text(Path(stderr_file.name)),
                     )
                     last_report_at = now
-                    task_proven = bool(phase_report.get("phase_statuses", {}).get("task_verdict_passed", {}).get("ok"))
-                    if task_proven:
+                    if _phase_report_has_terminal_proof_and_work_panel(phase_report):
                         terminal_proof_seen_at = terminal_proof_seen_at or now
                         if now - terminal_proof_seen_at >= terminal_proof_grace:
                             _stop_host_process(process, graceful=True)
@@ -1010,12 +1093,9 @@ def _wait_for_host_command_with_runtime_monitoring(request: HostCommandMonitorRe
                 time.sleep(0.5)
         finally:
             _stop_host_process(process)
-        stdout_path = Path(stdout_file.name)
-        stderr_path = Path(stderr_file.name)
-    stdout = stdout_path.read_text(encoding="utf-8", errors="replace")
-    stderr = stderr_path.read_text(encoding="utf-8", errors="replace")
-    stdout_path.unlink(missing_ok=True)
-    stderr_path.unlink(missing_ok=True)
+    stdout = _read_and_remove_temp_text(stdout_file.name)
+    stderr = _read_and_remove_temp_text(stderr_file.name)
+    _record_returned_run_url_visibility(request, activity_snapshots)
     completed = subprocess.CompletedProcess(request.command, returncode_override if returncode_override is not None else int(process.returncode or 0), stdout, stderr)
     if completed.returncode != 0:
         _raise_host_command_failure(request, completed, activity_snapshots)
@@ -1053,13 +1133,8 @@ def _wait_for_host_command_with_runtime_monitoring(request: HostCommandMonitorRe
 
 
 def _assert_runtime_activity_observed_run(activity_snapshots: list[dict], run_id: str) -> None:
-    assert activity_snapshots, "runtime activity endpoint was not observed while the host command was running"
-    assert any(
-        item.get("id") == run_id and item.get("status") in {"queued", "running", "awaiting_agent"}
-        for snapshot in activity_snapshots
-        for item in snapshot.get("runs", [])
-        if isinstance(item, dict)
-    ), activity_snapshots[-3:]
+    assert activity_snapshots, "runtime activity endpoint or returned run URL was not observed while the host command was running"
+    assert _runtime_visibility_observed_run(activity_snapshots, run_id), activity_snapshots[-3:]
 
 
 def _assert_alignment_session_came_from_conversation(workdir: Path, run_id: str) -> None:
@@ -1094,6 +1169,19 @@ def _assert_run_observation_chain(workdir: Path, run_id: str, adapter: str) -> N
     assert event_types.index("step_context_prepared") < event_types.index("run_finished")
 
 
+def _assert_host_visible_work_panel(phase_report: dict, phase_report_path: Path) -> None:
+    health = phase_report.get("diagnostics", {}).get("experience_health", {})
+    if health.get("agent_work_panel_seen") is True:
+        return
+    raise AssertionError(
+        _format_real_probe_diagnostic_failure(
+            "real Agent host stdout/stderr did not expose the required agent_work_panel block",
+            report=phase_report,
+            report_path=phase_report_path,
+        )
+    ) from None
+
+
 def _agent_label(adapter: str) -> str:
     return {
         "codex": "Codex",
@@ -1123,7 +1211,19 @@ Use the Loopora {_agent_label(adapter)} project entry installed in this workdir.
 
 Current task: prove the installed Loopora Agent entry can guide a short task conversation into a READY bundle, start a managed run, expose runtime activity, and finish through Agent-native step submission.
 
-This is an execution task, not a planning task. You may think through a checklist, but do not return a todo-only response or stop after creating a plan. Because this host is non-interactive, do not end a response after preparatory commands such as `ls`, `test -f`, `mkdir -p`, or reading files. After creating the candidate directory, immediately continue in the same uninterrupted execution sequence to write the candidate file and invoke the installed entries. Your final response is only valid after the candidate file exists, `/loopora-plan` has returned READY, `/loopora-run` has returned `complete: true`, the Builder and GateKeeper wrapper submissions have been accepted, a run binding exists, and the terminal run status and task verdict have been observed.
+This is an execution task, not a planning task. You may think through a checklist, but do not return a todo-only response or stop after creating a plan. Because this host is non-interactive, do not end a response after preparatory commands such as `ls`, `test -f`, `mkdir -p`, or reading files. After creating the candidate directory, immediately continue in the same uninterrupted execution sequence to write the candidate file and invoke the installed entries. Your final response is only valid after the candidate file exists, `/loopora-plan` has returned READY, `/loopora-run` has returned `complete: true`, the Builder and GateKeeper wrapper submissions have been accepted, a run binding exists, the terminal run status and task verdict have been observed, and the final main-session answer visibly includes a literal `agent_work_panel:` block.
+
+Before any final success sentence, print this user-visible block in the main host session, using values copied from the latest `agent_v3_envelope.summary.agent_work_panel` when available:
+
+```text
+agent_work_panel:
+state: <latest state>
+next_action: <latest next_action>
+evidence_focus: <latest evidence_focus>
+todo_items: <latest todo items or []>
+```
+
+The `agent_work_panel:` block is an experience-health signal for the real probe, not Loopora task proof.
 
 Author the candidate bundle from the conversation brief below and save it to `{bundle_file}`. Create the parent directory if needed. The pytest harness deliberately does not pre-create, prewrite, or embed a complete candidate YAML; this real probe must prove the host can turn conversation guidance into a bundle before invoking `/loopora-plan`.
 
@@ -1187,6 +1287,22 @@ For every result file, use the installed entry's wrapper format: top-level `loop
 Do not edit user-owned config files.
 Do not invent a direct Loopora CLI command from this prompt; follow the installed project entry instructions when a shell command is needed.
 Do not invoke codex, claude, or opencode from inside this Agent session; this release-profile probe must prove the host Agent itself performs the role work.
+
+Final response format:
+
+- Your final stdout must include the literal line `agent_work_panel:`. The real probe treats the run as experience-incomplete if that line is missing.
+- Print the block before any summary:
+
+```text
+agent_work_panel:
+state: <copy latest state, or task_proven after the terminal verdict passed>
+next_action: <copy latest next_action, or no new evidence pass unless scope changes>
+evidence_focus: <copy latest evidence_focus, or task verdict passed>
+todo_items: <copy latest todo_items, or []>
+```
+
+- Then print candidate URL/path, run URL, runtime activity observation, terminal run status, and task verdict.
+- Do not omit the block even when the task verdict passed.
 """
 
 
@@ -1238,6 +1354,7 @@ def test_real_agent_host_can_guide_bundle_then_monitor_loop(adapter: str, tmp_pa
     prompt_file = workdir / "loopora-agent-release-prompt.md"
     command = ""
     activity_snapshots: list[dict] = []
+    monitor_result: HostCommandMonitorResult | None = None
     prompt_file.write_text(_release_probe_prompt(adapter, bundle_file, executor_script), encoding="utf-8")
 
     try:
@@ -1274,6 +1391,7 @@ def test_real_agent_host_can_guide_bundle_then_monitor_loop(adapter: str, tmp_pa
         binding = monitor_result.binding
         activity_snapshots = monitor_result.activity_snapshots
         assert completed.returncode == 0, completed.stderr or completed.stdout
+        _assert_host_visible_work_panel(monitor_result.phase_report, monitor_result.phase_report_path)
         assert bundle_file.exists()
         preview = _loopora_service(loopora_home).preview_bundle_text(bundle_file.read_text(encoding="utf-8"))
         assert preview["ok"] is True, preview.get("error")
@@ -1292,6 +1410,14 @@ def test_real_agent_host_can_guide_bundle_then_monitor_loop(adapter: str, tmp_pa
     except AssertionError as exc:
         if "Real probe phase report:" in str(exc):
             raise
+        if monitor_result is not None:
+            raise AssertionError(
+                _format_real_probe_diagnostic_failure(
+                    exc,
+                    report=monitor_result.phase_report,
+                    report_path=monitor_result.phase_report_path,
+                )
+            ) from None
         report, report_path = _write_real_probe_phase_report(
             adapter=adapter,
             workdir=workdir,

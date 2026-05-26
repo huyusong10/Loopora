@@ -18,7 +18,10 @@
   }
 
   function fetchRun(runId) {
-    return jsonRequest(runUrl(runId));
+    return jsonRequest(runUrl(runId)).then((payload) => {
+      const projection = window.LooporaRunDetailProjection;
+      return projection?.normalizeRunPayload ? projection.normalizeRunPayload(payload) : payload;
+    });
   }
 
   function fetchKeyTakeaways(runId) {

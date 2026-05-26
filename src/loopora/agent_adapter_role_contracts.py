@@ -62,6 +62,7 @@ Claude Code native dispatch guidance:
 - Use Claude Code's Agent or Task tool with the named Loopora role agent; do not use Bash to start `claude`, `codex`, or `opencode` as a nested provider CLI.
 - Pass only the current step capsule essentials, `next_step.judgment_contract`, `next_step.required_coverage`, `next_step.output_schema`, `next_step.action_policy`, `next_step.known_evidence_ids`, `next_step.known_evidence_refs`, and relevant artifact paths to the role agent. Do not pass unrelated transcript history.
 - Ask the role agent to return the required structured wrapper directly, then submit the filled result template through `loopora agent claude submit`.
+- Keep user-visible progress in the main Claude Code session: after `/loopora-run`, `loopora agent claude next`, and submit, report the returned `agent_work_panel:` before role-agent transcript details.
 - Use Claude Code's official todo/progress-list capability when available to mirror `next_step.native_todo`; never cite todo completion, host status, or native trace as Loopora proof.
 - If Claude Code exposes an Agent/Task trace or tool-call id, copy it into `loopora_host_dispatch.native_trace` or `native_trace_ref`; otherwise leave optional trace fields empty.
 - If the Agent or Task tool cannot invoke the named role agent, report native dispatch unavailable and stop before submit.

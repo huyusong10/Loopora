@@ -79,7 +79,8 @@ def _register_run_observation_api_routes(app: FastAPI, ctx: WebRouteContext) -> 
     @app.get("/api/runs/{run_id}")
     async def api_get_run(run_id: str) -> JSONResponse:
         run = ctx.svc().get_run(run_id)
-        return JSONResponse({**run, "web_projection": web_run_detail_projection(run)})
+        projection = ctx.svc().app_services.projection.web_run_detail(run) if hasattr(ctx.svc(), "app_services") else web_run_detail_projection(run)
+        return JSONResponse({**run, "web_projection": projection})
 
     @app.get("/api/runs/{run_id}/observation-snapshot")
     async def api_run_observation_snapshot(run_id: str) -> JSONResponse:

@@ -78,7 +78,7 @@ While a job is still running, inspect evidence rather than waiting blindly:
 6. Runtime activity: confirm the linked run appears while non-terminal.
 7. Run events: tail `.loopora/runs/<run-id>/events.jsonl`.
 8. Agent-native state: inspect `.loopora/runs/<run-id>/agent_native/state.json`.
-9. Summary projection: confirm recorded v3 envelopes expose `agent_v3_envelope.summary.agent_work_panel`, todo guidance when available, and main-session user-question guidance when a Loop-shaping answer is missing; legacy summary keys may appear only under `raw.legacy`; check `diagnostics.experience_health` for the review-only markers.
+9. Summary projection: confirm recorded v3 envelopes expose `agent_v3_envelope.summary.agent_work_panel`, todo guidance when available, and main-session user-question guidance when a Loop-shaping answer is missing; legacy summary keys may appear only under `raw.legacy`; check `diagnostics.experience_health` for the review-only markers. `agent_work_panel_seen` means the host output exposed the panel to the user; `agent_work_panel_artifact_exposed` only means Loopora artifacts carried the panel.
 10. Evidence: inspect `evidence/ledger.jsonl`, `evidence/coverage.json`, and `evidence/task_verdict.json`.
 11. Role outputs: inspect `iterations/iter_*/steps/*/output.raw.json` and `output.normalized.json`.
 12. Sentinel log: confirm no nested `codex`, `claude`, or `opencode` command was invoked from inside the run.

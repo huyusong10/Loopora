@@ -49,6 +49,8 @@ class AgentSubmitRepairV3(TypedDict, total=False):
 class ExperienceHealthV3(TypedDict):
     agent_work_panel_seen: bool
     agent_work_panel_sources: list[str]
+    agent_work_panel_artifact_exposed: bool
+    agent_work_panel_artifact_sources: list[str]
     todo_guidance_seen: bool
     todo_not_evidence_confirmed: bool
     user_question_guidance_available: bool

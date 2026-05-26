@@ -2,8 +2,10 @@
   window.LOOPORA_RUN_DETAIL = {
     runId: {{ run.id|tojson }},
     initialRun: {{ run|tojson }},
+    initialProjection: {{ web_projection|tojson }},
   };
 </script>
+<script src="{{ static_asset_url('pages/run_detail_projection.js') }}" defer></script>
 <script src="{{ static_asset_url('pages/run_detail_console.js') }}" defer></script>
 <script src="{{ static_asset_url('pages/run_detail_observation.js') }}" defer></script>
 <script src="{{ static_asset_url('pages/run_detail_state.js') }}" defer></script>

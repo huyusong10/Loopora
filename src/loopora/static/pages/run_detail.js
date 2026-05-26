@@ -1,6 +1,8 @@
   const runDetailData = window.LOOPORA_RUN_DETAIL || {};
   const runId = runDetailData.runId;
-  const initialRun = runDetailData.initialRun || {};
+  const initialRun = window.LooporaRunDetailProjection?.normalizeInitialRun
+    ? window.LooporaRunDetailProjection.normalizeInitialRun(runDetailData)
+    : (runDetailData.initialRun || {});
   let currentRun = initialRun;
   let timelineRecords = [];
   let consoleEventRecords = [];

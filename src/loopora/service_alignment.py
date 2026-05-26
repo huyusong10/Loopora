@@ -46,6 +46,7 @@ from loopora.service_alignment_diagnostics import (
     append_alignment_local_diagnostic_event,
     log_alignment_diagnostic_event_failure,
 )
+from loopora.service_alignment_context import alignment_context_title_preview, alignment_source_option_id
 from loopora.service_alignment_legacy import ServiceAlignmentLegacyMixin
 from loopora.service_cleanup_diagnostics import best_effort_rmtree, cleanup_diagnostic_payload, log_cleanup_diagnostic
 from loopora.service_types import LooporaConflictError, LooporaError, LooporaNotFoundError, TERMINAL_RUN_STATUSES
@@ -4877,12 +4878,7 @@ class ServiceAlignmentMixin(ServiceAlignmentLegacyMixin):
 
     @staticmethod
     def _alignment_source_option_id(source_type: str, identifier: object) -> str:
-        normalized_identifier = str(identifier or "").strip()
-        if source_type == "spec_file":
-            digest = sha256(normalized_identifier.encode("utf-8")).hexdigest()[:16]
-            return f"spec_file:{digest}"
-        safe_identifier = re.sub(r"[^A-Za-z0-9_.:-]+", "-", normalized_identifier).strip("-")
-        return f"{source_type}:{safe_identifier}"
+        return alignment_source_option_id(source_type, identifier)
 
     @staticmethod
     def _alignment_context_title_from_session(session: dict) -> str:
@@ -4896,10 +4892,7 @@ class ServiceAlignmentMixin(ServiceAlignmentLegacyMixin):
 
     @staticmethod
     def _alignment_context_title_preview(content: str, *, limit: int = 80) -> str:
-        text = " ".join(str(content or "").split()).strip()
-        if len(text) <= limit:
-            return text
-        return text[: max(0, limit - 3)].rstrip() + "..."
+        return alignment_context_title_preview(content, limit=limit)
 
     @classmethod
     def _alignment_session_context_options(cls, session: dict) -> list[dict]:

@@ -3,7 +3,9 @@ from __future__ import annotations
 import threading
 from collections.abc import Callable
 from dataclasses import dataclass
+from pathlib import Path
 from typing import ClassVar
+from typing import Any
 
 from loopora.asset_catalog import AssetCatalogError, AssetCatalogNotFoundError, WorkflowAssetCatalog
 from loopora.db import LooporaRepository
@@ -99,27 +101,91 @@ class _RuntimeComponent:
 
 
 class AlignmentService(_RuntimeComponent):
-    pass
+    def get_workdir_context(self, workdir: Path) -> dict:
+        return self.runtime.get_alignment_workdir_context(workdir)
+
+    def resolve_context(
+        self,
+        workdir: Path,
+        *,
+        intent: str = "plan",
+        adapter: str = "",
+        context_id: str = "",
+        source_option_id: str = "",
+    ) -> dict:
+        return self.runtime.resolve_loopora_context(
+            workdir,
+            intent=intent,
+            adapter=adapter,
+            context_id=context_id,
+            source_option_id=source_option_id,
+        )
+
+    def list_sessions(self, *, limit: int = 30) -> list[dict]:
+        return self.runtime.list_alignment_sessions(limit=limit)
 
 
 class BundleService(_RuntimeComponent):
-    pass
+    def list_exchange_items(self) -> list[dict]:
+        return self.runtime.list_bundle_exchange_items()
+
+    def import_text(self, bundle_yaml: str, *, replace_bundle_id: str | None = None) -> dict:
+        return self.runtime.import_bundle_text(bundle_yaml, replace_bundle_id=replace_bundle_id)
+
+    def preview_text(self, bundle_yaml: str) -> dict:
+        return self.runtime.preview_bundle_text(bundle_yaml)
 
 
 class RunService(_RuntimeComponent):
-    pass
+    def get_run(self, run_id: str) -> dict:
+        return self.runtime.get_run(run_id)
+
+    def start_run(self, loop_id: str) -> dict:
+        return self.runtime.start_run(loop_id)
+
+    def start_run_async(self, run_id: str) -> None:
+        self.runtime.start_run_async(run_id)
+
+    def stop_run(self, run_id: str) -> dict:
+        return self.runtime.stop_run(run_id)
+
+    def stream_events(self, run_id: str, *, after_id: int = 0, limit: int = 200) -> list[dict]:
+        return self.runtime.stream_events(run_id, after_id=after_id, limit=limit)
+
+    def observation_snapshot(self, run_id: str) -> dict:
+        return self.runtime.run_observation_snapshot(run_id)
+
+    def runtime_activity(self) -> dict:
+        return self.runtime.get_runtime_activity()
 
 
 class AgentNativeService(_RuntimeComponent):
-    pass
+    def start_loop(self, adapter: str, **kwargs: Any) -> dict:
+        return self.runtime.start_agent_loop(adapter, **kwargs)
+
+    def prepare_run(self, adapter: str, run_id: str, *, entry_source: str = "") -> dict:
+        return self.runtime.prepare_agent_native_run(adapter, run_id, entry_source=entry_source)
+
+    def claim_step(self, request) -> dict[str, Any]:
+        return self.runtime.claim_agent_native_step(request)
+
+    def submit_step(self, request) -> dict[str, Any]:
+        return self.runtime.submit_agent_native_step(request)
+
+    def entry_loop_start_projection(self, loop_id: str) -> dict[str, Any]:
+        return self.runtime.agent_entry_loop_start_projection(loop_id)
 
 
 class AssetRegistryService(_RuntimeComponent):
-    pass
+    def local_diagnostics(self) -> dict:
+        return self.runtime.local_asset_diagnostics()
 
 
 class ProjectionService(_RuntimeComponent):
-    pass
+    def web_run_detail(self, run: dict[str, Any]) -> dict[str, Any]:
+        from loopora.web_projection import web_run_detail_projection
+
+        return web_run_detail_projection(run)
 
 
 @dataclass(frozen=True, slots=True)

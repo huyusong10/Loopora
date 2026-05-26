@@ -94,6 +94,8 @@ def _assert_claude_loop_entry(loop_skill: str, run_contract: str) -> None:
         assert snippet in run_contract
     assert "Claude Code native dispatch guidance" in run_contract
     assert "Agent or Task tool" in run_contract
+    assert "main Claude Code session" in run_contract
+    assert "agent_work_panel:" in run_contract
     assert "nested provider CLI" in run_contract
     assert "never cite todo completion, host status, or native trace as Loopora proof" in run_contract
     assert '--context-id "${CLAUDE_SESSION_ID}"' in loop_skill

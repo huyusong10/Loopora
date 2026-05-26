@@ -20,7 +20,7 @@ targets:
       - tests/probes/real_environment/README.md
       - tests/probes/real_environment/test_real_agent_adapter_probe.py
       - tests/probes/real_environment/run_real_probes.py
-    max_bytes_per_file: 48000
+    max_bytes_per_file: 64000
   - id: agent-native-risk-hints
     type: term_hints
     title: Agent-native shortcut-risk hints
@@ -46,7 +46,7 @@ Look for:
 - Native todo/progress updates mirroring the Loopora handoff when the host supports them, without treating todo state as task evidence.
 - Missing Loop-shaping information being routed to the main Agent session as one clear user question with reply shape and decision impact, not asked by a role subagent.
 - Optional native subagent/task trace ids being preserved when the host exposes them, without inventing trace proof when unavailable.
-- `diagnostics.experience_health` showing whether the work panel, todo guidance, not-evidence marker, user-question guidance, role-dispatch guidance, native trace, and auto-repair events were observed in the recorded phase report.
+- `diagnostics.experience_health` showing whether the work panel was host-visible, whether Loopora artifacts exposed the panel, and whether todo guidance, not-evidence marker, user-question guidance, role-dispatch guidance, native trace, and auto-repair events were observed in the recorded phase report.
 - Builder evidence being concrete enough for GateKeeper to cite, and GateKeeper citing known evidence rather than a self-report.
 - The host avoiding nested calls to its own CLI from inside the Loopora run.
 - Failure triage evidence being understandable without watching stdout live.
