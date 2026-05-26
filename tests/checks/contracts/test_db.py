@@ -87,23 +87,25 @@ def test_repository_initializes_schema_user_version(tmp_path: Path) -> None:
     assert _schema_user_version(target) == CURRENT_SCHEMA_VERSION
 
 
-def test_repository_migrates_version_zero_schema_and_preserves_rows(tmp_path: Path) -> None:
+def test_repository_rejects_legacy_schema_for_v3_development_reset(tmp_path: Path) -> None:
     target = tmp_path / "app.db"
     with sqlite3.connect(target) as connection:
         connection.execute("CREATE TABLE loop_definitions (id TEXT PRIMARY KEY, name TEXT NOT NULL)")
         connection.execute("INSERT INTO loop_definitions (id, name) VALUES ('loop_legacy', 'Legacy Loop')")
-        connection.execute("PRAGMA user_version = 0")
+        connection.execute("PRAGMA user_version = 1")
 
-    LooporaRepository(target)
+    with pytest.raises(LooporaConflictError, match="Loopora v3 development reset required"):
+        LooporaRepository(target)
 
+
+def test_repository_rejects_v2_schema_for_v3_development_reset(tmp_path: Path) -> None:
+    target = tmp_path / "app.db"
     with sqlite3.connect(target) as connection:
-        columns = {row[1] for row in connection.execute("PRAGMA table_info(loop_definitions)").fetchall()}
-        row = connection.execute("SELECT id, name FROM loop_definitions WHERE id = 'loop_legacy'").fetchone()
-        version = int(connection.execute("PRAGMA user_version").fetchone()[0])
+        connection.execute("CREATE TABLE loop_definitions (id TEXT PRIMARY KEY, name TEXT NOT NULL)")
+        connection.execute("PRAGMA user_version = 2")
 
-    assert "orchestration_id" in columns
-    assert row == ("loop_legacy", "Legacy Loop")
-    assert version == CURRENT_SCHEMA_VERSION
+    with pytest.raises(LooporaConflictError, match="Loopora v3 development reset required"):
+        LooporaRepository(target)
 
 
 def test_create_run_rejects_second_active_run_for_workdir(tmp_path: Path) -> None:

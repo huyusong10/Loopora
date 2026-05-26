@@ -113,7 +113,7 @@ def _assert_packaging_boundary(packaging: dict) -> None:
 
 def _assert_context_loading_boundary(context_loading: dict) -> None:
     assert context_loading["entry_prompt"] == "thin_dispatcher"
-    assert "agent_next_summary" in context_loading["summary_first"]
+    assert context_loading["summary_first"] == ["agent_v3_envelope.summary"]
     assert context_loading["reference_loading"] == "on_demand_from_reference_paths"
     assert context_loading["host_memory"] == "host_owned_hint_not_binding_or_evidence"
     _assert_keys_present(

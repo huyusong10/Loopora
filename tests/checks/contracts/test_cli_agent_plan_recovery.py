@@ -32,7 +32,10 @@ def test_agent_plan_message_required_recovery_keeps_single_question_and_native_s
     assert output.count("required_inputs:") == 1
     assert "ask_user: What long-running task should Loopora govern?" in output
     assert "question_action: Use the host's official user-question or follow-up capability" in output
-    assert "first_task_message_example:" in output
-    assert "debug_cli_example_command:" in output
+    assert "recommended_reply_shape: Goal: ...; Fake-done risks: ...; Required evidence: ...; Judgment tradeoffs: ..." in output
+    assert "decision_impact: This answer decides the Loop's task contract" in output
+    assert "example_user_reply: Build the account-deletion audit flow;" in output
+    assert "first_task_message_example:" not in output
+    assert "debug_cli_example_command:" not in output
     assert "native surface:" in output
     assert "- host dispatch: Codex spawn_agent with agent_type=<role_dispatch.target_agent>" in output

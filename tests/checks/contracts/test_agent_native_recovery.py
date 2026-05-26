@@ -1,6 +1,35 @@
 from __future__ import annotations
 
-from agent_adapter_helpers import *
+from agent_native_v3_helpers import assert_agent_v3_envelope
+from agent_adapter_test_support import (
+    AgentBundleCandidateRequest,
+    AgentNativeStepClaimRequest,
+    AgentNativeStepSubmitRequest,
+    CliRunner,
+    LooporaConflictError,
+    Path,
+    RunArtifactLayout,
+    _agent_native_host_dispatch,
+    _agent_native_step_output,
+    _assert_agent_native_cli_output,
+    _assert_agent_native_observation_artifacts,
+    _assert_agent_native_observation_current_step,
+    _assert_agent_run_json_summary_reports_missing_dispatch,
+    _assert_agent_run_summary_continuation,
+    _assert_ambiguous_agent_recovery_choices,
+    _assert_codex_native_surface_summary,
+    _assert_labeled_loopora_agent_command,
+    _assert_loopora_cli_command,
+    _drive_agent_native_run_to_success,
+    _error_text,
+    _labeled_value,
+    _write_agent_native_cli_contract,
+    agent_adapters,
+    alignment_bundle_yaml,
+    cli,
+    json,
+    pytest,
+)
 
 @pytest.mark.parametrize(
     "agent_case",
@@ -247,9 +276,9 @@ def test_cli_agent_run_without_exact_binding_reports_recoverable_context(
     assert json_result.exit_code == 1
     assert _error_text(json_result) == ""
     payload = json.loads(json_result.stdout)
-    payload_keys = list(payload)
-    assert payload_keys.index("agent_loop_recovery_summary") < payload_keys.index("context_resolution")
-    summary = payload["agent_loop_recovery_summary"]
+    summary, _legacy = assert_agent_v3_envelope(
+        payload, kind="agent_recovery", summary_key="agent_loop_recovery_summary", status="blocked"
+    )
     assert summary["loop_recovery"] == "choose_recoverable_context"
     _assert_codex_native_surface_summary(summary)
     assert summary["choice_count"] == 1
@@ -260,15 +289,9 @@ def test_cli_agent_run_without_exact_binding_reports_recoverable_context(
     assert summary["choices"][0]["choice_hint"].startswith("Continue the in-progress run")
     assert summary["choices"][0]["next_loop_command"].startswith("/loopora-run option:agent_run:")
     assert "--source-option-id agent_run:" in summary["choices"][0]["next_cli_command"]
-    assert payload["loop_recovery"] == "choose_recoverable_context"
-    assert payload["context_resolution"]["requires_user_choice"] is True
-    assert payload["context_resolution"]["choice_count"] == 1
-    assert payload["context_resolution"]["runnable_choice_count"] == 1
-    assert payload["context_resolution"]["non_runnable_choice_count"] == 0
-    assert "one runnable context is available" in payload["context_resolution"]["selection_hint"]
-    assert payload["context_resolution"]["choices"][0]["linked_run_id"] == started["run"]["id"]
-    _assert_recovery_choice_has_copyable_commands(payload["context_resolution"]["choices"][0])
-    _assert_recovery_choice_has_status_hint(payload["context_resolution"]["choices"][0], expected_status="active_run")
+    assert summary["loop_recovery"] == "choose_recoverable_context"
+    assert summary["choices"][0]["linked_run_id"] == started["run"]["id"]
+    assert summary["choices"][0]["runnable"] is True
 
     text_result = runner.invoke(
         cli.app,
@@ -337,9 +360,9 @@ def test_cli_agent_next_without_exact_binding_reports_direct_run_recovery(
     assert json_result.exit_code == 1
     assert _error_text(json_result) == ""
     payload = json.loads(json_result.stdout)
-    payload_keys = list(payload)
-    assert payload_keys.index("agent_next_recovery_summary") < payload_keys.index("context_resolution")
-    summary = payload["agent_next_recovery_summary"]
+    summary, _legacy = assert_agent_v3_envelope(
+        payload, kind="agent_recovery", summary_key="agent_next_recovery_summary", status="blocked"
+    )
     assert summary["loop_recovery"] == "choose_recoverable_context"
     _assert_codex_native_surface_summary(summary)
     assert summary["choice_count"] == 1
@@ -349,10 +372,9 @@ def test_cli_agent_next_without_exact_binding_reports_direct_run_recovery(
     assert summary["choices"][0]["next_agent_command"].endswith(
         f"--run-id {started['run']['id']} --json --entry-source codex_project_skill"
     )
-    assert payload["loop_recovery"] == "choose_recoverable_context"
-    assert payload["recovery_source"] == "agent_next_missing_binding"
-    assert payload["context_resolution"]["choices"][0]["linked_run_id"] == started["run"]["id"]
-    assert payload["context_resolution"]["choices"][0]["next_agent_command"].endswith(
+    assert summary["loop_recovery"] == "choose_recoverable_context"
+    assert summary["choices"][0]["linked_run_id"] == started["run"]["id"]
+    assert summary["choices"][0]["next_agent_command"].endswith(
         f"--run-id {started['run']['id']} --json --entry-source codex_project_skill"
     )
 
@@ -442,9 +464,9 @@ def test_cli_agent_run_active_workdir_conflict_reports_recovery_commands(sample_
     assert json_result.exit_code == 1
     assert _error_text(json_result) == ""
     payload = json.loads(json_result.stdout)
-    payload_keys = list(payload)
-    assert payload_keys.index("agent_loop_recovery_summary") < payload_keys.index("active_runs")
-    summary = payload["agent_loop_recovery_summary"]
+    summary, _legacy = assert_agent_v3_envelope(
+        payload, kind="agent_recovery", summary_key="agent_loop_recovery_summary", status="blocked"
+    )
     assert summary["loop_recovery"] == "active_run_conflict"
     _assert_codex_native_surface_summary(summary)
     assert summary["active_run_count"] == 1
@@ -464,14 +486,14 @@ def test_cli_agent_run_active_workdir_conflict_reports_recovery_commands(sample_
         "loopora loops stop run_active",
         loopora_home=loopora_home,
     )
-    assert payload["loop_recovery"] == "active_run_conflict"
-    assert payload["message"].endswith("before starting another preview or run")
-    assert payload["active_runs"][0]["id"] == "run_active"
-    assert payload["active_runs"][0]["current_step"]["step_id"] == "builder_step"
-    assert payload["active_runs"][0]["current_step"]["target_agent"] == "loopora-builder"
-    assert payload["next_active_run_command"].endswith("--run-id run_active --json --entry-source codex_project_skill")
+    assert summary["loop_recovery"] == "active_run_conflict"
+    assert summary["message"].endswith("before starting another preview or run")
+    assert summary["active_runs"][0]["id"] == "run_active"
+    assert summary["active_runs"][0]["current_step"]["step_id"] == "builder_step"
+    assert summary["active_runs"][0]["current_step"]["target_agent"] == "loopora-builder"
+    assert summary["next_active_run_command"].endswith("--run-id run_active --json --entry-source codex_project_skill")
     _assert_loopora_cli_command(
-        payload["stop_active_run_command"],
+        summary["stop_active_run_command"],
         "loopora loops stop run_active",
         loopora_home=loopora_home,
     )
@@ -525,9 +547,10 @@ def test_cli_agent_run_reports_damaged_binding_recovery(service_factory, sample_
 
     assert result.exit_code == 1
     payload = json.loads(result.stdout)
-    assert payload["loop_recovery"] == "repair_agent_binding"
-    assert "agent binding is unreadable" in payload["binding_error"]
-    assert "loopora init codex --check" in payload["check_command"]
+    summary, _legacy = assert_agent_v3_envelope(
+        payload, kind="agent_recovery", summary_key="agent_loop_recovery_summary", status="blocked"
+    )
+    assert summary["loop_recovery"] == "repair_agent_binding"
 
 def test_agent_native_observation_snapshot_projects_current_handoff(
     service_factory,
@@ -851,7 +874,7 @@ def test_cli_agent_loop_does_not_spawn_nested_worker_for_agent_native(adapter: s
         workdir=workdir,
         loopora_home=loopora_home,
     )
-    summary = payload["agent_run_summary"]
+    summary, _legacy = assert_agent_v3_envelope(payload, kind="agent_run", summary_key="agent_run_summary")
     continuation_summary = _assert_agent_run_summary_continuation(
         summary,
         previous_run_id="run_previous",

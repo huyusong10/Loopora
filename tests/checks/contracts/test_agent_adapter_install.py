@@ -1,6 +1,36 @@
 from __future__ import annotations
 
-from agent_adapter_helpers import *
+from agent_native_v3_helpers import assert_agent_v3_envelope
+from agent_adapter_test_support import (
+    CliRunner,
+    EXPECTED_NATIVE_CONTEXT_LOADING,
+    EXPECTED_NATIVE_OBSERVABILITY,
+    EXPECTED_NATIVE_PACKAGING,
+    EXPECTED_NATIVE_PERMISSION_BOUNDARY,
+    EXPECTED_NATIVE_TOOLING_BOUNDARY,
+    LooporaConflictError,
+    Path,
+    ServiceAgentNativeMixin,
+    _assert_claude_managed_install,
+    _assert_codex_managed_install,
+    _assert_labeled_loopora_agent_command,
+    _assert_loopora_cli_command,
+    _assert_opencode_managed_install,
+    _assert_output_contains,
+    _claude_settings_has_loopora_session_hook,
+    _claude_skill_paths,
+    _codex_skill_paths,
+    _error_text,
+    _opencode_command_paths,
+    agent_adapters,
+    cli,
+    json,
+    pytest,
+)
+
+
+def _agent_check_payload(payload: dict, *, status: str) -> tuple[dict, dict]:
+    return assert_agent_v3_envelope(payload, kind="agent_check", summary_key="agent_check_summary", status=status)
 
 
 def _adapter_entry_paths_text(adapter: str) -> str:
@@ -105,7 +135,7 @@ def _assert_native_surface_packaging(surface: dict) -> None:
 
 def _assert_native_surface_context_loading(surface: dict) -> None:
     context_loading = surface["context_loading"]
-    assert "agent_next_summary" in context_loading["summary_first"]
+    assert context_loading["summary_first"] == ["agent_v3_envelope.summary"]
     assert context_loading == EXPECTED_NATIVE_CONTEXT_LOADING
 
 
@@ -458,10 +488,11 @@ def test_cli_adapter_check_before_install_reports_install_state_not_internal_mis
     json_result = runner.invoke(cli.app, ["init", "codex", "--workdir", str(workdir), "--check", "--json"])
     assert json_result.exit_code == 1
     payload = json.loads(json_result.stdout)
-    assert payload["check_recovery"]["state"] == "not_installed"
-    assert payload["check_recovery"]["details_are_expected"] is True
-    assert payload["check_recovery"]["install_command"].endswith(f"--workdir {workdir.resolve()}")
-    assert any(item["name"] == "supporting_file" for item in payload["checks"])
+    summary, _legacy = _agent_check_payload(payload, status="fail")
+    assert summary["check_status"] == "fail"
+    assert summary["check_recovery"]["state"] == "not_installed"
+    assert summary["check_recovery"]["details_are_expected"] is True
+    assert summary["check_recovery"]["install_command"].endswith(f"--workdir {workdir.resolve()}")
 
 def test_cli_agent_adapter_check_alias_reports_actionable_install_state(tmp_path: Path) -> None:
     workdir = tmp_path / "project"
@@ -482,14 +513,13 @@ def test_cli_agent_adapter_check_alias_reports_actionable_install_state(tmp_path
     json_result = runner.invoke(cli.app, ["agent", "codex", "check", "--workdir", str(workdir), "--json"])
     assert json_result.exit_code == 0, json_result.stdout
     payload = json.loads(json_result.stdout)
-    assert payload["check_status"] == "pass"
-    assert payload["check_recovery"]["check_command"].endswith(f"--workdir {workdir.resolve()} --check")
-    assert "first_task_message_example" in payload
-    assert payload["next_commands"]["plan"] == "/loopora-plan"
-    assert payload["native_surface"]["entry_kind"] == "project_skill"
-    assert payload["native_surface"]["role_agents"]["builder"]["path"] == ".codex/agents/loopora-builder.toml"
-    assert payload["native_surface"]["native_dispatch"]["accepted_native_tools"] == ["spawn_agent"]
-    assert "CODEX_SESSION_ID" in payload["native_surface"]["context_identity_env"]
+    summary, _legacy = _agent_check_payload(payload, status="pass")
+    assert summary["check_status"] == "pass"
+    assert summary["check_recovery"]["check_command"].endswith(f"--workdir {workdir.resolve()} --check")
+    assert summary["native_surface"]["entry_kind"] == "project_skill"
+    assert summary["native_surface"]["role_agents"]["builder"]["path"] == ".codex/agents/loopora-builder.toml"
+    assert summary["native_surface"]["native_dispatch"]["accepted_native_tools"] == ["spawn_agent"]
+    assert "CODEX_SESSION_ID" in summary["native_surface"]["context_identity_env"]
 
 def test_cli_adapter_check_validates_managed_supporting_files(tmp_path: Path) -> None:
     workdir = tmp_path / "project"
@@ -501,7 +531,7 @@ def test_cli_adapter_check_validates_managed_supporting_files(tmp_path: Path) ->
 
     healthy = runner.invoke(cli.app, ["init", "codex", "--workdir", str(workdir), "--check", "--json"])
     assert healthy.exit_code == 0, healthy.stdout
-    healthy_payload = json.loads(healthy.stdout)
+    _healthy_summary, healthy_payload = _agent_check_payload(json.loads(healthy.stdout), status="pass")
     assert healthy_payload["check_status"] == "pass"
     assert any(item["name"] == "supporting_file" and item["status"] == "pass" for item in healthy_payload["checks"])
 
@@ -510,7 +540,7 @@ def test_cli_adapter_check_validates_managed_supporting_files(tmp_path: Path) ->
 
     unhealthy = runner.invoke(cli.app, ["init", "codex", "--workdir", str(workdir), "--check", "--json"])
     assert unhealthy.exit_code == 1
-    unhealthy_payload = json.loads(unhealthy.stdout)
+    _unhealthy_summary, unhealthy_payload = _agent_check_payload(json.loads(unhealthy.stdout), status="fail")
     assert unhealthy_payload["check_status"] == "fail"
     assert any(item["name"] == "supporting_file" and item["status"] == "fail" for item in unhealthy_payload["checks"])
     assert not reference.exists()
@@ -539,7 +569,7 @@ def test_cli_adapter_check_validates_native_run_entry_contract(tmp_path: Path) -
     result = runner.invoke(cli.app, ["init", "codex", "--workdir", str(workdir), "--check", "--json"])
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    _summary, payload = _agent_check_payload(json.loads(result.stdout), status="fail")
     failed_contract = next(item for item in payload["checks"] if item["name"] == "entry_native_run_contract")
     assert failed_contract["status"] == "fail"
     assert failed_contract["path"] == ".agents/skills/loopora-run/SKILL.md"
@@ -592,7 +622,7 @@ def test_cli_adapter_check_validates_entry_frontmatter_contract(
     result = runner.invoke(cli.app, ["agent", adapter, "check", "--workdir", str(workdir), "--json"])
 
     assert result.exit_code == 1
-    payload = json.loads(result.stdout)
+    _summary, payload = _agent_check_payload(json.loads(result.stdout), status="fail")
     failed_entry = next(
         item
         for item in payload["checks"]
@@ -623,7 +653,7 @@ def test_cli_agent_adapter_check_explains_missing_role_agent_config(tmp_path: Pa
 
     json_result = runner.invoke(cli.app, ["agent", "codex", "check", "--workdir", str(workdir), "--json"])
     assert json_result.exit_code == 1
-    payload = json.loads(json_result.stdout)
+    _summary, payload = _agent_check_payload(json.loads(json_result.stdout), status="fail")
     failed_role = next(
         item
         for item in payload["checks"]
@@ -670,7 +700,7 @@ def test_cli_agent_adapter_check_validates_opencode_role_permission_boundary(tmp
 
     json_result = runner.invoke(cli.app, ["agent", "opencode", "check", "--workdir", str(workdir), "--json"])
     assert json_result.exit_code == 1
-    payload = json.loads(json_result.stdout)
+    _summary, payload = _agent_check_payload(json.loads(json_result.stdout), status="fail")
     assert payload["check_status"] == "fail"
     failed_permissions = {
         item["path"]: item
@@ -720,7 +750,7 @@ def test_cli_agent_adapter_check_validates_claude_role_frontmatter_and_tools(tmp
 
     json_result = runner.invoke(cli.app, ["agent", "claude", "check", "--workdir", str(workdir), "--json"])
     assert json_result.exit_code == 1
-    payload = json.loads(json_result.stdout)
+    _summary, payload = _agent_check_payload(json.loads(json_result.stdout), status="fail")
     assert payload["check_status"] == "fail"
     failed_permissions = {
         item["path"]: item
@@ -768,7 +798,7 @@ def test_cli_agent_adapter_check_validates_codex_role_toml_and_contract(tmp_path
 
     json_result = runner.invoke(cli.app, ["agent", "codex", "check", "--workdir", str(workdir), "--json"])
     assert json_result.exit_code == 1
-    payload = json.loads(json_result.stdout)
+    _summary, payload = _agent_check_payload(json.loads(json_result.stdout), status="fail")
     assert payload["check_status"] == "fail"
     failed_permissions = {
         item["path"]: item

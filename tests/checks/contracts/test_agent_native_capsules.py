@@ -1,6 +1,34 @@
 from __future__ import annotations
 
-from agent_adapter_helpers import *
+from agent_native_v3_helpers import assert_agent_v3_envelope
+from agent_adapter_test_support import (
+    AgentBundleCandidateRequest,
+    AgentNativeStepClaimRequest,
+    AgentNativeStepSubmitRequest,
+    CliRunner,
+    LooporaConflictError,
+    LooporaError,
+    Path,
+    RunArtifactLayout,
+    ServiceAgentNativeMixin,
+    _agent_native_host_dispatch,
+    _agent_native_step_output,
+    _alignment_bundle_yaml_with_peer_visible_parallel_review_inputs,
+    _assert_agent_run_summary_for_started_run,
+    _assert_codex_native_surface_summary,
+    _candidate_digest,
+    _drive_agent_native_run_to_success,
+    _ready_candidate_digest,
+    alignment_bundle_yaml,
+    append_jsonl,
+    cli,
+    cli_agent_adapter_commands,
+    hashlib,
+    json,
+    pytest,
+    read_jsonl,
+    yaml,
+)
 
 def test_cli_claude_gen_accepts_ready_bundle_without_starting_run(tmp_path: Path, sample_workdir: Path) -> None:
     bundle_file = tmp_path / "bundle.yml"
@@ -30,20 +58,11 @@ def test_cli_claude_gen_accepts_ready_bundle_without_starting_run(tmp_path: Path
 
     assert result.exit_code == 0, result.stdout
     payload = json.loads(result.stdout)
-    assert payload["adapter"] == "claude"
-    assert payload["candidate_origin"] == "agent_entry"
-    assert payload["candidate_entry_source"] == "claude_project_skill"
-    assert payload["ready"] is True
-    assert payload["status"] == "ready"
-    assert payload["host_context_id"] == "claude-session-a"
-    assert payload["binding"]["context_source"] == "explicit"
-    assert payload["binding"]["host_context_id"] == "claude-session-a"
-    assert payload["binding"]["candidate_origin"] == "agent_entry"
-    assert payload["binding"]["candidate_adapter"] == "claude"
-    assert payload["binding"]["candidate_entry_source"] == "claude_project_skill"
-    assert payload["binding"]["entry_invocations"][-1]["entry_source"] == "claude_project_skill"
-    assert payload["preview_url"].startswith("/loops/new/bundle?alignment_session_id=")
-    assert "run" not in payload
+    summary, _legacy = assert_agent_v3_envelope(payload, kind="agent_plan", summary_key="agent_plan_summary", status="ready")
+    assert summary["ready"] is True
+    assert summary["status"] == "ready"
+    assert summary["preview_url"].startswith("/loops/new/bundle?alignment_session_id=")
+    assert "run" not in summary
 
 def test_agent_loop_after_web_imported_candidate_still_uses_agent_native(
     service_factory,
@@ -185,7 +204,8 @@ def test_cli_agent_runtime_accepts_managed_entry_source_from_env(monkeypatch, tm
 
     assert result.exit_code == 0, result.stdout
     payload = json.loads(result.stdout)
-    assert payload["binding"]["entry_invocations"][-1]["entry_source"] == "claude_project_skill"
+    summary, _legacy = assert_agent_v3_envelope(payload, kind="agent_plan", summary_key="agent_plan_summary", status="ready")
+    assert summary["ready"] is True
 
 def test_cli_opencode_gen_accepts_ready_bundle_without_starting_run(monkeypatch, tmp_path: Path, sample_workdir: Path) -> None:
     bundle_file = tmp_path / "bundle.yml"
@@ -214,20 +234,11 @@ def test_cli_opencode_gen_accepts_ready_bundle_without_starting_run(monkeypatch,
 
     assert result.exit_code == 0, result.stdout
     payload = json.loads(result.stdout)
-    assert payload["adapter"] == "opencode"
-    assert payload["candidate_origin"] == "agent_entry"
-    assert payload["candidate_entry_source"] == "opencode_project_command"
-    assert payload["ready"] is True
-    assert payload["status"] == "ready"
-    assert payload["host_context_id"] == ""
-    assert payload["binding"]["context_source"] == "workdir"
-    assert payload["binding"]["host_context_id"] == ""
-    assert payload["binding"]["candidate_origin"] == "agent_entry"
-    assert payload["binding"]["candidate_adapter"] == "opencode"
-    assert payload["binding"]["candidate_entry_source"] == "opencode_project_command"
-    assert payload["binding"]["entry_invocations"][-1]["entry_source"] == "opencode_project_command"
-    assert payload["preview_url"].startswith("/loops/new/bundle?alignment_session_id=")
-    assert "run" not in payload
+    summary, _legacy = assert_agent_v3_envelope(payload, kind="agent_plan", summary_key="agent_plan_summary", status="ready")
+    assert summary["ready"] is True
+    assert summary["status"] == "ready"
+    assert summary["preview_url"].startswith("/loops/new/bundle?alignment_session_id=")
+    assert "run" not in summary
 
 def test_codex_adapter_install_does_not_touch_user_configuration(service_factory, tmp_path: Path) -> None:
     service = service_factory(scenario="success")

@@ -14,11 +14,10 @@ from loopora.service import (
     CHALLENGER_SCHEMA,
     CHECK_PLANNER_SCHEMA,
     GENERATOR_SCHEMA,
-    ServiceRunPromptMixin,
     TESTER_SCHEMA,
     VERIFIER_SCHEMA,
 )
-from loopora.service_prompts import CUSTOM_SCHEMA
+from loopora.service_prompts import CUSTOM_SCHEMA, ServiceRunPromptMixin
 
 
 class PromptHarness(ServiceRunPromptMixin):

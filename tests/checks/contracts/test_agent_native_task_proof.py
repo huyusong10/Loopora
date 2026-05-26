@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from agent_adapter_helpers import (
+from agent_adapter_expected import (
     EXPECTED_NATIVE_CONTEXT_LOADING,
     EXPECTED_NATIVE_OBSERVABILITY,
     EXPECTED_NATIVE_PACKAGING,
