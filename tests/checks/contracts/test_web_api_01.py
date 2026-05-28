@@ -364,6 +364,10 @@ def test_api_run_detail_includes_v3_web_projection(
     assert projection["kind"] == "web_run_detail"
     assert projection["summary"]["run_id"] == run_id
     assert projection["summary"]["run_status"] == payload["status"]
+    assert projection["lifecycle"]["run_id"] == run_id
+    assert projection["task_verdict"]["status"] in {"passed", "passed_with_residual_risk", "insufficient_evidence", "not_evaluated"}
+    assert "summary_md" in projection["display"]
+    assert {"queued_at", "started_at", "finished_at", "updated_at", "created_at"} <= set(projection["timing"])
     assert projection["technical_handoff"]["run_url"] == f"/runs/{run_id}"
     assert projection["raw"]["run"]["id"] == run_id
 

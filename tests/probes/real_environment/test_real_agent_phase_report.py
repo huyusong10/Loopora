@@ -109,7 +109,16 @@ def _write_phase_report_fixture(module, tmp_path: Path) -> tuple[dict, Path]:
     report, report_path = module._write_real_probe_phase_report(
         adapter="opencode",
         workdir=workdir,
-        activity_snapshots=[{"running_count": 1, "queued_count": 0, "runs": [{"id": run_id, "status": "awaiting_agent"}]}],
+        activity_snapshots=[
+            {"running_count": 1, "queued_count": 0, "runs": [{"id": run_id, "status": "awaiting_agent"}]},
+            {
+                "runtime_visibility_source": "returned_run_url",
+                "returned_run_url_phase": "during_process",
+                "running_count": 0,
+                "queued_count": 0,
+                "runs": [{"id": run_id, "status": "succeeded", "run_path": f"/runs/{run_id}"}],
+            },
+        ],
         sentinel_log=sentinel_log,
         host_signals=module.PhaseReportHostSignals(
             command='opencode run --api-key AGENT_PHASE_SECRET_MARKER "...prompt..."',
@@ -141,9 +150,26 @@ def test_real_agent_phase_report_summarizes_real_probe_milestones(tmp_path: Path
     assert phases["run_invocation_observed"]["ok"] is True
     assert phases["loop_invocation_observed"]["ok"] is True
     assert phases["runtime_activity_observed_run"]["ok"] is True
+    assert phases["returned_run_url_observed"]["ok"] is True
+    assert phases["returned_run_url_observed"]["phase"] == "during_process"
+    assert phases["returned_run_url_observed"]["diagnostic_only"] is False
     assert phases["builder_submitted"]["ok"] is True
     assert phases["gatekeeper_submitted"]["ok"] is True
     assert phases["task_verdict_passed"]["ok"] is True
+    assert report["diagnostics"]["runtime_visibility_sources"] == [
+        {
+            "source": "runtime_activity",
+            "phase": "",
+            "status": "awaiting_agent",
+            "active_runtime_activity": True,
+        },
+        {
+            "source": "returned_run_url",
+            "phase": "during_process",
+            "status": "succeeded",
+            "active_runtime_activity": False,
+        },
+    ]
     assert report["diagnostics"]["task_verdict"]["status"] == "passed"
     assert "--model" not in report["command_preview"]
     assert "--effort" not in report["command_preview"]
@@ -170,6 +196,46 @@ def test_real_agent_phase_report_summarizes_real_probe_milestones(tmp_path: Path
     ]
     assert "experience_health_is_review_signal_not_task_proof" in health["experience_notes"]
     assert module._compact_phase_report(report)["experience_health"] == health
+
+
+def test_real_agent_returned_url_after_exit_is_diagnostic_not_runtime_activity(tmp_path: Path) -> None:
+    module = _load_real_agent_module()
+    phases = module._phase_statuses(
+        module.PhaseStatusInput(
+            adapter="opencode",
+            workdir=tmp_path,
+            binding={"linked_run_id": "run_123", "entry_invocations": []},
+            activity_snapshots=[
+                {
+                    "runtime_visibility_source": "returned_run_url",
+                    "returned_run_url_phase": "post_exit_diagnostic_only",
+                    "runs": [{"id": "run_123", "status": "succeeded", "run_path": "/runs/run_123"}],
+                }
+            ],
+            events=[],
+            validation_summaries=[],
+        )
+    )
+
+    assert phases["runtime_activity_observed_run"]["ok"] is False
+    assert phases["returned_run_url_observed"]["ok"] is True
+    assert phases["returned_run_url_observed"]["phase"] == "post_exit_diagnostic_only"
+    assert phases["returned_run_url_observed"]["diagnostic_only"] is True
+
+
+def test_real_agent_terminal_probe_completion_requires_active_runtime_activity() -> None:
+    module = _load_real_agent_module()
+    report = {
+        "phase_statuses": {
+            "task_verdict_passed": {"ok": True},
+            "runtime_activity_observed_run": {"ok": False},
+        },
+        "diagnostics": {"experience_health": {"agent_work_panel_seen": True}},
+    }
+    assert module._phase_report_has_terminal_proof_and_work_panel(report) is False
+
+    report["phase_statuses"]["runtime_activity_observed_run"]["ok"] = True
+    assert module._phase_report_has_terminal_proof_and_work_panel(report) is True
 
 
 def test_real_agent_experience_health_scans_full_output_without_storing_transcript(tmp_path: Path) -> None:

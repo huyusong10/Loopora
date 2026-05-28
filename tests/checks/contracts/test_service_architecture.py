@@ -76,6 +76,26 @@ def test_component_services_expose_explicit_boundary_methods() -> None:
         assert method_names <= explicit
 
 
+def test_component_services_do_not_expose_runtime_pass_through(tmp_path: Path) -> None:
+    service = LooporaService(repository=LooporaRepository(tmp_path / "app.db"), settings=AppSettings())
+
+    assert callable(service.start_agent_loop)
+    assert "__getattr__" in LooporaService.__dict__
+    for component in (
+        service.app_services.alignment,
+        service.app_services.bundle,
+        service.app_services.run,
+        service.app_services.agent_native,
+        service.app_services.asset_registry,
+        service.app_services.projection,
+    ):
+        assert "__getattr__" not in type(component).__dict__
+
+    assert not hasattr(service.app_services.run, "start_agent_loop")
+    assert not hasattr(service.app_services.agent_native, "start_run")
+    assert not hasattr(service.app_services.projection, "get_runtime_activity")
+
+
 def test_service_private_helper_imports_do_not_grow_without_inventory() -> None:
     offenders: list[tuple[str, str, str]] = []
     for path in sorted((REPO_ROOT / "src" / "loopora").glob("service*.py")):

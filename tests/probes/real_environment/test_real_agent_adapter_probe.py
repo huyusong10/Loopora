@@ -361,6 +361,7 @@ def _activity_summaries(activity_snapshots: list[dict]) -> list[dict]:
         rows.append(
             {
                 "runtime_visibility_source": snapshot.get("runtime_visibility_source") or "runtime_activity",
+                "returned_run_url_phase": snapshot.get("returned_run_url_phase"),
                 "running_count": snapshot.get("running_count"),
                 "queued_count": snapshot.get("queued_count"),
                 "runs": [
@@ -655,7 +656,8 @@ def _phase_statuses(inputs: PhaseStatusInput) -> dict[str, dict]:
         "run_invocation_observed": {"ok": run_seen},
         "loop_invocation_observed": {"ok": run_seen},
         "linked_run_created": {"ok": bool(run_id), "run_id": run_id},
-        "runtime_activity_observed_run": {"ok": bool(run_id) and _runtime_visibility_observed_run(inputs.activity_snapshots, run_id)},
+        "runtime_activity_observed_run": {"ok": bool(run_id) and _runtime_activity_observed_run(inputs.activity_snapshots, run_id)},
+        "returned_run_url_observed": _returned_run_url_status(inputs.activity_snapshots, run_id),
         "builder_claimed": {"ok": event_seen("agent_native_step_claimed", "builder_step")},
         "builder_submitted": {"ok": event_seen("agent_native_step_submitted", "builder_step")},
         "gatekeeper_claimed": {"ok": event_seen("agent_native_step_claimed", "gatekeeper_step")},
@@ -672,19 +674,58 @@ def _phase_statuses(inputs: PhaseStatusInput) -> dict[str, dict]:
     }
 
 
-def _runtime_visibility_observed_run(activity_snapshots: list[dict], run_id: str) -> bool:
-    active_or_returned_statuses = {"queued", "running", "awaiting_agent", *TERMINAL_RUN_STATUSES}
+def _runtime_activity_observed_run(activity_snapshots: list[dict], run_id: str) -> bool:
     return any(
         item.get("id") == run_id
-        and item.get("status") in active_or_returned_statuses
-        and (
-            item.get("status") in {"queued", "running", "awaiting_agent"}
-            or snapshot.get("runtime_visibility_source") == "returned_run_url"
-        )
+        and item.get("status") in {"queued", "running", "awaiting_agent"}
+        and (snapshot.get("runtime_visibility_source") or "runtime_activity") == "runtime_activity"
         for snapshot in activity_snapshots
         for item in list(snapshot.get("runs") or [])
         if isinstance(item, dict)
     )
+
+
+def _returned_run_url_status(activity_snapshots: list[dict], run_id: str) -> dict[str, object]:
+    phases: list[str] = []
+    statuses: list[str] = []
+    for snapshot in activity_snapshots:
+        if snapshot.get("runtime_visibility_source") != "returned_run_url":
+            continue
+        for item in list(snapshot.get("runs") or []):
+            if not isinstance(item, dict) or item.get("id") != run_id:
+                continue
+            status = str(item.get("status") or "").strip()
+            if status:
+                statuses.append(status)
+            phase = str(snapshot.get("returned_run_url_phase") or "during_process").strip()
+            if phase:
+                phases.append(phase)
+    return {
+        "ok": bool(statuses),
+        "phase": phases[-1] if phases else "",
+        "phases": list(dict.fromkeys(phases)),
+        "statuses": list(dict.fromkeys(statuses)),
+        "diagnostic_only": bool(phases) and all(phase == "post_exit_diagnostic_only" for phase in phases),
+    }
+
+
+def _runtime_visibility_sources(activity_snapshots: list[dict], run_id: str) -> list[dict[str, object]]:
+    rows: list[dict[str, object]] = []
+    for snapshot in activity_snapshots:
+        source = str(snapshot.get("runtime_visibility_source") or "runtime_activity").strip() or "runtime_activity"
+        phase = str(snapshot.get("returned_run_url_phase") or "").strip()
+        for item in list(snapshot.get("runs") or []):
+            if not isinstance(item, dict) or item.get("id") != run_id:
+                continue
+            rows.append(
+                {
+                    "source": source,
+                    "phase": phase,
+                    "status": str(item.get("status") or "").strip(),
+                    "active_runtime_activity": source == "runtime_activity" and item.get("status") in {"queued", "running", "awaiting_agent"},
+                }
+            )
+    return rows[-12:]
 
 
 def _build_real_probe_phase_report(
@@ -728,6 +769,7 @@ def _build_real_probe_phase_report(
             "alignment_validations": validation_summaries,
             "binding": _binding_summary(binding),
             "runtime_activity": _activity_summaries(activity_snapshots),
+            "runtime_visibility_sources": _runtime_visibility_sources(activity_snapshots, run_id) if run_id else [],
             "events_tail": _event_summaries(events),
             "agent_native_state": _state_summary(run_path / "agent_native" / "state.json") if run_id else {},
             "experience_health": _experience_health_summary(
@@ -789,6 +831,7 @@ def _compact_phase_report(report: dict) -> dict:
         "phase_statuses": report.get("phase_statuses"),
         "binding": diagnostics.get("binding"),
         "alignment_validations": diagnostics.get("alignment_validations"),
+        "runtime_visibility_sources": diagnostics.get("runtime_visibility_sources"),
         "experience_health": diagnostics.get("experience_health"),
         "coverage": diagnostics.get("coverage"),
         "task_verdict": diagnostics.get("task_verdict"),
@@ -971,7 +1014,12 @@ def _record_runtime_activity(request: HostCommandMonitorRequest, activity_snapsh
         pass
 
 
-def _record_returned_run_url_visibility(request: HostCommandMonitorRequest, activity_snapshots: list[dict]) -> None:
+def _record_returned_run_url_visibility(
+    request: HostCommandMonitorRequest,
+    activity_snapshots: list[dict],
+    *,
+    phase: str = "during_process",
+) -> None:
     binding = _linked_run_binding(request.adapter, request.workdir)
     run_id = str((binding or {}).get("linked_run_id") or "").strip()
     if not run_id:
@@ -984,6 +1032,7 @@ def _record_returned_run_url_visibility(request: HostCommandMonitorRequest, acti
     activity_snapshots.append(
         {
             "runtime_visibility_source": "returned_run_url",
+            "returned_run_url_phase": phase,
             "running_count": 1 if status == "running" else 0,
             "queued_count": 1 if status == "queued" else 0,
             "awaiting_agent_count": 1 if status == "awaiting_agent" else 0,
@@ -1042,7 +1091,11 @@ def _raise_host_command_failure(
 def _phase_report_has_terminal_proof_and_work_panel(phase_report: dict) -> bool:
     statuses = phase_report.get("phase_statuses", {})
     health = phase_report.get("diagnostics", {}).get("experience_health", {})
-    return bool(statuses.get("task_verdict_passed", {}).get("ok")) and bool(health.get("agent_work_panel_seen"))
+    return (
+        bool(statuses.get("task_verdict_passed", {}).get("ok"))
+        and bool(statuses.get("runtime_activity_observed_run", {}).get("ok"))
+        and bool(health.get("agent_work_panel_seen"))
+    )
 
 
 def _read_and_remove_temp_text(path: str) -> str:
@@ -1095,7 +1148,7 @@ def _wait_for_host_command_with_runtime_monitoring(request: HostCommandMonitorRe
             _stop_host_process(process)
     stdout = _read_and_remove_temp_text(stdout_file.name)
     stderr = _read_and_remove_temp_text(stderr_file.name)
-    _record_returned_run_url_visibility(request, activity_snapshots)
+    _record_returned_run_url_visibility(request, activity_snapshots, phase="post_exit_diagnostic_only")
     completed = subprocess.CompletedProcess(request.command, returncode_override if returncode_override is not None else int(process.returncode or 0), stdout, stderr)
     if completed.returncode != 0:
         _raise_host_command_failure(request, completed, activity_snapshots)
@@ -1133,8 +1186,8 @@ def _wait_for_host_command_with_runtime_monitoring(request: HostCommandMonitorRe
 
 
 def _assert_runtime_activity_observed_run(activity_snapshots: list[dict], run_id: str) -> None:
-    assert activity_snapshots, "runtime activity endpoint or returned run URL was not observed while the host command was running"
-    assert _runtime_visibility_observed_run(activity_snapshots, run_id), activity_snapshots[-3:]
+    assert activity_snapshots, "runtime activity endpoint was not observed while the host command was running"
+    assert _runtime_activity_observed_run(activity_snapshots, run_id), activity_snapshots[-3:]
 
 
 def _assert_alignment_session_came_from_conversation(workdir: Path, run_id: str) -> None:

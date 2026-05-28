@@ -96,9 +96,6 @@ class _LooporaServiceRuntime(
 class _RuntimeComponent:
     runtime: _LooporaServiceRuntime
 
-    def __getattr__(self, name: str):
-        return getattr(self.runtime, name)
-
 
 class AlignmentService(_RuntimeComponent):
     def get_workdir_context(self, workdir: Path) -> dict:

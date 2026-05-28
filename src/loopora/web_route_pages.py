@@ -13,7 +13,6 @@ from loopora.web_overviews import (
     _progress_stage_seed,
     _workflow_role_executor_summary,
 )
-from loopora.web_projection import web_run_detail_projection
 from loopora.web_route_context import WebRouteContext
 from loopora.web_inputs import _preferred_request_locale
 from loopora.web_url_utils import attachment_content_disposition, with_query_params
@@ -172,7 +171,7 @@ def _register_loop_run_pages(app: FastAPI, ctx: WebRouteContext) -> None:
             {
                 "request": request,
                 "run": run,
-                "web_projection": web_run_detail_projection(run),
+                "web_projection": ctx.svc().app_services.projection.web_run_detail(run),
                 "export_bundle_url": export_bundle_url,
                 "page_locale": locale,
                 "progress_stages": _progress_stage_seed(run),

@@ -18,7 +18,6 @@ from loopora.web_overviews import (
 )
 from loopora.web_inputs import _loop_payload_from_mapping
 from loopora.web_route_context import WebRouteContext
-from loopora.web_projection import web_run_detail_projection
 from loopora.web_streaming import MAX_EVENT_CURSOR_ID, stream_error_payload
 from loopora.web_url_utils import attachment_content_disposition
 
@@ -79,7 +78,7 @@ def _register_run_observation_api_routes(app: FastAPI, ctx: WebRouteContext) -> 
     @app.get("/api/runs/{run_id}")
     async def api_get_run(run_id: str) -> JSONResponse:
         run = ctx.svc().get_run(run_id)
-        projection = ctx.svc().app_services.projection.web_run_detail(run) if hasattr(ctx.svc(), "app_services") else web_run_detail_projection(run)
+        projection = ctx.svc().app_services.projection.web_run_detail(run)
         return JSONResponse({**run, "web_projection": projection})
 
     @app.get("/api/runs/{run_id}/observation-snapshot")
