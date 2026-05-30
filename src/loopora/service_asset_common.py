@@ -8,7 +8,7 @@ from loopora.strategy_source import StrategySourceError, normalize_strategy_role
 logger = get_logger(__name__)
 
 
-def _normalize_role_models(role_models: dict | None) -> dict[str, str]:
+def normalize_role_models(role_models: dict | None) -> dict[str, str]:
     try:
         return normalize_strategy_role_models(role_models)
     except StrategySourceError as exc:

@@ -4,7 +4,7 @@ from collections.abc import Callable
 
 from loopora.db import LooporaRepository
 from loopora.executor import CodexExecutor, executor_from_environment
-from loopora.service_app import LooporaAppServices, _LooporaServiceRuntime
+from loopora.service_app import LooporaAppServices, LooporaServiceRuntime
 from loopora.service_prompts import (
     CHALLENGER_SCHEMA,
     CHECK_PLANNER_SCHEMA,
@@ -44,8 +44,8 @@ def normalize_role_models(role_models: dict | None) -> dict[str, str]:
 
 
 class LooporaService:
-    _process_active_runs = _LooporaServiceRuntime._process_active_runs
-    _process_active_runs_lock = _LooporaServiceRuntime._process_active_runs_lock
+    _process_active_runs = LooporaServiceRuntime._process_active_runs
+    _process_active_runs_lock = LooporaServiceRuntime._process_active_runs_lock
 
     def __init__(
         self,

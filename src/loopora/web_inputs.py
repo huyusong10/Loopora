@@ -136,7 +136,7 @@ def _loop_payload_from_mapping(payload: Mapping[str, object]) -> tuple[dict[str,
         "delta_threshold": delta_threshold,
         "trigger_window": trigger_window,
         "regression_window": regression_window,
-        "workflow": _workflow_from_mapping(payload, default_to_preset=False),
+        "workflow": _strategy_source_from_mapping(payload, default_to_preset=False),
         "prompt_files": _prompt_files_from_mapping(payload),
         "role_models": _role_models_from_mapping(payload),
     }
@@ -168,7 +168,7 @@ def _orchestration_payload_from_mapping(
     return {
         "name": name,
         "description": description,
-        "workflow": _workflow_from_mapping(payload, default_to_preset=default_to_preset),
+        "workflow": _strategy_source_from_mapping(payload, default_to_preset=default_to_preset),
         "prompt_files": _prompt_files_from_mapping(payload),
         "role_models": _role_models_from_mapping(payload),
     }
@@ -222,54 +222,84 @@ def _mapping_from_json_field(value: object, *, field_name: str) -> dict[str, obj
     return dict(parsed)
 
 
-def _workflow_from_mapping(payload: Mapping[str, object], *, default_to_preset: bool = True) -> dict | None:
-    workflow = payload.get("workflow")
-    if isinstance(workflow, Mapping):
-        return dict(workflow)
-    workflow_json = _mapping_from_json_field(payload.get("workflow_json"), field_name="workflow_json")
-    if workflow_json:
-        return workflow_json
+def _strategy_source_mapping_field(payload: Mapping[str, object]) -> SpecTemplateStrategyCandidate:
+    for key in ("strategy_source", "strategy", "workflow"):
+        value = payload.get(key)
+        if isinstance(value, Mapping):
+            return SpecTemplateStrategyCandidate(present=True, strategy_source=dict(value))
+    return SpecTemplateStrategyCandidate(present=False, strategy_source=None)
+
+
+def _strategy_json_mapping_field(payload: Mapping[str, object]) -> SpecTemplateStrategyCandidate:
+    for key in ("strategy_json", "workflow_json"):
+        value = payload.get(key)
+        if isinstance(value, Mapping):
+            return SpecTemplateStrategyCandidate(present=True, strategy_source=dict(value))
+    return SpecTemplateStrategyCandidate(present=False, strategy_source=None)
+
+
+def _strategy_source_from_json_field(payload: Mapping[str, object]) -> dict[str, object]:
+    for key in ("strategy_json", "workflow_json"):
+        value = payload.get(key)
+        if str(value or "").strip():
+            return _mapping_from_json_field(value, field_name=key)
+    return {}
+
+
+def _strategy_preset_from_mapping(payload: Mapping[str, object], *, default: str = "") -> str:
+    preset = str(payload.get("strategy_preset") or "").strip()
+    if preset:
+        return preset
+    return str(payload.get("workflow_preset", default)).strip() or default
+
+
+def _strategy_source_from_mapping(payload: Mapping[str, object], *, default_to_preset: bool = True) -> dict | None:
+    strategy_candidate = _strategy_source_mapping_field(payload)
+    if strategy_candidate.present:
+        return strategy_candidate.strategy_source
+    strategy_json = _strategy_json_mapping_field(payload)
+    if strategy_json.present:
+        return strategy_json.strategy_source
+    parsed_strategy_json = _strategy_source_from_json_field(payload)
+    if parsed_strategy_json:
+        return parsed_strategy_json
     if not default_to_preset:
         return None
-    preset = (
-        str(payload.get("workflow_preset", DEFAULT_STRATEGY_SOURCE_PRESET)).strip()
-        or DEFAULT_STRATEGY_SOURCE_PRESET
-    )
+    preset = _strategy_preset_from_mapping(payload, default=DEFAULT_STRATEGY_SOURCE_PRESET)
     return build_preset_strategy_source(preset)
 
 
-def _workflow_for_spec_template(payload: Mapping[str, object]) -> dict | None:
+def _strategy_source_for_spec_template(payload: Mapping[str, object]) -> dict | None:
     result: dict | None = None
-    workflow_candidate = _spec_template_mapping_candidate(payload.get("workflow"))
-    if workflow_candidate.present:
-        result = _normalize_spec_template_strategy_source(workflow_candidate.strategy_source)
+    strategy_candidate = _strategy_source_mapping_field(payload)
+    if strategy_candidate.present:
+        result = _normalize_spec_template_strategy_source(_spec_template_strategy_source_or_none(strategy_candidate.strategy_source))
     else:
-        result = _workflow_for_spec_template_without_workflow_field(payload)
+        result = _strategy_source_for_spec_template_without_mapping_field(payload)
     return result
 
 
-def _workflow_for_spec_template_without_workflow_field(payload: Mapping[str, object]) -> dict | None:
+def _strategy_source_for_spec_template_without_mapping_field(payload: Mapping[str, object]) -> dict | None:
     result: dict | None = None
-    workflow_json_candidate = _spec_template_mapping_candidate(payload.get("workflow_json"))
-    if workflow_json_candidate.present:
-        result = _normalize_spec_template_strategy_source(workflow_json_candidate.strategy_source)
+    strategy_json_candidate = _strategy_json_mapping_field(payload)
+    if strategy_json_candidate.present:
+        result = _normalize_spec_template_strategy_source(_spec_template_strategy_source_or_none(strategy_json_candidate.strategy_source))
     else:
-        workflow_json = _mapping_from_json_field(payload.get("workflow_json"), field_name="workflow_json")
+        strategy_source_json = _strategy_source_from_json_field(payload)
         result = (
-            _normalize_spec_template_strategy_source(workflow_json)
-            if workflow_json
+            _normalize_spec_template_strategy_source(strategy_source_json)
+            if strategy_source_json
             else _preset_strategy_source_for_spec_template(payload)
         )
     return result
 
 
-def _spec_template_mapping_candidate(value: object) -> SpecTemplateStrategyCandidate:
-    if not isinstance(value, Mapping):
-        return SpecTemplateStrategyCandidate(present=False, strategy_source=None)
-    strategy_source = dict(value)
+def _spec_template_strategy_source_or_none(strategy_source: dict | None) -> dict | None:
+    if not strategy_source:
+        return None
     if not strategy_source.get("roles") and not strategy_source.get("steps"):
-        strategy_source = None
-    return SpecTemplateStrategyCandidate(present=True, strategy_source=strategy_source)
+        return None
+    return strategy_source
 
 
 def _normalize_spec_template_strategy_source(strategy_source: dict | None) -> dict | None:
@@ -277,7 +307,7 @@ def _normalize_spec_template_strategy_source(strategy_source: dict | None) -> di
 
 
 def _preset_strategy_source_for_spec_template(payload: Mapping[str, object]) -> dict | None:
-    preset = str(payload.get("workflow_preset", "")).strip()
+    preset = _strategy_preset_from_mapping(payload)
     return build_preset_strategy_source(preset) if preset else None
 
 
@@ -358,12 +388,12 @@ def _normalize_orchestration_form(values: Mapping[str, object] | None) -> dict[s
     if isinstance(normalized.get("prompt_files_json"), Mapping):
         normalized["prompt_files_json"] = json.dumps(normalized["prompt_files_json"], ensure_ascii=False, indent=2)
     if not str(normalized.get("workflow_json", "")).strip():
-        preset_name = str(normalized.get("workflow_preset", "")).strip()
+        preset_name = _strategy_preset_from_mapping(normalized)
         if preset_name:
-            workflow = build_preset_strategy_source(preset_name)
-            normalized["workflow_json"] = json.dumps(workflow, ensure_ascii=False, indent=2)
+            strategy_source = build_preset_strategy_source(preset_name)
+            normalized["workflow_json"] = json.dumps(strategy_source, ensure_ascii=False, indent=2)
             normalized["prompt_files_json"] = json.dumps(
-                resolve_strategy_prompt_files(workflow),
+                resolve_strategy_prompt_files(strategy_source),
                 ensure_ascii=False,
                 indent=2,
             )
@@ -495,12 +525,12 @@ def _archetype_options() -> list[dict[str, str]]:
 
 
 def _orchestration_form_values_from_record(orchestration: Mapping[str, object]) -> dict[str, object]:
-    workflow = dict(orchestration.get("workflow_json") or {})
+    strategy_source = dict(orchestration.get("workflow_json") or {})
     return {
         "name": str(orchestration.get("name", "")),
         "description": str(orchestration.get("description", "")),
-        "workflow_preset": str(workflow.get("preset", "")).strip(),
-        "workflow_json": json.dumps(workflow, ensure_ascii=False, indent=2),
+        "workflow_preset": str(strategy_source.get("preset", "")).strip(),
+        "workflow_json": json.dumps(strategy_source, ensure_ascii=False, indent=2),
         "prompt_files_json": json.dumps(orchestration.get("prompt_files_json") or {}, ensure_ascii=False, indent=2),
     }
 
@@ -738,5 +768,5 @@ __all__ = [
     "_role_definition_form_values_from_record",
     "_role_definition_payload_from_mapping",
     "_spec_document_payload",
-    "_workflow_for_spec_template",
+    "_strategy_source_for_spec_template",
 ]

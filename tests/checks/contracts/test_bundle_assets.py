@@ -121,8 +121,8 @@ def test_bundle_traceability_requires_literal_gatekeeper_enabled() -> None:
             "bundle": {},
             "raw_sections": {},
             "roles": [],
-            "workflow": {},
-            "workflow_projection": {},
+            "strategy_source": {},
+            "strategy_flow_projection": {},
             "gatekeeper": {"enabled": "true", "roles": ["GateKeeper"], "finish_steps": ["gatekeeper_step"]},
             "controls": [],
         }
@@ -364,8 +364,8 @@ def test_bundle_control_summary_projects_strict_vs_pragmatic_tradeoff() -> None:
             },
             "raw_sections": {"Task": "Do the work.", "Evidence Preferences": "Collect evidence."},
             "roles": [{"name": "Builder", "archetype": "builder", "posture_notes": "Build the slice."}],
-            "workflow": {"collaboration_intent": "Builder then GateKeeper."},
-            "workflow_projection": {"summary": "Builder -> GateKeeper"},
+            "strategy_source": {"collaboration_intent": "Builder then GateKeeper."},
+            "strategy_flow_projection": {"summary": "Builder -> GateKeeper"},
             "gatekeeper": {"enabled": True, "roles": ["GateKeeper"], "finish_steps": ["gatekeeper_step"]},
             "controls": [],
         }
@@ -393,8 +393,8 @@ def test_bundle_control_summary_does_not_invent_tradeoff_projection() -> None:
             "bundle": {"collaboration_summary": "Use the available plan surfaces."},
             "raw_sections": {"Task": "Do the work.", "Evidence Preferences": "Collect evidence."},
             "roles": [{"name": "Builder", "archetype": "builder", "posture_notes": "Build the slice."}],
-            "workflow": {"collaboration_intent": "Builder then GateKeeper."},
-            "workflow_projection": {"summary": "Builder -> GateKeeper"},
+            "strategy_source": {"collaboration_intent": "Builder then GateKeeper."},
+            "strategy_flow_projection": {"summary": "Builder -> GateKeeper"},
             "gatekeeper": {"enabled": True, "roles": ["GateKeeper"], "finish_steps": ["gatekeeper_step"]},
             "controls": [],
         }

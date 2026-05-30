@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import ClassVar
 from typing import Any
 
-from loopora.asset_catalog import AssetCatalogError, AssetCatalogNotFoundError, WorkflowAssetCatalog
+from loopora.asset_catalog import AssetCatalogError, AssetCatalogNotFoundError, StrategyTemplateAssetCatalog
 from loopora.db import LooporaRepository
 from loopora.executor import CodexExecutor, executor_from_environment
 from loopora.service_agent_adapters import ServiceAgentAdapterMixin
@@ -29,7 +29,7 @@ from loopora.settings import AppSettings
 from loopora.strategy_source import StrategySourceError
 
 
-class _LooporaServiceRuntime(
+class LooporaServiceRuntime(
     ServiceAgentAdapterMixin,
     ServiceAgentNativeMixin,
     ServiceAssetMixin,
@@ -55,7 +55,7 @@ class _LooporaServiceRuntime(
         executor_factory: Callable[[], CodexExecutor] | None = None,
     ) -> None:
         self.repository = repository
-        self.asset_catalog = WorkflowAssetCatalog(repository)
+        self.asset_catalog = StrategyTemplateAssetCatalog(repository)
         self.settings = settings
         self.executor_factory = executor_factory or executor_from_environment
         self._threads: dict[str, threading.Thread] = {}
@@ -92,7 +92,7 @@ class _LooporaServiceRuntime(
 
 @dataclass(frozen=True, slots=True)
 class _RuntimeComponent:
-    runtime: _LooporaServiceRuntime
+    runtime: LooporaServiceRuntime
 
 
 class AlignmentService(_RuntimeComponent):
@@ -185,7 +185,7 @@ class ProjectionService(_RuntimeComponent):
 
 @dataclass(frozen=True, slots=True)
 class LooporaAppServices:
-    runtime: _LooporaServiceRuntime
+    runtime: LooporaServiceRuntime
     alignment: AlignmentService
     bundle: BundleService
     run: RunService
@@ -201,7 +201,7 @@ class LooporaAppServices:
         settings: AppSettings,
         executor_factory: Callable[[], CodexExecutor] | None = None,
     ) -> LooporaAppServices:
-        runtime = _LooporaServiceRuntime(
+        runtime = LooporaServiceRuntime(
             repository=repository,
             settings=settings,
             executor_factory=executor_factory,

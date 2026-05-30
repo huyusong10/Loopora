@@ -97,6 +97,14 @@ def test_api_spec_init_validate_and_delete_loop(service_factory, tmp_path: Path,
     assert duplicate_init_response.status_code == 409
     assert "already exists" in duplicate_init_response.json()["error"]
 
+    strategy_alias_path = tmp_path / "created-spec-strategy-alias.md"
+    strategy_alias_response = client.post(
+        "/api/specs/init",
+        json={"path": str(strategy_alias_path), "locale": "en", "strategy_preset": "inspect_first"},
+    )
+    assert strategy_alias_response.status_code == 201
+    assert "## Inspector Notes" in strategy_alias_path.read_text(encoding="utf-8")
+
     validate_response = client.get("/api/specs/validate", params={"path": str(spec_path)})
     assert validate_response.status_code == 200
     assert validate_response.json()["ok"] is True
@@ -121,7 +129,7 @@ def test_api_spec_init_validate_and_delete_loop(service_factory, tmp_path: Path,
     assert delete_response.json()["id"] == loop["id"]
     assert service.list_loops() == []
 
-def test_api_spec_template_accepts_workflow_json_mapping(service_factory) -> None:
+def test_api_spec_template_accepts_strategy_json_mapping(service_factory) -> None:
     service = service_factory(scenario="success")
     client = TestClient(build_app(service=service))
 
@@ -129,7 +137,7 @@ def test_api_spec_template_accepts_workflow_json_mapping(service_factory) -> Non
         "/api/specs/template",
         json={
             "locale": "en",
-            "workflow_json": {
+            "strategy_json": {
                 "version": 1,
                 "roles": [
                     {"id": "builder", "name": "Builder", "archetype": "builder", "prompt_ref": "builder.md"},

@@ -8,13 +8,18 @@ from fastapi.responses import JSONResponse, Response
 
 from loopora.markdown_tools import looks_binary, normalize_markdown_text, render_safe_markdown_html
 from loopora.service import LooporaError
-from loopora.specs import SpecError, compile_markdown_spec, init_spec_file_for_workflow, render_spec_template
+from loopora.specs import (
+    SpecError,
+    compile_markdown_spec,
+    init_spec_file_for_strategy_source,
+    render_spec_template_for_strategy_source,
+)
 from loopora.web_inputs import (
     _coerce_bool,
     _orchestration_payload_from_mapping,
     _role_definition_payload_from_mapping,
     _spec_document_payload,
-    _workflow_for_spec_template,
+    _strategy_source_for_spec_template,
 )
 from loopora.web_route_context import WebRouteContext
 from loopora.web_url_utils import attachment_content_disposition
@@ -316,12 +321,12 @@ def _register_spec_template_api_routes(app: FastAPI, ctx: WebRouteContext) -> No
             return ctx.json_error("spec path is required")
         locale = str(payload.get("locale", "zh"))
         try:
-            workflow = _workflow_for_spec_template(payload)
+            strategy_source = _strategy_source_for_spec_template(payload)
         except (LooporaError, StrategySourceError) as exc:
             return ctx.json_error_from_exception(exc)
         try:
             spec_path = _resolve_spec_markdown_path(path_text)
-            created = init_spec_file_for_workflow(spec_path, locale=locale, workflow=workflow)
+            created = init_spec_file_for_strategy_source(spec_path, locale=locale, strategy_source=strategy_source)
         except (FileExistsError, OSError, LooporaError) as exc:
             return ctx.json_error_from_exception(exc)
         return JSONResponse({"path": str(created.resolve())}, status_code=201)
@@ -330,17 +335,17 @@ def _register_spec_template_api_routes(app: FastAPI, ctx: WebRouteContext) -> No
     async def api_spec_template(request: Request) -> JSONResponse:
         payload = await ctx.read_json_mapping(request)
         try:
-            workflow = _workflow_for_spec_template(payload)
+            strategy_source = _strategy_source_for_spec_template(payload)
         except (LooporaError, StrategySourceError) as exc:
             return ctx.json_error_from_exception(exc)
         locale = str(payload.get("locale", "zh"))
-        markdown_text = render_spec_template(locale=locale, workflow=workflow)
+        markdown_text = render_spec_template_for_strategy_source(locale=locale, strategy_source=strategy_source)
         return JSONResponse(
             {
                 "ok": True,
                 "content": markdown_text,
                 "rendered_html": render_safe_markdown_html(markdown_text),
-                "role_note_sections": _role_note_sections_from_strategy_source(workflow),
+                "role_note_sections": _role_note_sections_from_strategy_source(strategy_source),
             }
         )
 

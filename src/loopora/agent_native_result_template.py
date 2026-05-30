@@ -14,11 +14,17 @@ from loopora.utils import write_json
 
 
 def write_agent_native_step_contract_files(capsule: dict[str, Any]) -> None:
-    capsule_path_text = str(capsule.get("capsule_absolute_path") or "").strip()
-    if not capsule_path_text:
-        raise LooporaError("agent-native capsule path is required")
-    capsule_path = Path(capsule_path_text)
-    write_json(capsule_path, capsule)
+    step_contract_path_text = str(capsule.get("step_contract_absolute_path") or capsule.get("step_contract_path") or "").strip()
+    legacy_capsule_path_text = str(capsule.get("capsule_absolute_path") or capsule.get("capsule_path") or "").strip()
+    if not step_contract_path_text and not legacy_capsule_path_text:
+        raise LooporaError("agent-native step contract path is required")
+    step_contract_paths = [Path(path) for path in (step_contract_path_text, legacy_capsule_path_text) if path]
+    written_paths: set[Path] = set()
+    for step_contract_path in step_contract_paths:
+        if step_contract_path in written_paths:
+            continue
+        write_json(step_contract_path, capsule)
+        written_paths.add(step_contract_path)
 
     submit_hint = capsule.get("submit_hint") if isinstance(capsule.get("submit_hint"), dict) else {}
     template_path_text = str(submit_hint.get("result_template_absolute_path") or "").strip()

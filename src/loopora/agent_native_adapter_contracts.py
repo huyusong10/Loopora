@@ -15,11 +15,11 @@ NATIVE_RUN_ENTRY_CONTRACT_BULLETS = (
     "Start only from `/loopora-plan`, `/loopora-run`, or explicit Loopora CLI commands; host hooks or session start must not auto-trigger Loopora work.",
     "Dispatch only through the host-native role agent named by `next_step.role_dispatch.target_agent`; if unavailable, stop before submit.",
     "Treat host auto-activation, compatibility routing, or rule injection as context hints, not Loopora dispatch proof.",
-    "Use the context, capsule, and result-template paths for role handoff; do not replace them with a large inline prompt.",
+    "Use the context, step-contract, and result-template paths for role handoff; do not replace them with a large inline prompt.",
     "Do not copy credentials, API keys, tokens, or environment secrets into result files; use redacted evidence references.",
     "Do not fan out to multiple role agents unless the reviewed Loop workflow exposes a parallel group.",
     "Treat `complete` as run lifecycle only; task proof comes from `task_proven`, `task_outcome`, and `run.task_verdict`.",
-    "Use exact Loopora binding or surfaced recoverable choices; do not auto-discover or take over host historical sessions.",
+    "Use the exact Loopora context card or surfaced recoverable choices; do not auto-discover or take over host historical sessions.",
     "Never start codex, claude, or opencode as nested provider CLIs.",
 )
 
@@ -119,7 +119,7 @@ def agent_adapter_native_capability_contract(adapter: str) -> dict[str, str]:
         "project_entry": "loopora_managed",
         "role_dispatch": "host_native",
         "role_config": "project_local_managed",
-        "context_binding": "env_or_explicit_context_id",
+        "context_card": "env_or_explicit_context_id",
         "diagnostics": "loopora_check_commands",
         "workspace_owner": "current_host_agent_workdir",
         "worktree_management": "not_created_or_switched_by_loopora",
@@ -157,13 +157,13 @@ def agent_adapter_context_loading_policy(adapter: str) -> dict[str, list[str] | 
         ],
         "reference_loading": "on_demand_from_reference_paths",
         "full_payload": "open_after_compact_summary",
-        "host_memory": "host_owned_hint_not_binding_or_evidence",
+        "host_memory": "host_owned_hint_not_loopora_context_or_evidence",
         "memory_store": "external_memory_stores_indexes_and_memory_mcp_are_hints_not_loopora_context_or_proof",
         "template_context": "host_command_templates_playbooks_and_dynamic_prompts_are_hints_not_loopora_reviewed_workflow",
         "workflow_kits": "external_spec_workflows_prd_packs_quality_gate_recipes_and_workflow_kits_are_guidance_not_loopora_reviewed_workflow_install_proof_or_evidence",
         "role_catalogs": "external_agent_catalogs_subagent_libraries_and_role_marketplaces_are_selection_hints_not_loopora_role_contract_or_policy",
-        "compaction_context": "host_compaction_summaries_are_hints_not_loopora_binding_or_proof",
-        "host_context": "host_loaded_skills_commands_agents_editor_context_and_ide_bridges_are_hints_not_loopora_binding_contract_or_evidence",
+        "compaction_context": "host_compaction_summaries_are_hints_not_loopora_context_or_proof",
+        "host_context": "host_loaded_skills_commands_agents_editor_context_and_ide_bridges_are_hints_not_loopora_context_contract_or_evidence",
         "catalog_context": "marketplace_catalogs_and_uninstalled_components_are_not_loopora_context_or_proof",
     }
 
@@ -193,7 +193,7 @@ def agent_adapter_experience_capabilities(adapter: str) -> dict[str, str]:
         "todo_guidance": "native_todo_should_create_or_update_host_todo_when_available_not_evidence",
         "user_question_guidance": "ask_user_routes_missing_loop_judgment_to_main_agent_session",
         "native_trace_optional": "preserve_official_subagent_or_task_trace_when_available_do_not_invent",
-        "technical_handoff_paths": "context_capsule_result_template_and_submit_command_remain_available_below_work_panel",
+        "technical_handoff_paths": "context_step_contract_result_template_and_submit_command_remain_available_below_work_panel",
     }
 
 
@@ -213,10 +213,10 @@ def agent_adapter_handoff_protocol(adapter: str) -> dict[str, list[str] | str]:
         "required_context": [
             "role_dispatch.target_agent",
             "context_path",
-            "capsule_path",
+            "step_contract_path",
             "result_template",
         ],
-        "payload_policy": "path_based_context_capsule_and_template_not_large_inline_prompt",
+        "payload_policy": "path_based_context_step_contract_and_template_not_large_inline_prompt",
         "submit_gate": "filled_schema_result_with_loopora_host_dispatch",
         "dispatch_failure": "stop_and_report_dispatch_unavailable_before_submit",
         "parallel_dispatch": "only_when_loop_workflow_declares_parallel_group",
@@ -245,13 +245,13 @@ def agent_adapter_permission_boundary(adapter: str) -> dict[str, str]:
 def agent_adapter_session_recovery_policy(adapter: str) -> dict[str, str]:
     normalize_agent_adapter_kind(adapter)
     return {
-        "binding": "exact_agent_context_binding_first",
+        "context_card": "exact_agent_context_card_first",
         "ambiguous": "list_recoverable_contexts_before_running",
         "ready_resume": "/loopora-run option:<recoverable_context_id>",
         "not_ready": "return_to_loopora_plan_or_web_review",
         "provider_session_resume": "not_used_for_loopora_work",
         "host_session_discovery": "not_auto_discovered_or_taken_over_by_loopora",
-        "checkpoint_restore": "host_checkpoints_rewinds_and_session_archives_are_recovery_hints_not_loopora_binding_or_proof",
+        "checkpoint_restore": "host_checkpoints_rewinds_and_session_archives_are_recovery_hints_not_loopora_context_or_proof",
     }
 
 

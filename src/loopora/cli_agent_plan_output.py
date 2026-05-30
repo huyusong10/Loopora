@@ -177,7 +177,7 @@ def _attach_agent_web_review_recovery_fields(result: dict) -> None:
     if reply:
         result["review_reply_preview"] = _clip_inline(reply, 260)
     result["next_review_step"] = "open the preview URL, complete the Web review checklist, then use /loopora-run only after the preview is ready"
-    result["after_review_ready"] = "return to this Agent session and run /loopora-run; do not start the Agent-native run from Web"
+    result["after_review_ready"] = "return to this Agent session and run /loopora-run; do not start the Agent Runner run from Web"
     result["after_review_slash_command"] = _agent_entry_return_slash_command()
     command = _agent_entry_return_run_command(result)
     if command:
@@ -269,7 +269,7 @@ def _attach_agent_ready_run_handoff_fields(result: dict) -> None:
     if not result.get("ready"):
         return
     result["review_before_loop"] = "confirm the preview carries these judgments before running /loopora-run"
-    result["ready_next_step"] = "return to this Agent session and run /loopora-run; do not start the Agent-native run from Web"
+    result["ready_next_step"] = "return to this Agent session and run /loopora-run; do not start the Agent Runner run from Web"
     result["ready_slash_command"] = _agent_entry_return_slash_command()
     command = _agent_entry_return_run_command(result)
     if command:
@@ -323,7 +323,7 @@ def _print_agent_web_review_task_anchor(result: dict) -> None:
 
 def _print_agent_web_review_return_command(result: dict) -> None:
     command = _agent_entry_return_run_command(result)
-    typer.echo("after_review_ready: return to this Agent session and run /loopora-run; do not start the Agent-native run from Web")
+    typer.echo("after_review_ready: return to this Agent session and run /loopora-run; do not start the Agent Runner run from Web")
     typer.echo(f"after_review_slash_command: {_agent_entry_return_slash_command()}")
     if command:
         typer.echo(f"after_review_cli_command: {command}")

@@ -1,7 +1,16 @@
 from __future__ import annotations
 
+from dataclasses import fields
+
 from loopora.bundles import normalize_bundle
 from loopora.projections import LoopfileExportProjectionInput, build_loopfile_export_projection
+
+
+def test_loopfile_export_projection_accepts_strategy_source_internally() -> None:
+    field_names = {field.name for field in fields(LoopfileExportProjectionInput)}
+
+    assert "strategy_source" in field_names
+    assert "workflow" not in field_names
 
 
 def test_loopfile_export_projection_builds_valid_loopfile_from_loop_snapshot(tmp_path) -> None:
@@ -24,7 +33,7 @@ Export Loopfile from the Loop snapshot.
 - The exported Loopfile remains importable.
 """,
     }
-    workflow = {
+    strategy_source = {
         "version": 1,
         "collaboration_intent": "Build then judge from evidence.",
         "roles": [
@@ -76,7 +85,7 @@ Export Loopfile from the Loop snapshot.
             LoopfileExportProjectionInput(
                 loop=loop,
                 loop_id="loop_export",
-                workflow=workflow,
+                strategy_source=strategy_source,
                 prompt_files={},
                 role_definition_by_id=role_definition_by_id,
                 name="Exported Loopfile",

@@ -124,7 +124,7 @@ def test_cli_agent_next_prints_run_contract_for_intermediate_capsule(monkeypatch
                             "do not cite todo completion as Loopora evidence."
                         ),
                         "items": [
-                            "Read agent_v3_envelope.summary and the context capsule.",
+                            "Read agent_v3_envelope.summary and the step contract.",
                             "Invoke loopora-inspector through the host-native role agent mechanism.",
                             "Fill the result template with schema-shaped output and preserve loopora_host_dispatch.",
                             "Submit the filled result and read agent_v3_envelope.summary before continuing.",
@@ -188,6 +188,7 @@ def test_cli_agent_next_prints_run_contract_for_intermediate_capsule(monkeypatch
                         ],
                     },
                     "context_path": "iterations/iter_000/steps/01__inspector_step/input.context.json",
+                    "step_contract_path": "iterations/iter_000/steps/01__inspector_step/step_contract.json",
                     "capsule_path": "iterations/iter_000/steps/01__inspector_step/capsule.json",
                     "submit_hint": {
                         "command": "loopora agent codex submit --run-id run_next",
@@ -250,7 +251,7 @@ def test_cli_agent_next_prints_run_contract_for_intermediate_capsule(monkeypatch
     assert "result_template_fill: open the template, replace null placeholders in result, keep loopora_host_dispatch, then submit the filled copy" in result.stdout
     _assert_cli_handoff_contract_paths(
         result.stdout,
-        capsule_fragment="iterations/iter_000/steps/01__inspector_step/capsule.json",
+        step_contract_fragment="iterations/iter_000/steps/01__inspector_step/step_contract.json",
         template_fragment=".loopora/agent_outbox/codex/run_next__inspector_step.result.template.json",
         outbox_fragment=".loopora/agent_outbox/codex",
     )
@@ -415,11 +416,11 @@ def test_cli_agent_submit_prints_terminal_task_verdict(monkeypatch, tmp_path: Pa
     assert "next_loop_command: /loopora-run" in result.stdout
     assert "next_plan_action: open run_url and use Improve plan with evidence if the Loop itself needs adjustment" in result.stdout
     assert "next_evidence_focus: Required coverage still lacks direct evidence." in result.stdout
-    assert "agent_native: lifecycle_closed_task_unproven" in result.stdout
-    assert "agent_native_task_verdict: insufficient_evidence" in result.stdout
+    assert "agent_runner: lifecycle_closed_task_unproven" in result.stdout
+    assert "agent_runner_task_verdict: insufficient_evidence" in result.stdout
     assert "task_proof_source: run.task_verdict" in result.stdout
     assert "run_lifecycle_source: result.complete" in result.stdout
-    assert "agent_native: complete" not in result.stdout
+    assert "agent_runner: complete" not in result.stdout
 
 
 def test_cli_agent_submit_json_preserves_terminal_task_next_action(monkeypatch, tmp_path: Path) -> None:

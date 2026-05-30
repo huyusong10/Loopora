@@ -439,7 +439,7 @@
       const policy = actionPolicyText(step.action_policy || {});
       const title = policy ? `${roleLabel} -> ${targetAgent} · ${policy}` : `${roleLabel} -> ${targetAgent}`;
       const contextPath = String(step.context_path || step.context_absolute_path || "-");
-      const capsulePath = String(step.capsule_path || step.capsule_absolute_path || "-");
+      const stepContractPath = String(step.step_contract_path || step.step_contract_absolute_path || step.capsule_path || step.capsule_absolute_path || "-");
       const templatePath = String(submitHint.result_template_path || submitHint.result_template_absolute_path || "-");
       const outboxPath = String(submitHint.result_outbox_dir || submitHint.result_outbox_absolute_dir || "-");
       const submitCommand = String(submitHint.command || "-");
@@ -462,10 +462,10 @@
       const normalizedContextCopyValue = contextCopyValue && contextCopyValue !== "-"
         ? contextCopyValue
         : (contextPath && contextPath !== "-" ? contextPath : "");
-      const capsuleCopyValue = String(step.capsule_absolute_path || capsulePath || "").trim();
-      const normalizedCapsuleCopyValue = capsuleCopyValue && capsuleCopyValue !== "-"
-        ? capsuleCopyValue
-        : (capsulePath && capsulePath !== "-" ? capsulePath : "");
+      const stepContractCopyValue = String(step.step_contract_absolute_path || stepContractPath || "").trim();
+      const normalizedStepContractCopyValue = stepContractCopyValue && stepContractCopyValue !== "-"
+        ? stepContractCopyValue
+        : (stepContractPath && stepContractPath !== "-" ? stepContractPath : "");
       const templateCopyValue = String(submitHint.result_template_absolute_path || templatePath || "").trim();
       const normalizedTemplateCopyValue = templateCopyValue && templateCopyValue !== "-"
         ? templateCopyValue
@@ -480,7 +480,7 @@
       renderAgentContinuation(step.continuation);
       setTextContentIfChanged("agent-handoff-target", targetAgent);
       setTextContentIfChanged("agent-handoff-context", contextPath);
-      setTextContentIfChanged("agent-handoff-capsule", capsulePath);
+      setTextContentIfChanged("agent-handoff-step-contract", stepContractPath);
       setTextContentIfChanged("agent-handoff-template", templatePath);
       setTextContentIfChanged("agent-handoff-outbox", outboxPath);
       setTextContentIfChanged("agent-handoff-submit", submitCommand);
@@ -488,7 +488,7 @@
       setTextContentIfChanged("agent-handoff-known-evidence", knownEvidenceText);
       setTextContentIfChanged("agent-handoff-fill-rule", fillRuleText);
       setAttributeIfChanged(document.getElementById("agent-handoff-context"), "title", String(step.context_absolute_path || contextPath));
-      setAttributeIfChanged(document.getElementById("agent-handoff-capsule"), "title", String(step.capsule_absolute_path || capsulePath));
+      setAttributeIfChanged(document.getElementById("agent-handoff-step-contract"), "title", String(step.step_contract_absolute_path || stepContractPath));
       setAttributeIfChanged(document.getElementById("agent-handoff-template"), "title", String(submitHint.result_template_absolute_path || templatePath));
       setAttributeIfChanged(document.getElementById("agent-handoff-outbox"), "title", String(submitHint.result_outbox_absolute_dir || outboxPath));
       setAttributeIfChanged(document.getElementById("agent-handoff-submit"), "title", submitCommand);
@@ -497,7 +497,7 @@
       setAttributeIfChanged(document.getElementById("agent-handoff-fill-rule"), "title", fillRuleText);
       setAgentHandoffCopyValue("target", targetAgent === "-" ? "" : targetAgent);
       setAgentHandoffCopyValue("context", normalizedContextCopyValue);
-      setAgentHandoffCopyValue("capsule", normalizedCapsuleCopyValue);
+      setAgentHandoffCopyValue("step-contract", normalizedStepContractCopyValue);
       setAgentHandoffCopyValue("template", normalizedTemplateCopyValue);
       setAgentHandoffCopyValue("outbox", normalizedOutboxCopyValue);
       setAgentHandoffCopyValue("submit", submitCommand === "-" ? "" : submitCommand);

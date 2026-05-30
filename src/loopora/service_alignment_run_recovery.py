@@ -263,8 +263,8 @@ def agent_run_context_choice_payload(  # noqa: PLR0913 - recovery choice payload
         "agent_cli_command": next_cli_command,
         "label_zh": f"{agent_run_context_choice_label_prefix_zh(next_action)}：{title}",
         "label_en": f"{agent_run_context_choice_label_prefix_en(next_action)}: {title}",
-        "description_zh": "回到这个 Agent Native Loop 的现有运行或 READY 预览；不会重新规划。",
-        "description_en": "Return to this Agent Native Loop's existing run or READY preview without replanning.",
+        "description_zh": "回到这个 Agent Runner Loop 的现有运行或 READY 预览；不会重新规划。",
+        "description_en": "Return to this Agent Runner Loop's existing run or READY preview without replanning.",
     }
     if next_action == "preview_not_ready":
         choice["next_review_step"] = "open the preview, complete Web review or rerun /loopora-plan, then use /loopora-run only after it is ready"

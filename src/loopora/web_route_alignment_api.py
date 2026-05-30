@@ -10,7 +10,7 @@ from fastapi import FastAPI, Query, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from loopora.diagnostics import log_event, log_exception
-from loopora.service_alignment import ALIGNMENT_ACTIVE_STATUSES
+from loopora.service_alignment_status import ALIGNMENT_ACTIVE_STATUSES
 from loopora.web_route_context import WebRouteContext
 from loopora.web_streaming import MAX_EVENT_CURSOR_ID, parse_sse_last_event_id, stream_error_payload
 

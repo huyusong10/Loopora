@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from loopora.asset_catalog import AssetCatalogNotFoundError, WorkflowAssetCatalog
+from loopora.asset_catalog import AssetCatalogNotFoundError, StrategyTemplateAssetCatalog, WorkflowAssetCatalog
 from loopora.db import LooporaRepository
 from loopora.strategy_source import StrategySourceError, default_strategy_role_execution_settings
 
@@ -19,9 +19,9 @@ archetype: {archetype}
 """
 
 
-def _catalog_with_custom_assets(tmp_path: Path) -> tuple[WorkflowAssetCatalog, dict, dict]:
+def _catalog_with_custom_assets(tmp_path: Path) -> tuple[StrategyTemplateAssetCatalog, dict, dict]:
     repository = LooporaRepository(tmp_path / "app.db")
-    catalog = WorkflowAssetCatalog(repository)
+    catalog = StrategyTemplateAssetCatalog(repository)
     role_definition = catalog.create_role_definition(
         name="Release Builder",
         description="Ships focused release work.",
@@ -110,7 +110,7 @@ def _assert_builtin_practice_assets(builtin_orchestrations: list[dict]) -> None:
     assert all(item["id"] != "builtin:build_first" for item in builtin_orchestrations)
 
 
-def _assert_hidden_legacy_orchestrations_remain_addressable(catalog: WorkflowAssetCatalog) -> None:
+def _assert_hidden_legacy_orchestrations_remain_addressable(catalog: StrategyTemplateAssetCatalog) -> None:
     expectations = {
         "builtin:fast_lane": ("Fast Lane", "fast_lane"),
         "builtin:build_then_parallel_review": ("Build + Parallel Review", "build_then_parallel_review"),
@@ -121,6 +121,10 @@ def _assert_hidden_legacy_orchestrations_remain_addressable(catalog: WorkflowAss
         orchestration = catalog.get_orchestration(orchestration_id)
         assert orchestration["name"] == name
         assert orchestration["workflow_json"]["preset"] == preset
+
+
+def test_workflow_asset_catalog_remains_legacy_import_alias() -> None:
+    assert WorkflowAssetCatalog is StrategyTemplateAssetCatalog
 
 
 def test_asset_catalog_lists_builtin_and_custom_assets_with_stable_flags(tmp_path: Path) -> None:
@@ -142,9 +146,29 @@ def test_asset_catalog_lists_builtin_and_custom_assets_with_stable_flags(tmp_pat
     _assert_hidden_legacy_orchestrations_remain_addressable(catalog)
 
 
+def test_asset_catalog_accepts_strategy_source_for_orchestration_templates(tmp_path: Path) -> None:
+    repository = LooporaRepository(tmp_path / "app.db")
+    catalog = StrategyTemplateAssetCatalog(repository)
+
+    created = catalog.create_orchestration(
+        name="Strategy Source Inspect First",
+        description="Creates through the legacy Loopfile-compatible source field.",
+        workflow={"preset": "inspect_first"},
+    )
+    updated = catalog.update_orchestration(
+        created["id"],
+        name="Strategy Source Build First",
+        description="Updates through the Strategy Source mutation boundary.",
+        strategy_source={"preset": "build_first"},
+    )
+
+    assert created["workflow_json"]["preset"] == "inspect_first"
+    assert updated["workflow_json"]["preset"] == "build_first"
+
+
 def test_asset_catalog_resolves_builtin_orchestration_input_and_applies_role_overrides(tmp_path: Path) -> None:
     repository = LooporaRepository(tmp_path / "app.db")
-    catalog = WorkflowAssetCatalog(repository)
+    catalog = StrategyTemplateAssetCatalog(repository)
 
     resolved = catalog.resolve_orchestration_input(
         orchestration_id="builtin:inspect_first",
@@ -164,7 +188,7 @@ def test_asset_catalog_resolves_builtin_orchestration_input_and_applies_role_ove
 
 def test_asset_catalog_persists_role_execution_defaults_for_model_only_snapshots(tmp_path: Path) -> None:
     repository = LooporaRepository(tmp_path / "app.db")
-    catalog = WorkflowAssetCatalog(repository)
+    catalog = StrategyTemplateAssetCatalog(repository)
 
     orchestration = catalog.create_orchestration(
         name="Model Override Workflow",
@@ -192,7 +216,7 @@ def test_asset_catalog_persists_role_execution_defaults_for_model_only_snapshots
 
 def test_asset_catalog_hydrates_role_snapshots_from_role_definition_id(tmp_path: Path) -> None:
     repository = LooporaRepository(tmp_path / "app.db")
-    catalog = WorkflowAssetCatalog(repository)
+    catalog = StrategyTemplateAssetCatalog(repository)
     role_definition = catalog.create_role_definition(
         name="Release Builder",
         description="Ships focused release work.",
@@ -231,7 +255,7 @@ def test_asset_catalog_hydrates_role_snapshots_from_role_definition_id(tmp_path:
 
 def test_asset_catalog_hydrates_role_posture_notes_from_role_definition_id(tmp_path: Path) -> None:
     repository = LooporaRepository(tmp_path / "app.db")
-    catalog = WorkflowAssetCatalog(repository)
+    catalog = StrategyTemplateAssetCatalog(repository)
     role_definition = catalog.create_role_definition(
         name="Focused Builder",
         description="Ships focused release work.",
@@ -261,7 +285,7 @@ def test_asset_catalog_hydrates_role_posture_notes_from_role_definition_id(tmp_p
 
 def test_asset_catalog_allows_task_scoped_posture_notes_with_role_definition_id(tmp_path: Path) -> None:
     repository = LooporaRepository(tmp_path / "app.db")
-    catalog = WorkflowAssetCatalog(repository)
+    catalog = StrategyTemplateAssetCatalog(repository)
     role_definition = catalog.create_role_definition(
         name="Focused Builder",
         description="Ships focused release work.",
@@ -295,7 +319,7 @@ def test_asset_catalog_allows_task_scoped_posture_notes_with_role_definition_id(
 
 def test_asset_catalog_allows_workflow_role_label_with_role_definition_id(tmp_path: Path) -> None:
     repository = LooporaRepository(tmp_path / "app.db")
-    catalog = WorkflowAssetCatalog(repository)
+    catalog = StrategyTemplateAssetCatalog(repository)
     role_definition = catalog.create_role_definition(
         name="Generic Inspector",
         description="Checks evidence.",
@@ -329,7 +353,7 @@ def test_asset_catalog_allows_workflow_role_label_with_role_definition_id(tmp_pa
 
 def test_asset_catalog_rejects_unknown_role_definition_ids_in_workflow(tmp_path: Path) -> None:
     repository = LooporaRepository(tmp_path / "app.db")
-    catalog = WorkflowAssetCatalog(repository)
+    catalog = StrategyTemplateAssetCatalog(repository)
 
     with pytest.raises(AssetCatalogNotFoundError, match="unknown role definition: role_missing"):
         catalog.resolve_orchestration_input(
@@ -350,7 +374,7 @@ def test_asset_catalog_rejects_unknown_role_definition_ids_in_workflow(tmp_path:
 
 def test_asset_catalog_rejects_conflicting_role_snapshot_fields_for_role_definition_id(tmp_path: Path) -> None:
     repository = LooporaRepository(tmp_path / "app.db")
-    catalog = WorkflowAssetCatalog(repository)
+    catalog = StrategyTemplateAssetCatalog(repository)
     role_definition = catalog.create_role_definition(
         name="Release Builder",
         description="Ships focused release work.",
@@ -388,7 +412,7 @@ def test_asset_catalog_rejects_conflicting_role_snapshot_fields_for_role_definit
 
 def test_asset_catalog_rejects_conflicting_prompt_files_for_role_definition_id(tmp_path: Path) -> None:
     repository = LooporaRepository(tmp_path / "app.db")
-    catalog = WorkflowAssetCatalog(repository)
+    catalog = StrategyTemplateAssetCatalog(repository)
     role_definition = catalog.create_role_definition(
         name="Release Builder",
         description="Ships focused release work.",
@@ -427,7 +451,7 @@ def test_asset_catalog_rejects_conflicting_prompt_files_for_role_definition_id(t
 
 def test_asset_catalog_update_preserves_existing_workflow_and_prompt_files_when_omitted(tmp_path: Path) -> None:
     repository = LooporaRepository(tmp_path / "app.db")
-    catalog = WorkflowAssetCatalog(repository)
+    catalog = StrategyTemplateAssetCatalog(repository)
     orchestration = catalog.create_orchestration(
         name="Custom Builder Flow",
         description="Uses a custom builder prompt.",
@@ -462,7 +486,7 @@ def test_asset_catalog_update_preserves_existing_workflow_and_prompt_files_when_
 
 def test_asset_catalog_update_prunes_prompt_files_not_used_by_current_workflow(tmp_path: Path) -> None:
     repository = LooporaRepository(tmp_path / "app.db")
-    catalog = WorkflowAssetCatalog(repository)
+    catalog = StrategyTemplateAssetCatalog(repository)
     orchestration = catalog.create_orchestration(
         name="Custom Builder Flow",
         description="Uses a custom builder prompt.",
@@ -504,7 +528,7 @@ def test_asset_catalog_update_prunes_prompt_files_not_used_by_current_workflow(t
 
 def test_asset_catalog_rejects_invalid_prompt_file_keys(tmp_path: Path) -> None:
     repository = LooporaRepository(tmp_path / "app.db")
-    catalog = WorkflowAssetCatalog(repository)
+    catalog = StrategyTemplateAssetCatalog(repository)
 
     with pytest.raises(StrategySourceError, match="prompt_ref must be a safe relative path"):
         catalog.create_orchestration(
@@ -547,7 +571,7 @@ def test_asset_catalog_sanitizes_invalid_persisted_prompt_file_keys(tmp_path: Pa
             },
         }
     )
-    catalog = WorkflowAssetCatalog(repository)
+    catalog = StrategyTemplateAssetCatalog(repository)
 
     orchestration = catalog.get_orchestration("orch_legacy")
     resolved = catalog.resolve_orchestration_input(
@@ -563,7 +587,7 @@ def test_asset_catalog_sanitizes_invalid_persisted_prompt_file_keys(tmp_path: Pa
 
 def test_asset_catalog_role_definition_crud_normalizes_archetypes_and_protects_builtins(tmp_path: Path) -> None:
     repository = LooporaRepository(tmp_path / "app.db")
-    catalog = WorkflowAssetCatalog(repository)
+    catalog = StrategyTemplateAssetCatalog(repository)
 
     created = catalog.create_role_definition(
         name="Legacy Generator",
@@ -632,7 +656,7 @@ def test_asset_catalog_role_definition_crud_normalizes_archetypes_and_protects_b
 
 def test_asset_catalog_rejects_duplicate_role_definition_prompt_refs(tmp_path: Path) -> None:
     repository = LooporaRepository(tmp_path / "app.db")
-    catalog = WorkflowAssetCatalog(repository)
+    catalog = StrategyTemplateAssetCatalog(repository)
 
     with pytest.raises(ValueError, match=r"prompt_ref already in use: builder\.md"):
         catalog.create_role_definition(
@@ -671,7 +695,7 @@ def test_asset_catalog_rejects_duplicate_role_definition_prompt_refs(tmp_path: P
 
 def test_asset_catalog_rejects_unsafe_role_definition_prompt_ref(tmp_path: Path) -> None:
     repository = LooporaRepository(tmp_path / "app.db")
-    catalog = WorkflowAssetCatalog(repository)
+    catalog = StrategyTemplateAssetCatalog(repository)
 
     with pytest.raises(ValueError, match="prompt_ref must be a safe relative path"):
         catalog.create_role_definition(
@@ -687,7 +711,7 @@ def test_asset_catalog_rejects_unsafe_role_definition_prompt_ref(tmp_path: Path)
 
 def test_asset_catalog_rejects_custom_executor_preset_mode(tmp_path: Path) -> None:
     repository = LooporaRepository(tmp_path / "app.db")
-    catalog = WorkflowAssetCatalog(repository)
+    catalog = StrategyTemplateAssetCatalog(repository)
 
     with pytest.raises(ValueError, match="only supports command mode"):
         catalog.create_role_definition(

@@ -1008,9 +1008,9 @@ def test_successful_run_emits_structured_service_logs(
     events = {record["event"] for record in run_records}
 
     assert "service.run.execution.started" in events
-    assert "service.workflow.execution.started" in events
-    assert "service.workflow.iteration.started" in events
-    assert "service.workflow.step.completed" in events
+    assert "service.runner.execution.started" in events
+    assert "service.runner.iteration.started" in events
+    assert "service.runner.step.completed" in events
     assert "service.run.execution.finished" in events
     finished_record = next(record for record in run_records if record["event"] == "service.run.execution.finished")
     assert finished_record["loop_id"] == loop["id"]

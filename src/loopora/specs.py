@@ -63,15 +63,30 @@ def spec_template(locale: str = "zh", workflow: dict[str, Any] | None = None) ->
     return render_spec_template(locale=locale, workflow=workflow)
 
 
-def render_spec_template(locale: str = "zh", workflow: dict[str, Any] | None = None) -> str:
+def render_spec_template(
+    locale: str = "zh",
+    workflow: dict[str, Any] | None = None,
+    *,
+    strategy_source: dict[str, Any] | None = None,
+) -> str:
+    return render_spec_template_for_strategy_source(
+        locale=locale,
+        strategy_source=strategy_source if strategy_source is not None else workflow,
+    )
+
+
+def render_spec_template_for_strategy_source(
+    locale: str = "zh",
+    strategy_source: dict[str, Any] | None = None,
+) -> str:
     use_zh = locale.lower().startswith("zh")
     normalized_strategy_source = {"version": 1, "preset": "", "roles": [], "steps": []}
-    if workflow:
-        roles = workflow.get("roles") if isinstance(workflow, dict) else None
-        steps = workflow.get("steps") if isinstance(workflow, dict) else None
-        preset_name = str(workflow.get("preset", "")).strip() if isinstance(workflow, dict) else ""
+    if strategy_source:
+        roles = strategy_source.get("roles") if isinstance(strategy_source, dict) else None
+        steps = strategy_source.get("steps") if isinstance(strategy_source, dict) else None
+        preset_name = str(strategy_source.get("preset", "")).strip() if isinstance(strategy_source, dict) else ""
         if isinstance(roles, list) and isinstance(steps, list) and (roles or steps):
-            normalized_strategy_source = normalize_strategy_source(workflow)
+            normalized_strategy_source = normalize_strategy_source(strategy_source)
         elif preset_name:
             normalized_strategy_source = build_preset_strategy_source(preset_name)
     role_note_sections = _render_role_note_sections(normalized_strategy_source, locale="zh" if use_zh else "en")
@@ -155,14 +170,26 @@ def render_spec_template(locale: str = "zh", workflow: dict[str, Any] | None = N
 
 
 def init_spec_file(path: Path, *, locale: str = "zh") -> Path:
-    return init_spec_file_for_workflow(path, locale=locale, workflow=None)
+    return init_spec_file_for_strategy_source(path, locale=locale, strategy_source=None)
 
 
 def init_spec_file_for_workflow(path: Path, *, locale: str = "zh", workflow: dict[str, Any] | None = None) -> Path:
+    return init_spec_file_for_strategy_source(path, locale=locale, strategy_source=workflow)
+
+
+def init_spec_file_for_strategy_source(
+    path: Path,
+    *,
+    locale: str = "zh",
+    strategy_source: dict[str, Any] | None = None,
+) -> Path:
     if path.exists():
         raise FileExistsError(f"spec already exists: {path}")
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(render_spec_template(locale=locale, workflow=workflow), encoding="utf-8")
+    path.write_text(
+        render_spec_template_for_strategy_source(locale=locale, strategy_source=strategy_source),
+        encoding="utf-8",
+    )
     return path
 
 

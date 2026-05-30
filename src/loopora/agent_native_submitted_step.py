@@ -6,9 +6,9 @@ from typing import Any
 from loopora.context_flow import evidence_entry_id
 from loopora.run_artifacts import RunArtifactLayout
 from loopora.service_agent_native_contracts import (
-    _agent_native_actionable_blocking_item,
-    _agent_native_actionable_repair_next_action,
     _agent_native_output_coverage_results,
+    agent_native_actionable_blocking_item,
+    agent_native_actionable_repair_next_action,
 )
 
 
@@ -31,8 +31,8 @@ def agent_native_submitted_step_result(request: AgentNativeSubmittedStepResultRe
         evidence_refs = [evidence_entry_id(request.iter_id, request.step_order, step_id)]
     handoff_path = request.layout.step_handoff_path(request.iter_id, request.step_order, step_id)
     blocking_items = [str(item).strip() for item in list(request.handoff.get("blocking_items") or []) if str(item).strip()]
-    actionable_blocking_items = [_agent_native_actionable_blocking_item(item) for item in blocking_items]
-    recommended_next_action = _agent_native_actionable_repair_next_action(
+    actionable_blocking_items = [agent_native_actionable_blocking_item(item) for item in blocking_items]
+    recommended_next_action = agent_native_actionable_repair_next_action(
         str(request.handoff.get("recommended_next_action") or "").strip(),
         actionable_blocking_items,
     )

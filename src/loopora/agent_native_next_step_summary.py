@@ -163,7 +163,14 @@ def _agent_native_todo_summary(native_todo: dict) -> dict[str, object]:
 
 def _attach_agent_next_step_submit_summary(summary: dict[str, object], next_step: dict, submit_hint: dict) -> None:
     set_summary_text(summary, "context_path", next_step.get("context_absolute_path") or next_step.get("context_path"))
-    set_summary_text(summary, "capsule_path", next_step.get("capsule_absolute_path") or next_step.get("capsule_path"))
+    set_summary_text(
+        summary,
+        "step_contract_path",
+        next_step.get("step_contract_absolute_path")
+        or next_step.get("step_contract_path")
+        or next_step.get("capsule_absolute_path")
+        or next_step.get("capsule_path"),
+    )
     set_summary_text(summary, "result_template", submit_hint.get("result_template_absolute_path") or submit_hint.get("result_template_path"))
     set_summary_text(summary, "result_file_to_write", submit_hint.get("result_file_absolute_path") or submit_hint.get("result_file_path"))
     set_summary_text(summary, "result_template_contract", submit_hint.get("result_file_contract"))
@@ -204,7 +211,7 @@ def _agent_dispatch_next_summary(role_dispatch: dict) -> str:
     target_agent = str(role_dispatch.get("target_agent") or "").strip()
     if not target_agent or role_dispatch.get("target_agent_config_exists") is False:
         return ""
-    return f"invoke {target_agent} with the next context/capsule paths below; do not perform this role inline"
+    return f"invoke {target_agent} with the next context and step contract paths below; do not perform this role inline"
 
 
 def _agent_iteration_repair_summary(repair: object) -> dict[str, object]:

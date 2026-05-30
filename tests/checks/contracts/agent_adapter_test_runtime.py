@@ -125,7 +125,7 @@ def _agent_native_step_output(step: dict) -> dict:
                 "risk_note": "GateKeeper rejected the current evidence set.",
             },
             "seed_question": "Which missing proof can Builder produce next?",
-            "meta_note": "Agent-native workflow control fired.",
+            "meta_note": "Agent Runner workflow control fired.",
         }
     if archetype == "inspector" or "inspection" in step_id:
         return {
@@ -133,13 +133,13 @@ def _agent_native_step_output(step: dict) -> dict:
             "check_results": [
                 {
                     "id": "agent_native_path",
-                    "title": "Agent-native path",
+                    "title": "Agent Runner path",
                     "status": "passed",
                     "notes": "The host Agent submitted structured inspection evidence through Loopora Core.",
                 }
             ],
             "dynamic_checks": [],
-            "tester_observations": "The Agent-native adapter path produced structured inspection evidence.",
+            "tester_observations": "The Agent Runner adapter path produced structured inspection evidence.",
             "coverage_results": [],
         }
     if archetype == "gatekeeper" or "gatekeeper" in step_id:
@@ -150,7 +150,7 @@ def _agent_native_step_output(step: dict) -> dict:
         ]
         return {
             "passed": True,
-            "decision_summary": "Agent-native adapter path passed with inspector evidence.",
+            "decision_summary": "Agent Runner adapter path passed with inspector evidence.",
             "feedback_to_builder": "",
             "feedback_to_generator": "",
             "blocking_issues": [],
@@ -169,7 +169,7 @@ def _agent_native_step_output(step: dict) -> dict:
             "coverage_results": [],
         }
     return {
-        "attempted": "Prepared the workspace under the Loopora Agent-native capsule.",
+        "attempted": "Prepared the workspace under the Loopora Agent Runner step contract.",
         "abandoned": "",
         "assumption": "The unit test simulates host-native role execution without launching a nested Agent CLI.",
         "summary": "Builder produced a structured handoff for downstream inspection.",

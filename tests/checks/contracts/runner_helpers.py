@@ -113,7 +113,7 @@ def _assert_runtime_contract_frozen_prefixes() -> None:
         prefix = system_prompt_prefix(archetype)
         assert "Treat the run contract as frozen" in prefix
         assert (
-            "do not reinterpret or lower Task, Done When, Guardrails, bundle collaboration summary, Loopora fit, workflow collaboration intent, role posture, "
+            "do not reinterpret or lower Task, Done When, Guardrails, bundle collaboration summary, Loopora fit, strategy collaboration intent, role posture, "
             "Success Surface, Fake Done, Evidence Preferences, Execution Strategy, Judgment Tradeoffs, Local Governance, or Residual Risk"
         ) in prefix
         assert "evidence gaps or blockers" in prefix

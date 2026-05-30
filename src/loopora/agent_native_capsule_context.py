@@ -4,13 +4,13 @@ from typing import Any
 
 from loopora.run_takeaways import build_judgment_contract
 from loopora.service_agent_native_contracts import (
-    _agent_native_actionable_blocking_item,
-    _agent_native_actionable_repair_next_action,
     _agent_native_current_gap_repair_next_action,
     _agent_native_previous_blocked_handoff,
     _agent_native_repair_blockers_still_current,
     _agent_native_role_posture_list,
     _agent_native_string_list,
+    agent_native_actionable_blocking_item,
+    agent_native_actionable_repair_next_action,
 )
 from loopora.structured_numbers import structured_non_negative_int
 
@@ -34,7 +34,7 @@ def agent_native_capsule_iteration_repair_context(context_packet: object) -> dic
     blocking_items = _agent_native_string_list(blocked_handoff.get("blocking_items"))
     if not blocking_items:
         blocking_items = _agent_native_string_list(gatekeeper_verdict.get("blocking_issues"))
-    blocking_items = [_agent_native_actionable_blocking_item(item) for item in blocking_items if item]
+    blocking_items = [agent_native_actionable_blocking_item(item) for item in blocking_items if item]
     top_gaps = [dict(item) for item in list(iteration.get("coverage_top_gaps") or []) if isinstance(item, dict)][:5]
     summary = str(blocked_handoff.get("summary") or gatekeeper_verdict.get("decision_summary") or "").strip()
     recommended_next_action = str(
@@ -46,7 +46,7 @@ def agent_native_capsule_iteration_repair_context(context_packet: object) -> dic
     if not _agent_native_repair_blockers_still_current(blocking_items, top_gaps):
         blocking_items = []
         recommended_next_action = _agent_native_current_gap_repair_next_action(top_gaps)
-    recommended_next_action = _agent_native_actionable_repair_next_action(recommended_next_action, blocking_items)
+    recommended_next_action = agent_native_actionable_repair_next_action(recommended_next_action, blocking_items)
     if not any((blocking_items, top_gaps, summary, recommended_next_action)):
         return {}
     source = blocked_handoff.get("source") if isinstance(blocked_handoff.get("source"), dict) else {}
@@ -151,10 +151,10 @@ def agent_native_todo_contract(*, step_id: str, target_agent: str) -> dict[str, 
         "not_evidence": True,
         "host_policy": (
             "Create or update the host's official todo/progress-list when available; otherwise continue with "
-            "the capsule and result template. Todo state is user-visible progress only, not Loopora evidence."
+            "the step contract and result template. Todo state is user-visible progress only, not Loopora evidence."
         ),
         "items": [
-            f"Read agent_v3_envelope.summary and capsule for {step_text}.",
+            f"Read agent_v3_envelope.summary and the step contract for {step_text}.",
             f"Invoke {target_text} through the host's official subagent/task mechanism.",
             "Fill the provided result template without changing Loopora's frozen contract fields.",
             "Submit the filled result and read agent_v3_envelope.summary before deciding whether the task is proven.",

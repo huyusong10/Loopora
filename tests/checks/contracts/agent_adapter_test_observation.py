@@ -61,6 +61,7 @@ def _assert_agent_native_observation_current_step(current_step: dict) -> None:
     assert current_step["required_coverage"]["missing_check_count"] == 2
     assert current_step["required_coverage"]["top_gaps"][0]["target_id"] == "done_when.check_001"
     assert current_step["context_path"].endswith("input.context.json")
+    assert current_step["step_contract_path"].endswith("step_contract.json")
     assert current_step["capsule_path"].endswith("capsule.json")
     assert current_step["submit_hint"]["result_template_path"].endswith(".result.template.json")
     assert current_step["submit_hint"]["result_file_path"].endswith(".result.json")
@@ -77,14 +78,18 @@ def _assert_agent_native_observation_current_step(current_step: dict) -> None:
     assert "output_schema" not in current_step
 
 def _assert_agent_native_observation_artifacts(service, current_step: dict, started: dict, sample_workdir: Path) -> None:
+    step_contract_path = Path(current_step["step_contract_absolute_path"])
     capsule_path = Path(current_step["capsule_absolute_path"])
     template_path = Path(current_step["submit_hint"]["result_template_absolute_path"])
+    assert step_contract_path.exists()
     assert capsule_path.exists()
     assert template_path.exists()
+    step_contract = json.loads(step_contract_path.read_text(encoding="utf-8"))
     capsule = json.loads(capsule_path.read_text(encoding="utf-8"))
-    _assert_agent_native_observation_capsule(capsule)
+    assert capsule == step_contract
+    _assert_agent_native_observation_capsule(step_contract)
     template = json.loads(template_path.read_text(encoding="utf-8"))
-    _assert_agent_native_observation_template(template, capsule, started)
+    _assert_agent_native_observation_template(template, step_contract, started)
     with pytest.raises(
         LooporaConflictError,
         match=r"agent-native result does not match output_schema: \$\.attempted expected string, got null",
@@ -101,9 +106,9 @@ def _assert_agent_native_observation_artifacts(service, current_step: dict, star
                 entry_source="codex_project_skill",
             )
         )
-    assert not Path(capsule["result_output_path"]).is_absolute()
-    assert not (Path(started["run"]["runs_dir"]) / capsule["result_output_path"]).exists()
-    assert f"--workdir {sample_workdir.resolve()}" in capsule["submit_hint"]["command"]
+    assert not Path(step_contract["result_output_path"]).is_absolute()
+    assert not (Path(started["run"]["runs_dir"]) / step_contract["result_output_path"]).exists()
+    assert f"--workdir {sample_workdir.resolve()}" in step_contract["submit_hint"]["command"]
 
     layout = RunArtifactLayout(Path(started["run"]["runs_dir"]))
     role_requests = read_jsonl(layout.role_requests_path)
@@ -112,6 +117,7 @@ def _assert_agent_native_observation_artifacts(service, current_step: dict, star
     assert role_requests[-1]["context_path"].endswith("input.context.json")
     claimed = [event for event in read_jsonl(layout.legacy_events_path) if event["event_type"] == "agent_native_step_claimed"][-1]
     assert claimed["payload"]["target_agent"] == "loopora-builder"
+    assert claimed["payload"]["step_contract_path"].endswith("step_contract.json")
     assert claimed["payload"]["capsule_path"].endswith("capsule.json")
     assert claimed["payload"]["result_template_path"].endswith(".result.template.json")
 
@@ -246,7 +252,7 @@ def _assert_agent_native_cli_output(
     adapter: str = "codex",
     loopora_home: Path | str | None = None,
 ) -> None:
-    assert "run_start: started_new_agent_native_run" in stdout
+    assert "run_start: started_new_agent_runner_run" in stdout
     assert f"run_contract_path: {layout.run_contract_path}" in stdout
     assert "source_plan: Agent Native Refund Bundle (bundle_agent, rev 2)" in stdout
     assert "source_plan_path: /tmp/loopora/bundle.yml" in stdout
@@ -297,7 +303,7 @@ def _assert_agent_native_cli_output(
     assert "result_template_fill: open the template, replace null placeholders in result, keep loopora_host_dispatch, then submit the filled copy" in stdout
     _assert_cli_handoff_contract_paths(
         stdout,
-        capsule_fragment="capsule.json",
+        step_contract_fragment="step_contract.json",
         template_fragment="run_agent__builder_step.result.template.json",
         outbox_fragment=".loopora/agent_outbox/codex",
     )
@@ -316,7 +322,7 @@ def _assert_agent_run_json_summary_reports_missing_dispatch(
     assert summary["next_target_agent_config_exists"] is False
     assert "dispatch_next" not in summary
     assert summary["next_context_path"].endswith("input.context.json")
-    assert summary["next_capsule_path"].endswith("capsule.json")
+    assert summary["next_step_contract_path"].endswith("step_contract.json")
     assert summary["next_result_template"].endswith("run_agent__builder_step.result.template.json")
     assert summary["next_submit_command"] == "loopora agent codex submit --run-id run_agent --step-id builder_step"
     next_step_summary = summary["next_step"]
@@ -324,7 +330,7 @@ def _assert_agent_run_json_summary_reports_missing_dispatch(
     assert next_step_summary["target_agent"] == "loopora-builder"
     assert "dispatch_next" not in next_step_summary
     assert next_step_summary["context_path"].endswith("input.context.json")
-    assert next_step_summary["capsule_path"].endswith("capsule.json")
+    assert next_step_summary["step_contract_path"].endswith("step_contract.json")
     assert next_step_summary["result_template"].endswith("run_agent__builder_step.result.template.json")
     assert next_step_summary["result_template_contract"].startswith("Write one wrapper JSON object")
     assert "replace null placeholders" in next_step_summary["result_template_fill"]

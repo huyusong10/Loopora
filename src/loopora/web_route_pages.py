@@ -11,7 +11,7 @@ from loopora.web_overviews import (
     _decorate_loop_overview,
     _decorate_run_overview,
     _progress_stage_seed,
-    _workflow_role_executor_summary,
+    _strategy_role_executor_summary,
 )
 from loopora.web_route_context import WebRouteContext
 from loopora.web_inputs import _preferred_request_locale
@@ -146,7 +146,7 @@ def _register_loop_run_pages(app: FastAPI, ctx: WebRouteContext) -> None:
                 "loop": {
                     **loop,
                     "runs": runs,
-                    "role_executor_summary": _workflow_role_executor_summary(
+                    "role_executor_summary": _strategy_role_executor_summary(
                         loop.get("workflow_json") or {},
                         fallback_executor_kind=loop.get("executor_kind", "codex"),
                     ),

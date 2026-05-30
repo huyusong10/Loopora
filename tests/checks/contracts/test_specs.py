@@ -2,7 +2,14 @@ from __future__ import annotations
 
 import pytest
 
-from loopora.specs import SpecError, compile_markdown_spec, load_spec_file, render_spec_template, resolve_role_note
+from loopora.specs import (
+    SpecError,
+    compile_markdown_spec,
+    load_spec_file,
+    render_spec_template,
+    render_spec_template_for_strategy_source,
+    resolve_role_note,
+)
 
 
 def test_compile_markdown_spec_extracts_sections(sample_spec_text: str) -> None:
@@ -154,6 +161,21 @@ def test_render_spec_template_renders_unique_role_note_sections() -> None:
     assert "# Role Notes" in template
     assert template.count("## Builder Notes") == 1
     assert template.count("## GateKeeper Notes") == 1
+
+
+def test_render_spec_template_accepts_strategy_source_boundary_name() -> None:
+    template = render_spec_template_for_strategy_source(
+        locale="en",
+        strategy_source={
+            "version": 1,
+            "roles": [
+                {"id": "builder", "name": "Focused Builder", "archetype": "builder", "prompt_ref": "builder.md"},
+            ],
+            "steps": [{"id": "builder_step", "role_id": "builder"}],
+        },
+    )
+
+    assert "## Focused Builder Notes" in template
 
 
 def test_compile_markdown_spec_extracts_task_contract_sections() -> None:

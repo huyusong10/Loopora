@@ -389,9 +389,9 @@ def test_workflow_summary_requires_literal_gatekeeper_passed_boolean(tmp_path: P
     )
 
     assert entry["score"]["passed"] is False
-    assert "- Passed: `False`" in summary
+    assert "- Passed: `False`" in summary and "- Strategy preset: `custom`" in summary
     assert "Still iterating." in summary
-    assert "All checks passed in this iteration." not in summary
+    assert "All checks passed in this iteration." not in summary and "- Workflow preset:" not in summary
 
 
 def test_iteration_summaries_require_literal_score_numbers(tmp_path: Path) -> None:

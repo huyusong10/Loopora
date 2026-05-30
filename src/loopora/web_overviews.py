@@ -281,8 +281,12 @@ def _artifact_record_or_404(run: dict, artifact_id: str) -> dict:
     raise HTTPException(status_code=404, detail="unknown artifact")
 
 
-def _workflow_role_executor_summary(workflow: Mapping[str, object] | None, *, fallback_executor_kind: str = "codex") -> str:
-    roles = workflow.get("roles", []) if isinstance(workflow, Mapping) else []
+def _strategy_role_executor_summary(
+    strategy_source: Mapping[str, object] | None,
+    *,
+    fallback_executor_kind: str = "codex",
+) -> str:
+    roles = strategy_source.get("roles", []) if isinstance(strategy_source, Mapping) else []
     if not isinstance(roles, list) or not roles:
         return "-"
     counts: dict[str, int] = {}
@@ -322,7 +326,7 @@ def _decorate_loop_overview(loop: dict) -> dict:
     latest_run_id = loop.get("latest_run_id")
     latest_status = loop.get("latest_status") or "draft"
     summary_excerpt = _summary_excerpt(loop.get("latest_summary_md"))
-    workflow = loop.get("workflow_json") or {}
+    strategy_source = loop.get("workflow_json") or {}
     task_verdict = loop.get("latest_task_verdict_json") if isinstance(loop.get("latest_task_verdict_json"), Mapping) else {}
     task_status = _task_verdict_status(task_verdict)
     task_label_zh, task_label_en = _task_verdict_label(task_status)
@@ -348,9 +352,12 @@ def _decorate_loop_overview(loop: dict) -> dict:
     managed_by_bundle = bool(bundle and bundle.get("id"))
     return {
         **loop,
-        "role_executor_summary": _workflow_role_executor_summary(workflow, fallback_executor_kind=loop.get("executor_kind", "codex")),
-        "role_count": len(workflow.get("roles", []) if isinstance(workflow, Mapping) else []),
-        "step_count": len(workflow.get("steps", []) if isinstance(workflow, Mapping) else []),
+        "role_executor_summary": _strategy_role_executor_summary(
+            strategy_source,
+            fallback_executor_kind=loop.get("executor_kind", "codex"),
+        ),
+        "role_count": len(strategy_source.get("roles", []) if isinstance(strategy_source, Mapping) else []),
+        "step_count": len(strategy_source.get("steps", []) if isinstance(strategy_source, Mapping) else []),
         "display_iter": _display_iter(loop.get("latest_current_iter")),
         "card_href": f"/runs/{latest_run_id}" if latest_run_id else f"/loops/{loop['id']}",
         "card_hint_zh": hint_zh,
@@ -368,12 +375,15 @@ def _decorate_loop_overview(loop: dict) -> dict:
 
 
 def _decorate_run_overview(run: dict) -> dict:
-    workflow = run.get("workflow_json") or {}
+    strategy_source = run.get("workflow_json") or {}
     summary = _build_run_summary_snapshot(run)
     task_status = _task_verdict_status(run.get("task_verdict") or run.get("task_verdict_json"))
     return {
         **run,
-        "role_executor_summary": _workflow_role_executor_summary(workflow, fallback_executor_kind=run.get("executor_kind", "codex")),
+        "role_executor_summary": _strategy_role_executor_summary(
+            strategy_source,
+            fallback_executor_kind=run.get("executor_kind", "codex"),
+        ),
         "display_iter": _display_iter(run.get("current_iter")),
         "summary_excerpt": _summary_excerpt(run.get("summary_md")),
         "task_verdict_status": task_status,
@@ -385,9 +395,9 @@ def _decorate_run_overview(run: dict) -> dict:
 
 
 def _progress_stage_seed(run: Mapping[str, object] | None) -> list[dict[str, str]]:
-    workflow = run.get("workflow_json") if isinstance(run, Mapping) else {}
-    roles = workflow.get("roles", []) if isinstance(workflow, Mapping) else []
-    steps = workflow.get("steps", []) if isinstance(workflow, Mapping) else []
+    strategy_source = run.get("workflow_json") if isinstance(run, Mapping) else {}
+    roles = strategy_source.get("roles", []) if isinstance(strategy_source, Mapping) else []
+    steps = strategy_source.get("steps", []) if isinstance(strategy_source, Mapping) else []
     role_by_id = {str(role.get("id") or "").strip(): role for role in roles if isinstance(role, Mapping) and str(role.get("id") or "").strip()}
 
     stages = [

@@ -113,7 +113,7 @@ def _attach_agent_run_summary(result: dict) -> None:
         summary["next_step"] = next_step_summary
         _set_summary_text(summary, "dispatch_next", next_step_summary.get("dispatch_next"))
         _set_summary_text(summary, "next_context_path", next_step_summary.get("context_path"))
-        _set_summary_text(summary, "next_capsule_path", next_step_summary.get("capsule_path"))
+        _set_summary_text(summary, "next_step_contract_path", next_step_summary.get("step_contract_path"))
         _set_summary_text(summary, "next_result_template", next_step_summary.get("result_template"))
         _set_summary_text(summary, "next_submit_command", next_step_summary.get("submit_command"))
     dispatch_unavailable = _agent_dispatch_unavailable_summary(adapter=adapter, workdir=workdir, role_dispatch=role_dispatch)
@@ -145,11 +145,11 @@ def _print_agent_loop_start_state(result: dict) -> None:
     if "started_new_run" not in result:
         return
     if result.get("started_new_run") is True:
-        typer.echo("run_start: started_new_agent_native_run")
+        typer.echo("run_start: started_new_agent_runner_run")
     elif result.get("complete") is True:
         typer.echo("run_start: replayed_existing_terminal_run")
     else:
-        typer.echo("run_start: resumed_existing_agent_native_run")
+        typer.echo("run_start: resumed_existing_agent_runner_run")
 
 
 def _print_agent_step_result(result: dict, *, json_output: bool) -> None:
@@ -351,13 +351,13 @@ def _agent_task_proof_focus(value: str) -> str:
 def _print_agent_native_terminal_state(task_verdict: object) -> None:
     status = _task_verdict_status(task_verdict)
     if status in PASSING_TASK_VERDICT_STATUSES:
-        typer.echo("agent_native: complete")
+        typer.echo("agent_runner: complete")
         _print_agent_native_terminal_sources()
         return
     if not status:
         status = "not_evaluated"
-    typer.echo("agent_native: lifecycle_closed_task_unproven")
-    typer.echo(f"agent_native_task_verdict: {status}")
+    typer.echo("agent_runner: lifecycle_closed_task_unproven")
+    typer.echo(f"agent_runner_task_verdict: {status}")
     _print_agent_native_terminal_sources()
 
 

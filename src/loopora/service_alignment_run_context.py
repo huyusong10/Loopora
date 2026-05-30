@@ -44,10 +44,11 @@ def resolve_alignment_run_context(
         except LooporaError as exc:
             return {
                 **base,
-                "action": "repair_agent_binding",
-                "confidence": "damaged_binding",
+                "action": "repair_context_card",
+                "confidence": "damaged_context_card",
                 "binding_error": str(exc),
-                "message": "Agent binding is unreadable; repair it or choose a recoverable context before /loopora-run starts.",
+                "context_card_error": str(exc),
+                "message": "Agent context card is unreadable; repair it or choose a recoverable context before /loopora-run starts.",
             }
         if binding:
             return resolve_alignment_run_context_from_exact_binding(context, root, base=base, binding=binding)
@@ -71,7 +72,7 @@ def resolve_alignment_run_context(
     return {
         **base,
         "action": "plan_first",
-        "confidence": "no_binding",
+        "confidence": "no_context_card",
         "message": "No Loopora run context is bound to this Agent session/workdir; run /loopora-plan first.",
     }
 
@@ -100,9 +101,9 @@ def resolve_alignment_run_context_from_exact_binding(
         return {
             **base,
             "action": "blocked",
-            "confidence": "stale_binding",
+            "confidence": "stale_context_card",
             "binding": agent_redacted_context_binding(binding),
-            "message": "Agent binding exists but does not reference a Loop preview; run /loopora-plan again.",
+            "message": "Agent context card exists but does not reference a Loop preview; run /loopora-plan again.",
         }
     try:
         session = context.get_alignment_session(session_id)
@@ -110,10 +111,10 @@ def resolve_alignment_run_context_from_exact_binding(
         return {
             **base,
             "action": "blocked",
-            "confidence": "stale_binding",
+            "confidence": "stale_context_card",
             "binding": agent_redacted_context_binding(binding),
             "alignment_session_id": session_id,
-            "message": "Agent binding references a missing Loop preview; run /loopora-plan again.",
+            "message": "Agent context card references a missing Loop preview; run /loopora-plan again.",
         }
     if not context.same_workdir(binding.get("workdir") or session.get("workdir"), root):
         return {
@@ -122,7 +123,7 @@ def resolve_alignment_run_context_from_exact_binding(
             "confidence": "workdir_mismatch",
             "binding": agent_redacted_context_binding(binding),
             "alignment_session_id": session_id,
-            "message": "Agent binding belongs to a different workdir; run /loopora-plan again.",
+            "message": "Agent context card belongs to a different workdir; run /loopora-plan again.",
         }
     choice = agent_run_context_choice_from_session(
         context.repository,
@@ -133,9 +134,9 @@ def resolve_alignment_run_context_from_exact_binding(
     return {
         **base,
         "action": agent_exact_binding_recovery_action(choice),
-        "confidence": "exact_binding",
+        "confidence": "exact_context_card",
         "alignment_session_id": session_id,
         "binding": agent_redacted_context_binding(binding),
         "choice": choice,
-        "message": "Exact Agent binding found.",
+        "message": "Exact Agent context card found.",
     }

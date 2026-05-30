@@ -65,9 +65,13 @@ class RoleSnapshotDefinition:
 class OrchestrationPayloadInput:
     name: str
     description: str = ""
-    workflow: dict | None = None
+    strategy_source: dict | None = None
     prompt_files: dict | None = None
     role_models: dict | None = None
+
+    @property
+    def workflow(self) -> dict | None:
+        return self.strategy_source
 
 
 def _required_role_definition_field(fields: dict[str, object], field: str) -> object:
@@ -133,7 +137,7 @@ def _orchestration_payload_input_from_args(
     payload_input = OrchestrationPayloadInput(
         name=name,
         description=fields.pop("description", ""),
-        workflow=fields.pop("workflow", None),
+        strategy_source=_pop_strategy_source_payload(fields),
         prompt_files=fields.pop("prompt_files", None),
         role_models=fields.pop("role_models", None),
     )
@@ -141,6 +145,21 @@ def _orchestration_payload_input_from_args(
         unexpected_fields = ", ".join(sorted(fields))
         raise TypeError(f"unexpected orchestration fields: {unexpected_fields}")
     return payload_input
+
+
+_MISSING = object()
+
+
+def _pop_strategy_source_payload(fields: dict[str, object]) -> object:
+    strategy_source = fields.pop("strategy_source", _MISSING)
+    workflow = fields.pop("workflow", _MISSING)
+    if strategy_source is not _MISSING and workflow is not _MISSING:
+        raise TypeError("orchestration fields strategy_source and workflow cannot both be provided")
+    if strategy_source is not _MISSING:
+        return strategy_source
+    if workflow is not _MISSING:
+        return workflow
+    return None
 
 
 def _strategy_parallel_groups(strategy_source: dict | None) -> list[str]:
@@ -156,8 +175,8 @@ def _strategy_parallel_groups(strategy_source: dict | None) -> list[str]:
     return [group for group, count in counts.items() if count >= 2]
 
 
-class WorkflowAssetCatalog:
-    """Owns orchestration and role-definition asset records."""
+class StrategyTemplateAssetCatalog:
+    """Owns strategy-template and role-template asset records."""
 
     def __init__(self, repository: LooporaRepository) -> None:
         self.repository = repository
@@ -170,10 +189,10 @@ class WorkflowAssetCatalog:
     def _build_builtin_orchestration_records(self) -> list[dict]:
         records = []
         for preset_name in strategy_source_preset_names(include_hidden=True):
-            workflow = build_preset_strategy_source(preset_name)
-            prompt_files = resolve_strategy_prompt_files(workflow)
+            strategy_source = build_preset_strategy_source(preset_name)
+            prompt_files = resolve_strategy_prompt_files(strategy_source)
             copy = strategy_source_preset_copy(preset_name)
-            parallel_groups = _strategy_parallel_groups(workflow)
+            parallel_groups = _strategy_parallel_groups(strategy_source)
             records.append(
                 {
                     "id": f"builtin:{preset_name}",
@@ -196,11 +215,11 @@ class WorkflowAssetCatalog:
                     "preset": preset_name,
                     "editable": False,
                     "deletable": False,
-                    "workflow_json": workflow,
+                    "workflow_json": strategy_source,
                     "parallel_groups": parallel_groups,
                     "parallel_group_count": len(parallel_groups),
                     "prompt_files_json": prompt_files,
-                    "workflow_warnings": strategy_source_warnings(workflow),
+                    "workflow_warnings": strategy_source_warnings(strategy_source),
                 }
             )
         return records
@@ -567,25 +586,25 @@ class WorkflowAssetCatalog:
     ) -> dict:
         if orchestration_id and workflow is None and not prompt_files:
             orchestration = self.get_orchestration(orchestration_id)
-            hydrated_workflow, hydrated_prompt_files = self._hydrate_strategy_role_snapshots(
+            hydrated_strategy_source, hydrated_prompt_files = self._hydrate_strategy_role_snapshots(
                 orchestration["workflow_json"],
                 orchestration.get("prompt_files_json") or {},
             )
-            normalized_workflow = normalize_strategy_source(hydrated_workflow, role_models=role_models)
+            normalized_strategy_source = normalize_strategy_source(hydrated_strategy_source, role_models=role_models)
             resolved_prompt_files = resolve_strategy_prompt_files(
-                normalized_workflow,
+                normalized_strategy_source,
                 hydrated_prompt_files,
             )
             return {
                 "id": orchestration["id"],
                 "name": orchestration["name"],
-                "workflow": normalized_workflow,
+                "workflow": normalized_strategy_source,
                 "prompt_files": resolved_prompt_files,
             }
 
-        hydrated_workflow, hydrated_prompt_files = self._hydrate_strategy_role_snapshots(workflow, prompt_files)
-        normalized_workflow = normalize_strategy_source(hydrated_workflow, role_models=role_models)
-        resolved_prompt_files = resolve_strategy_prompt_files(normalized_workflow, hydrated_prompt_files)
+        hydrated_strategy_source, hydrated_prompt_files = self._hydrate_strategy_role_snapshots(workflow, prompt_files)
+        normalized_strategy_source = normalize_strategy_source(hydrated_strategy_source, role_models=role_models)
+        resolved_prompt_files = resolve_strategy_prompt_files(normalized_strategy_source, hydrated_prompt_files)
         derived_id = str(orchestration_id or "").strip()
         derived_name = ""
         if derived_id:
@@ -593,20 +612,20 @@ class WorkflowAssetCatalog:
                 derived_name = self.get_orchestration(derived_id)["name"]
             except AssetCatalogNotFoundError:
                 derived_name = ""
-        if not derived_id and normalized_workflow.get("preset"):
-            derived_id = f"builtin:{normalized_workflow['preset']}"
+        if not derived_id and normalized_strategy_source.get("preset"):
+            derived_id = f"builtin:{normalized_strategy_source['preset']}"
             derived_name = next(
                 (
                     record["name"]
                     for record in self._builtin_orchestrations
                     if record["id"] == derived_id
                 ),
-                normalized_workflow["preset"],
+                normalized_strategy_source["preset"],
             )
         return {
             "id": derived_id,
             "name": derived_name,
-            "workflow": normalized_workflow,
+            "workflow": normalized_strategy_source,
             "prompt_files": resolved_prompt_files,
         }
 
@@ -622,9 +641,10 @@ class WorkflowAssetCatalog:
         normalized_name = str(name or "").strip()
         if not normalized_name:
             raise ValueError("name is required")
+        strategy_source = workflow
         resolved = self.resolve_orchestration_input(
             orchestration_id=None,
-            workflow=workflow,
+            workflow=strategy_source,
             prompt_files=prompt_files,
             role_models=role_models,
         )
@@ -652,14 +672,16 @@ class WorkflowAssetCatalog:
         normalized_name = str(payload_input.name or "").strip()
         if not normalized_name:
             raise ValueError("name is required")
-        current_workflow = deepcopy(current.get("workflow_json") or {})
+        current_strategy_source = deepcopy(current.get("workflow_json") or {})
         current_prompt_files = dict(current.get("prompt_files_json") or {})
-        effective_workflow = payload_input.workflow if payload_input.workflow is not None else current_workflow
+        effective_strategy_source = (
+            payload_input.strategy_source if payload_input.strategy_source is not None else current_strategy_source
+        )
         effective_prompt_files = dict(current_prompt_files)
         effective_prompt_files.update(dict(payload_input.prompt_files or {}))
         resolved = self.resolve_orchestration_input(
             orchestration_id=None,
-            workflow=effective_workflow,
+            workflow=effective_strategy_source,
             prompt_files=effective_prompt_files,
             role_models=payload_input.role_models,
         )
@@ -683,3 +705,6 @@ class WorkflowAssetCatalog:
         if not self.repository.delete_orchestration(orchestration_id):
             raise AssetCatalogNotFoundError(f"unknown orchestration: {orchestration_id}")
         return orchestration
+
+
+WorkflowAssetCatalog = StrategyTemplateAssetCatalog

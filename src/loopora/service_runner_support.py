@@ -536,7 +536,7 @@ class ServiceRunnerSupportMixin:
             "",
             f"- Workdir: `{request.run['workdir']}`",
             f"- Iteration: `{request.iter_id + 1 if request.iter_id >= 0 else 0}`",
-            f"- Workflow preset: `{request.strategy_source.get('preset') or 'custom'}`",
+            f"- Strategy preset: `{request.strategy_source.get('preset') or 'custom'}`",
             f"- Check mode: `{request.compiled_spec.get('check_mode', 'specified')}`",
             f"- Check count: `{len(request.compiled_spec.get('checks', []))}`",
             f"- Completion mode: `{completion_mode}`",

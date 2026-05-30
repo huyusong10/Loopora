@@ -36,7 +36,7 @@ AGENT_ENTRY_GEN_CONTRACT_SNIPPETS = (
     "do not let a bundle pass merely because it repeats one or two object words from the task",
     "Do not invent human judgment just to pass validation",
     "raw.legacy",
-    "native_surface",
+    "agent surface summary",
     "ready_review_projection",
     "same-session run command",
     "`loop_recovery=plan_message_required`",
@@ -185,13 +185,13 @@ EXPECTED_NATIVE_CONTEXT_LOADING = {
     ],
     "reference_loading": "on_demand_from_reference_paths",
     "full_payload": "open_after_compact_summary",
-    "host_memory": "host_owned_hint_not_binding_or_evidence",
+    "host_memory": "host_owned_hint_not_loopora_context_or_evidence",
     "memory_store": "external_memory_stores_indexes_and_memory_mcp_are_hints_not_loopora_context_or_proof",
     "template_context": "host_command_templates_playbooks_and_dynamic_prompts_are_hints_not_loopora_reviewed_workflow",
     "workflow_kits": "external_spec_workflows_prd_packs_quality_gate_recipes_and_workflow_kits_are_guidance_not_loopora_reviewed_workflow_install_proof_or_evidence",
     "role_catalogs": "external_agent_catalogs_subagent_libraries_and_role_marketplaces_are_selection_hints_not_loopora_role_contract_or_policy",
-    "compaction_context": "host_compaction_summaries_are_hints_not_loopora_binding_or_proof",
-    "host_context": "host_loaded_skills_commands_agents_editor_context_and_ide_bridges_are_hints_not_loopora_binding_contract_or_evidence",
+    "compaction_context": "host_compaction_summaries_are_hints_not_loopora_context_or_proof",
+    "host_context": "host_loaded_skills_commands_agents_editor_context_and_ide_bridges_are_hints_not_loopora_context_contract_or_evidence",
     "catalog_context": "marketplace_catalogs_and_uninstalled_components_are_not_loopora_context_or_proof",
 }
 
@@ -234,5 +234,5 @@ EXPECTED_NATIVE_EXPERIENCE_CAPABILITIES = {
     "todo_guidance": "native_todo_should_create_or_update_host_todo_when_available_not_evidence",
     "user_question_guidance": "ask_user_routes_missing_loop_judgment_to_main_agent_session",
     "native_trace_optional": "preserve_official_subagent_or_task_trace_when_available_do_not_invent",
-    "technical_handoff_paths": "context_capsule_result_template_and_submit_command_remain_available_below_work_panel",
+    "technical_handoff_paths": "context_step_contract_result_template_and_submit_command_remain_available_below_work_panel",
 }

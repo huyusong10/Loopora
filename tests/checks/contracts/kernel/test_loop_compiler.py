@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from inspect import signature
+
 import pytest
 
 from loopora.bundles import load_bundle_text
@@ -18,6 +20,13 @@ from loopora.compiler import (
 )
 from loopora.executor_fake_payloads import alignment_bundle_yaml
 from loopora.kernel.contract import ResidualRiskPolicy
+
+
+def test_strategy_compiler_accepts_strategy_source_boundary_name() -> None:
+    parameters = signature(compile_loop_strategy).parameters
+
+    assert "strategy_source" in parameters
+    assert "workflow" not in parameters
 
 
 def test_loop_compiler_contract_covers_current_source_kinds() -> None:
@@ -59,7 +68,7 @@ def test_compiled_spec_compiles_to_loop_contract_without_workflow_state() -> Non
     assert "gatekeeper.finish" not in target_ids
 
 
-def test_workflow_compiles_to_loop_strategy_without_spec_state() -> None:
+def test_strategy_source_compiles_to_loop_strategy_without_spec_state() -> None:
     strategy = compile_loop_strategy(
         "loop_refund",
         {

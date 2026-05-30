@@ -42,7 +42,7 @@ def _adapter_entry_paths_text(adapter: str) -> str:
 
 
 def _assert_native_surface_plain_output(output: str) -> None:
-    assert "native surface:" in output
+    assert "agent surface:" in output
     _assert_output_contains(
         output,
         "- entry:",
@@ -84,8 +84,8 @@ def _assert_native_surface_plain_output(output: str) -> None:
         "entry=thin_dispatcher",
         "summary_first=",
         "references=on_demand_from_reference_paths",
-        "memory=host_owned_hint_not_binding_or_evidence",
-        "host_context=host_loaded_skills_commands_agents_editor_context_and_ide_bridges_are_hints_not_loopora_binding_contract_or_evidence",
+        "memory=host_owned_hint_not_loopora_context_or_evidence",
+        "host_context=host_loaded_skills_commands_agents_editor_context_and_ide_bridges_are_hints_not_loopora_context_contract_or_evidence",
         "health check:",
         "scope=managed_entries_role_configs_and_loopora_state",
         "session recovery:",
@@ -95,8 +95,8 @@ def _assert_native_surface_plain_output(output: str) -> None:
     _assert_output_contains(
         output,
         "handoff:",
-        "required=role_dispatch.target_agent, context_path, capsule_path, result_template",
-        "payload=path_based_context_capsule_and_template_not_large_inline_prompt",
+        "required=role_dispatch.target_agent, context_path, step_contract_path, result_template",
+        "payload=path_based_context_step_contract_and_template_not_large_inline_prompt",
         "parallel=only_when_loop_workflow_declares_parallel_group",
         "permission boundary:",
         "owner=host_agent_and_user",
@@ -111,7 +111,7 @@ def _assert_native_surface_plain_output(output: str) -> None:
     )
     _assert_native_surface_plain_ownership(output)
     _assert_output_contains(output, "submit contract:", "loopora_host_dispatch", "proof boundary:", "Loopora evidence refs")
-    assert output.index("native surface:") < output.index("managed files:")
+    assert output.index("agent surface:") < output.index("managed files:")
 
 
 def _assert_native_surface_plain_ownership(output: str) -> None:
@@ -157,7 +157,7 @@ def _assert_native_surface_payload(payload: dict, *, adapter: str, entry_paths: 
     assert surface["health_check"]["adapter_check"] == f"loopora agent {adapter} check --workdir <project>"
     assert surface["health_check"]["side_effects"] == "check_commands_do_not_install_or_overwrite"
     assert surface["health_check"]["host_reload"] == "restart_or_new_host_session_may_be_required_for_entry_discovery"
-    assert surface["session_recovery"]["binding"] == "exact_agent_context_binding_first"
+    assert surface["session_recovery"]["context_card"] == "exact_agent_context_card_first"
     assert surface["session_recovery"]["not_ready"] == "return_to_loopora_plan_or_web_review"
     assert (
         surface["session_recovery"]["host_session_discovery"]
@@ -165,7 +165,7 @@ def _assert_native_surface_payload(payload: dict, *, adapter: str, entry_paths: 
     )
     assert (
         surface["session_recovery"]["checkpoint_restore"]
-        == "host_checkpoints_rewinds_and_session_archives_are_recovery_hints_not_loopora_binding_or_proof"
+        == "host_checkpoints_rewinds_and_session_archives_are_recovery_hints_not_loopora_context_or_proof"
     )
     _assert_native_surface_handoff_protocol(surface)
     _assert_native_surface_runtime_boundaries(surface)
@@ -176,8 +176,8 @@ def _assert_native_surface_payload(payload: dict, *, adapter: str, entry_paths: 
 def _assert_native_surface_handoff_protocol(surface: dict) -> None:
     handoff = surface["handoff_protocol"]
     assert handoff["submit_gate"] == "filled_schema_result_with_loopora_host_dispatch"
-    assert "capsule_path" in handoff["required_context"]
-    assert handoff["payload_policy"] == "path_based_context_capsule_and_template_not_large_inline_prompt"
+    assert "step_contract_path" in handoff["required_context"]
+    assert handoff["payload_policy"] == "path_based_context_step_contract_and_template_not_large_inline_prompt"
     assert handoff["parallel_dispatch"] == "only_when_loop_workflow_declares_parallel_group"
     assert handoff["behavioral_activation"] == "host_auto_activation_or_rule_injection_is_hint_not_dispatch_proof"
     assert handoff["external_orchestration"] == (
@@ -516,10 +516,10 @@ def test_cli_agent_adapter_check_alias_reports_actionable_install_state(tmp_path
     summary, _legacy = _agent_check_payload(payload, status="pass")
     assert summary["check_status"] == "pass"
     assert summary["check_recovery"]["check_command"].endswith(f"--workdir {workdir.resolve()} --check")
-    assert summary["native_surface"]["entry_kind"] == "project_skill"
-    assert summary["native_surface"]["role_agents"]["builder"]["path"] == ".codex/agents/loopora-builder.toml"
-    assert summary["native_surface"]["native_dispatch"]["accepted_native_tools"] == ["spawn_agent"]
-    assert "CODEX_SESSION_ID" in summary["native_surface"]["context_identity_env"]
+    assert summary["agent_surface"]["entry_kind"] == "project_skill"
+    assert summary["agent_surface"]["role_agents"]["builder"]["path"] == ".codex/agents/loopora-builder.toml"
+    assert summary["agent_surface"]["native_dispatch"]["accepted_native_tools"] == ["spawn_agent"]
+    assert "CODEX_SESSION_ID" in summary["agent_surface"]["context_identity_env"]
 
 def test_cli_adapter_check_validates_managed_supporting_files(tmp_path: Path) -> None:
     workdir = tmp_path / "project"

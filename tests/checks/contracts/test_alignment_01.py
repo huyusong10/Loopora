@@ -8,6 +8,7 @@ from loopora.bundles import bundle_to_yaml, load_bundle_text
 from loopora.executor import FakeCodexExecutor
 from loopora.executor_fake_payloads import alignment_bundle_yaml
 from loopora.service_alignment_artifacts import (
+    alignment_invocation_dir,
     alignment_repair_attempts,
     finalize_alignment_invocation_files,
     write_alignment_manifest,
@@ -383,7 +384,7 @@ def test_alignment_repair_attempts_require_integer_sequence(service_factory, sam
     assert updated["repair_attempts"] == 0
     assert alignment_repair_attempts({"repair_attempts": None}) == 0
     assert alignment_repair_attempts({"repair_attempts": "1"}, invalid_default=1) == 1
-    assert alignment_module.ServiceAlignmentMixin._alignment_invocation_dir(sample_workdir, "2", repair=False).name == "0001"
+    assert alignment_invocation_dir(sample_workdir, "2", repair=False).name == "0001"
 
 def test_alignment_session_start_immediately_string_false_does_not_start(
     service_factory,

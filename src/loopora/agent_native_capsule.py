@@ -17,8 +17,8 @@ from loopora.run_artifacts import RunArtifactLayout, read_jsonl
 from loopora.service_agent_native_contracts import (
     _agent_native_compact_known_evidence_refs,
     _agent_native_result_artifact_stem,
-    _agent_native_submit_command,
     _agent_native_submit_hint_with_scoped_result_paths,
+    agent_native_submit_command,
 )
 from loopora.service_types import LooporaError
 
@@ -43,6 +43,7 @@ class AgentNativeCapsuleRequest:
 def agent_native_capsule(request: AgentNativeCapsuleRequest) -> dict[str, Any]:
     context_path = request.layout.step_context_path(request.iter_id, request.step_order, request.step["id"])
     capsule_path = request.layout.step_capsule_path(request.iter_id, request.step_order, request.step["id"])
+    step_contract_path = request.layout.step_contract_path(request.iter_id, request.step_order, request.step["id"])
     output_path = request.layout.step_output_raw_path(request.iter_id, request.step_order, request.step["id"])
     result_outbox_dir = request.layout.workdir_path / ".loopora" / "agent_outbox" / request.adapter
     result_artifact_stem = _agent_native_result_artifact_stem(
@@ -97,11 +98,13 @@ def agent_native_capsule(request: AgentNativeCapsuleRequest) -> dict[str, Any]:
         },
         "context_path": request.layout.relative(context_path),
         "context_absolute_path": str(context_path.resolve()),
+        "step_contract_path": request.layout.relative(step_contract_path),
+        "step_contract_absolute_path": str(step_contract_path.resolve()),
         "capsule_path": request.layout.relative(capsule_path),
         "capsule_absolute_path": str(capsule_path.resolve()),
         "result_output_path": request.layout.relative(output_path),
         "submit_hint": {
-            "command": _agent_native_submit_command(
+            "command": agent_native_submit_command(
                 adapter=request.adapter,
                 run_id=str(request.run["id"]),
                 step_id=str(request.step["id"]),
@@ -129,7 +132,7 @@ def refresh_agent_native_capsule_with_judgment_contract(
     context_packet: object = None,
 ) -> dict[str, Any]:
     if not isinstance(capsule, dict):
-        raise LooporaError("agent-native active step capsule is invalid")
+        raise LooporaError("agent-native active step contract is invalid")
     normalized = dict(capsule)
     normalized["judgment_contract"] = agent_native_capsule_judgment_contract(run, context_packet)
     normalized["required_coverage"] = agent_native_required_coverage(context_packet)
@@ -213,7 +216,7 @@ def _refresh_agent_native_submit_hint(capsule: dict[str, Any]) -> None:
             submit_hint["result_file_absolute_path"] = result_file
         else:
             submit_hint["result_file_path"] = result_file
-    submit_hint["command"] = _agent_native_submit_command(
+    submit_hint["command"] = agent_native_submit_command(
         adapter=adapter,
         run_id=run_id,
         step_id=step_id,

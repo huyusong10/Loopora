@@ -840,7 +840,7 @@ def build_judgment_contract(run: Mapping[str, Any]) -> dict[str, Any]:
 def _normalize_judgment_contract_payload(value: object, *, default_contract_path: str = "") -> dict[str, Any]:
     raw = value if isinstance(value, Mapping) else {}
     compiled_spec = raw.get("compiled_spec") if isinstance(raw.get("compiled_spec"), Mapping) else raw
-    workflow = raw.get("workflow") if isinstance(raw.get("workflow"), Mapping) else raw
+    strategy_snapshot = raw.get("workflow") if isinstance(raw.get("workflow"), Mapping) else raw
     normalized = empty_judgment_contract()
     normalized["contract_path"] = _string_value(raw.get("contract_path")) or default_contract_path
     normalized["source_bundle"] = _normalize_judgment_source_bundle(raw.get("source_bundle"))
@@ -854,13 +854,13 @@ def _normalize_judgment_contract_payload(value: object, *, default_contract_path
     normalized["check_count"] = structured_non_negative_int(raw.get("check_count"), default=len(list(compiled_spec.get("checks") or [])))
     normalized["completion_mode"] = clean_takeaway_text(raw.get("completion_mode"), max_length=80)
     strategy_preset = clean_takeaway_text(
-        raw.get("strategy_preset") or raw.get("workflow_preset") or workflow.get("preset"),
+        raw.get("strategy_preset") or raw.get("workflow_preset") or strategy_snapshot.get("preset"),
         max_length=120,
     )
     strategy_collaboration_intent = clean_takeaway_text(
         raw.get("strategy_collaboration_intent")
         or raw.get("workflow_collaboration_intent")
-        or workflow.get("collaboration_intent"),
+        or strategy_snapshot.get("collaboration_intent"),
         max_length=600,
     )
     normalized["strategy_preset"] = strategy_preset
@@ -872,8 +872,8 @@ def _normalize_judgment_contract_payload(value: object, *, default_contract_path
         or build_judgment_tradeoff_trace(
             collaboration_summary=raw.get("collaboration_summary"),
             raw_sections=compiled_spec.get("raw_sections") if isinstance(compiled_spec, Mapping) else {},
-            roles=workflow.get("roles") if isinstance(workflow, Mapping) else [],
-            workflow=workflow,
+            roles=strategy_snapshot.get("roles") if isinstance(strategy_snapshot, Mapping) else [],
+            strategy_source=strategy_snapshot,
         )
     )
     normalized["execution_strategy"] = _takeaway_text_list(
@@ -881,8 +881,8 @@ def _normalize_judgment_contract_payload(value: object, *, default_contract_path
         or build_execution_strategy_trace(
             collaboration_summary=raw.get("collaboration_summary"),
             raw_sections=compiled_spec.get("raw_sections") if isinstance(compiled_spec, Mapping) else {},
-            roles=workflow.get("roles") if isinstance(workflow, Mapping) else [],
-            workflow=workflow,
+            roles=strategy_snapshot.get("roles") if isinstance(strategy_snapshot, Mapping) else [],
+            strategy_source=strategy_snapshot,
         )
     )
     if "local_governance" in raw:
@@ -891,11 +891,11 @@ def _normalize_judgment_contract_payload(value: object, *, default_contract_path
         normalized["local_governance"] = _takeaway_text_list(
             build_runtime_local_governance_trace(
                 raw_sections=compiled_spec.get("raw_sections") if isinstance(compiled_spec, Mapping) else {},
-                roles=workflow.get("roles") if isinstance(workflow, Mapping) else [],
-                workflow=workflow,
+                roles=strategy_snapshot.get("roles") if isinstance(strategy_snapshot, Mapping) else [],
+                strategy_source=strategy_snapshot,
             )
         )
-    normalized["role_postures"] = _role_posture_takeaway_list(raw.get("role_postures") or workflow.get("roles"))
+    normalized["role_postures"] = _role_posture_takeaway_list(raw.get("role_postures") or strategy_snapshot.get("roles"))
     normalized["coverage_targets"] = _takeaway_mapping_list(raw.get("coverage_targets") or compiled_spec.get("coverage_targets"))
     normalized["success_surface"] = _takeaway_text_list(raw.get("success_surface") or compiled_spec.get("success_surface"))
     normalized["fake_done_states"] = _takeaway_text_list(raw.get("fake_done_states") or compiled_spec.get("fake_done_states"))

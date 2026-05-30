@@ -35,7 +35,7 @@ def _agent_native_previous_blocked_handoff(previous_summary: dict[str, Any]) -> 
     return {}
 
 
-def _agent_native_actionable_blocking_item(item: str) -> str:
+def agent_native_actionable_blocking_item(item: str) -> str:
     return _shared_actionable_blocking_item(item)
 
 
@@ -43,7 +43,7 @@ def _agent_native_coverage_target_blocker_explanation(cleaned: str) -> str:
     return _shared_coverage_target_blocker_explanation(cleaned)
 
 
-def _agent_native_actionable_repair_next_action(action: str, blocking_items: list[str]) -> str:
+def agent_native_actionable_repair_next_action(action: str, blocking_items: list[str]) -> str:
     return _shared_actionable_next_action(action, blocking_items)
 
 
@@ -87,7 +87,7 @@ def _agent_native_current_gap_repair_next_action(top_gaps: list[dict[str, Any]])
     return "Continue from the current coverage gaps instead of repeating the resolved previous blocker before asking GateKeeper to pass again."
 
 
-def _agent_native_submit_command(
+def agent_native_submit_command(
     *,
     adapter: str,
     run_id: str,
@@ -246,7 +246,7 @@ def _agent_native_known_evidence_ids(active: dict, context_packet: dict) -> set[
     return set(_agent_native_string_list(evidence.get("known_ids")))
 
 
-def _agent_native_unknown_evidence_refs(output: dict[str, Any], *, active: dict, context_packet: dict) -> list[str]:
+def agent_native_unknown_evidence_refs(output: dict[str, Any], *, active: dict, context_packet: dict) -> list[str]:
     known_ids = _agent_native_known_evidence_ids(active, context_packet)
     return [item for item in _agent_native_output_evidence_refs(output) if item not in known_ids]
 

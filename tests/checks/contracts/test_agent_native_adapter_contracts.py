@@ -115,7 +115,7 @@ def _assert_context_loading_boundary(context_loading: dict) -> None:
     assert context_loading["entry_prompt"] == "thin_dispatcher"
     assert context_loading["summary_first"] == ["agent_v3_envelope.summary"]
     assert context_loading["reference_loading"] == "on_demand_from_reference_paths"
-    assert context_loading["host_memory"] == "host_owned_hint_not_binding_or_evidence"
+    assert context_loading["host_memory"] == "host_owned_hint_not_loopora_context_or_evidence"
     _assert_keys_present(
         context_loading,
         {
@@ -134,7 +134,7 @@ def _assert_context_loading_boundary(context_loading: dict) -> None:
 def _assert_health_and_recovery_boundaries(surface: dict) -> None:
     assert surface["health_check"]["side_effects"] == "check_commands_do_not_install_or_overwrite"
     assert surface["health_check"]["host_reload"] == "restart_or_new_host_session_may_be_required_for_entry_discovery"
-    assert surface["session_recovery"]["binding"] == "exact_agent_context_binding_first"
+    assert surface["session_recovery"]["context_card"] == "exact_agent_context_card_first"
     assert surface["session_recovery"]["ambiguous"] == "list_recoverable_contexts_before_running"
     assert surface["session_recovery"]["provider_session_resume"] == "not_used_for_loopora_work"
     assert surface["session_recovery"]["host_session_discovery"] == "not_auto_discovered_or_taken_over_by_loopora"
@@ -144,7 +144,8 @@ def _assert_runtime_boundaries(surface: dict) -> None:
     handoff = surface["handoff_protocol"]
     assert handoff["role_channel"] == "host_native_role_agent"
     assert "result_template" in handoff["required_context"]
-    assert handoff["payload_policy"] == "path_based_context_capsule_and_template_not_large_inline_prompt"
+    assert "step_contract_path" in handoff["required_context"]
+    assert handoff["payload_policy"] == "path_based_context_step_contract_and_template_not_large_inline_prompt"
     assert handoff["parallel_dispatch"] == "only_when_loop_workflow_declares_parallel_group"
     assert handoff["behavioral_activation"] == "host_auto_activation_or_rule_injection_is_hint_not_dispatch_proof"
 

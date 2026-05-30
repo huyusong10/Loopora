@@ -51,7 +51,7 @@ def _print_agent_current_step(next_step: dict) -> None:
             )
         else:
             typer.echo(
-                f"dispatch_next: invoke {target_agent} with the next context/capsule paths below; do not perform this role inline"
+                f"dispatch_next: invoke {target_agent} with the next context and step contract paths below; do not perform this role inline"
             )
             _print_agent_native_dispatch_contract(next_step, target_agent)
     _print_agent_native_todo(next_step.get("native_todo"))
@@ -124,9 +124,15 @@ def _print_agent_current_step_paths(next_step: dict, submit_hint: dict) -> None:
     context_path = str(next_step.get("context_absolute_path") or next_step.get("context_path") or "").strip()
     if context_path:
         typer.echo(f"next_context_path: {context_path}")
-    capsule_path = str(next_step.get("capsule_absolute_path") or next_step.get("capsule_path") or "").strip()
-    if capsule_path:
-        typer.echo(f"next_capsule_path: {capsule_path}")
+    step_contract_path = str(
+        next_step.get("step_contract_absolute_path")
+        or next_step.get("step_contract_path")
+        or next_step.get("capsule_absolute_path")
+        or next_step.get("capsule_path")
+        or ""
+    ).strip()
+    if step_contract_path:
+        typer.echo(f"next_step_contract_path: {step_contract_path}")
     known_evidence_count = _non_bool_int(next_step.get("known_evidence_count"))
     if known_evidence_count is None and isinstance(next_step.get("known_evidence_ids"), list):
         known_evidence_count = len(next_step["known_evidence_ids"])

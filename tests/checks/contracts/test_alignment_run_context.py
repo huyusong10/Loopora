@@ -66,7 +66,7 @@ def test_alignment_run_context_resolver_reports_plan_first_when_no_binding_or_re
     )
 
     assert result["action"] == "plan_first"
-    assert result["confidence"] == "no_binding"
+    assert result["confidence"] == "no_context_card"
     assert result["requires_user_choice"] is False
     assert result["choices"] == []
     assert result["context_id"] == "thread-empty"
@@ -91,7 +91,7 @@ def test_alignment_run_context_resolver_reports_damaged_binding_before_recovery(
 
     def damaged_binding(_adapter: str, _root: Path, *, context_id: str = "") -> dict:
         _ = context_id
-        raise LooporaError("binding json is unreadable")
+        raise LooporaError("context card json is unreadable")
 
     result = resolve_alignment_run_context(
         resolver_context(repo, read_binding=damaged_binding),
@@ -100,9 +100,9 @@ def test_alignment_run_context_resolver_reports_damaged_binding_before_recovery(
         context_id="thread-broken",
     )
 
-    assert result["action"] == "repair_agent_binding"
-    assert result["confidence"] == "damaged_binding"
-    assert "binding json is unreadable" in result["binding_error"]
+    assert result["action"] == "repair_context_card"
+    assert result["confidence"] == "damaged_context_card"
+    assert "context card json is unreadable" in result["binding_error"]
     assert result["choices"] == []
 
 
@@ -127,7 +127,7 @@ def test_alignment_run_context_resolver_uses_exact_binding_without_user_choice(t
     )
 
     assert result["action"] == "start_ready_preview"
-    assert result["confidence"] == "exact_binding"
+    assert result["confidence"] == "exact_context_card"
     assert result["requires_user_choice"] is False
     assert result["alignment_session_id"] == "align_1"
     assert result["binding"]["host_context_id"] == "thread-a"

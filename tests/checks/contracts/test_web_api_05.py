@@ -17,7 +17,7 @@ def test_api_orchestration_update_preserves_existing_prompt_files_when_omitted(s
         json={
             "name": "Custom Builder Flow",
             "description": "Uses a custom builder prompt.",
-            "workflow": {
+            "strategy_source": {
                 "version": 1,
                 "roles": [
                     {"id": "builder", "archetype": "builder", "prompt_ref": "custom-builder.md"},
@@ -45,15 +45,18 @@ Keep the builder prompt stable.
         json={
             "name": "Custom Builder Flow v2",
             "description": "Workflow changed, prompt payload omitted.",
-            "workflow": {
-                "version": 1,
-                "roles": [
-                    {"id": "builder", "archetype": "builder", "prompt_ref": "custom-builder.md"},
-                ],
-                "steps": [
-                    {"id": "builder_retry_step", "role_id": "builder"},
-                ],
-            },
+            "strategy_json": json.dumps(
+                {
+                    "version": 1,
+                    "roles": [
+                        {"id": "builder", "archetype": "builder", "prompt_ref": "custom-builder.md"},
+                    ],
+                    "steps": [
+                        {"id": "builder_retry_step", "role_id": "builder"},
+                    ],
+                },
+                ensure_ascii=False,
+            ),
         },
     )
 
@@ -327,7 +330,7 @@ def test_api_can_create_round_based_loop_without_gatekeeper(
             "delta_threshold": 0.005,
             "trigger_window": 2,
             "regression_window": 2,
-            "workflow": {
+            "strategy_source": {
                 "version": 1,
                 "roles": [
                     {"id": "builder", "name": "Builder", "archetype": "builder", "prompt_ref": "builder.md"},

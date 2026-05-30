@@ -60,11 +60,11 @@ def agent_entry_loop_projection_messages(next_loop_action: str) -> dict[str, str
     return {
         "message_zh": (
             "这个 Loop 来自当前 Coding Agent 的 /loopora-plan；继续运行必须回到同一个 Agent 执行 /loopora-run，"
-            "避免 Web 悄悄切到后台 headless worker。"
+            "避免 Web 悄悄切到后台 automation runner。"
         ),
         "message_en": (
             "This Loop came from the current Coding Agent via /loopora-plan; continue it from the same Agent "
-            "with /loopora-run so Web does not silently switch to a headless worker."
+            "with /loopora-run so Web does not silently switch to an automation runner."
         ),
     }
 
@@ -115,7 +115,9 @@ def agent_loop_summary(adapter: str, run: dict[str, Any], run_result: dict[str, 
     }
     attach_native_run_surface(summary, adapter=adapter)
     if target_agent and role_dispatch.get("target_agent_config_exists") is not False:
-        summary["dispatch_next"] = f"invoke {target_agent} with the next context/capsule paths below; do not perform this role inline"
+        summary["dispatch_next"] = (
+            f"invoke {target_agent} with the next context and step contract paths below; do not perform this role inline"
+        )
     native_todo = next_step.get("native_todo") if isinstance(next_step.get("native_todo"), dict) else {}
     if native_todo:
         summary["native_todo"] = native_todo

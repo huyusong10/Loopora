@@ -43,11 +43,11 @@ def test_cli_agent_loop_terminal_unproven_reports_lifecycle_without_complete(mon
     assert "task_next_action: Run lifecycle is complete, but the task is not proven." in result.stdout
     assert "next_loop_command: /loopora-run" in result.stdout
     assert "next_evidence_focus: Audit proof is still missing." in result.stdout
-    assert "agent_native: lifecycle_closed_task_unproven" in result.stdout
-    assert "agent_native_task_verdict: insufficient_evidence" in result.stdout
+    assert "agent_runner: lifecycle_closed_task_unproven" in result.stdout
+    assert "agent_runner_task_verdict: insufficient_evidence" in result.stdout
     assert "task_proof_source: run.task_verdict" in result.stdout
     assert "run_lifecycle_source: result.complete" in result.stdout
-    assert "agent_native: complete" not in result.stdout
+    assert "agent_runner: complete" not in result.stdout
 
 
 def test_cli_agent_loop_json_reports_terminal_task_proof_summary(monkeypatch, tmp_path: Path) -> None:

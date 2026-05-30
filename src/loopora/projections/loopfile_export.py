@@ -12,7 +12,7 @@ from loopora.numeric_inputs import coerce_integral_number
 class LoopfileExportProjectionInput:
     loop: Mapping[str, object]
     loop_id: str
-    workflow: Mapping[str, object]
+    strategy_source: Mapping[str, object]
     prompt_files: Mapping[str, str]
     role_definition_by_id: Mapping[str, Mapping[str, object] | None]
     bundle_id: str = ""
@@ -22,8 +22,8 @@ class LoopfileExportProjectionInput:
 
 
 def build_loopfile_export_projection(request: LoopfileExportProjectionInput) -> dict[str, object]:
-    roles = [role for role in list(request.workflow.get("roles") or []) if isinstance(role, Mapping)]
-    steps = [step for step in list(request.workflow.get("steps") or []) if isinstance(step, Mapping)]
+    roles = [role for role in list(request.strategy_source.get("roles") or []) if isinstance(role, Mapping)]
+    steps = [step for step in list(request.strategy_source.get("steps") or []) if isinstance(step, Mapping)]
     return {
         "version": 1,
         "metadata": {
@@ -44,7 +44,7 @@ def build_loopfile_export_projection(request: LoopfileExportProjectionInput) -> 
             )
             for role in roles
         ],
-        "workflow": _loopfile_workflow_payload(request.workflow, roles=roles, steps=steps),
+        "workflow": _loopfile_strategy_source_payload(request.strategy_source, roles=roles, steps=steps),
     }
 
 
@@ -79,16 +79,16 @@ def _loopfile_role_definition_payload(
     }
 
 
-def _loopfile_workflow_payload(
-    workflow: Mapping[str, object],
+def _loopfile_strategy_source_payload(
+    strategy_source: Mapping[str, object],
     *,
     roles: list[Mapping[str, object]],
     steps: list[Mapping[str, object]],
 ) -> dict[str, object]:
     payload: dict[str, object] = {
-        "version": int(workflow.get("version", 1) or 1),
-        "preset": str(workflow.get("preset", "") or "").strip(),
-        "collaboration_intent": str(workflow.get("collaboration_intent", "") or "").strip(),
+        "version": int(strategy_source.get("version", 1) or 1),
+        "preset": str(strategy_source.get("preset", "") or "").strip(),
+        "collaboration_intent": str(strategy_source.get("collaboration_intent", "") or "").strip(),
         "roles": [
             {
                 "id": str(role.get("id", "") or "").strip(),
@@ -96,14 +96,14 @@ def _loopfile_workflow_payload(
             }
             for role in roles
         ],
-        "steps": [_loopfile_workflow_step_payload(step) for step in steps],
+        "steps": [_loopfile_strategy_step_payload(step) for step in steps],
     }
-    if workflow.get("controls"):
-        payload["controls"] = deepcopy(workflow.get("controls") or [])
+    if strategy_source.get("controls"):
+        payload["controls"] = deepcopy(strategy_source.get("controls") or [])
     return payload
 
 
-def _loopfile_workflow_step_payload(step: Mapping[str, object]) -> dict[str, object]:
+def _loopfile_strategy_step_payload(step: Mapping[str, object]) -> dict[str, object]:
     return {
         "id": str(step.get("id", "") or "").strip(),
         "role_id": str(step.get("role_id", "") or "").strip(),

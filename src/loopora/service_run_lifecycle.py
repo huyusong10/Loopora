@@ -183,6 +183,11 @@ def _current_agent_step_projection(run: dict) -> dict:
         "iteration_repair": _current_agent_step_iteration_repair_projection(capsule),
         "context_path": _text(capsule.get("context_path"), limit=1000),
         "context_absolute_path": _text(capsule.get("context_absolute_path"), limit=2000),
+        "step_contract_path": _text(capsule.get("step_contract_path") or capsule.get("capsule_path"), limit=1000),
+        "step_contract_absolute_path": _text(
+            capsule.get("step_contract_absolute_path") or capsule.get("capsule_absolute_path"),
+            limit=2000,
+        ),
         "capsule_path": _text(capsule.get("capsule_path"), limit=1000),
         "capsule_absolute_path": _text(capsule.get("capsule_absolute_path"), limit=2000),
         "submit_hint": {

@@ -168,7 +168,7 @@ def test_agent_run_context_resolution_covers_empty_resume_and_ambiguous_recovery
     service = service_factory(scenario="success")
     empty = service.resolve_loopora_context(sample_workdir, intent="run", adapter="codex", context_id="thread-empty")
     assert empty["action"] == "plan_first"
-    assert empty["confidence"] == "no_binding"
+    assert empty["confidence"] == "no_context_card"
     assert empty["requires_user_choice"] is False
 
     bundle_a = tmp_path / "bundle-a.yml"
@@ -184,7 +184,7 @@ def test_agent_run_context_resolution_covers_empty_resume_and_ambiguous_recovery
     )
     exact_ready = service.resolve_loopora_context(sample_workdir, intent="run", adapter="codex", context_id="thread-a")
     assert exact_ready["action"] == "start_ready_preview"
-    assert exact_ready["confidence"] == "exact_binding"
+    assert exact_ready["confidence"] == "exact_context_card"
     assert exact_ready["choice"]["alignment_session_id"] == generated_a["session"]["id"]
     assert exact_ready["choice"]["action"] == "start_ready_preview"
 
@@ -198,7 +198,7 @@ def test_agent_run_context_resolution_covers_empty_resume_and_ambiguous_recovery
     exact_active = service.resolve_loopora_context(sample_workdir, intent="run", adapter="codex", context_id="thread-a")
     resumed_a = service.start_agent_loop("codex", workdir=sample_workdir, context_id="thread-a", execute_async=False)
     assert exact_active["action"] == "resume_run"
-    assert exact_active["confidence"] == "exact_binding"
+    assert exact_active["confidence"] == "exact_context_card"
     assert exact_active["choice"]["action"] == "resume_active_run"
     assert exact_active["choice"]["linked_run_id"] == started_a["run"]["id"]
     assert resumed_a["started_new_run"] is False
@@ -550,7 +550,7 @@ def test_cli_agent_run_reports_damaged_binding_recovery(service_factory, sample_
     summary, _legacy = assert_agent_v3_envelope(
         payload, kind="agent_recovery", summary_key="agent_loop_recovery_summary", status="blocked"
     )
-    assert summary["loop_recovery"] == "repair_agent_binding"
+    assert summary["loop_recovery"] == "repair_context_card"
 
 def test_agent_native_observation_snapshot_projects_current_handoff(
     service_factory,
@@ -828,6 +828,7 @@ def test_cli_agent_loop_does_not_spawn_nested_worker_for_agent_native(adapter: s
                     },
                     "known_evidence_count": 3,
                     "context_absolute_path": str(run_dir / "iterations" / "iter_000" / "steps" / "00__builder_step" / "input.context.json"),
+                    "step_contract_absolute_path": str(layout.step_contract_path(0, 0, "builder_step")),
                     "capsule_absolute_path": str(run_dir / "iterations" / "iter_000" / "steps" / "00__builder_step" / "capsule.json"),
                     "submit_hint": {
                         "command": "loopora agent codex submit --run-id run_agent --step-id builder_step",

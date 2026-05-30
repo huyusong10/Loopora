@@ -2276,8 +2276,8 @@ document.addEventListener("DOMContentLoaded", () => {
         )
         : agentLaunch
         ? localeText(
-          "这份预览来自 /loopora-plan；用同一个 Agent 执行 /loopora-run，才能保留宿主 Agent-native 交接。",
-          "This preview came from /loopora-plan; run /loopora-run in the same Agent to preserve host-native handoff."
+          "这份预览来自 /loopora-plan；用同一个 Agent 执行 /loopora-run，才能保留宿主交接。",
+          "This preview came from /loopora-plan; run /loopora-run in the same Agent to preserve the host handoff."
         )
         : localeText(
           "READY 只表示方案通过硬校验；确认判断地图、证据路径和运行目录后再启动。",

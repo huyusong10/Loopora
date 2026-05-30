@@ -19,16 +19,7 @@ from loopora.settings import AppSettings
 
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-SERVICE_PRIVATE_IMPORT_ALLOWLIST = {
-    ("src/loopora/service.py", "loopora.service_app", "_LooporaServiceRuntime"),
-    ("src/loopora/service_agent_native.py", "loopora.service_agent_native_contracts", "_agent_native_actionable_blocking_item"),
-    ("src/loopora/service_agent_native.py", "loopora.service_agent_native_contracts", "_agent_native_actionable_repair_next_action"),
-    ("src/loopora/service_agent_native.py", "loopora.service_agent_native_contracts", "_agent_native_submit_command"),
-    ("src/loopora/service_agent_native.py", "loopora.service_agent_native_contracts", "_agent_native_unknown_evidence_refs"),
-    ("src/loopora/service_bundle_assets.py", "loopora.service_asset_common", "_normalize_role_models"),
-    ("src/loopora/service_loop_records.py", "loopora.service_asset_common", "_normalize_role_models"),
-    ("src/loopora/service_run_registration.py", "loopora.service_asset_common", "_normalize_role_models"),
-}
+SERVICE_PRIVATE_IMPORT_ALLOWLIST: set[tuple[str, str, str]] = set()
 
 
 def test_loopora_service_is_composition_facade(tmp_path: Path) -> None:
@@ -53,6 +44,13 @@ def test_loopora_service_is_composition_facade(tmp_path: Path) -> None:
 def test_public_service_module_does_not_import_legacy_mixins() -> None:
     source = Path(service_module.__file__).read_text(encoding="utf-8")
     service_app_source = (REPO_ROOT / "src" / "loopora" / "service_app.py").read_text(encoding="utf-8")
+    service_alignment_source = (REPO_ROOT / "src" / "loopora" / "service_alignment.py").read_text(encoding="utf-8")
+    alignment_status_source = (REPO_ROOT / "src" / "loopora" / "service_alignment_status.py").read_text(
+        encoding="utf-8"
+    )
+    web_alignment_api_source = (REPO_ROOT / "src" / "loopora" / "web_route_alignment_api.py").read_text(
+        encoding="utf-8"
+    )
 
     assert "ServiceAlignmentMixin" not in source
     assert "ServiceLegacyExecutionMixin" not in source
@@ -61,6 +59,11 @@ def test_public_service_module_does_not_import_legacy_mixins() -> None:
     assert "ServiceLegacyExecutionMixin" not in service_app_source
     assert "ServiceWorkflowExecutionMixin" not in service_app_source
     assert "service_legacy_execution" not in service_app_source
+    assert "ServiceAlignmentLegacyMixin" not in service_alignment_source
+    assert "ensure_alignment_session_layout" in service_alignment_source
+    assert "ALIGNMENT_ACTIVE_STATUSES =" not in service_alignment_source
+    assert "ALIGNMENT_ACTIVE_STATUSES =" in alignment_status_source
+    assert "from loopora.service_alignment_status import ALIGNMENT_ACTIVE_STATUSES" in web_alignment_api_source
 
 
 def test_component_services_expose_explicit_boundary_methods() -> None:
@@ -99,6 +102,7 @@ def test_component_services_do_not_expose_runtime_pass_through(tmp_path: Path) -
 
 
 def test_service_private_helper_imports_do_not_grow_without_inventory() -> None:
+    assert not SERVICE_PRIVATE_IMPORT_ALLOWLIST
     offenders: list[tuple[str, str, str]] = []
     for path in sorted((REPO_ROOT / "src" / "loopora").glob("service*.py")):
         relative = str(path.relative_to(REPO_ROOT))
@@ -115,10 +119,11 @@ def test_service_private_helper_imports_do_not_grow_without_inventory() -> None:
     assert offenders == []
 
 
-def test_service_boundary_inventory_documents_transitional_private_imports() -> None:
+def test_service_boundary_inventory_documents_private_import_retirement() -> None:
     inventory = (REPO_ROOT / "design" / "contracts.md").read_text(encoding="utf-8")
 
-    assert "Existing private helper imports are treated as a temporary inventory" in inventory
+    assert "Service-to-service private helper imports are retired" in inventory
+    assert "LooporaServiceRuntime" in inventory
     assert "AgentNativeService" in inventory
     assert "ProjectionService" in inventory
     assert "AlignmentService" in inventory
@@ -198,6 +203,14 @@ def test_run_contract_snapshot_request_uses_strategy_source_input() -> None:
     assert "class RunContractSnapshotRequest" in context_flow_source
     assert "strategy_source: dict" in context_flow_source
     assert "    workflow: dict\n    prompt_files" not in context_flow_source
+    assert "_strategy_source_roles_with_prompt_files" in context_flow_source
+    assert "_workflow_roles_with_prompt_files" not in context_flow_source
+    assert 'strategy_snapshot = run_contract.get("workflow")' in context_flow_source
+    assert 'workflow_snapshot = run_contract.get("workflow")' not in context_flow_source
+    assert "strategy_source=strategy_source" in context_flow_source
+    assert "strategy_source=strategy_snapshot" in context_flow_source
+    assert "workflow=strategy_source" not in context_flow_source
+    assert "workflow=strategy_snapshot" not in context_flow_source
     assert "class ResolvedLoopCreate" in registration_source
     assert "class LoopDefinitionFiles" in registration_source
     assert "strategy_source: dict" in registration_source
@@ -234,7 +247,7 @@ def test_runtime_uses_strategy_source_boundary_for_workflow_source_helpers() -> 
     runner_support_source = (REPO_ROOT / "src" / "loopora" / "service_runner_support.py").read_text(encoding="utf-8")
 
     assert strategy_source_path.exists()
-    assert "StrategySourceError = WorkflowError" in strategy_source_source
+    assert "StrategySourceError" in strategy_source_source
     assert "def normalize_strategy_source" in strategy_source_source
     assert "def strategy_source_has_finish_gatekeeper_step" in strategy_source_source
     assert "def build_preset_strategy_source" in strategy_source_source
@@ -277,6 +290,14 @@ def test_strategy_source_definitions_own_legacy_workflow_format_implementation()
 
     assert "from loopora.strategy_source_definitions import" in strategy_source_source
     assert "from loopora.workflows import" not in strategy_source_source
+    assert "class StrategySourcePresetDefinitionSpec" in strategy_definitions_source
+    assert "class WorkflowPresetDefinitionSpec" not in strategy_definitions_source
+    assert "def _strategy_source_preset_definition" in strategy_definitions_source
+    assert "def _workflow_preset_definition" not in strategy_definitions_source
+    assert "def strategy_source_preset_copy" in strategy_definitions_source
+    assert "workflow_preset_copy = strategy_source_preset_copy" in strategy_definitions_source
+    assert "definition_strategy_source_preset_copy" in strategy_source_source
+    assert "workflow_preset_copy" not in strategy_source_source
     assert "Strategy Source definitions" in strategy_definitions_source
     assert "Legacy workflow import compatibility" in workflow_compat_source
     assert "from loopora.strategy_source_definitions import *" in workflow_compat_source
@@ -286,15 +307,46 @@ def test_strategy_source_definitions_own_legacy_workflow_format_implementation()
 def test_asset_catalog_uses_strategy_source_boundary_for_strategy_templates() -> None:
     strategy_source_source = (REPO_ROOT / "src" / "loopora" / "strategy_source.py").read_text(encoding="utf-8")
     asset_catalog_source = (REPO_ROOT / "src" / "loopora" / "asset_catalog.py").read_text(encoding="utf-8")
+    service_app_source = (REPO_ROOT / "src" / "loopora" / "service_app.py").read_text(encoding="utf-8")
 
     assert "def strategy_source_preset_names" in strategy_source_source
     assert "def strategy_source_preset_copy" in strategy_source_source
     assert "def default_strategy_role_execution_settings" in strategy_source_source
     assert "def normalize_strategy_prompt_ref" in strategy_source_source
+    assert "class StrategyTemplateAssetCatalog" in asset_catalog_source
+    assert "class WorkflowAssetCatalog" not in asset_catalog_source
+    assert "WorkflowAssetCatalog = StrategyTemplateAssetCatalog" in asset_catalog_source
+    assert "StrategyTemplateAssetCatalog(repository)" in service_app_source
+    assert "WorkflowAssetCatalog(repository)" not in service_app_source
     assert "from loopora.strategy_source import" in asset_catalog_source
     assert "from loopora.workflows import" not in asset_catalog_source
     assert "_hydrate_strategy_role_snapshots" in asset_catalog_source
     assert "_hydrate_workflow_role_snapshots" not in asset_catalog_source
+    assert "strategy_source = build_preset_strategy_source(preset_name)" in asset_catalog_source
+    assert "workflow = build_preset_strategy_source(preset_name)" not in asset_catalog_source
+    assert "normalized_strategy_source = normalize_strategy_source" in asset_catalog_source
+    assert "normalized_workflow" not in asset_catalog_source
+    assert "hydrated_strategy_source" in asset_catalog_source
+    assert "hydrated_workflow" not in asset_catalog_source
+    assert "effective_strategy_source" in asset_catalog_source
+    assert "effective_workflow" not in asset_catalog_source
+
+
+def test_orchestration_asset_mutations_use_strategy_source_boundary_for_strategy_templates() -> None:
+    asset_catalog_source = (REPO_ROOT / "src" / "loopora" / "asset_catalog.py").read_text(encoding="utf-8")
+    service_orchestration_source = (REPO_ROOT / "src" / "loopora" / "service_orchestration_assets.py").read_text(
+        encoding="utf-8"
+    )
+
+    assert "strategy_source: dict | None = None" in asset_catalog_source
+    assert "strategy_source: dict | None = None" in service_orchestration_source
+    assert "def _pop_strategy_source_payload" in asset_catalog_source
+    assert "def _pop_strategy_source_field" in service_orchestration_source
+    assert "payload_input.strategy_source" in asset_catalog_source
+    assert "payload_input.workflow" not in asset_catalog_source
+    assert "strategy_source=request.strategy_source" in service_orchestration_source
+    assert "workflow=request.workflow" not in service_orchestration_source
+    assert "role_count, step_count = _strategy_source_counts(orchestration)" in service_orchestration_source
 
 
 def test_compiler_sources_use_strategy_source_boundary_for_strategy_inputs() -> None:
@@ -303,14 +355,73 @@ def test_compiler_sources_use_strategy_source_boundary_for_strategy_inputs() -> 
         encoding="utf-8"
     )
     specs_source = (REPO_ROOT / "src" / "loopora" / "specs.py").read_text(encoding="utf-8")
+    cli_spec_commands_source = (REPO_ROOT / "src" / "loopora" / "cli_spec_commands.py").read_text(encoding="utf-8")
+    web_editor_source = (REPO_ROOT / "src" / "loopora" / "web_route_editor_api.py").read_text(encoding="utf-8")
+    web_loop_pages_source = (REPO_ROOT / "src" / "loopora" / "web_route_context_loop_pages.py").read_text(
+        encoding="utf-8"
+    )
 
     assert "def normalize_strategy_role_display_name" in strategy_source_source
     assert "from loopora.strategy_source import" in loop_compiler_source
     assert "from loopora.strategy_source import" in specs_source
     assert "from loopora.workflows import" not in loop_compiler_source
     assert "from loopora.workflows import" not in specs_source
+    assert "def render_spec_template_for_strategy_source" in specs_source
+    assert "def init_spec_file_for_strategy_source" in specs_source
+    assert "strategy_source: dict[str, Any] | None = None" in specs_source
+    assert "render_spec_template_for_strategy_source" in cli_spec_commands_source
+    assert "init_spec_file_for_strategy_source" in cli_spec_commands_source
+    assert "render_spec_template(locale=locale, workflow=" not in cli_spec_commands_source
+    assert "render_spec_template_for_strategy_source" in web_editor_source
+    assert "init_spec_file_for_strategy_source" in web_editor_source
+    assert "render_spec_template(locale=locale, workflow=" not in web_editor_source
+    assert "render_spec_template_for_strategy_source" in web_loop_pages_source
     assert "_loopfile_strategy_source" in loop_compiler_source
     assert "_loopfile_strategy_workflow" not in loop_compiler_source
+    assert 'strategy_source_payload = mapping(bundle.get("workflow"))' in loop_compiler_source
+    assert 'workflow = mapping(bundle.get("workflow"))' not in loop_compiler_source
+
+
+def test_run_takeaway_projection_uses_strategy_snapshot_for_contract_trace_inputs() -> None:
+    control_summary_source = (REPO_ROOT / "src" / "loopora" / "service_bundle_control_summary.py").read_text(
+        encoding="utf-8"
+    )
+    run_takeaways_source = (REPO_ROOT / "src" / "loopora" / "run_takeaways.py").read_text(encoding="utf-8")
+
+    assert "strategy_source: object = None" in control_summary_source
+    assert "def _strategy_source_payload" in control_summary_source
+    assert 'strategy_snapshot = raw.get("workflow")' in run_takeaways_source
+    assert 'workflow = raw.get("workflow")' not in run_takeaways_source
+    assert "strategy_source=strategy_snapshot" in run_takeaways_source
+    assert "workflow=strategy_snapshot" not in run_takeaways_source
+
+
+def test_bundle_control_summary_uses_strategy_source_boundary_for_loopfile_workflow_input() -> None:
+    control_summary_source = (REPO_ROOT / "src" / "loopora" / "service_bundle_control_summary.py").read_text(
+        encoding="utf-8"
+    )
+
+    assert 'strategy_source = dict(bundle.get("workflow") or {})' in control_summary_source
+    assert 'workflow = dict(bundle.get("workflow") or {})' not in control_summary_source
+    assert "strategy_flow_projection = _strategy_flow_projection" in control_summary_source
+    assert "def _strategy_flow_projection" in control_summary_source
+    assert "def _workflow_projection" not in control_summary_source
+    assert "def _strategy_flow_trace" in control_summary_source
+    assert "def _workflow_trace" not in control_summary_source
+    assert "def _append_strategy_input_diagnostics" in control_summary_source
+    assert "def _append_workflow_input_diagnostics" not in control_summary_source
+    assert 'strategy_source = dict(context.get("strategy_source") or context.get("workflow") or {})' in control_summary_source
+
+
+def test_bundle_graph_preflight_uses_strategy_source_for_template_role_refs() -> None:
+    graph_preflight_source = (REPO_ROOT / "src" / "loopora" / "service_bundle_graph_preflight.py").read_text(
+        encoding="utf-8"
+    )
+
+    assert 'strategy_source = orchestration.get("workflow_json") or {}' in graph_preflight_source
+    assert 'workflow = orchestration.get("workflow_json") or {}' not in graph_preflight_source
+    assert "_strategy_source_role_definition_ids" in graph_preflight_source
+    assert "_workflow_role_definition_ids" not in graph_preflight_source
 
 
 def test_loopfile_bundle_uses_strategy_source_boundary_for_strategy_validation() -> None:
@@ -328,6 +439,10 @@ def test_loopfile_bundle_uses_strategy_source_boundary_for_strategy_validation()
 def test_web_input_projection_uses_strategy_source_boundary_for_strategy_forms() -> None:
     strategy_source_source = (REPO_ROOT / "src" / "loopora" / "strategy_source.py").read_text(encoding="utf-8")
     web_inputs_source = (REPO_ROOT / "src" / "loopora" / "web_inputs.py").read_text(encoding="utf-8")
+    web_loop_pages_source = (REPO_ROOT / "src" / "loopora" / "web_route_context_loop_pages.py").read_text(
+        encoding="utf-8"
+    )
+    web_editor_source = (REPO_ROOT / "src" / "loopora" / "web_route_editor_api.py").read_text(encoding="utf-8")
 
     assert "def builtin_strategy_prompt_markdown_by_locale" in strategy_source_source
     assert "def normalize_strategy_prompt_locale" in strategy_source_source
@@ -335,11 +450,24 @@ def test_web_input_projection_uses_strategy_source_boundary_for_strategy_forms()
     assert "from loopora.workflows import" not in web_inputs_source
     assert "SpecTemplateStrategyCandidate" in web_inputs_source
     assert "SpecTemplateWorkflowCandidate" not in web_inputs_source
+    assert "def _strategy_source_from_mapping" in web_inputs_source
+    assert "def _workflow_from_mapping" not in web_inputs_source
+    assert "def _strategy_source_for_spec_template" in web_inputs_source
+    assert "def _workflow_for_spec_template" not in web_inputs_source
+    assert "strategy_source = build_preset_strategy_source(preset_name)" in web_inputs_source
+    assert "workflow = build_preset_strategy_source(preset_name)" not in web_inputs_source
+    assert "strategy_source = dict(orchestration.get(\"workflow_json\") or {})" in web_inputs_source
+    assert "workflow = dict(orchestration.get(\"workflow_json\") or {})" not in web_inputs_source
+    assert "_strategy_source_for_spec_template" in web_loop_pages_source
+    assert "_workflow_for_spec_template" not in web_loop_pages_source
+    assert "_strategy_source_for_spec_template" in web_editor_source
+    assert "_workflow_for_spec_template" not in web_editor_source
 
 
 def test_web_page_projections_use_strategy_source_boundary_for_strategy_display() -> None:
     strategy_source_source = (REPO_ROOT / "src" / "loopora" / "strategy_source.py").read_text(encoding="utf-8")
     web_overviews_source = (REPO_ROOT / "src" / "loopora" / "web_overviews.py").read_text(encoding="utf-8")
+    web_route_pages_source = (REPO_ROOT / "src" / "loopora" / "web_route_pages.py").read_text(encoding="utf-8")
     loop_pages_source = (REPO_ROOT / "src" / "loopora" / "web_route_context_loop_pages.py").read_text(
         encoding="utf-8"
     )
@@ -349,6 +477,12 @@ def test_web_page_projections_use_strategy_source_boundary_for_strategy_display(
     assert "from loopora.strategy_source import" in loop_pages_source
     assert "from loopora.workflows import" not in web_overviews_source
     assert "from loopora.workflows import" not in loop_pages_source
+    assert "def _strategy_role_executor_summary" in web_overviews_source
+    assert "def _workflow_role_executor_summary" not in web_overviews_source
+    assert 'strategy_source = loop.get("workflow_json") or {}' in web_overviews_source
+    assert 'workflow = loop.get("workflow_json") or {}' not in web_overviews_source
+    assert "_strategy_role_executor_summary" in web_route_pages_source
+    assert "_workflow_role_executor_summary" not in web_route_pages_source
 
 
 def test_web_editor_and_form_routes_use_strategy_source_boundary_for_strategy_validation() -> None:
@@ -431,6 +565,8 @@ def test_runner_support_boundary_is_runner_named() -> None:
     assert "class ServiceRunnerSupportMixin" in support_source
     assert "def _build_runner_summary" in support_source
     assert "def _build_runner_iteration_entry" in support_source
+    assert "Strategy preset" in support_source
+    assert "Workflow preset" not in support_source
     assert "def _build_workflow_summary" not in support_source
     assert "def _build_workflow_iteration_entry" not in support_source
 
@@ -464,6 +600,8 @@ def test_runner_execution_boundary_is_runner_named() -> None:
     assert "def _execute_runner_run" in runner_execution_source
     assert "def _run_runner_iteration" in runner_execution_source
     assert "def _run_runner_step_once" in runner_execution_source
+    assert "service.runner.execution.started" in runner_execution_source
+    assert "service.workflow." not in runner_execution_source
     assert "class ServiceWorkflowExecutionMixin" not in runner_execution_source
     assert "def _execute_workflow_run" not in runner_execution_source
     assert "def _run_workflow_iteration" not in runner_execution_source
@@ -647,6 +785,8 @@ def test_agent_and_headless_share_runner_step_commit_boundary() -> None:
     assert "def commit_runner_step_result" in commit_source
     assert "class ServiceRunnerStepCommitMixin" in commit_source
     assert "class ServiceRunnerStepArtifactsMixin" in artifacts_source
+    assert "service.runner.step.completed" in artifacts_source
+    assert "service.workflow.step.completed" not in artifacts_source
     assert "runner_step_result" in commit_source
     assert "workflow_step_result" not in commit_source
     assert "class RunnerStepResultRequest" in step_result_source

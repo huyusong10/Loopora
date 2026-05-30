@@ -98,9 +98,9 @@ def read_agent_binding(adapter: str, workdir: Path | str, *, context_id: str = "
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
-        raise LooporaError(f"agent binding is unreadable: {path}: {exc}") from exc
+        raise LooporaError(f"agent context card is unreadable: {path}: {exc}") from exc
     if not isinstance(payload, dict):
-        raise LooporaError(f"agent binding is invalid: {path}")
+        raise LooporaError(f"agent context card is invalid: {path}")
     payload["path"] = str(path)
     return payload
 

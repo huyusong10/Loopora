@@ -452,7 +452,7 @@ def _evidence_ref_repair_focus(error: str, active_step: dict) -> list[str]:
     known = [str(item) for item in list(active_step.get("known_evidence_ids") or []) if str(item).strip()]
     if known:
         return ["use only known_evidence_ids in evidence_refs: " + ", ".join(known[:6])]
-    return ["remove invented evidence_refs; evidence_refs must be exact IDs from the active capsule"]
+    return ["remove invented evidence_refs; evidence_refs must be exact IDs from the active step contract"]
 
 
 def _coverage_target_repair_focus(error: str, active_step: dict) -> list[str]:

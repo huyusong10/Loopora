@@ -273,14 +273,14 @@ def _loopfile_bundle_from_source(source: LoopSource) -> dict:
 
 
 def _loopfile_strategy_source(bundle: Mapping[str, object]) -> dict[str, object]:
-    workflow = mapping(bundle.get("workflow"))
+    strategy_source_payload = mapping(bundle.get("workflow"))
     role_definitions = {
         text(role_definition.get("key")): role_definition
         for role_definition in mapping_list(bundle.get("role_definitions"))
         if text(role_definition.get("key"))
     }
     roles = []
-    for role in mapping_list(workflow.get("roles")):
+    for role in mapping_list(strategy_source_payload.get("roles")):
         role_definition = mapping(role_definitions.get(text(role.get("role_definition_key"))))
         role_id = text(role.get("id"))
         roles.append(
@@ -293,6 +293,6 @@ def _loopfile_strategy_source(bundle: Mapping[str, object]) -> dict[str, object]
             }
         )
     return {
-        **dict(workflow),
+        **dict(strategy_source_payload),
         "roles": roles,
     }

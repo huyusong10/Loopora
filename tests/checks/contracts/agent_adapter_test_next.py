@@ -34,14 +34,14 @@ def _assert_agent_next_step_json_summary(next_summary: dict) -> None:
     assert next_summary["target_agent"] == "loopora-inspector"
     assert next_summary["target_agent_config"] == ".codex/agents/loopora-inspector.toml"
     assert next_summary["dispatch_next"] == (
-        "invoke loopora-inspector with the next context/capsule paths below; do not perform this role inline"
+        "invoke loopora-inspector with the next context and step contract paths below; do not perform this role inline"
     )
     assert next_summary["native_todo"]["recommended"] is True
     assert next_summary["native_todo"]["not_evidence"] is True
     assert next_summary["native_todo"]["items"] == _expected_agent_next_todo_items()
     assert next_summary["action_policy"] == "read_only, can_block"
     assert next_summary["context_path"] == "iterations/iter_000/steps/01__inspector_step/input.context.json"
-    assert next_summary["capsule_path"] == "iterations/iter_000/steps/01__inspector_step/capsule.json"
+    assert next_summary["step_contract_path"] == "iterations/iter_000/steps/01__inspector_step/step_contract.json"
     assert next_summary["result_template"] == ".loopora/agent_outbox/codex/run_next__inspector_step.result.template.json"
     assert next_summary["result_template_contract"].startswith("Write one wrapper JSON object")
     assert "replace null placeholders" in next_summary["result_template_fill"]
@@ -98,7 +98,9 @@ def _assert_agent_work_panel_summary(panel: dict) -> None:
     assert panel["task_outcome"] == "not_proven_continue_evidence"
     assert panel["current_role"] == "Inspector"
     assert panel["current_step_id"] == "inspector_step"
-    assert panel["next_action"] == "invoke loopora-inspector with the next context/capsule paths below; do not perform this role inline"
+    assert panel["next_action"] == (
+        "invoke loopora-inspector with the next context and step contract paths below; do not perform this role inline"
+    )
     assert panel["evidence_focus"] == "done_when.check_001 [weak] Authorization proof is still weak."
     assert panel["todo_items"] == _expected_agent_next_todo_items()
     assert panel["top_gaps"] == [
@@ -112,7 +114,7 @@ def _assert_agent_work_panel_summary(panel: dict) -> None:
 
 def _expected_agent_next_todo_items() -> list[str]:
     return [
-        "Read agent_v3_envelope.summary and the context capsule.",
+        "Read agent_v3_envelope.summary and the step contract.",
         "Invoke loopora-inspector through the host-native role agent mechanism.",
         "Fill the result template with schema-shaped output and preserve loopora_host_dispatch.",
         "Submit the filled result and read agent_v3_envelope.summary before continuing.",

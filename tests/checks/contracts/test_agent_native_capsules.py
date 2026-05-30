@@ -118,7 +118,7 @@ def test_agent_loop_after_web_imported_candidate_still_uses_agent_native(
     assert not imported["session"].get("linked_run_id")
 
     def fail_nested_worker(run_id: str) -> None:
-        raise AssertionError(f"Agent-first imported sessions must not start a headless worker for {run_id}")
+        raise AssertionError(f"Agent-first imported sessions must not start an automation runner for {run_id}")
 
     monkeypatch.setattr(service, "start_run_async", fail_nested_worker)
 
@@ -453,7 +453,7 @@ def test_agent_run_summary_exposes_dispatch_next_when_role_agent_is_available() 
 
     summary = result["agent_run_summary"]
     assert summary["dispatch_next"] == (
-        "invoke loopora-builder with the next context/capsule paths below; do not perform this role inline"
+        "invoke loopora-builder with the next context and step contract paths below; do not perform this role inline"
     )
     assert summary["next_step"]["dispatch_next"] == summary["dispatch_next"]
     _assert_codex_native_surface_summary(summary)
@@ -567,7 +567,7 @@ def test_agent_native_required_coverage_refs_stay_known_when_evidence_query_filt
         AgentBundleCandidateRequest(
             adapter="codex",
             workdir=sample_workdir,
-            message="Keep blocked coverage evidence citable by the next Agent-native role.",
+            message="Keep blocked coverage evidence citable by the next Agent Runner role.",
             bundle_file=bundle_file,
             entry_source="codex_project_skill",
         )
@@ -950,7 +950,7 @@ def test_agent_native_claim_rejects_corrupted_active_capsule(
     state["active_step"]["capsule"] = "not-a-capsule-object"
     state_path.write_text(json.dumps(state, ensure_ascii=False), encoding="utf-8")
 
-    with pytest.raises(LooporaError, match="active step capsule is invalid"):
+    with pytest.raises(LooporaError, match="active step contract is invalid"):
         service.claim_agent_native_step(
             AgentNativeStepClaimRequest(adapter="codex", workdir=sample_workdir, run_id=started["run"]["id"])
         )

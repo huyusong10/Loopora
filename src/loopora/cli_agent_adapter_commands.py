@@ -285,7 +285,7 @@ def _register_agent_runtime_for(agent_app: typer.Typer, *, adapter: str, help_te
         json_output: JsonOutputOption = False,
         no_web: NoWebOption = False,
     ) -> None:
-        """Claim the next Loopora step capsule for the host Agent to execute natively."""
+        """Claim the next Loopora step contract for the host Agent to execute natively."""
         _claim_agent_next_from_cli(
             adapter=adapter,
             workdir=workdir,

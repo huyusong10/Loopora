@@ -23,7 +23,7 @@ def test_run_detail_static_assets_keep_semantic_hooks_without_layout_contracts()
     console = (ROOT / "src" / "loopora" / "static" / "pages" / "run_detail_console.js").read_text(encoding="utf-8")
     page_script = (ROOT / "src" / "loopora" / "static" / "pages" / "run_detail.js").read_text(encoding="utf-8")
 
-    for kind in ("target", "context", "capsule", "template", "outbox", "submit"):
+    for kind in ("target", "context", "step-contract", "template", "outbox", "submit"):
         assert f'data-agent-handoff-copy="{kind}"' in template
         assert f'data-testid="agent-handoff-copy-{kind}"' in template
 

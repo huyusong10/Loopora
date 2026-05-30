@@ -16,7 +16,8 @@ from agent_adapter_test_common import (
 
 
 def _assert_codex_native_surface_summary(summary: dict) -> None:
-    surface = summary["native_surface"]
+    assert "native_surface" not in summary
+    surface = summary["agent_surface"]
     assert surface["entry_kind"] == "project_skill"
     assert surface["entry_paths"]["plan"] == ".agents/skills/loopora-plan/SKILL.md"
     assert surface["slash_commands"] == {"plan": "/loopora-plan", "run": "/loopora-run"}
@@ -36,7 +37,7 @@ def _assert_codex_native_surface_summary(summary: dict) -> None:
     assert surface["health_check"]["adapter_check"] == "loopora agent codex check --workdir <project>"
     assert surface["health_check"]["scope"] == "managed_entries_role_configs_and_loopora_state"
     assert surface["health_check"]["host_reload"] == "restart_or_new_host_session_may_be_required_for_entry_discovery"
-    assert surface["session_recovery"]["binding"] == "exact_agent_context_binding_first"
+    assert surface["session_recovery"]["context_card"] == "exact_agent_context_card_first"
     assert surface["session_recovery"]["ready_resume"] == "/loopora-run option:<recoverable_context_id>"
     assert (
         surface["session_recovery"]["host_session_discovery"]
@@ -44,10 +45,10 @@ def _assert_codex_native_surface_summary(summary: dict) -> None:
     )
     assert (
         surface["session_recovery"]["checkpoint_restore"]
-        == "host_checkpoints_rewinds_and_session_archives_are_recovery_hints_not_loopora_binding_or_proof"
+        == "host_checkpoints_rewinds_and_session_archives_are_recovery_hints_not_loopora_context_or_proof"
     )
     assert surface["handoff_protocol"]["role_channel"] == "host_native_role_agent"
-    assert surface["handoff_protocol"]["payload_policy"] == "path_based_context_capsule_and_template_not_large_inline_prompt"
+    assert surface["handoff_protocol"]["payload_policy"] == "path_based_context_step_contract_and_template_not_large_inline_prompt"
     assert surface["handoff_protocol"]["dispatch_failure"] == "stop_and_report_dispatch_unavailable_before_submit"
     assert surface["handoff_protocol"]["parallel_dispatch"] == "only_when_loop_workflow_declares_parallel_group"
     assert surface["handoff_protocol"]["external_orchestration"] == (
@@ -90,7 +91,7 @@ def _assert_codex_native_surface_ownership(surface: dict) -> None:
     assert ownership["repair_policy"] == "check_then_reinstall_loopora_managed_entries_only"
 
 def _assert_codex_native_surface_plain(output: str) -> None:
-    assert "native surface:" in output
+    assert "agent surface:" in output
     assert "- entry: project_skill plan=.agents/skills/loopora-plan/SKILL.md run=.agents/skills/loopora-run/SKILL.md" in output
     assert "- slash commands: plan=/loopora-plan run=/loopora-run" in output
     assert "- dispatch: loopora-orchestrator -> loopora-builder" in output
@@ -124,28 +125,28 @@ def _assert_codex_native_surface_plain(output: str) -> None:
         "- context loading: entry=thin_dispatcher",
         "summary_first=agent_v3_envelope.summary",
         "references=on_demand_from_reference_paths",
-        "memory=host_owned_hint_not_binding_or_evidence",
+        "memory=host_owned_hint_not_loopora_context_or_evidence",
         "memory_store=external_memory_stores_indexes_and_memory_mcp_are_hints_not_loopora_context_or_proof",
         "templates=host_command_templates_playbooks_and_dynamic_prompts_are_hints_not_loopora_reviewed_workflow",
         "workflow_kits=external_spec_workflows_prd_packs_quality_gate_recipes_and_workflow_kits_are_guidance_not_loopora_reviewed_workflow_install_proof_or_evidence",
         "role_catalogs=external_agent_catalogs_subagent_libraries_and_role_marketplaces_are_selection_hints_not_loopora_role_contract_or_policy",
-        "compaction=host_compaction_summaries_are_hints_not_loopora_binding_or_proof",
-        "host_context=host_loaded_skills_commands_agents_editor_context_and_ide_bridges_are_hints_not_loopora_binding_contract_or_evidence",
+        "compaction=host_compaction_summaries_are_hints_not_loopora_context_or_proof",
+        "host_context=host_loaded_skills_commands_agents_editor_context_and_ide_bridges_are_hints_not_loopora_context_contract_or_evidence",
         "catalog=marketplace_catalogs_and_uninstalled_components_are_not_loopora_context_or_proof",
     )
     assert "- health check: adapter=loopora agent codex check --workdir <project>" in output
     assert "side_effects=check_commands_do_not_install_or_overwrite" in output
     assert "reload=restart_or_new_host_session_may_be_required_for_entry_discovery" in output
-    assert "- session recovery: binding=exact_agent_context_binding_first" in output
+    assert "- session recovery: context_card=exact_agent_context_card_first" in output
     assert "ambiguous=list_recoverable_contexts_before_running" in output
     assert "provider_resume=not_used_for_loopora_work" in output
     assert "host_sessions=not_auto_discovered_or_taken_over_by_loopora" in output
-    assert "checkpoints=host_checkpoints_rewinds_and_session_archives_are_recovery_hints_not_loopora_binding_or_proof" in output
+    assert "checkpoints=host_checkpoints_rewinds_and_session_archives_are_recovery_hints_not_loopora_context_or_proof" in output
     _assert_output_contains(
         output,
         "- handoff: channel=host_native_role_agent",
-        "required=role_dispatch.target_agent, context_path, capsule_path, result_template",
-        "payload=path_based_context_capsule_and_template_not_large_inline_prompt",
+        "required=role_dispatch.target_agent, context_path, step_contract_path, result_template",
+        "payload=path_based_context_step_contract_and_template_not_large_inline_prompt",
         "dispatch_failure=stop_and_report_dispatch_unavailable_before_submit",
         "parallel=only_when_loop_workflow_declares_parallel_group",
         "external=host_swarms_party_modes_and_plugin_orchestrators_are_hints_not_loopora_parallel_contract",
@@ -158,7 +159,7 @@ def _assert_codex_native_surface_plain(output: str) -> None:
         "todo=native_todo_should_create_or_update_host_todo_when_available_not_evidence",
         "user_question=ask_user_routes_missing_loop_judgment_to_main_agent_session",
         "trace=preserve_official_subagent_or_task_trace_when_available_do_not_invent",
-        "technical_handoff=context_capsule_result_template_and_submit_command_remain_available_below_work_panel",
+        "technical_handoff=context_step_contract_result_template_and_submit_command_remain_available_below_work_panel",
     )
     _assert_codex_native_surface_plain_ownership(output)
     assert "- submit contract: loopora_host_dispatch + schema-shaped result template" in output

@@ -11,7 +11,7 @@ from loopora.markdown_tools import render_safe_markdown_html
 from loopora.providers import list_executor_profiles
 from loopora.service import LooporaError
 from loopora.settings import load_recent_workdirs
-from loopora.specs import render_spec_template
+from loopora.specs import render_spec_template_for_strategy_source
 from loopora.web_inputs import (
     _loop_form_is_pristine,
     _normalize_bundle_import_form,
@@ -19,7 +19,7 @@ from loopora.web_inputs import (
     _normalize_orchestration_form,
     _orchestration_form_values_from_record,
     _preferred_request_locale,
-    _workflow_for_spec_template,
+    _strategy_source_for_spec_template,
 )
 from loopora.web_url_utils import safe_local_return_path
 from loopora.strategy_source import (
@@ -160,10 +160,13 @@ class WebRouteLoopPagesMixin:
         if return_to:
             page_copy["action"] = f"{page_copy['action']}?{urlencode({'return_to': return_to})}"
         try:
-            spec_template_workflow = _workflow_for_spec_template(form_values)
+            spec_template_strategy_source = _strategy_source_for_spec_template(form_values)
         except (LooporaError, StrategySourceError, ValueError):
-            spec_template_workflow = None
-        generated_spec_template = render_spec_template(locale=page_locale, workflow=spec_template_workflow)
+            spec_template_strategy_source = None
+        generated_spec_template = render_spec_template_for_strategy_source(
+            locale=page_locale,
+            strategy_source=spec_template_strategy_source,
+        )
         spec_practice_markdown = ""
         spec_practice_summary = ""
         spec_practice_markdown_zh = ""

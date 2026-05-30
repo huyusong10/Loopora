@@ -58,7 +58,7 @@ from loopora.agent_native_state import (
     write_agent_native_state,
 )
 from loopora.agent_native_submit_flow import (
-    AgentNativeStepAdvanceRequest as _AgentNativeStepAdvanceRequest,
+    AgentNativeStepAdvanceRequest,
     agent_native_advance_state_after_submit,
     agent_native_record_control_completion,
 )
@@ -79,12 +79,7 @@ from loopora.engine.runner_context import RunnerIterationState, RunnerRunContext
 from loopora.events.projection_cache import current_step_projection_for_run
 from loopora.runners import agent_runner_actor
 from loopora.run_artifacts import RunArtifactLayout
-from loopora.service_agent_native_contracts import (
-    _agent_native_actionable_blocking_item as _agent_native_actionable_blocking_item,
-    _agent_native_actionable_repair_next_action as _agent_native_actionable_repair_next_action,
-    _agent_native_submit_command as _agent_native_submit_command,
-    _agent_native_unknown_evidence_refs,
-)
+from loopora.service_agent_native_contracts import agent_native_unknown_evidence_refs
 from loopora.service_types import ACTIVE_RUN_STATUSES, LooporaConflictError, LooporaError, LooporaNotFoundError, TERMINAL_RUN_STATUSES, normalize_completion_mode
 from loopora.structured_numbers import structured_non_negative_int
 from loopora.utils import utc_now, write_json
@@ -429,6 +424,7 @@ class ServiceAgentNativeMixin:
                 "archetype": role["archetype"],
                 "runtime_role": runtime_role,
                 "target_agent": str((capsule.get("role_dispatch") or {}).get("target_agent") or ""),
+                "step_contract_path": str(capsule.get("step_contract_path") or capsule.get("capsule_path") or ""),
                 "capsule_path": str(capsule.get("capsule_path") or ""),
                 "result_template_path": str((capsule.get("submit_hint") or {}).get("result_template_path") or ""),
                 "parallel_group": str(step.get("parallel_group") or ""),
@@ -569,7 +565,7 @@ class ServiceAgentNativeMixin:
         host_dispatch = submit_context.host_dispatch
         self._validate_agent_native_step_output_contract(output, active=active)
         if role["archetype"] != "gatekeeper":
-            unknown_refs = _agent_native_unknown_evidence_refs(output, active=active, context_packet=context_packet)
+            unknown_refs = agent_native_unknown_evidence_refs(output, active=active, context_packet=context_packet)
             if unknown_refs:
                 raise LooporaError(
                     "agent-native evidence_refs_unknown: "
@@ -667,7 +663,7 @@ class ServiceAgentNativeMixin:
         state["host_dispatches"] = [*list(state.get("host_dispatches") or []), host_dispatch]
         state["active_step"] = {}
         self._agent_native_advance_state_after_submit(
-            _AgentNativeStepAdvanceRequest(
+            AgentNativeStepAdvanceRequest(
                 run=run,
                 state=state,
                 context=context,
@@ -718,7 +714,7 @@ class ServiceAgentNativeMixin:
     def _agent_native_submitted_step_result(self, request: AgentNativeSubmittedStepResultRequest) -> dict[str, Any]:
         return agent_native_submitted_step_result(request)
 
-    def _agent_native_advance_state_after_submit(self, request: _AgentNativeStepAdvanceRequest) -> None:
+    def _agent_native_advance_state_after_submit(self, request: AgentNativeStepAdvanceRequest) -> None:
         agent_native_advance_state_after_submit(request, append_run_event=self.append_run_event)
 
     def _agent_native_record_control_completion(self, run: dict, result: dict) -> bool:
@@ -952,7 +948,7 @@ class ServiceAgentNativeMixin:
     def _agent_native_step_already_submitted(layout, *, iter_id: int, step_order: int, step_id: str) -> bool:
         return agent_native_step_already_submitted(layout, iter_id=iter_id, step_order=step_order, step_id=step_id)
 
-    def _agent_native_capsule(  # noqa: PLR0913 - capsule fields are the public step contract projection.
+    def _agent_native_capsule(  # noqa: PLR0913 - legacy capsule payload is the current step contract projection.
         self,
         adapter: str,
         *,

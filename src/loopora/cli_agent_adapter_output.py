@@ -129,7 +129,7 @@ def _adapter_check_summary(result: dict) -> dict:
         summary["check_recovery"] = recovery
     surface = result.get("native_surface") if isinstance(result.get("native_surface"), dict) else {}
     if surface:
-        summary["native_surface"] = surface
+        summary["agent_surface"] = surface
         capabilities = surface.get("experience_capabilities") if isinstance(surface.get("experience_capabilities"), dict) else {}
         if capabilities:
             summary["experience_capabilities"] = capabilities

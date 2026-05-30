@@ -42,7 +42,7 @@ def _agent_recovery_v3_envelope(result: dict, summary: dict, *, legacy_summary_k
 def _agent_loop_recovery_summary(result: dict) -> dict:
     summary: dict[str, object] = {
         "ready": bool(result.get("ready")),
-        "loop_recovery": str(result.get("loop_recovery") or "").strip(),
+        "loop_recovery": _visible_loop_recovery(str(result.get("loop_recovery") or "").strip()),
     }
     attach_native_run_surface(summary, result)
     _set_summary_text(summary, "workdir", result.get("workdir"))
@@ -62,6 +62,7 @@ def _agent_loop_recovery_summary(result: dict) -> dict:
         _set_summary_text(summary, "debug_cli_example_command", result.get("debug_cli_example_command"))
         _set_summary_text(summary, "next", result.get("next"))
         _set_summary_text(summary, "check_command", result.get("check_command"))
+        _set_summary_text(summary, "context_card_error", result.get("context_card_error") or result.get("binding_error"))
         _set_summary_text(summary, "preview_url", result.get("preview_url") or result.get("preview_path"))
         _set_summary_text(summary, "validation_error", result.get("validation_error") or _agent_gen_error_summary(result))
         _set_summary_list(summary, "repair_focus", result.get("repair_focus"))
@@ -77,6 +78,12 @@ def _agent_loop_recovery_summary(result: dict) -> dict:
         _set_summary_text(summary, "after_review_slash_command", result.get("after_review_slash_command"))
         _set_summary_text(summary, "after_review_cli_command", result.get("after_review_cli_command"))
     return {key: value for key, value in summary.items() if value not in ("", [], {})}
+
+
+def _visible_loop_recovery(loop_recovery: str) -> str:
+    if loop_recovery == "repair_agent_binding":
+        return "repair_context_card"
+    return loop_recovery
 
 
 def _attach_recoverable_context_summary(summary: dict[str, object], result: dict) -> None:

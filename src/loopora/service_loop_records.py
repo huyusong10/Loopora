@@ -4,7 +4,7 @@ from pathlib import Path
 
 from loopora.branding import state_dir_for_workdir
 from loopora.run_artifacts import RunArtifactLayout
-from loopora.service_asset_common import _normalize_role_models
+from loopora.service_asset_common import normalize_role_models
 from loopora.service_types import LooporaNotFoundError
 from loopora.strategy_source import (
     DEFAULT_STRATEGY_SOURCE_PRESET,
@@ -21,7 +21,7 @@ from loopora.task_verdicts import hydrate_run_status_and_task_verdict
 
 class ServiceLoopRecordMixin:
     def _legacy_strategy_source_from_loop(self, loop_or_run: dict) -> dict:
-        role_models = _normalize_role_models(
+        role_models = normalize_role_models(
             loop_or_run.get("role_models_json") or loop_or_run.get("role_models") or {}
         )
         return build_preset_strategy_source(DEFAULT_STRATEGY_SOURCE_PRESET, role_models=role_models)

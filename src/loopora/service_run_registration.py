@@ -14,7 +14,7 @@ from loopora.executor import coerce_reasoning_effort, normalize_reasoning_effort
 from loopora.numeric_inputs import coerce_integral_number
 from loopora.providers import executor_profile, normalize_executor_kind, normalize_executor_mode
 from loopora.run_artifacts import INITIAL_STAGNATION_STATE, write_json_with_mirrors, write_text_with_mirrors
-from loopora.service_asset_common import _normalize_role_models, logger
+from loopora.service_asset_common import logger, normalize_role_models
 from loopora.service_cleanup_diagnostics import best_effort_rmtree
 from loopora.service_types import LooporaConflictError, LooporaError, LooporaNotFoundError, normalize_completion_mode
 from loopora.strategy_source import StrategySourceError, strategy_source_has_finish_gatekeeper_step
@@ -200,7 +200,7 @@ def _loop_create_payload(resolved: ResolvedLoopCreate) -> dict:
         "regression_window": request.regression_window,
         "orchestration_id": resolved.resolved_orchestration["id"],
         "orchestration_name": resolved.resolved_orchestration["name"],
-        "role_models": _normalize_role_models(request.role_models),
+        "role_models": normalize_role_models(request.role_models),
         "workflow": resolved.strategy_source,
     }
 

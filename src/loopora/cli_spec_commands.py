@@ -20,7 +20,13 @@ from loopora.cli_shared import (
 )
 from loopora.markdown_tools import normalize_markdown_text
 from loopora.service import LooporaError
-from loopora.specs import SpecError, init_spec_file_for_workflow, load_spec_file, read_and_compile, render_spec_template
+from loopora.specs import (
+    SpecError,
+    init_spec_file_for_strategy_source,
+    load_spec_file,
+    read_and_compile,
+    render_spec_template_for_strategy_source,
+)
 from loopora.strategy_source import StrategySourceError
 
 
@@ -42,8 +48,7 @@ def _register_spec_init_command(spec_app: typer.Typer) -> None:
         """Create a starter Markdown spec."""
         try:
             strategy_source = {"preset": strategy_preset} if strategy_preset else None
-            workflow = strategy_source
-            created = init_spec_file_for_workflow(path, locale=locale, workflow=workflow)
+            created = init_spec_file_for_strategy_source(path, locale=locale, strategy_source=strategy_source)
             typer.echo(f"created: {created}")
         except (FileExistsError, OSError) as exc:
             handle_error(exc)
@@ -80,19 +85,19 @@ def _register_spec_template_command(spec_app: typer.Typer) -> None:
     ) -> None:
         """Render a spec template without writing it to disk."""
         try:
-            workflow = resolve_spec_template_strategy_source(
+            strategy_source = resolve_spec_template_strategy_source(
                 orchestration_id=orchestration_id,
                 strategy_preset=strategy_preset,
                 strategy_file=strategy_file,
             )
-            markdown_text = render_spec_template(locale=locale, workflow=workflow)
+            markdown_text = render_spec_template_for_strategy_source(locale=locale, strategy_source=strategy_source)
             if json_output:
                 echo_json(
                     {
                         "ok": True,
                         "locale": locale,
                         "markdown": markdown_text,
-                        "role_note_sections": role_note_sections_for_strategy_source(workflow),
+                        "role_note_sections": role_note_sections_for_strategy_source(strategy_source),
                     }
                 )
                 return

@@ -13,7 +13,7 @@ def attach_native_run_surface(summary: dict[str, Any], result: dict | None = Non
         else agent_native_run_surface_for_result(result or {}, *sources)
     )
     if surface:
-        summary["native_surface"] = surface
+        summary["agent_surface"] = surface
 
 
 def agent_native_run_surface_for_result(result: dict, *sources: object) -> dict[str, Any]:
@@ -27,7 +27,7 @@ def native_surface_plain_lines(surface: dict, *, include_role_configs: bool = Fa
     fields = _native_surface_dict_fields(surface)
     context_env = [str(item).strip() for item in list(surface.get("context_identity_env") or []) if str(item).strip()]
 
-    lines = ["native surface:"]
+    lines = ["agent surface:"]
     lines.extend(_native_surface_entry_lines(surface, fields["entry_paths"]))
     lines.extend(_native_surface_slash_command_lines(fields["slash_commands"]))
     lines.extend(_native_surface_dispatch_lines(surface, fields["dispatch"]))
@@ -211,7 +211,7 @@ def _native_surface_session_recovery_lines(session_recovery: dict) -> list[str]:
         "session recovery",
         session_recovery,
         (
-            ("binding", "binding"),
+            ("context_card", "context_card"),
             ("ambiguous", "ambiguous"),
             ("ready", "ready_resume"),
             ("not_ready", "not_ready"),

@@ -16,7 +16,7 @@ from loopora.service_bundle_graph_preflight import BundleGraphLinks, bundle_grap
 from loopora.service_cleanup_diagnostics import best_effort_rmtree, cleanup_diagnostic_payload, log_cleanup_diagnostic
 from loopora.settings import app_home
 from loopora.specs import compile_markdown_spec, SpecError
-from loopora.service_asset_common import _normalize_role_models
+from loopora.service_asset_common import normalize_role_models
 from loopora.service_types import LooporaConflictError, LooporaError, LooporaNotFoundError
 from loopora.service_local_asset_diagnostics import build_local_asset_diagnostics
 from loopora.strategy_source import (
@@ -322,10 +322,10 @@ class ServiceBundleAssetMixin:
         request = _derive_bundle_request_from_args(request, raw_request)
         loop_id = request.loop_id
         loop = self.get_loop(loop_id)
-        workflow = normalize_strategy_source(loop.get("workflow_json") or {})
+        strategy_source = normalize_strategy_source(loop.get("workflow_json") or {})
         prompt_files = dict(loop.get("prompt_files") or {})
         role_definition_by_id = {}
-        for role in workflow.get("roles", []):
+        for role in strategy_source.get("roles", []):
             role_definition_id = str(role.get("role_definition_id", "") or "").strip()
             if not role_definition_id or role_definition_id in role_definition_by_id:
                 continue
@@ -339,7 +339,7 @@ class ServiceBundleAssetMixin:
                     LoopfileExportProjectionInput(
                         loop=loop,
                         loop_id=loop_id,
-                        workflow=workflow,
+                        strategy_source=strategy_source,
                         prompt_files=prompt_files,
                         role_definition_by_id=role_definition_by_id,
                         bundle_id=request.bundle_id,
@@ -822,7 +822,7 @@ class ServiceBundleAssetMixin:
             compiled_spec,
             completion_mode=str(loop.get("completion_mode", "gatekeeper")),
         )
-        role_models = _normalize_role_models(loop.get("role_models_json") or loop.get("role_models") or {})
+        role_models = normalize_role_models(loop.get("role_models_json") or loop.get("role_models") or {})
         resolved_orchestration = self._resolve_bundle_orchestration_for_snapshot(bundle, role_models=role_models)
         normalized_workflow = resolved_orchestration["workflow"]
         if loop.get("completion_mode") == "gatekeeper" and not strategy_source_has_finish_gatekeeper_step(

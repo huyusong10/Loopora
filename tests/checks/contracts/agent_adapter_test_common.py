@@ -103,12 +103,12 @@ def _wait_for_alignment_status(service, session_id: str, *statuses: str, timeout
 def _assert_cli_handoff_contract_paths(
     stdout: str,
     *,
-    capsule_fragment: str,
+    step_contract_fragment: str,
     template_fragment: str,
     outbox_fragment: str,
 ) -> None:
-    assert "next_capsule_path:" in stdout
-    assert capsule_fragment in stdout
+    assert "next_step_contract_path:" in stdout
+    assert step_contract_fragment in stdout
     assert "result_template_path:" in stdout
     assert template_fragment in stdout
     assert "result_outbox_dir:" in stdout

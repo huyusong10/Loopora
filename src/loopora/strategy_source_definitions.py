@@ -16,7 +16,9 @@ from loopora.executor import validate_extra_cli_args_text
 from loopora.providers import executor_profile, normalize_executor_kind, normalize_executor_mode, normalize_reasoning_setting
 
 ARCHETYPES = ("builder", "inspector", "gatekeeper", "guide", "custom")
-WORKFLOW_VERSION = 1
+STRATEGY_SOURCE_ARCHETYPES = ARCHETYPES
+STRATEGY_SOURCE_VERSION = 1
+WORKFLOW_VERSION = STRATEGY_SOURCE_VERSION
 LEGACY_ROLE_TO_ARCHETYPE = {
     "generator": "builder",
     "tester": "inspector",
@@ -48,6 +50,7 @@ LEGACY_ROLE_BY_ARCHETYPE = {
     "gatekeeper": "verifier",
     "guide": "challenger",
 }
+LEGACY_STRATEGY_ROLE_BY_ARCHETYPE = LEGACY_ROLE_BY_ARCHETYPE
 PROMPT_FILES = {
     "builder": "builder.md",
     "inspector": "inspector.md",
@@ -56,6 +59,7 @@ PROMPT_FILES = {
     "guide": "guide.md",
     "custom": "custom.md",
 }
+STRATEGY_PROMPT_FILES = PROMPT_FILES
 PROMPT_ASSET_DIR = Path(__file__).parent / "assets" / "prompts"
 SPEC_PRACTICE_ASSET_DIR = Path(__file__).parent / "assets" / "spec_practices"
 ROLE_EXECUTION_FIELDS = (
@@ -67,6 +71,8 @@ ROLE_EXECUTION_FIELDS = (
     "reasoning_effort",
 )
 ROLE_POSTURE_FIELDS = ("posture_notes",)
+STRATEGY_ROLE_EXECUTION_FIELDS = ROLE_EXECUTION_FIELDS
+STRATEGY_ROLE_POSTURE_FIELDS = ROLE_POSTURE_FIELDS
 STEP_EXECUTION_FIELDS = (
     "on_pass",
     "model",
@@ -82,14 +88,22 @@ STEP_EVIDENCE_QUERY_KEYS = {"archetypes", "verifies", "limit"}
 STEP_ACTION_POLICY_KEYS = {"workspace", "can_block", "can_finish_run"}
 STEP_ACTION_POLICY_WORKSPACES = {"read_only", "workspace_write"}
 STEP_ITERATION_MEMORY_POLICIES = {"default", "none", "same_step", "same_role", "summary_only"}
-WORKFLOW_CONTROL_KEYS = {"id", "when", "call", "mode", "max_fires_per_run"}
-WORKFLOW_CONTROL_WHEN_KEYS = {"signal", "after"}
-WORKFLOW_CONTROL_CALL_KEYS = {"role_id"}
-WORKFLOW_CONTROL_SIGNALS = {"no_evidence_progress", "role_timeout", "step_failed", "gatekeeper_rejected"}
-WORKFLOW_CONTROL_MODES = {"advisory", "blocking", "repair_guidance"}
-WORKFLOW_CONTROL_ARCHETYPES = {"inspector", "guide", "gatekeeper"}
-WORKFLOW_SAFE_IDENTIFIER_RE = re.compile(r"^[A-Za-z0-9_.-]{1,80}$")
-WORKFLOW_CONTROL_AFTER_RE = re.compile(r"^\d+(?:\.\d+)?(?:ms|s|m|h)?$")
+STRATEGY_SOURCE_CONTROL_KEYS = {"id", "when", "call", "mode", "max_fires_per_run"}
+STRATEGY_SOURCE_CONTROL_WHEN_KEYS = {"signal", "after"}
+STRATEGY_SOURCE_CONTROL_CALL_KEYS = {"role_id"}
+STRATEGY_SOURCE_CONTROL_SIGNALS = {"no_evidence_progress", "role_timeout", "step_failed", "gatekeeper_rejected"}
+STRATEGY_SOURCE_CONTROL_MODES = {"advisory", "blocking", "repair_guidance"}
+STRATEGY_SOURCE_CONTROL_ARCHETYPES = {"inspector", "guide", "gatekeeper"}
+WORKFLOW_CONTROL_KEYS = STRATEGY_SOURCE_CONTROL_KEYS
+WORKFLOW_CONTROL_WHEN_KEYS = STRATEGY_SOURCE_CONTROL_WHEN_KEYS
+WORKFLOW_CONTROL_CALL_KEYS = STRATEGY_SOURCE_CONTROL_CALL_KEYS
+WORKFLOW_CONTROL_SIGNALS = STRATEGY_SOURCE_CONTROL_SIGNALS
+WORKFLOW_CONTROL_MODES = STRATEGY_SOURCE_CONTROL_MODES
+WORKFLOW_CONTROL_ARCHETYPES = STRATEGY_SOURCE_CONTROL_ARCHETYPES
+STRATEGY_SOURCE_SAFE_IDENTIFIER_RE = re.compile(r"^[A-Za-z0-9_.-]{1,80}$")
+WORKFLOW_SAFE_IDENTIFIER_RE = STRATEGY_SOURCE_SAFE_IDENTIFIER_RE
+STRATEGY_SOURCE_CONTROL_AFTER_RE = re.compile(r"^\d+(?:\.\d+)?(?:ms|s|m|h)?$")
+WORKFLOW_CONTROL_AFTER_RE = STRATEGY_SOURCE_CONTROL_AFTER_RE
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -103,7 +117,7 @@ class PresetRoleSpec:
 
 
 @dataclass(frozen=True, kw_only=True)
-class WorkflowPresetDefinitionSpec:
+class StrategySourcePresetDefinitionSpec:
     label_zh: str
     label_en: str
     description_zh: str
@@ -117,6 +131,9 @@ class WorkflowPresetDefinitionSpec:
     decision_zh: str = ""
     decision_en: str = ""
     visible: bool = True
+
+
+WorkflowPresetDefinitionSpec = StrategySourcePresetDefinitionSpec
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -148,7 +165,7 @@ def normalize_prompt_ref(value: str | None) -> str:
     return PurePosixPath(*parts).as_posix()
 
 
-def normalize_workflow_identifier(value: object, *, field_name: str) -> str:
+def normalize_strategy_source_identifier(value: object, *, field_name: str) -> str:
     if value is None:
         normalized = ""
     elif not isinstance(value, str):
@@ -157,9 +174,26 @@ def normalize_workflow_identifier(value: object, *, field_name: str) -> str:
         normalized = value.strip()
     if not normalized:
         raise WorkflowError(f"{field_name} is required")
-    if not WORKFLOW_SAFE_IDENTIFIER_RE.fullmatch(normalized):
+    if not STRATEGY_SOURCE_SAFE_IDENTIFIER_RE.fullmatch(normalized):
         raise WorkflowError(f"{field_name} must use letters, numbers, dot, underscore, or dash")
     return normalized
+
+
+def normalize_workflow_identifier(value: object, *, field_name: str) -> str:
+    return normalize_strategy_source_identifier(value, field_name=field_name)
+
+
+def _normalize_optional_strategy_source_identifier(
+    value: object,
+    *,
+    default: str,
+    field_name: str,
+) -> str:
+    if value is None:
+        return normalize_strategy_source_identifier(default, field_name=field_name)
+    if isinstance(value, str) and not value.strip():
+        return normalize_strategy_source_identifier(default, field_name=field_name)
+    return normalize_strategy_source_identifier(value, field_name=field_name)
 
 
 def _normalize_optional_workflow_identifier(
@@ -168,18 +202,14 @@ def _normalize_optional_workflow_identifier(
     default: str,
     field_name: str,
 ) -> str:
-    if value is None:
-        return normalize_workflow_identifier(default, field_name=field_name)
-    if isinstance(value, str) and not value.strip():
-        return normalize_workflow_identifier(default, field_name=field_name)
-    return normalize_workflow_identifier(value, field_name=field_name)
+    return _normalize_optional_strategy_source_identifier(value, default=default, field_name=field_name)
 
 
-def normalize_workflow_version(value: Any, *, field_name: str = "workflow version") -> int:
+def normalize_strategy_source_version(value: Any, *, field_name: str = "strategy source version") -> int:
     if value is None:
-        return WORKFLOW_VERSION
+        return STRATEGY_SOURCE_VERSION
     if isinstance(value, str) and not value.strip():
-        return WORKFLOW_VERSION
+        return STRATEGY_SOURCE_VERSION
     if isinstance(value, bool):
         raise WorkflowError(f"{field_name} must be an integer")
     if isinstance(value, float):
@@ -188,9 +218,13 @@ def normalize_workflow_version(value: Any, *, field_name: str = "workflow versio
         version = int(value)
     except (TypeError, ValueError, OverflowError) as exc:
         raise WorkflowError(f"{field_name} must be an integer") from exc
-    if version != WORKFLOW_VERSION:
+    if version != STRATEGY_SOURCE_VERSION:
         raise WorkflowError(f"unsupported {field_name}: {version}")
     return version
+
+
+def normalize_workflow_version(value: Any, *, field_name: str = "workflow version") -> int:
+    return normalize_strategy_source_version(value, field_name=field_name)
 
 
 def prompt_asset_path(root: Path, prompt_ref: str) -> Path:
@@ -209,7 +243,7 @@ def localized_prompt_ref(prompt_ref: str, locale: str | None = None) -> str:
     return localized_prompt_ref if localized_path.exists() else normalized_prompt_ref
 
 
-def default_role_execution_settings(executor_kind: str = "codex") -> dict[str, str]:
+def default_strategy_role_execution_settings(executor_kind: str = "codex") -> dict[str, str]:
     profile = executor_profile(executor_kind)
     default_mode = "command" if profile.command_only else "preset"
     return {
@@ -222,7 +256,11 @@ def default_role_execution_settings(executor_kind: str = "codex") -> dict[str, s
     }
 
 
-def normalize_role_execution_settings(
+def default_role_execution_settings(executor_kind: str = "codex") -> dict[str, str]:
+    return default_strategy_role_execution_settings(executor_kind)
+
+
+def normalize_strategy_role_execution_settings(
     raw_settings: Mapping[str, Any] | None = None,
     *,
     default_executor_kind: str = "codex",
@@ -259,7 +297,15 @@ def normalize_role_execution_settings(
     }
 
 
-def role_uses_execution_snapshot(role: Mapping[str, Any] | None) -> bool:
+def normalize_role_execution_settings(
+    raw_settings: Mapping[str, Any] | None = None,
+    *,
+    default_executor_kind: str = "codex",
+) -> dict[str, str]:
+    return normalize_strategy_role_execution_settings(raw_settings, default_executor_kind=default_executor_kind)
+
+
+def strategy_role_uses_execution_snapshot(role: Mapping[str, Any] | None) -> bool:
     if not isinstance(role, Mapping):
         return False
     return any(
@@ -268,13 +314,21 @@ def role_uses_execution_snapshot(role: Mapping[str, Any] | None) -> bool:
     )
 
 
-def default_step_inherit_session(archetype: str | None) -> bool:
+def role_uses_execution_snapshot(role: Mapping[str, Any] | None) -> bool:
+    return strategy_role_uses_execution_snapshot(role)
+
+
+def default_strategy_step_inherit_session(archetype: str | None) -> bool:
     normalized_archetype = LEGACY_ROLE_TO_ARCHETYPE.get(str(archetype or "").strip().lower(), "")
     return normalized_archetype == "builder"
 
 
-def normalize_step_inherit_session(value: Any, *, archetype: str | None = None) -> bool:
-    default = default_step_inherit_session(archetype)
+def default_step_inherit_session(archetype: str | None) -> bool:
+    return default_strategy_step_inherit_session(archetype)
+
+
+def normalize_strategy_step_inherit_session(value: Any, *, archetype: str | None = None) -> bool:
+    default = default_strategy_step_inherit_session(archetype)
     if value is None:
         return default
     if isinstance(value, bool):
@@ -288,6 +342,10 @@ def normalize_step_inherit_session(value: Any, *, archetype: str | None = None) 
         if normalized in {"0", "false", "no", "off"}:
             return False
     raise WorkflowError("workflow step inherit_session must be a boolean")
+
+
+def normalize_step_inherit_session(value: Any, *, archetype: str | None = None) -> bool:
+    return normalize_strategy_step_inherit_session(value, archetype=archetype)
 
 
 def normalize_step_policy_boolean(value: Any, *, field_name: str, default: bool) -> bool:
@@ -306,7 +364,7 @@ def normalize_step_policy_boolean(value: Any, *, field_name: str, default: bool)
     raise WorkflowError(f"workflow step action_policy.{field_name} must be a boolean")
 
 
-def normalize_step_on_pass(
+def normalize_strategy_step_on_pass(
     value: Any,
     *,
     archetype: str | None = None,
@@ -322,6 +380,15 @@ def normalize_step_on_pass(
     if normalized_value not in {"continue", "finish_run"}:
         raise WorkflowError("gatekeeper step on_pass must be continue or finish_run")
     return normalized_value
+
+
+def normalize_step_on_pass(
+    value: Any,
+    *,
+    archetype: str | None = None,
+    default: str = "continue",
+) -> str:
+    return normalize_strategy_step_on_pass(value, archetype=archetype, default=default)
 
 
 def _normalize_string_list(value: Any, *, field_name: str) -> list[str]:
@@ -346,15 +413,19 @@ def _unknown_keys(value: Mapping[str, Any], allowed_keys: set[str]) -> list[str]
     return sorted(str(key) for key in value if str(key) not in allowed_keys)
 
 
-def normalize_step_parallel_group(value: Any) -> str:
+def normalize_strategy_step_parallel_group(value: Any) -> str:
     if value is None:
         return ""
     if isinstance(value, str) and not value.strip():
         return ""
-    return normalize_workflow_identifier(value, field_name="workflow step parallel_group")
+    return normalize_strategy_source_identifier(value, field_name="workflow step parallel_group")
 
 
-def normalize_step_inputs(value: Any) -> dict[str, Any]:
+def normalize_step_parallel_group(value: Any) -> str:
+    return normalize_strategy_step_parallel_group(value)
+
+
+def normalize_strategy_step_inputs(value: Any) -> dict[str, Any]:
     if value is None:
         return {}
     if not isinstance(value, Mapping):
@@ -364,26 +435,34 @@ def normalize_step_inputs(value: Any) -> dict[str, Any]:
         raise WorkflowError(f"workflow step inputs contains unknown keys: {', '.join(unknown_keys)}")
 
     result: dict[str, Any] = {}
-    handoffs_from = normalize_step_handoffs_from(value.get("handoffs_from"))
+    handoffs_from = normalize_strategy_step_handoffs_from(value.get("handoffs_from"))
     if handoffs_from:
         result["handoffs_from"] = handoffs_from
 
-    evidence_query = normalize_step_evidence_query(value.get("evidence_query"))
+    evidence_query = normalize_strategy_step_evidence_query(value.get("evidence_query"))
     if evidence_query:
         result["evidence_query"] = evidence_query
 
-    iteration_memory = normalize_step_iteration_memory(value.get("iteration_memory"))
+    iteration_memory = normalize_strategy_step_iteration_memory(value.get("iteration_memory"))
     if iteration_memory:
         result["iteration_memory"] = iteration_memory
 
     return result
 
 
-def normalize_step_handoffs_from(value: Any) -> list[str]:
+def normalize_step_inputs(value: Any) -> dict[str, Any]:
+    return normalize_strategy_step_inputs(value)
+
+
+def normalize_strategy_step_handoffs_from(value: Any) -> list[str]:
     return _normalize_string_list(value, field_name="workflow step inputs.handoffs_from")
 
 
-def normalize_step_evidence_query(value: Any) -> dict[str, Any]:
+def normalize_step_handoffs_from(value: Any) -> list[str]:
+    return normalize_strategy_step_handoffs_from(value)
+
+
+def normalize_strategy_step_evidence_query(value: Any) -> dict[str, Any]:
     if value is None:
         return {}
     if not isinstance(value, Mapping):
@@ -393,7 +472,7 @@ def normalize_step_evidence_query(value: Any) -> dict[str, Any]:
         raise WorkflowError(f"workflow step inputs.evidence_query contains unknown keys: {', '.join(query_unknown)}")
 
     query: dict[str, Any] = {}
-    archetypes = normalize_step_evidence_archetypes(value.get("archetypes"))
+    archetypes = normalize_strategy_step_evidence_archetypes(value.get("archetypes"))
     if archetypes:
         query["archetypes"] = archetypes
     verifies = _normalize_string_list(
@@ -402,13 +481,17 @@ def normalize_step_evidence_query(value: Any) -> dict[str, Any]:
     )
     if verifies:
         query["verifies"] = verifies
-    limit = normalize_step_evidence_limit(value.get("limit"))
+    limit = normalize_strategy_step_evidence_limit(value.get("limit"))
     if limit is not None:
         query["limit"] = limit
     return query
 
 
-def normalize_step_evidence_archetypes(value: Any) -> list[str]:
+def normalize_step_evidence_query(value: Any) -> dict[str, Any]:
+    return normalize_strategy_step_evidence_query(value)
+
+
+def normalize_strategy_step_evidence_archetypes(value: Any) -> list[str]:
     archetypes = _normalize_string_list(
         value,
         field_name="workflow step inputs.evidence_query.archetypes",
@@ -422,7 +505,11 @@ def normalize_step_evidence_archetypes(value: Any) -> list[str]:
     return archetypes
 
 
-def normalize_step_evidence_limit(value: Any) -> int | None:
+def normalize_step_evidence_archetypes(value: Any) -> list[str]:
+    return normalize_strategy_step_evidence_archetypes(value)
+
+
+def normalize_strategy_step_evidence_limit(value: Any) -> int | None:
     if value is None:
         return None
     if isinstance(value, bool) or not isinstance(value, int):
@@ -433,7 +520,11 @@ def normalize_step_evidence_limit(value: Any) -> int | None:
     return limit
 
 
-def normalize_step_iteration_memory(value: Any) -> str:
+def normalize_step_evidence_limit(value: Any) -> int | None:
+    return normalize_strategy_step_evidence_limit(value)
+
+
+def normalize_strategy_step_iteration_memory(value: Any) -> str:
     if value is None:
         return ""
     if not isinstance(value, str):
@@ -452,7 +543,11 @@ def normalize_step_iteration_memory(value: Any) -> str:
     return "" if iteration_memory == "default" else iteration_memory
 
 
-def default_step_action_policy(*, archetype: str | None = None, on_pass: str = "continue") -> dict[str, Any]:
+def normalize_step_iteration_memory(value: Any) -> str:
+    return normalize_strategy_step_iteration_memory(value)
+
+
+def default_strategy_step_action_policy(*, archetype: str | None = None, on_pass: str = "continue") -> dict[str, Any]:
     normalized_archetype = LEGACY_ROLE_TO_ARCHETYPE.get(str(archetype or "").strip().lower(), "")
     if normalized_archetype == "builder":
         return {"workspace": "workspace_write", "can_block": False, "can_finish_run": False}
@@ -467,7 +562,11 @@ def default_step_action_policy(*, archetype: str | None = None, on_pass: str = "
     return {"workspace": "read_only", "can_block": False, "can_finish_run": False}
 
 
-def normalize_step_action_policy_workspace(value: Any, *, default: str) -> str:
+def default_step_action_policy(*, archetype: str | None = None, on_pass: str = "continue") -> dict[str, Any]:
+    return default_strategy_step_action_policy(archetype=archetype, on_pass=on_pass)
+
+
+def normalize_strategy_step_action_policy_workspace(value: Any, *, default: str) -> str:
     if value is None or (isinstance(value, str) and not value.strip()):
         raw_workspace = str(default)
     elif not isinstance(value, str):
@@ -484,14 +583,18 @@ def normalize_step_action_policy_workspace(value: Any, *, default: str) -> str:
     return normalized
 
 
-def normalize_step_action_policy(
+def normalize_step_action_policy_workspace(value: Any, *, default: str) -> str:
+    return normalize_strategy_step_action_policy_workspace(value, default=default)
+
+
+def normalize_strategy_step_action_policy(
     value: Any,
     *,
     archetype: str | None = None,
     on_pass: str = "continue",
 ) -> dict[str, Any]:
     normalized_archetype = LEGACY_ROLE_TO_ARCHETYPE.get(str(archetype or "").strip().lower(), "")
-    defaults = default_step_action_policy(archetype=normalized_archetype, on_pass=on_pass)
+    defaults = default_strategy_step_action_policy(archetype=normalized_archetype, on_pass=on_pass)
     if value is None:
         policy = dict(defaults)
     else:
@@ -501,7 +604,7 @@ def normalize_step_action_policy(
         if unknown_keys:
             raise WorkflowError(f"workflow step action_policy contains unknown keys: {', '.join(unknown_keys)}")
         policy = {
-            "workspace": normalize_step_action_policy_workspace(
+            "workspace": normalize_strategy_step_action_policy_workspace(
                 value.get("workspace", defaults["workspace"]),
                 default=str(defaults["workspace"]),
             ),
@@ -526,7 +629,16 @@ def normalize_step_action_policy(
     return policy
 
 
-def normalize_workflow_controls(value: Any, *, role_by_id: Mapping[str, Mapping[str, Any]]) -> list[dict[str, Any]]:
+def normalize_step_action_policy(
+    value: Any,
+    *,
+    archetype: str | None = None,
+    on_pass: str = "continue",
+) -> dict[str, Any]:
+    return normalize_strategy_step_action_policy(value, archetype=archetype, on_pass=on_pass)
+
+
+def normalize_strategy_source_controls(value: Any, *, role_by_id: Mapping[str, Mapping[str, Any]]) -> list[dict[str, Any]]:
     if value is None:
         return []
     if not isinstance(value, list):
@@ -534,8 +646,42 @@ def normalize_workflow_controls(value: Any, *, role_by_id: Mapping[str, Mapping[
     result: list[dict[str, Any]] = []
     seen_ids: set[str] = set()
     for index, raw_control in enumerate(value, start=1):
-        result.append(normalize_workflow_control(raw_control, index=index, role_by_id=role_by_id, seen_ids=seen_ids))
+        result.append(
+            normalize_strategy_source_control(raw_control, index=index, role_by_id=role_by_id, seen_ids=seen_ids)
+        )
     return result
+
+
+def normalize_workflow_controls(value: Any, *, role_by_id: Mapping[str, Mapping[str, Any]]) -> list[dict[str, Any]]:
+    return normalize_strategy_source_controls(value, role_by_id=role_by_id)
+
+
+def normalize_strategy_source_control(
+    raw_control: Any,
+    *,
+    index: int,
+    role_by_id: Mapping[str, Mapping[str, Any]],
+    seen_ids: set[str],
+) -> dict[str, Any]:
+    if not isinstance(raw_control, Mapping):
+        raise WorkflowError("workflow.controls entries must be objects")
+    unknown_keys = _unknown_keys(raw_control, STRATEGY_SOURCE_CONTROL_KEYS)
+    if unknown_keys:
+        raise WorkflowError(f"workflow control contains unknown keys: {', '.join(unknown_keys)}")
+    control_id = normalize_strategy_source_control_id(raw_control.get("id"), index=index, seen_ids=seen_ids)
+    signal, after = normalize_strategy_source_control_when(raw_control.get("when"), control_id=control_id)
+    role_id = normalize_strategy_source_control_call(
+        raw_control.get("call"),
+        control_id=control_id,
+        role_by_id=role_by_id,
+    )
+    return {
+        "id": control_id,
+        "when": {"signal": signal, "after": after},
+        "call": {"role_id": role_id},
+        "mode": normalize_strategy_source_control_mode(raw_control.get("mode")),
+        "max_fires_per_run": normalize_strategy_source_control_max_fires(raw_control.get("max_fires_per_run")),
+    }
 
 
 def normalize_workflow_control(
@@ -545,25 +691,11 @@ def normalize_workflow_control(
     role_by_id: Mapping[str, Mapping[str, Any]],
     seen_ids: set[str],
 ) -> dict[str, Any]:
-    if not isinstance(raw_control, Mapping):
-        raise WorkflowError("workflow.controls entries must be objects")
-    unknown_keys = _unknown_keys(raw_control, WORKFLOW_CONTROL_KEYS)
-    if unknown_keys:
-        raise WorkflowError(f"workflow control contains unknown keys: {', '.join(unknown_keys)}")
-    control_id = normalize_workflow_control_id(raw_control.get("id"), index=index, seen_ids=seen_ids)
-    signal, after = normalize_workflow_control_when(raw_control.get("when"), control_id=control_id)
-    role_id = normalize_workflow_control_call(raw_control.get("call"), control_id=control_id, role_by_id=role_by_id)
-    return {
-        "id": control_id,
-        "when": {"signal": signal, "after": after},
-        "call": {"role_id": role_id},
-        "mode": normalize_workflow_control_mode(raw_control.get("mode")),
-        "max_fires_per_run": normalize_workflow_control_max_fires(raw_control.get("max_fires_per_run")),
-    }
+    return normalize_strategy_source_control(raw_control, index=index, role_by_id=role_by_id, seen_ids=seen_ids)
 
 
-def normalize_workflow_control_id(value: Any, *, index: int, seen_ids: set[str]) -> str:
-    control_id = _normalize_optional_workflow_identifier(
+def normalize_strategy_source_control_id(value: Any, *, index: int, seen_ids: set[str]) -> str:
+    control_id = _normalize_optional_strategy_source_identifier(
         value,
         default=f"control_{index:03d}",
         field_name="workflow control id",
@@ -574,16 +706,20 @@ def normalize_workflow_control_id(value: Any, *, index: int, seen_ids: set[str])
     return control_id
 
 
-def normalize_workflow_control_when(value: Any, *, control_id: str) -> tuple[str, str]:
+def normalize_workflow_control_id(value: Any, *, index: int, seen_ids: set[str]) -> str:
+    return normalize_strategy_source_control_id(value, index=index, seen_ids=seen_ids)
+
+
+def normalize_strategy_source_control_when(value: Any, *, control_id: str) -> tuple[str, str]:
     if not isinstance(value, Mapping):
         raise WorkflowError(f"workflow control {control_id} requires when")
-    when_unknown = _unknown_keys(value, WORKFLOW_CONTROL_WHEN_KEYS)
+    when_unknown = _unknown_keys(value, STRATEGY_SOURCE_CONTROL_WHEN_KEYS)
     if when_unknown:
         raise WorkflowError(f"workflow control {control_id}.when contains unknown keys: {', '.join(when_unknown)}")
     signal = str(value.get("signal") or "").strip()
-    if signal not in WORKFLOW_CONTROL_SIGNALS:
+    if signal not in STRATEGY_SOURCE_CONTROL_SIGNALS:
         raise WorkflowError(
-            "workflow control when.signal must be one of: " + ", ".join(sorted(WORKFLOW_CONTROL_SIGNALS))
+            "workflow control when.signal must be one of: " + ", ".join(sorted(STRATEGY_SOURCE_CONTROL_SIGNALS))
         )
     raw_after = value.get("after")
     if raw_after is None or (isinstance(raw_after, str) and not raw_after.strip()):
@@ -592,9 +728,37 @@ def normalize_workflow_control_when(value: Any, *, control_id: str) -> tuple[str
         raise WorkflowError("workflow control when.after must be an elapsed duration such as 30s, 20m, or 1h")
     else:
         after = raw_after.strip()
-    if not WORKFLOW_CONTROL_AFTER_RE.match(after):
+    if not STRATEGY_SOURCE_CONTROL_AFTER_RE.match(after):
         raise WorkflowError("workflow control when.after must be an elapsed duration such as 30s, 20m, or 1h")
     return signal, after
+
+
+def normalize_workflow_control_when(value: Any, *, control_id: str) -> tuple[str, str]:
+    return normalize_strategy_source_control_when(value, control_id=control_id)
+
+
+def normalize_strategy_source_control_call(
+    value: Any,
+    *,
+    control_id: str,
+    role_by_id: Mapping[str, Mapping[str, Any]],
+) -> str:
+    if not isinstance(value, Mapping):
+        raise WorkflowError(f"workflow control {control_id} requires call")
+    call_unknown = _unknown_keys(value, STRATEGY_SOURCE_CONTROL_CALL_KEYS)
+    if call_unknown:
+        raise WorkflowError(f"workflow control {control_id}.call contains unknown keys: {', '.join(call_unknown)}")
+    role_id = normalize_strategy_source_identifier(
+        value.get("role_id"),
+        field_name=f"workflow control {control_id}.call.role_id",
+    )
+    role = role_by_id.get(role_id)
+    if role is None:
+        raise WorkflowError(f"workflow control {control_id} references unknown role_id: {role_id}")
+    archetype = str(role.get("archetype") or "").strip()
+    if archetype not in STRATEGY_SOURCE_CONTROL_ARCHETYPES:
+        raise WorkflowError("workflow controls may only call Inspector, Guide, or GateKeeper roles")
+    return role_id
 
 
 def normalize_workflow_control_call(
@@ -603,37 +767,26 @@ def normalize_workflow_control_call(
     control_id: str,
     role_by_id: Mapping[str, Mapping[str, Any]],
 ) -> str:
-    if not isinstance(value, Mapping):
-        raise WorkflowError(f"workflow control {control_id} requires call")
-    call_unknown = _unknown_keys(value, WORKFLOW_CONTROL_CALL_KEYS)
-    if call_unknown:
-        raise WorkflowError(f"workflow control {control_id}.call contains unknown keys: {', '.join(call_unknown)}")
-    role_id = normalize_workflow_identifier(
-        value.get("role_id"),
-        field_name=f"workflow control {control_id}.call.role_id",
-    )
-    role = role_by_id.get(role_id)
-    if role is None:
-        raise WorkflowError(f"workflow control {control_id} references unknown role_id: {role_id}")
-    archetype = str(role.get("archetype") or "").strip()
-    if archetype not in WORKFLOW_CONTROL_ARCHETYPES:
-        raise WorkflowError("workflow controls may only call Inspector, Guide, or GateKeeper roles")
-    return role_id
+    return normalize_strategy_source_control_call(value, control_id=control_id, role_by_id=role_by_id)
 
 
-def normalize_workflow_control_mode(value: Any) -> str:
+def normalize_strategy_source_control_mode(value: Any) -> str:
     if value is None or (isinstance(value, str) and not value.strip()):
         mode = "advisory"
     elif not isinstance(value, str):
         raise WorkflowError("workflow control mode must be advisory, blocking, or repair_guidance")
     else:
         mode = value.strip()
-    if mode not in WORKFLOW_CONTROL_MODES:
+    if mode not in STRATEGY_SOURCE_CONTROL_MODES:
         raise WorkflowError("workflow control mode must be advisory, blocking, or repair_guidance")
     return mode
 
 
-def normalize_workflow_control_max_fires(value: Any) -> int:
+def normalize_workflow_control_mode(value: Any) -> str:
+    return normalize_strategy_source_control_mode(value)
+
+
+def normalize_strategy_source_control_max_fires(value: Any) -> int:
     raw_value = 1 if value is None or value == "" else value
     if isinstance(raw_value, bool) or not isinstance(raw_value, int):
         raise WorkflowError("workflow control max_fires_per_run must be an integer")
@@ -643,14 +796,22 @@ def normalize_workflow_control_max_fires(value: Any) -> int:
     return max_fires
 
 
-def default_step_execution_settings(*, archetype: str | None = None) -> dict[str, Any]:
+def normalize_workflow_control_max_fires(value: Any) -> int:
+    return normalize_strategy_source_control_max_fires(value)
+
+
+def default_strategy_step_execution_settings(*, archetype: str | None = None) -> dict[str, Any]:
     normalized_archetype = LEGACY_ROLE_TO_ARCHETYPE.get(str(archetype or "").strip().lower(), "")
     return {
         "on_pass": "finish_run" if normalized_archetype == "gatekeeper" else "continue",
         "model": "",
-        "inherit_session": default_step_inherit_session(normalized_archetype) if normalized_archetype else False,
+        "inherit_session": default_strategy_step_inherit_session(normalized_archetype) if normalized_archetype else False,
         "extra_cli_args": "",
     }
+
+
+def default_step_execution_settings(*, archetype: str | None = None) -> dict[str, Any]:
+    return default_strategy_step_execution_settings(archetype=archetype)
 
 
 def _preset_role(spec: PresetRoleSpec | None = None, **raw_spec: Any) -> dict[str, str]:
@@ -662,7 +823,7 @@ def _preset_role(spec: PresetRoleSpec | None = None, **raw_spec: Any) -> dict[st
         "prompt_ref": role_spec.prompt_ref,
         "role_definition_id": role_spec.role_definition_id,
         "posture_notes": role_spec.posture_notes,
-        **default_role_execution_settings(),
+        **default_strategy_role_execution_settings(),
     }
 
 
@@ -672,11 +833,11 @@ def _coerce_preset_role_spec(spec: PresetRoleSpec | None, raw_spec: Mapping[str,
     return spec or PresetRoleSpec(**raw_spec)
 
 
-def _workflow_preset_definition(
-    spec: WorkflowPresetDefinitionSpec | None = None,
+def _strategy_source_preset_definition(
+    spec: StrategySourcePresetDefinitionSpec | None = None,
     **raw_spec: Any,
 ) -> dict[str, Any]:
-    preset_spec = _coerce_workflow_preset_definition_spec(spec, raw_spec)
+    preset_spec = _coerce_strategy_source_preset_definition_spec(spec, raw_spec)
     return {
         "label_zh": preset_spec.label_zh,
         "label_en": preset_spec.label_en,
@@ -697,19 +858,23 @@ def _workflow_preset_definition(
     }
 
 
-def _coerce_workflow_preset_definition_spec(
-    spec: WorkflowPresetDefinitionSpec | None,
+def _coerce_strategy_source_preset_definition_spec(
+    spec: StrategySourcePresetDefinitionSpec | None,
     raw_spec: Mapping[str, Any],
-) -> WorkflowPresetDefinitionSpec:
+) -> StrategySourcePresetDefinitionSpec:
     if spec is not None and raw_spec:
-        raise TypeError("workflow preset spec cannot mix object and keyword fields")
-    return spec or WorkflowPresetDefinitionSpec(**raw_spec)
+        raise TypeError("strategy source preset spec cannot mix object and keyword fields")
+    return spec or StrategySourcePresetDefinitionSpec(**raw_spec)
+
+
+_workflow_preset_definition = _strategy_source_preset_definition
+_coerce_workflow_preset_definition_spec = _coerce_strategy_source_preset_definition_spec
 
 
 def _preset_step(spec: PresetStepSpec | None = None, **raw_spec: Any) -> dict[str, Any]:
     step_spec = _coerce_preset_step_spec(spec, raw_spec)
-    defaults = default_step_execution_settings(archetype=step_spec.archetype)
-    normalized_on_pass = normalize_step_on_pass(
+    defaults = default_strategy_step_execution_settings(archetype=step_spec.archetype)
+    normalized_on_pass = normalize_strategy_step_on_pass(
         step_spec.on_pass,
         archetype=step_spec.archetype,
         default=defaults["on_pass"],
@@ -719,21 +884,21 @@ def _preset_step(spec: PresetStepSpec | None = None, **raw_spec: Any) -> dict[st
         "role_id": step_spec.role_id,
         "on_pass": normalized_on_pass,
         "model": step_spec.model,
-        "inherit_session": normalize_step_inherit_session(
+        "inherit_session": normalize_strategy_step_inherit_session(
             step_spec.inherit_session,
             archetype=step_spec.archetype,
         ),
         "extra_cli_args": str(step_spec.extra_cli_args or ""),
-        "action_policy": normalize_step_action_policy(
+        "action_policy": normalize_strategy_step_action_policy(
             step_spec.action_policy,
             archetype=step_spec.archetype,
             on_pass=normalized_on_pass,
         ),
     }
-    normalized_parallel_group = normalize_step_parallel_group(step_spec.parallel_group)
+    normalized_parallel_group = normalize_strategy_step_parallel_group(step_spec.parallel_group)
     if normalized_parallel_group:
         step["parallel_group"] = normalized_parallel_group
-    normalized_inputs = normalize_step_inputs(step_spec.inputs)
+    normalized_inputs = normalize_strategy_step_inputs(step_spec.inputs)
     if normalized_inputs:
         step["inputs"] = normalized_inputs
     return step
@@ -745,11 +910,12 @@ def _coerce_preset_step_spec(spec: PresetStepSpec | None, raw_spec: Mapping[str,
     return spec or PresetStepSpec(**raw_spec)
 
 
-DEFAULT_WORKFLOW_PRESET = "quality_gate"
+DEFAULT_STRATEGY_SOURCE_PRESET = "quality_gate"
+DEFAULT_WORKFLOW_PRESET = DEFAULT_STRATEGY_SOURCE_PRESET
 
 
-WORKFLOW_PRESETS = {
-    "build_then_parallel_review": _workflow_preset_definition(
+STRATEGY_SOURCE_PRESETS = {
+    "build_then_parallel_review": _strategy_source_preset_definition(
         label_zh="构建后并行检视",
         label_en="Build + Parallel Review",
         description_zh="构建者 -> [契约巡检者 + 证据巡检者] -> 守门者",
@@ -829,7 +995,7 @@ WORKFLOW_PRESETS = {
             ),
         ],
     ),
-    "evidence_first": _workflow_preset_definition(
+    "evidence_first": _strategy_source_preset_definition(
         label_zh="先取证再构建",
         label_en="Evidence First",
         description_zh="巡检者 -> 构建者 -> 守门者",
@@ -883,7 +1049,7 @@ WORKFLOW_PRESETS = {
             ),
         ],
     ),
-    "benchmark_gate": _workflow_preset_definition(
+    "benchmark_gate": _strategy_source_preset_definition(
         label_zh="基准门禁",
         label_en="Benchmark Gate",
         description_zh="基准巡检者 -> 构建者 -> 回归巡检者 -> 守门者",
@@ -955,7 +1121,7 @@ WORKFLOW_PRESETS = {
             ),
         ],
     ),
-    "build_first": _workflow_preset_definition(
+    "build_first": _strategy_source_preset_definition(
         label_zh="先构建，再验收",
         label_en="Build First",
         description_zh="构建者 -> 巡检者 -> 守门者 -> 引导者",
@@ -989,7 +1155,7 @@ WORKFLOW_PRESETS = {
             ),
         ],
     ),
-    "inspect_first": _workflow_preset_definition(
+    "inspect_first": _strategy_source_preset_definition(
         label_zh="先巡检，再构建",
         label_en="Inspect First",
         description_zh="巡检者 -> 构建者 -> 守门者 -> 引导者",
@@ -1023,7 +1189,7 @@ WORKFLOW_PRESETS = {
             ),
         ],
     ),
-    "benchmark_loop": _workflow_preset_definition(
+    "benchmark_loop": _strategy_source_preset_definition(
         label_zh="基准先行",
         label_en="Benchmark Loop",
         description_zh="守门者（基准）-> 构建者",
@@ -1044,7 +1210,7 @@ WORKFLOW_PRESETS = {
             _preset_step(step_id="builder_step", role_id="builder", archetype="builder"),
         ],
     ),
-    "quality_gate": _workflow_preset_definition(
+    "quality_gate": _strategy_source_preset_definition(
         label_zh="质量闸门",
         label_en="Quality Gate",
         description_zh="构建者 -> 巡检者 -> 守门者（收束）",
@@ -1065,7 +1231,7 @@ WORKFLOW_PRESETS = {
             _preset_step(step_id="gatekeeper_step", role_id="gatekeeper", archetype="gatekeeper", on_pass="finish_run"),
         ],
     ),
-    "triage_first": _workflow_preset_definition(
+    "triage_first": _strategy_source_preset_definition(
         label_zh="先诊断再推进",
         label_en="Triage First",
         description_zh="巡检者 -> 引导者 -> 构建者 -> 守门者（收束）",
@@ -1113,7 +1279,7 @@ WORKFLOW_PRESETS = {
             ),
         ],
     ),
-    "repair_loop": _workflow_preset_definition(
+    "repair_loop": _strategy_source_preset_definition(
         label_zh="修复回路",
         label_en="Repair Loop",
         description_zh="构建者 -> 回归巡检者 -> 契约巡检者 -> 引导者 -> 构建者 -> 守门者",
@@ -1203,7 +1369,7 @@ WORKFLOW_PRESETS = {
             ),
         ],
     ),
-    "fast_lane": _workflow_preset_definition(
+    "fast_lane": _strategy_source_preset_definition(
         label_zh="快速通道",
         label_en="Fast Lane",
         description_zh="构建者 -> 守门者（收束）",
@@ -1223,15 +1389,19 @@ WORKFLOW_PRESETS = {
         ],
     ),
 }
+WORKFLOW_PRESETS = STRATEGY_SOURCE_PRESETS
 
 PROMPT_FRONT_MATTER_RE = re.compile(r"\A---\s*\n(.*?)\n---\s*\n?(.*)\Z", re.DOTALL)
 
 
-class WorkflowError(ValueError):
-    """Raised when workflow or prompt files are invalid."""
+class StrategySourceError(ValueError):
+    """Raised when strategy source or prompt files are invalid."""
 
 
-def normalize_archetype(value: str | None) -> str:
+WorkflowError = StrategySourceError
+
+
+def normalize_strategy_archetype(value: str | None) -> str:
     key = str(value or "").strip().lower()
     archetype = LEGACY_ROLE_TO_ARCHETYPE.get(key)
     if not archetype:
@@ -1239,7 +1409,11 @@ def normalize_archetype(value: str | None) -> str:
     return archetype
 
 
-def normalize_role_models(role_models: dict[str, str] | None) -> dict[str, str]:
+def normalize_archetype(value: str | None) -> str:
+    return normalize_strategy_archetype(value)
+
+
+def normalize_strategy_role_models(role_models: dict[str, str] | None) -> dict[str, str]:
     normalized: dict[str, str] = {}
     if not role_models:
         return normalized
@@ -1258,18 +1432,26 @@ def normalize_role_models(role_models: dict[str, str] | None) -> dict[str, str]:
     return normalized
 
 
-def display_name_for_archetype(archetype: str, locale: str = "en") -> str:
-    labels = ARCHETYPE_DISPLAY[normalize_archetype(archetype)]
+def normalize_role_models(role_models: dict[str, str] | None) -> dict[str, str]:
+    return normalize_strategy_role_models(role_models)
+
+
+def strategy_archetype_display_name(archetype: str, locale: str = "en") -> str:
+    labels = ARCHETYPE_DISPLAY[normalize_strategy_archetype(archetype)]
     return labels["zh" if locale.lower().startswith("zh") else "en"]
 
 
-def normalize_role_display_name(name: str | None, archetype: str | None = None) -> str:
+def display_name_for_archetype(archetype: str, locale: str = "en") -> str:
+    return strategy_archetype_display_name(archetype, locale=locale)
+
+
+def normalize_strategy_role_display_name(name: str | None, archetype: str | None = None) -> str:
     raw_name = str(name or "").strip()
     if not raw_name:
         return ""
     if archetype:
-        normalized_archetype = normalize_archetype(archetype)
-        canonical = display_name_for_archetype(normalized_archetype, locale="en")
+        normalized_archetype = normalize_strategy_archetype(archetype)
+        canonical = strategy_archetype_display_name(normalized_archetype, locale="en")
         aliases = {alias.lower() for alias in ARCHETYPE_DISPLAY_ALIASES.get(normalized_archetype, set())}
         lowered = raw_name.lower()
         if lowered == canonical.lower() or lowered in aliases:
@@ -1277,11 +1459,15 @@ def normalize_role_display_name(name: str | None, archetype: str | None = None) 
         return raw_name
     lowered = raw_name.lower()
     for candidate in ARCHETYPES:
-        canonical = display_name_for_archetype(candidate, locale="en")
+        canonical = strategy_archetype_display_name(candidate, locale="en")
         aliases = {alias.lower() for alias in ARCHETYPE_DISPLAY_ALIASES.get(candidate, set())}
         if lowered == canonical.lower() or lowered in aliases:
             return canonical
     return raw_name
+
+
+def normalize_role_display_name(name: str | None, archetype: str | None = None) -> str:
+    return normalize_strategy_role_display_name(name, archetype=archetype)
 
 
 def parse_prompt_markdown(markdown_text: str) -> tuple[dict[str, Any], str]:
@@ -1317,14 +1503,18 @@ def validate_prompt_markdown(markdown_text: str, *, expected_archetype: str | No
     return metadata, body
 
 
-def builtin_prompt_markdown(prompt_ref: str, *, locale: str | None = None) -> str:
+def builtin_strategy_prompt_markdown(prompt_ref: str, *, locale: str | None = None) -> str:
     path = prompt_asset_path(PROMPT_ASSET_DIR, localized_prompt_ref(prompt_ref, locale))
     if not path.exists():
         raise WorkflowError(f"unknown built-in prompt template: {prompt_ref}")
     return path.read_text(encoding="utf-8")
 
 
-def load_prompt_file(path: Path) -> str:
+def builtin_prompt_markdown(prompt_ref: str, *, locale: str | None = None) -> str:
+    return builtin_strategy_prompt_markdown(prompt_ref, locale=locale)
+
+
+def load_strategy_prompt_file(path: Path) -> str:
     try:
         return path.read_text(encoding="utf-8")
     except UnicodeDecodeError as exc:
@@ -1333,16 +1523,24 @@ def load_prompt_file(path: Path) -> str:
         raise WorkflowError(f"prompt file could not be read: {path}") from exc
 
 
-def builtin_prompt_markdown_by_locale(prompt_ref: str) -> dict[str, str]:
+def load_prompt_file(path: Path) -> str:
+    return load_strategy_prompt_file(path)
+
+
+def builtin_strategy_prompt_markdown_by_locale(prompt_ref: str) -> dict[str, str]:
     return {
-        "en": builtin_prompt_markdown(prompt_ref, locale="en"),
-        "zh": builtin_prompt_markdown(prompt_ref, locale="zh"),
+        "en": builtin_strategy_prompt_markdown(prompt_ref, locale="en"),
+        "zh": builtin_strategy_prompt_markdown(prompt_ref, locale="zh"),
     }
+
+
+def builtin_prompt_markdown_by_locale(prompt_ref: str) -> dict[str, str]:
+    return builtin_strategy_prompt_markdown_by_locale(prompt_ref)
 
 
 def builtin_spec_practice(name: str, *, locale: str | None = None) -> dict[str, str]:
     preset_name = str(name or "").strip()
-    if preset_name not in WORKFLOW_PRESETS:
+    if preset_name not in STRATEGY_SOURCE_PRESETS:
         raise WorkflowError(f"unknown workflow preset: {name}")
     normalized_locale = normalize_prompt_locale(locale)
     localized_path = SPEC_PRACTICE_ASSET_DIR / f"{preset_name}.zh.md"
@@ -1367,10 +1565,10 @@ def builtin_spec_practice(name: str, *, locale: str | None = None) -> dict[str, 
     return {"summary": summary, "markdown": practice_markdown}
 
 
-def available_prompt_templates() -> list[dict[str, str]]:
+def available_strategy_prompt_templates() -> list[dict[str, str]]:
     templates = []
     for prompt_ref in sorted(PROMPT_FILES.values()):
-        metadata, _ = validate_prompt_markdown(builtin_prompt_markdown(prompt_ref))
+        metadata, _ = validate_prompt_markdown(builtin_strategy_prompt_markdown(prompt_ref))
         templates.append(
             {
                 "prompt_ref": prompt_ref,
@@ -1380,26 +1578,38 @@ def available_prompt_templates() -> list[dict[str, str]]:
     return templates
 
 
-def builtin_prompt_files_for_workflow(workflow: dict) -> dict[str, str]:
+def available_prompt_templates() -> list[dict[str, str]]:
+    return available_strategy_prompt_templates()
+
+
+def builtin_prompt_files_for_strategy_source(strategy_source: dict) -> dict[str, str]:
     prompt_files: dict[str, str] = {}
-    for role in workflow.get("roles", []):
+    for role in strategy_source.get("roles", []):
         prompt_ref = str(role.get("prompt_ref", "")).strip()
         if prompt_ref and prompt_ref not in prompt_files:
-            prompt_files[prompt_ref] = builtin_prompt_markdown(prompt_ref)
+            prompt_files[prompt_ref] = builtin_strategy_prompt_markdown(prompt_ref)
     return prompt_files
 
 
-def preset_names(*, include_hidden: bool = False) -> list[str]:
+def builtin_prompt_files_for_workflow(workflow: dict) -> dict[str, str]:
+    return builtin_prompt_files_for_strategy_source(workflow)
+
+
+def strategy_source_preset_names(*, include_hidden: bool = False) -> list[str]:
     names: list[str] = []
-    for preset_name, preset in WORKFLOW_PRESETS.items():
+    for preset_name, preset in STRATEGY_SOURCE_PRESETS.items():
         if include_hidden or bool(preset.get("visible", True)):
             names.append(preset_name)
     return names
 
 
-def workflow_preset_copy(name: str) -> dict[str, str]:
-    preset_name = str(name or DEFAULT_WORKFLOW_PRESET).strip() or DEFAULT_WORKFLOW_PRESET
-    preset = WORKFLOW_PRESETS.get(preset_name)
+def preset_names(*, include_hidden: bool = False) -> list[str]:
+    return strategy_source_preset_names(include_hidden=include_hidden)
+
+
+def strategy_source_preset_copy(name: str) -> dict[str, str]:
+    preset_name = str(name or DEFAULT_STRATEGY_SOURCE_PRESET).strip() or DEFAULT_STRATEGY_SOURCE_PRESET
+    preset = STRATEGY_SOURCE_PRESETS.get(preset_name)
     if not preset:
         raise WorkflowError(f"unknown workflow preset: {name}")
     practice_en = builtin_spec_practice(preset_name, locale="en")
@@ -1423,22 +1633,26 @@ def workflow_preset_copy(name: str) -> dict[str, str]:
     }
 
 
-def workflow_preset_options(*, include_hidden: bool = False) -> list[dict[str, str]]:
+def strategy_source_preset_options(*, include_hidden: bool = False) -> list[dict[str, str]]:
     return [
         {
             "id": preset_name,
-            **workflow_preset_copy(preset_name),
+            **strategy_source_preset_copy(preset_name),
         }
-        for preset_name in preset_names(include_hidden=include_hidden)
+        for preset_name in strategy_source_preset_names(include_hidden=include_hidden)
     ]
 
 
-def build_preset_workflow(name: str = DEFAULT_WORKFLOW_PRESET, *, role_models: dict[str, str] | None = None) -> dict:
-    preset_name = str(name or DEFAULT_WORKFLOW_PRESET).strip() or DEFAULT_WORKFLOW_PRESET
-    if preset_name not in WORKFLOW_PRESETS:
+def build_preset_strategy_source(
+    name: str = DEFAULT_STRATEGY_SOURCE_PRESET,
+    *,
+    role_models: dict[str, str] | None = None,
+) -> dict:
+    preset_name = str(name or DEFAULT_STRATEGY_SOURCE_PRESET).strip() or DEFAULT_STRATEGY_SOURCE_PRESET
+    if preset_name not in STRATEGY_SOURCE_PRESETS:
         raise WorkflowError(f"unknown workflow preset: {preset_name}")
     overrides = normalize_role_models(role_models)
-    preset = json.loads(json.dumps(WORKFLOW_PRESETS[preset_name]["workflow"], ensure_ascii=False))
+    preset = json.loads(json.dumps(STRATEGY_SOURCE_PRESETS[preset_name]["workflow"], ensure_ascii=False))
     for role in preset["roles"]:
         override = overrides.get(role["id"]) or overrides.get(role["archetype"])
         if override:
@@ -1455,15 +1669,23 @@ def build_preset_workflow(name: str = DEFAULT_WORKFLOW_PRESET, *, role_models: d
     return workflow
 
 
-def workflow_warnings(workflow: dict) -> list[str]:
-    role_by_id = {role["id"]: role for role in workflow.get("roles", [])}
-    steps = list(workflow.get("steps", []))
+workflow_preset_copy = strategy_source_preset_copy
+workflow_preset_options = strategy_source_preset_options
+
+
+def build_preset_workflow(name: str = DEFAULT_WORKFLOW_PRESET, *, role_models: dict[str, str] | None = None) -> dict:
+    return build_preset_strategy_source(name, role_models=role_models)
+
+
+def strategy_source_warnings(strategy_source: dict) -> list[str]:
+    role_by_id = {role["id"]: role for role in strategy_source.get("roles", [])}
+    steps = list(strategy_source.get("steps", []))
     warnings: list[str] = []
-    if not has_finish_gatekeeper_step(workflow):
+    if not strategy_source_has_finish_gatekeeper_step(strategy_source):
         warnings.append(
             "This workflow has no GateKeeper finish step, so it should be paired with round-based completion or updated before gate-based execution."
         )
-    warnings.extend(workflow_guide_input_warnings(steps, role_by_id))
+    warnings.extend(strategy_source_guide_input_warnings(steps, role_by_id))
     gate_before_builder = False
     gate_after_builder_without_inspector = False
     seen_builder = False
@@ -1491,7 +1713,11 @@ def workflow_warnings(workflow: dict) -> list[str]:
     return warnings
 
 
-def workflow_guide_input_warnings(
+def workflow_warnings(workflow: dict) -> list[str]:
+    return strategy_source_warnings(workflow)
+
+
+def strategy_source_guide_input_warnings(
     steps: list[dict[str, Any]],
     role_by_id: Mapping[str, Mapping[str, Any]],
 ) -> list[str]:
@@ -1506,15 +1732,22 @@ def workflow_guide_input_warnings(
     return warnings
 
 
-def has_finish_gatekeeper_step(workflow: dict[str, Any] | None) -> bool:
-    if not workflow:
+def workflow_guide_input_warnings(
+    steps: list[dict[str, Any]],
+    role_by_id: Mapping[str, Mapping[str, Any]],
+) -> list[str]:
+    return strategy_source_guide_input_warnings(steps, role_by_id)
+
+
+def strategy_source_has_finish_gatekeeper_step(strategy_source: dict[str, Any] | None) -> bool:
+    if not strategy_source:
         return False
     role_by_id = {
         str(role.get("id", "")).strip(): role
-        for role in workflow.get("roles", [])
+        for role in strategy_source.get("roles", [])
         if isinstance(role, dict)
     }
-    for raw_step in workflow.get("steps", []):
+    for raw_step in strategy_source.get("steps", []):
         if not isinstance(raw_step, dict):
             continue
         role = role_by_id.get(str(raw_step.get("role_id", "")).strip())
@@ -1525,11 +1758,18 @@ def has_finish_gatekeeper_step(workflow: dict[str, Any] | None) -> bool:
     return False
 
 
-def validate_workflow_parallel_groups(steps: list[dict[str, Any]], role_by_id: dict[str, dict[str, Any]]) -> None:
+def has_finish_gatekeeper_step(workflow: dict[str, Any] | None) -> bool:
+    return strategy_source_has_finish_gatekeeper_step(workflow)
+
+
+def validate_strategy_source_parallel_groups(
+    steps: list[dict[str, Any]],
+    role_by_id: dict[str, dict[str, Any]],
+) -> None:
     seen_closed_groups: set[str] = set()
     active_group = ""
     for step in steps:
-        group = workflow_step_parallel_group(step)
+        group = strategy_source_step_parallel_group(step)
         active_group = validate_parallel_group_contiguity(
             group,
             active_group=active_group,
@@ -1542,8 +1782,16 @@ def validate_workflow_parallel_groups(steps: list[dict[str, Any]], role_by_id: d
     validate_parallel_group_size(steps)
 
 
-def workflow_step_parallel_group(step: Mapping[str, Any]) -> str:
+def validate_workflow_parallel_groups(steps: list[dict[str, Any]], role_by_id: dict[str, dict[str, Any]]) -> None:
+    validate_strategy_source_parallel_groups(steps, role_by_id)
+
+
+def strategy_source_step_parallel_group(step: Mapping[str, Any]) -> str:
     return str(step.get("parallel_group") or "").strip()
+
+
+def workflow_step_parallel_group(step: Mapping[str, Any]) -> str:
+    return strategy_source_step_parallel_group(step)
 
 
 def validate_parallel_group_contiguity(
@@ -1578,7 +1826,7 @@ def validate_parallel_group_step(step: Mapping[str, Any], *, role_by_id: Mapping
 def validate_parallel_group_size(steps: list[dict[str, Any]]) -> None:
     counts: dict[str, int] = {}
     for step in steps:
-        group = workflow_step_parallel_group(step)
+        group = strategy_source_step_parallel_group(step)
         if group:
             counts[group] = counts.get(group, 0) + 1
     singletons = [group for group, count in counts.items() if count < 2]
@@ -1586,22 +1834,35 @@ def validate_parallel_group_size(steps: list[dict[str, Any]]) -> None:
         raise WorkflowError("workflow parallel_group must contain at least two contiguous steps")
 
 
-def normalize_workflow(workflow: dict[str, Any] | None, *, role_models: dict[str, str] | None = None) -> dict:
-    if workflow is None:
-        return normalize_preset_workflow(DEFAULT_WORKFLOW_PRESET, role_models=role_models)
+def normalize_strategy_source(
+    strategy_source: dict[str, Any] | None,
+    *,
+    role_models: dict[str, str] | None = None,
+) -> dict:
+    return _normalize_strategy_source(strategy_source, role_models=role_models, version_field_name="strategy source version")
 
-    raw = dict(workflow)
-    if workflow_requests_preset(raw):
-        return normalize_preset_workflow(str(raw.get("preset")), role_models=role_models)
 
-    raw_roles, raw_steps = require_workflow_entries(raw)
-    roles = normalize_workflow_roles(raw_roles, role_models=normalize_role_models(role_models))
+def _normalize_strategy_source(
+    strategy_source: dict[str, Any] | None,
+    *,
+    role_models: dict[str, str] | None = None,
+    version_field_name: str,
+) -> dict:
+    if strategy_source is None:
+        return normalize_preset_strategy_source(DEFAULT_STRATEGY_SOURCE_PRESET, role_models=role_models)
+
+    raw = dict(strategy_source)
+    if strategy_source_requests_preset(raw):
+        return normalize_preset_strategy_source(str(raw.get("preset")), role_models=role_models)
+
+    raw_roles, raw_steps = require_strategy_source_entries(raw)
+    roles = normalize_strategy_source_roles(raw_roles, role_models=normalize_strategy_role_models(role_models))
     role_by_id = {role["id"]: role for role in roles}
-    steps = normalize_workflow_steps(raw_steps, role_by_id=role_by_id)
-    controls = normalize_workflow_controls(raw.get("controls"), role_by_id=role_by_id)
+    steps = normalize_strategy_source_steps(raw_steps, role_by_id=role_by_id)
+    controls = normalize_strategy_source_controls(raw.get("controls"), role_by_id=role_by_id)
 
     normalized = {
-        "version": normalize_workflow_version(raw.get("version")),
+        "version": normalize_strategy_source_version(raw.get("version"), field_name=version_field_name),
         "preset": str(raw.get("preset", "")).strip(),
         "collaboration_intent": str(raw.get("collaboration_intent", "") or "").strip(),
         "roles": roles,
@@ -1609,21 +1870,33 @@ def normalize_workflow(workflow: dict[str, Any] | None, *, role_models: dict[str
     }
     if controls:
         normalized["controls"] = controls
-    normalized["warnings"] = workflow_warnings(normalized)
+    normalized["warnings"] = strategy_source_warnings(normalized)
+    return normalized
+
+
+def normalize_workflow(workflow: dict[str, Any] | None, *, role_models: dict[str, str] | None = None) -> dict:
+    return _normalize_strategy_source(workflow, role_models=role_models, version_field_name="workflow version")
+
+
+def normalize_preset_strategy_source(preset: str, *, role_models: dict[str, str] | None = None) -> dict:
+    normalized = build_preset_strategy_source(preset, role_models=role_models)
+    normalized["warnings"] = strategy_source_warnings(normalized)
     return normalized
 
 
 def normalize_preset_workflow(preset: str, *, role_models: dict[str, str] | None = None) -> dict:
-    normalized = build_preset_workflow(preset, role_models=role_models)
-    normalized["warnings"] = workflow_warnings(normalized)
-    return normalized
+    return normalize_preset_strategy_source(preset, role_models=role_models)
 
 
-def workflow_requests_preset(raw: Mapping[str, Any]) -> bool:
+def strategy_source_requests_preset(raw: Mapping[str, Any]) -> bool:
     return bool(raw.get("preset") and not raw.get("roles") and not raw.get("steps"))
 
 
-def require_workflow_entries(raw: Mapping[str, Any]) -> tuple[list[Any], list[Any]]:
+def workflow_requests_preset(raw: Mapping[str, Any]) -> bool:
+    return strategy_source_requests_preset(raw)
+
+
+def require_strategy_source_entries(raw: Mapping[str, Any]) -> tuple[list[Any], list[Any]]:
     raw_roles = raw.get("roles")
     raw_steps = raw.get("steps")
     if not isinstance(raw_roles, list) or not raw_roles:
@@ -1633,7 +1906,11 @@ def require_workflow_entries(raw: Mapping[str, Any]) -> tuple[list[Any], list[An
     return raw_roles, raw_steps
 
 
-def normalize_workflow_roles(
+def require_workflow_entries(raw: Mapping[str, Any]) -> tuple[list[Any], list[Any]]:
+    return require_strategy_source_entries(raw)
+
+
+def normalize_strategy_source_roles(
     raw_roles: list[Any],
     *,
     role_models: Mapping[str, str],
@@ -1641,11 +1918,19 @@ def normalize_workflow_roles(
     roles: list[dict[str, Any]] = []
     role_ids: set[str] = set()
     for index, raw_role in enumerate(raw_roles, start=1):
-        roles.append(normalize_workflow_role(raw_role, index=index, role_ids=role_ids, role_models=role_models))
+        roles.append(normalize_strategy_source_role(raw_role, index=index, role_ids=role_ids, role_models=role_models))
     return roles
 
 
-def normalize_workflow_role(
+def normalize_workflow_roles(
+    raw_roles: list[Any],
+    *,
+    role_models: Mapping[str, str],
+) -> list[dict[str, Any]]:
+    return normalize_strategy_source_roles(raw_roles, role_models=role_models)
+
+
+def normalize_strategy_source_role(
     raw_role: Any,
     *,
     index: int,
@@ -1654,17 +1939,20 @@ def normalize_workflow_role(
 ) -> dict[str, Any]:
     if not isinstance(raw_role, dict):
         raise WorkflowError("workflow roles must be objects")
-    role_id = _normalize_optional_workflow_identifier(
+    role_id = _normalize_optional_strategy_source_identifier(
         raw_role.get("id"),
         default=f"role_{index:03d}",
         field_name="workflow role id",
     )
     if role_id in role_ids:
         raise WorkflowError(f"duplicate workflow role id: {role_id}")
-    archetype = normalize_archetype(str(raw_role.get("archetype", "")))
+    archetype = normalize_strategy_archetype(str(raw_role.get("archetype", "")))
     prompt_ref = normalize_prompt_ref(raw_role.get("prompt_ref") or PROMPT_FILES[archetype])
     raw_name = str(raw_role.get("name", "")).strip()
-    name = normalize_role_display_name(raw_name, archetype) or display_name_for_archetype(archetype, locale="en")
+    name = normalize_strategy_role_display_name(raw_name, archetype) or strategy_archetype_display_name(
+        archetype,
+        locale="en",
+    )
     model = str(raw_role.get("model", "")).strip()
     role_definition_id = str(raw_role.get("role_definition_id", "")).strip()
     override_model = role_models.get(role_id, role_models.get(archetype, ""))
@@ -1680,15 +1968,25 @@ def normalize_workflow_role(
         "role_definition_id": role_definition_id,
         "posture_notes": str(raw_role.get("posture_notes", "") or "").strip(),
     }
-    if role_uses_execution_snapshot(raw_role):
-        execution_settings = normalize_role_execution_settings(raw_role)
+    if strategy_role_uses_execution_snapshot(raw_role):
+        execution_settings = normalize_strategy_role_execution_settings(raw_role)
         role_entry.update(execution_settings)
         if model:
             role_entry["model"] = model
     return role_entry
 
 
-def normalize_workflow_steps(
+def normalize_workflow_role(
+    raw_role: Any,
+    *,
+    index: int,
+    role_ids: set[str],
+    role_models: Mapping[str, str],
+) -> dict[str, Any]:
+    return normalize_strategy_source_role(raw_role, index=index, role_ids=role_ids, role_models=role_models)
+
+
+def normalize_strategy_source_steps(
     raw_steps: list[Any],
     *,
     role_by_id: Mapping[str, Mapping[str, Any]],
@@ -1696,12 +1994,20 @@ def normalize_workflow_steps(
     steps: list[dict[str, Any]] = []
     step_ids: set[str] = set()
     for index, raw_step in enumerate(raw_steps, start=1):
-        steps.append(normalize_workflow_step(raw_step, index=index, role_by_id=role_by_id, step_ids=step_ids))
-    validate_workflow_parallel_groups(steps, role_by_id)
+        steps.append(normalize_strategy_source_step(raw_step, index=index, role_by_id=role_by_id, step_ids=step_ids))
+    validate_strategy_source_parallel_groups(steps, role_by_id)
     return steps
 
 
-def normalize_workflow_step(
+def normalize_workflow_steps(
+    raw_steps: list[Any],
+    *,
+    role_by_id: Mapping[str, Mapping[str, Any]],
+) -> list[dict[str, Any]]:
+    return normalize_strategy_source_steps(raw_steps, role_by_id=role_by_id)
+
+
+def normalize_strategy_source_step(
     raw_step: Any,
     *,
     index: int,
@@ -1710,18 +2016,18 @@ def normalize_workflow_step(
 ) -> dict[str, Any]:
     if not isinstance(raw_step, dict):
         raise WorkflowError("workflow steps must be objects")
-    role_id = normalize_workflow_identifier(raw_step.get("role_id"), field_name="workflow step role_id")
+    role_id = normalize_strategy_source_identifier(raw_step.get("role_id"), field_name="workflow step role_id")
     role = role_by_id.get(role_id)
     if role is None:
         raise WorkflowError(f"workflow step references unknown role_id: {role_id}")
-    step_id = _normalize_optional_workflow_identifier(
+    step_id = _normalize_optional_strategy_source_identifier(
         raw_step.get("id"),
         default=f"step_{index:03d}",
         field_name="workflow step id",
     )
     if step_id in step_ids:
         raise WorkflowError(f"duplicate workflow step id: {step_id}")
-    on_pass = normalize_step_on_pass(
+    on_pass = normalize_strategy_step_on_pass(
         raw_step.get("on_pass"),
         archetype=role["archetype"],
         default="continue",
@@ -1733,29 +2039,39 @@ def normalize_workflow_step(
         "role_id": role_id,
         "on_pass": on_pass,
         "model": str(raw_step.get("model", "")).strip(),
-        "inherit_session": normalize_step_inherit_session(
+        "inherit_session": normalize_strategy_step_inherit_session(
             raw_step.get("inherit_session"),
             archetype=role["archetype"],
         ),
         "extra_cli_args": extra_cli_args,
-        "action_policy": normalize_step_action_policy(
+        "action_policy": normalize_strategy_step_action_policy(
             raw_step.get("action_policy"),
             archetype=role["archetype"],
             on_pass=on_pass,
         ),
     }
-    parallel_group = normalize_step_parallel_group(raw_step.get("parallel_group"))
+    parallel_group = normalize_strategy_step_parallel_group(raw_step.get("parallel_group"))
     if parallel_group:
         step_entry["parallel_group"] = parallel_group
-    inputs = normalize_step_inputs(raw_step.get("inputs"))
+    inputs = normalize_strategy_step_inputs(raw_step.get("inputs"))
     if inputs:
         step_entry["inputs"] = inputs
     step_ids.add(step_id)
     return step_entry
 
 
-def resolve_prompt_files(
-    workflow: dict,
+def normalize_workflow_step(
+    raw_step: Any,
+    *,
+    index: int,
+    role_by_id: Mapping[str, Mapping[str, Any]],
+    step_ids: set[str],
+) -> dict[str, Any]:
+    return normalize_strategy_source_step(raw_step, index=index, role_by_id=role_by_id, step_ids=step_ids)
+
+
+def resolve_strategy_prompt_files(
+    strategy_source: dict,
     provided_prompt_files: dict[str, str] | None = None,
 ) -> dict[str, str]:
     provided: dict[str, str] = {}
@@ -1766,21 +2082,28 @@ def resolve_prompt_files(
         normalized_prompt_ref = normalize_prompt_ref(candidate)
         provided[normalized_prompt_ref] = str(markdown_text or "")
     resolved: dict[str, str] = {}
-    for role in workflow.get("roles", []):
+    for role in strategy_source.get("roles", []):
         prompt_ref = role["prompt_ref"]
         if prompt_ref not in resolved:
             if prompt_ref in provided:
                 resolved[prompt_ref] = provided[prompt_ref]
             else:
                 try:
-                    resolved[prompt_ref] = builtin_prompt_markdown(prompt_ref)
+                    resolved[prompt_ref] = builtin_strategy_prompt_markdown(prompt_ref)
                 except WorkflowError as exc:
                     raise WorkflowError(f"missing prompt file for role {role['id']}: {prompt_ref}") from exc
         validate_prompt_markdown(resolved[prompt_ref], expected_archetype=role["archetype"])
     return resolved
 
 
-def load_workflow_file(path: Path) -> tuple[dict[str, Any], dict[str, str]]:
+def resolve_prompt_files(
+    workflow: dict,
+    provided_prompt_files: dict[str, str] | None = None,
+) -> dict[str, str]:
+    return resolve_strategy_prompt_files(workflow, provided_prompt_files)
+
+
+def load_strategy_source_file(path: Path) -> tuple[dict[str, Any], dict[str, str]]:
     try:
         raw_text = path.read_text(encoding="utf-8")
     except UnicodeDecodeError as exc:
@@ -1801,3 +2124,7 @@ def load_workflow_file(path: Path) -> tuple[dict[str, Any], dict[str, str]]:
     if not isinstance(prompt_files, dict):
         raise WorkflowError("workflow file prompt_files must be a mapping")
     return dict(workflow), {str(key): str(value) for key, value in prompt_files.items()}
+
+
+def load_workflow_file(path: Path) -> tuple[dict[str, Any], dict[str, str]]:
+    return load_strategy_source_file(path)

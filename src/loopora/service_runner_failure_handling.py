@@ -84,7 +84,7 @@ class ServiceRunnerFailureHandlingMixin:
         error_text = str(exc.result.error) if exc.result.error else str(exc)
         verdict = {
             "passed": False,
-            "decision_summary": "A workflow step aborted before the run could finish.",
+            "decision_summary": "A runner step aborted before the run could finish.",
             "composite_score": 0.0,
             "metrics": [],
             "metric_scores": {},
@@ -99,8 +99,8 @@ class ServiceRunnerFailureHandlingMixin:
                     "degraded": exc.result.degraded,
                 }
             ],
-            "feedback_to_builder": "Fix the failing workflow step before retrying.",
-            "feedback_to_generator": "Fix the failing workflow step before retrying.",
+            "feedback_to_builder": "Fix the failing runner step before retrying.",
+            "feedback_to_generator": "Fix the failing runner step before retrying.",
         }
         self._write_run_verdict_files(run_dir, verdict, include_gatekeeper=True)
         summary = (

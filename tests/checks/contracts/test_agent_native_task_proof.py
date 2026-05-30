@@ -122,7 +122,7 @@ def test_attach_native_run_surface_uses_result_adapter_or_codex_default() -> Non
     summary: dict[str, object] = {}
     attach_native_run_surface(summary, {"adapter": "opencode"})
 
-    surface = summary["native_surface"]
+    surface = summary["agent_surface"]
     assert surface["entry_kind"] == "project_command"
     assert surface["entry_paths"]["plan"] == ".opencode/commands/loopora-plan.md"
     assert surface["capability_contract"]["command_namespace"] == "loopora_plan_run_only_no_generic_host_command_aliases"
@@ -139,7 +139,7 @@ def test_attach_native_run_surface_uses_result_adapter_or_codex_default() -> Non
     )
     assert (
         surface["session_recovery"]["checkpoint_restore"]
-        == "host_checkpoints_rewinds_and_session_archives_are_recovery_hints_not_loopora_binding_or_proof"
+        == "host_checkpoints_rewinds_and_session_archives_are_recovery_hints_not_loopora_context_or_proof"
     )
     _assert_native_run_surface_runtime_boundaries(surface)
     assert surface["capability_contract"]["activation"] == "explicit_loopora_command_or_cli_only"
@@ -156,12 +156,12 @@ def test_attach_native_run_surface_uses_result_adapter_or_codex_default() -> Non
 
     default_summary: dict[str, object] = {}
     attach_native_run_surface(default_summary)
-    assert default_summary["native_surface"]["entry_kind"] == "project_skill"
+    assert default_summary["agent_surface"]["entry_kind"] == "project_skill"
 
 
 def _assert_native_run_surface_runtime_boundaries(surface: dict) -> None:
     assert surface["handoff_protocol"]["role_channel"] == "host_native_role_agent"
-    assert surface["handoff_protocol"]["payload_policy"] == "path_based_context_capsule_and_template_not_large_inline_prompt"
+    assert surface["handoff_protocol"]["payload_policy"] == "path_based_context_step_contract_and_template_not_large_inline_prompt"
     assert surface["handoff_protocol"]["parallel_dispatch"] == "only_when_loop_workflow_declares_parallel_group"
     assert surface["handoff_protocol"]["external_orchestration"] == (
         "host_swarms_party_modes_and_plugin_orchestrators_are_hints_not_loopora_parallel_contract"

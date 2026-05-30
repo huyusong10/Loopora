@@ -51,7 +51,7 @@ from loopora.service_alignment_context import (
     redact_alignment_source_value,
 )
 from loopora.service_alignment_delete import AlignmentDeleteContext, delete_alignment_session as delete_alignment_session_command
-from loopora.service_alignment_legacy import ServiceAlignmentLegacyMixin
+from loopora.service_alignment_legacy import AlignmentLegacyLayoutContext, ensure_alignment_session_layout
 from loopora.service_alignment_prompting import (
     AlignmentPromptBuildContext,
     build_alignment_prompt as build_alignment_prompt_command,
@@ -119,16 +119,13 @@ from loopora.service_alignment_session_lifecycle import (
     start_alignment_session_async as start_alignment_session_lifecycle,
 )
 from loopora.service_alignment_orchestration import AlignmentSessionOrchestrationContext, execute_alignment_session
+from loopora.service_alignment_status import ALIGNMENT_ACTIVE_STATUSES, ALIGNMENT_CONFIRMED_STAGES
 from loopora.service_alignment_validation import AlignmentBundleTextValidationContext, alignment_validated_bundle_text_loader
 from loopora.utils import utc_now
 
 logger = get_logger(__name__)
 
-ALIGNMENT_ACTIVE_STATUSES = {"running", "validating", "repairing"}
-ALIGNMENT_CONFIRMED_STAGES = {"confirmed", "compiling", "ready_review"}
-
-
-class ServiceAlignmentMixin(ServiceAlignmentLegacyMixin):
+class ServiceAlignmentMixin:
     def create_alignment_session(
         self,
         request: AlignmentSessionCreateRequest | None = None,
@@ -233,6 +230,16 @@ class ServiceAlignmentMixin(ServiceAlignmentLegacyMixin):
 
     def get_alignment_bundle(self, session_id: str) -> dict:
         return alignment_bundle_preview(self._alignment_bundle_preview_context(), self.get_alignment_session(session_id))
+
+    def _ensure_alignment_session_layout(self, session: dict) -> dict:
+        return ensure_alignment_session_layout(
+            AlignmentLegacyLayoutContext(
+                repository=self.repository,
+                ensure_artifact_dirs=ensure_alignment_artifact_dirs,
+                append_diagnostic_event=self._append_alignment_diagnostic_event,
+            ),
+            session,
+        )
 
     def _alignment_bundle_lifecycle_context(self) -> AlignmentBundleLifecycleContext:
         return AlignmentBundleLifecycleContext(

@@ -138,7 +138,7 @@ def test_cli_agent_loop_plain_output_discloses_resumed_existing_run(capsys) -> N
     output = capsys.readouterr().out
 
     assert "Loopora run: run_resume" in output
-    assert "run_start: resumed_existing_agent_native_run" in output
+    assert "run_start: resumed_existing_agent_runner_run" in output
 
 
 def test_cli_agent_gen_json_repair_focus_explains_structural_plan_errors(tmp_path: Path, sample_workdir: Path) -> None:

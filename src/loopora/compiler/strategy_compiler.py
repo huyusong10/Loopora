@@ -9,14 +9,14 @@ from loopora.kernel.strategy import EvidenceFlow, FinishPolicy, IterationPolicy,
 
 def compile_loop_strategy(
     loop_id: str,
-    workflow: Mapping[str, object],
+    strategy_source: Mapping[str, object],
     *,
     max_iterations: int = 1,
     max_step_retries: int = 1,
     residual_risk_policy: ResidualRiskPolicy = ResidualRiskPolicy.ALLOW_MANAGED,
 ) -> LoopStrategy:
-    roles = tuple(_compile_role(role, index) for index, role in enumerate(mapping_list(workflow.get("roles")), start=1))
-    steps = tuple(_compile_step(step, index) for index, step in enumerate(mapping_list(workflow.get("steps")), start=1))
+    roles = tuple(_compile_role(role, index) for index, role in enumerate(mapping_list(strategy_source.get("roles")), start=1))
+    steps = tuple(_compile_step(step, index) for index, step in enumerate(mapping_list(strategy_source.get("steps")), start=1))
     role_ids = {role.id for role in roles}
     if not roles:
         roles = (
@@ -45,7 +45,7 @@ def compile_loop_strategy(
         roles=roles,
         steps=known_steps or steps,
         evidence_flow=EvidenceFlow(
-            required_target_ids=tuple(target for target in strings(workflow.get("required_target_ids")) if target),
+            required_target_ids=tuple(target for target in strings(strategy_source.get("required_target_ids")) if target),
             gatekeeper_step_id=next((step.id for step in steps if step.can_finish_run), ""),
         ),
         iteration_policy=IterationPolicy(

@@ -39,10 +39,10 @@ from loopora.agent_entry_continuation import (
     terminal_agent_run_needs_next_pass,
 )
 from loopora.agent_entry_run_projection import (
-    adapter_label_for_error as _adapter_label_for_error,
+    adapter_label_for_error,
     agent_entry_loop_command as agent_entry_loop_command,
     agent_entry_loop_json_command as agent_entry_loop_json_command,
-    agent_entry_loop_projection_messages as _agent_entry_loop_projection_messages,
+    agent_entry_loop_projection_messages,
     agent_loop_result,
     agent_loop_unready_error,
     append_agent_entry_invocation,
@@ -283,16 +283,16 @@ class ServiceAgentAdapterMixin:
             context_resolution = self.resolve_loopora_context(root, intent="run", adapter=adapter, context_id=context_id)
             if context_resolution.get("requires_user_choice"):
                 raise LooporaConflictError(
-                    f"no exact Loopora binding is associated with this {_adapter_label_for_error(adapter)} session/workdir; "
+                    f"no exact Loopora context card is associated with this {adapter_label_for_error(adapter)} session/workdir; "
                     "choose a recoverable context before /loopora-run can start"
                 )
             raise LooporaConflictError(
-                f"no ready Loop preview is associated with this {_adapter_label_for_error(adapter)} session/workdir; run /loopora-plan first"
+                f"no ready Loop preview is associated with this {adapter_label_for_error(adapter)} session/workdir; run /loopora-plan first"
             )
 
         session_id = str(binding.get("alignment_session_id") or "").strip()
         if not session_id:
-            raise LooporaConflictError("agent binding does not reference a ready Loop preview; run /loopora-plan first")
+            raise LooporaConflictError("agent context card does not reference a ready Loop preview; run /loopora-plan first")
         session = self.get_alignment_session(session_id)
         self._assert_agent_binding_matches_workdir(binding, session, expected_workdir=root)
         start_context = _AgentLoopStartContext(
@@ -316,7 +316,7 @@ class ServiceAgentAdapterMixin:
         if unready_error:
             raise LooporaConflictError(unready_error)
         raise LooporaConflictError(
-            f"{_adapter_label_for_error(adapter)} session has no ready Loop preview (current status: {session['status']}); run /loopora-plan first"
+            f"{adapter_label_for_error(adapter)} session has no ready Loop preview (current status: {session['status']}); run /loopora-plan first"
         )
 
     def _start_agent_loop_from_existing_run(
@@ -390,7 +390,7 @@ class ServiceAgentAdapterMixin:
     ) -> tuple[dict[str, Any], dict[str, Any]]:
         loop_id = str(session.get("linked_loop_id") or previous_run.get("loop_id") or "").strip()
         if not loop_id:
-            raise LooporaConflictError("agent binding has no linked Loop for the next /loopora-run run")
+            raise LooporaConflictError("agent context card has no linked Loop for the next /loopora-run run")
         run = self.start_run(loop_id)
         self._seed_agent_native_continuation_context(run, previous_run)
         native = self.prepare_agent_native_run(start_context.adapter, run["id"], entry_source=start_context.entry_source)
@@ -470,7 +470,7 @@ class ServiceAgentAdapterMixin:
         try:
             return read_agent_binding(adapter, root, context_id=context_id)
         except LooporaError as exc:
-            raise LooporaConflictError(f"agent binding is damaged before /loopora-run can start: {exc}") from exc
+            raise LooporaConflictError(f"agent context card is damaged before /loopora-run can start: {exc}") from exc
 
     def _bind_selected_agent_run_context(
         self,
@@ -573,7 +573,7 @@ class ServiceAgentAdapterMixin:
             entry_source = str(payload.get("entry_source") or "").strip()
             host_context_id = str(payload.get("host_context_id") or "").strip()
             linked_state = self._agent_entry_projection_linked_run_state(session)
-            messages = _agent_entry_loop_projection_messages(linked_state["next_loop_action"])
+            messages = agent_entry_loop_projection_messages(linked_state["next_loop_action"])
             return {
                 "schema_version": 1,
                 "source": "agent_entry",
@@ -734,7 +734,7 @@ class ServiceAgentAdapterMixin:
         expected = expected_workdir.expanduser().resolve()
         binding_workdir = str(binding.get("workdir") or "").strip()
         if binding_workdir and Path(binding_workdir).expanduser().resolve() != expected:
-            raise LooporaConflictError("agent binding belongs to a different workdir; run /loopora-plan again")
+            raise LooporaConflictError("agent context card belongs to a different workdir; run /loopora-plan again")
         session_workdir = str(session.get("workdir") or "").strip()
         if not session_workdir or Path(session_workdir).expanduser().resolve() != expected:
-            raise LooporaConflictError("agent binding references a Loop preview from a different workdir; run /loopora-plan again")
+            raise LooporaConflictError("agent context card references a Loop preview from a different workdir; run /loopora-plan again")

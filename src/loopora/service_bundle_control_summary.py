@@ -32,25 +32,25 @@ def build_bundle_control_summary(bundle: dict) -> dict:
     raw_sections = _raw_sections(compiled_spec)
     coverage = _coverage_projection(compiled_spec)
     roles = list(bundle.get("role_definitions") or [])
-    workflow = dict(bundle.get("workflow") or {})
-    steps = list(workflow.get("steps") or [])
-    role_lookup = _role_lookup(roles=roles, workflow_roles=list(workflow.get("roles") or []))
-    workflow_projection = _workflow_projection(steps, role_lookup)
+    strategy_source = dict(bundle.get("workflow") or {})
+    steps = list(strategy_source.get("steps") or [])
+    role_lookup = _role_lookup(roles=roles, workflow_roles=list(strategy_source.get("roles") or []))
+    strategy_flow_projection = _strategy_flow_projection(steps, role_lookup)
     gatekeeper = _gatekeeper_projection(steps, role_lookup)
-    controls = _control_summaries(workflow, role_lookup)
+    controls = _control_summaries(strategy_source, role_lookup)
     collaboration_summary = str(bundle.get("collaboration_summary") or "").strip()
     loop_fit_reasons = loop_fit_governance_trace(collaboration_summary)
     judgment_tradeoffs = _judgment_tradeoff_trace(
         bundle=bundle,
         raw_sections=raw_sections,
         roles=roles,
-        workflow=workflow,
+        strategy_source=strategy_source,
     )
     execution_strategy = _execution_strategy_trace(
         bundle=bundle,
         raw_sections=raw_sections,
         roles=roles,
-        workflow=workflow,
+        strategy_source=strategy_source,
     )
     residual_risk_policy = _residual_risk_policy_trace(raw_sections)
     role_postures = _role_posture_trace(roles)
@@ -61,20 +61,20 @@ def build_bundle_control_summary(bundle: dict) -> dict:
         bundle=bundle,
         raw_sections=raw_sections,
         roles=roles,
-        workflow=workflow,
+        strategy_source=strategy_source,
     )
     local_governance = build_runtime_local_governance_trace(
         raw_sections=raw_sections,
         roles=roles,
-        workflow=workflow,
+        strategy_source=strategy_source,
     )
     traceability = _traceability_projection(
         {
             "bundle": bundle,
             "raw_sections": raw_sections,
             "roles": roles,
-            "workflow": workflow,
-            "workflow_projection": workflow_projection,
+            "strategy_source": strategy_source,
+            "strategy_flow_projection": strategy_flow_projection,
             "gatekeeper": gatekeeper,
             "controls": controls,
             "loop_fit_reasons": loop_fit_reasons,
@@ -110,7 +110,7 @@ def build_bundle_control_summary(bundle: dict) -> dict:
         "local_governance": local_governance,
         "role_postures": role_postures,
         "judgment_tradeoffs": judgment_tradeoffs,
-        "workflow": workflow_projection,
+        "workflow": strategy_flow_projection,
         "gatekeeper": gatekeeper,
         "traceability": traceability,
         "diagnostics": diagnostics,
@@ -123,14 +123,16 @@ def build_judgment_tradeoff_trace(
     collaboration_summary: object = "",
     raw_sections: object = None,
     roles: object = None,
+    strategy_source: object = None,
     workflow: object = None,
 ) -> list[str]:
     role_items = [dict(role) for role in list(roles or []) if isinstance(role, Mapping)] if isinstance(roles, list) else []
+    strategy_payload = _strategy_source_payload(strategy_source=strategy_source, workflow=workflow)
     return _judgment_tradeoff_trace(
         bundle={"collaboration_summary": collaboration_summary},
         raw_sections=dict(raw_sections) if isinstance(raw_sections, Mapping) else {},
         roles=role_items,
-        workflow=dict(workflow) if isinstance(workflow, Mapping) else {},
+        strategy_source=strategy_payload,
     )
 
 
@@ -139,14 +141,16 @@ def build_execution_strategy_trace(
     collaboration_summary: object = "",
     raw_sections: object = None,
     roles: object = None,
+    strategy_source: object = None,
     workflow: object = None,
 ) -> list[str]:
     role_items = [dict(role) for role in list(roles or []) if isinstance(role, Mapping)] if isinstance(roles, list) else []
+    strategy_payload = _strategy_source_payload(strategy_source=strategy_source, workflow=workflow)
     return _execution_strategy_trace(
         bundle={"collaboration_summary": collaboration_summary},
         raw_sections=dict(raw_sections) if isinstance(raw_sections, Mapping) else {},
         roles=role_items,
-        workflow=dict(workflow) if isinstance(workflow, Mapping) else {},
+        strategy_source=strategy_payload,
     )
 
 
@@ -155,14 +159,16 @@ def build_local_governance_trace(
     collaboration_summary: object = "",
     raw_sections: object = None,
     roles: object = None,
+    strategy_source: object = None,
     workflow: object = None,
 ) -> list[str]:
     role_items = [dict(role) for role in list(roles or []) if isinstance(role, Mapping)] if isinstance(roles, list) else []
+    strategy_payload = _strategy_source_payload(strategy_source=strategy_source, workflow=workflow)
     return _local_governance_trace(
         bundle={"collaboration_summary": collaboration_summary},
         raw_sections=dict(raw_sections) if isinstance(raw_sections, Mapping) else {},
         roles=role_items,
-        workflow=dict(workflow) if isinstance(workflow, Mapping) else {},
+        strategy_source=strategy_payload,
     )
 
 
@@ -170,19 +176,26 @@ def build_runtime_local_governance_trace(
     *,
     raw_sections: object = None,
     roles: object = None,
+    strategy_source: object = None,
     workflow: object = None,
 ) -> list[str]:
     role_items = [dict(role) for role in list(roles or []) if isinstance(role, Mapping)] if isinstance(roles, list) else []
+    strategy_payload = _strategy_source_payload(strategy_source=strategy_source, workflow=workflow)
     traces = _local_governance_trace(
         bundle={},
         raw_sections=dict(raw_sections) if isinstance(raw_sections, Mapping) else {},
         roles=role_items,
-        workflow=dict(workflow) if isinstance(workflow, Mapping) else {},
+        strategy_source=strategy_payload,
         runtime_only=True,
     )
     if not _local_governance_runtime_chain_complete(traces):
         return []
     return traces
+
+
+def _strategy_source_payload(*, strategy_source: object = None, workflow: object = None) -> dict:
+    payload = strategy_source if isinstance(strategy_source, Mapping) else workflow
+    return dict(payload) if isinstance(payload, Mapping) else {}
 
 
 def build_loop_fit_trace(collaboration_summary: object = "") -> list[str]:
@@ -292,7 +305,7 @@ def _step_label(step: dict, role_lookup: dict) -> str:
     return str(role.get("name") or step.get("role_id") or step.get("id") or "").strip()
 
 
-def _workflow_projection(steps: list[dict], role_lookup: dict) -> dict:
+def _strategy_flow_projection(steps: list[dict], role_lookup: dict) -> dict:
     return {
         "step_count": len(steps),
         "parallel_groups": _parallel_groups(steps),
@@ -356,14 +369,14 @@ def _gatekeeper_role_names(gatekeeper_steps: list[dict], role_lookup: dict) -> l
     return gatekeeper_roles
 
 
-def _control_summaries(workflow: dict, role_lookup: dict) -> list[dict]:
+def _control_summaries(strategy_source: dict, role_lookup: dict) -> list[dict]:
     control_summaries = []
-    for control in list(workflow.get("controls") or []):
+    for control in list(strategy_source.get("controls") or []):
         if not isinstance(control, dict):
             continue
         role_id = str((control.get("call") or {}).get("role_id") or "").strip()
-        workflow_role = role_lookup["workflow_role_by_id"].get(role_id, {})
-        role_definition = role_lookup["role_definition_by_key"].get(str(workflow_role.get("role_definition_key") or ""), {})
+        strategy_role = role_lookup["workflow_role_by_id"].get(role_id, {})
+        role_definition = role_lookup["role_definition_by_key"].get(str(strategy_role.get("role_definition_key") or ""), {})
         control_summaries.append(
             {
                 "id": str(control.get("id") or "").strip(),
@@ -395,8 +408,8 @@ def _traceability_projection(context: dict) -> dict:
     bundle = dict(context.get("bundle") or {})
     raw_sections = dict(context.get("raw_sections") or {})
     roles = list(context.get("roles") or [])
-    workflow = dict(context.get("workflow") or {})
-    workflow_projection = dict(context.get("workflow_projection") or {})
+    strategy_source = dict(context.get("strategy_source") or context.get("workflow") or {})
+    strategy_flow_projection = dict(context.get("strategy_flow_projection") or context.get("workflow_projection") or {})
     gatekeeper = dict(context.get("gatekeeper") or {})
     controls = list(context.get("controls") or [])
     coverage = dict(context.get("coverage") or {})
@@ -406,7 +419,7 @@ def _traceability_projection(context: dict) -> dict:
             bundle=bundle,
             raw_sections=raw_sections,
             roles=roles,
-            workflow=workflow,
+            strategy_source=strategy_source,
         )
     )
     execution_strategy = list(
@@ -415,7 +428,7 @@ def _traceability_projection(context: dict) -> dict:
             bundle=bundle,
             raw_sections=raw_sections,
             roles=roles,
-            workflow=workflow,
+            strategy_source=strategy_source,
         )
     )
     residual_risk_policy = list(context.get("residual_risk_policy") or _residual_risk_policy_trace(raw_sections))
@@ -425,7 +438,7 @@ def _traceability_projection(context: dict) -> dict:
             bundle=bundle,
             raw_sections=raw_sections,
             roles=roles,
-            workflow=workflow,
+            strategy_source=strategy_source,
         )
     )
     role_postures = list(context.get("role_postures") or _role_posture_trace(roles))
@@ -433,7 +446,7 @@ def _traceability_projection(context: dict) -> dict:
         bundle=bundle,
         raw_sections=raw_sections,
         roles=roles,
-        workflow=workflow,
+        strategy_source=strategy_source,
         runtime_only=True,
     )
     items: list[dict] = []
@@ -517,7 +530,12 @@ def _traceability_projection(context: dict) -> dict:
     local_governance_traceability = (
         runtime_local_governance if _local_governance_runtime_chain_complete(runtime_local_governance) else []
     )
-    if local_governance or _local_governance_markers_present(bundle=bundle, raw_sections=raw_sections, roles=roles, workflow=workflow):
+    if local_governance or _local_governance_markers_present(
+        bundle=bundle,
+        raw_sections=raw_sections,
+        roles=roles,
+        strategy_source=strategy_source,
+    ):
         _append_trace_item(
             items,
             key="local_governance",
@@ -555,7 +573,7 @@ def _traceability_projection(context: dict) -> dict:
         key="workflow_judgment",
         label="Run flow",
         surfaces=["workflow.collaboration_intent", "workflow.steps[].inputs"],
-        evidence=_workflow_trace(workflow, workflow_projection),
+        evidence=_strategy_flow_trace(strategy_source, strategy_flow_projection),
     )
     _append_trace_item(
         items,
@@ -644,9 +662,9 @@ def _role_prompt_mechanics_unit(text: str) -> bool:
     return bool(re.fullmatch(r"(?:version|archetype)\s*:\s*.+", text.strip(), re.I))
 
 
-def _workflow_trace(workflow: dict, workflow_projection: dict) -> list[str]:
-    traces = preview_list_items(str(workflow.get("collaboration_intent") or ""), limit=2)
-    summary = str(workflow_projection.get("summary") or "").strip()
+def _strategy_flow_trace(strategy_source: dict, strategy_flow_projection: dict) -> list[str]:
+    traces = preview_list_items(str(strategy_source.get("collaboration_intent") or ""), limit=2)
+    summary = str(strategy_flow_projection.get("summary") or "").strip()
     if summary:
         traces.append(summary)
     return traces[:4]
@@ -686,7 +704,7 @@ def _judgment_tradeoff_trace(
     bundle: dict,
     raw_sections: dict,
     roles: list[dict],
-    workflow: dict,
+    strategy_source: dict,
 ) -> list[str]:
     traces: list[tuple[int, int, str]] = []
     seen: set[str] = set()
@@ -694,7 +712,7 @@ def _judgment_tradeoff_trace(
         bundle=bundle,
         raw_sections=raw_sections,
         roles=roles,
-        workflow=workflow,
+        strategy_source=strategy_source,
     )):
         compact = re.sub(r"\s+", " ", candidate).strip()
         if not compact or compact.lower() in seen:
@@ -719,7 +737,7 @@ def _judgment_tradeoff_candidates(
     bundle: dict,
     raw_sections: dict,
     roles: list[dict],
-    workflow: dict,
+    strategy_source: dict,
 ) -> list[str]:
     text_blocks: list[str] = [str(bundle.get("collaboration_summary") or "")]
     text_blocks.extend(str(value or "") for value in raw_sections.values())
@@ -733,7 +751,7 @@ def _judgment_tradeoff_candidates(
                 str(role.get("description") or ""),
             ]
         )
-    text_blocks.append(str(workflow.get("collaboration_intent") or ""))
+    text_blocks.append(str(strategy_source.get("collaboration_intent") or ""))
 
     candidates: list[str] = []
     for text in text_blocks:
@@ -758,7 +776,7 @@ def _execution_strategy_trace(
     bundle: dict,
     raw_sections: dict,
     roles: list[dict],
-    workflow: dict,
+    strategy_source: dict,
 ) -> list[str]:
     traces: list[str] = []
     seen: set[str] = set()
@@ -766,7 +784,7 @@ def _execution_strategy_trace(
         bundle=bundle,
         raw_sections=raw_sections,
         roles=roles,
-        workflow=workflow,
+        strategy_source=strategy_source,
     ):
         compact = re.sub(r"\s+", " ", candidate).strip()
         if not compact or compact.lower() in seen:
@@ -785,7 +803,7 @@ def _execution_strategy_candidates(
     bundle: dict,
     raw_sections: dict,
     roles: list[dict],
-    workflow: dict,
+    strategy_source: dict,
 ) -> list[str]:
     text_blocks: list[str] = [str(bundle.get("collaboration_summary") or "")]
     text_blocks.extend(str(value or "") for value in raw_sections.values())
@@ -799,8 +817,8 @@ def _execution_strategy_candidates(
                 str(role.get("description") or ""),
             ]
         )
-    text_blocks.append(str(workflow.get("collaboration_intent") or ""))
-    for step in list(workflow.get("steps") or []):
+    text_blocks.append(str(strategy_source.get("collaboration_intent") or ""))
+    for step in list(strategy_source.get("steps") or []):
         if isinstance(step, Mapping):
             inputs = step.get("inputs")
             if isinstance(inputs, Mapping) and inputs:
@@ -819,7 +837,7 @@ def _local_governance_trace(
     bundle: dict,
     raw_sections: dict,
     roles: list[dict],
-    workflow: dict,
+    strategy_source: dict,
     runtime_only: bool = False,
 ) -> list[str]:
     traces: list[tuple[int, int, str]] = []
@@ -828,7 +846,7 @@ def _local_governance_trace(
         bundle=bundle,
         raw_sections=raw_sections,
         roles=roles,
-        workflow=workflow,
+        strategy_source=strategy_source,
         runtime_only=runtime_only,
     )):
         compact = re.sub(r"\s+", " ", candidate).strip()
@@ -928,7 +946,7 @@ def _local_governance_candidates(
     bundle: dict,
     raw_sections: dict,
     roles: list[dict],
-    workflow: dict,
+    strategy_source: dict,
     runtime_only: bool = False,
 ) -> list[str]:
     text_blocks: list[str] = []
@@ -947,8 +965,8 @@ def _local_governance_candidates(
                 str(role.get("description") or ""),
             ]
         )
-    text_blocks.append(str(workflow.get("collaboration_intent") or ""))
-    for step in list(workflow.get("steps") or []):
+    text_blocks.append(str(strategy_source.get("collaboration_intent") or ""))
+    for step in list(strategy_source.get("steps") or []):
         if isinstance(step, Mapping):
             inputs = step.get("inputs")
             if isinstance(inputs, Mapping) and inputs:
@@ -965,7 +983,7 @@ def _local_governance_markers_present(
     bundle: dict,
     raw_sections: dict,
     roles: list[dict],
-    workflow: dict,
+    strategy_source: dict,
 ) -> bool:
     return any(
         re.search(_LOCAL_GOVERNANCE_MARKER_PATTERN, candidate, re.I)
@@ -973,7 +991,7 @@ def _local_governance_markers_present(
             bundle=bundle,
             raw_sections=raw_sections,
             roles=roles,
-            workflow=workflow,
+            strategy_source=strategy_source,
             runtime_only=False,
         )
     )
@@ -1021,7 +1039,7 @@ def _diagnostics_projection(
     _append_traceability_diagnostics(diagnostics, traceability)
     _append_residual_risk_policy_diagnostics(diagnostics, raw_sections)
     _append_completion_mode_diagnostics(diagnostics, bundle)
-    _append_workflow_input_diagnostics(diagnostics, steps, role_lookup)
+    _append_strategy_input_diagnostics(diagnostics, steps, role_lookup)
     return diagnostics
 
 
@@ -1080,7 +1098,7 @@ def _append_completion_mode_diagnostics(diagnostics: list[dict], bundle: dict) -
     )
 
 
-def _append_workflow_input_diagnostics(
+def _append_strategy_input_diagnostics(
     diagnostics: list[dict],
     steps: list[dict],
     role_lookup: dict,
@@ -1094,15 +1112,15 @@ def _append_workflow_input_diagnostics(
         "parallel_review_groups": [],
     }
     for step in steps:
-        step_context = _workflow_step_diagnostic_context(step, role_lookup)
+        step_context = _strategy_step_diagnostic_context(step, role_lookup)
         _diagnose_guide_step(diagnostics, step_context, state)
         _diagnose_review_step(diagnostics, step_context, state)
         _diagnose_builder_step(diagnostics, step_context, state)
         _diagnose_gatekeeper_step(diagnostics, step_context, state)
-        _advance_workflow_diagnostic_state(step_context, state)
+        _advance_strategy_diagnostic_state(step_context, state)
 
 
-def _workflow_step_diagnostic_context(step: dict, role_lookup: dict) -> dict:
+def _strategy_step_diagnostic_context(step: dict, role_lookup: dict) -> dict:
     return {
         "step": step,
         "step_id": str(step.get("id") or "").strip(),
@@ -1250,7 +1268,7 @@ def _diagnose_gatekeeper_step(diagnostics: list[dict], step_context: dict, state
     _diagnose_gatekeeper_parallel_review_fan_in(diagnostics, step_context, state)
 
 
-def _advance_workflow_diagnostic_state(step_context: dict, state: dict) -> None:
+def _advance_strategy_diagnostic_state(step_context: dict, state: dict) -> None:
     _record_parallel_review_group(step_context, state)
     if step_context["step_id"]:
         state["prior_step_ids"].append(step_context["step_id"])

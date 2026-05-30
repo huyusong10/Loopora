@@ -10,7 +10,10 @@ def assert_agent_v3_envelope(payload: dict, *, kind: str, summary_key: str, stat
     assert isinstance(payload["technical_handoff"], dict)
     assert payload["diagnostics"]["legacy_summary_key"] == summary_key
     legacy = payload["raw"]["legacy"]
-    assert legacy[summary_key] == summary
+    expected_legacy_summary = dict(summary)
+    if "agent_surface" in expected_legacy_summary:
+        expected_legacy_summary["native_surface"] = expected_legacy_summary["agent_surface"]
+    assert legacy[summary_key] == expected_legacy_summary
     assert summary_key not in payload
     assert "agent_v2_envelope" not in payload
     return summary, legacy

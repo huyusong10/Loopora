@@ -710,8 +710,8 @@ def build_run_contract_snapshot(request: RunContractSnapshotRequest) -> dict:
     layout = request.layout
     compiled_spec = request.compiled_spec if isinstance(request.compiled_spec, dict) else {}
     strategy_source = request.strategy_source
-    tradeoff_roles = _workflow_roles_with_prompt_files(strategy_source, request.prompt_files)
-    role_posture_roles = _workflow_roles_with_runtime_prompt_markdown(strategy_source, request.prompt_files)
+    tradeoff_roles = _strategy_source_roles_with_prompt_files(strategy_source, request.prompt_files)
+    role_posture_roles = _strategy_source_roles_with_runtime_prompt_markdown(strategy_source, request.prompt_files)
     source_bundle = _contract_source_bundle(request.source_bundle)
     return {
         "run_id": run["id"],
@@ -742,18 +742,18 @@ def build_run_contract_snapshot(request: RunContractSnapshotRequest) -> dict:
             collaboration_summary=request.collaboration_summary,
             raw_sections=compiled_spec.get("raw_sections"),
             roles=tradeoff_roles,
-            workflow=strategy_source,
+            strategy_source=strategy_source,
         ),
         "execution_strategy": build_execution_strategy_trace(
             collaboration_summary=request.collaboration_summary,
             raw_sections=compiled_spec.get("raw_sections"),
             roles=tradeoff_roles,
-            workflow=strategy_source,
+            strategy_source=strategy_source,
         ),
         "local_governance": build_runtime_local_governance_trace(
             raw_sections=compiled_spec.get("raw_sections"),
             roles=tradeoff_roles,
-            workflow=strategy_source,
+            strategy_source=strategy_source,
         ),
         "role_postures": _contract_role_postures(role_posture_roles),
         "workflow": {
@@ -817,8 +817,12 @@ def build_run_contract_snapshot(request: RunContractSnapshotRequest) -> dict:
     }
 
 
-def _workflow_roles_with_prompt_files(workflow: dict, prompt_files: dict[str, str]) -> list[dict]:
-    roles = [dict(role) for role in list(workflow.get("roles") or []) if isinstance(role, dict)] if isinstance(workflow, dict) else []
+def _strategy_source_roles_with_prompt_files(strategy_source: dict, prompt_files: dict[str, str]) -> list[dict]:
+    roles = (
+        [dict(role) for role in list(strategy_source.get("roles") or []) if isinstance(role, dict)]
+        if isinstance(strategy_source, dict)
+        else []
+    )
     if not isinstance(prompt_files, dict):
         return roles
     for prompt_ref, prompt_markdown in prompt_files.items():
@@ -829,8 +833,12 @@ def _workflow_roles_with_prompt_files(workflow: dict, prompt_files: dict[str, st
     return roles
 
 
-def _workflow_roles_with_runtime_prompt_markdown(workflow: dict, prompt_files: dict[str, str]) -> list[dict]:
-    roles = [dict(role) for role in list(workflow.get("roles") or []) if isinstance(role, dict)] if isinstance(workflow, dict) else []
+def _strategy_source_roles_with_runtime_prompt_markdown(strategy_source: dict, prompt_files: dict[str, str]) -> list[dict]:
+    roles = (
+        [dict(role) for role in list(strategy_source.get("roles") or []) if isinstance(role, dict)]
+        if isinstance(strategy_source, dict)
+        else []
+    )
     if not isinstance(prompt_files, dict):
         return roles
     for role in roles:
@@ -999,9 +1007,9 @@ def build_step_context_packet(request: StepContextPacketRequest) -> dict:
     step = request.step
     role = request.role
     compiled_spec = run_contract.get("compiled_spec") or {}
-    workflow_snapshot = run_contract.get("workflow") or {}
+    strategy_snapshot = run_contract.get("workflow") or {}
     raw_sections = compiled_spec.get("raw_sections") if isinstance(compiled_spec.get("raw_sections"), dict) else {}
-    workflow_roles = workflow_snapshot.get("roles") if isinstance(workflow_snapshot.get("roles"), list) else []
+    strategy_roles = strategy_snapshot.get("roles") if isinstance(strategy_snapshot.get("roles"), list) else []
     coverage_summary = _normalize_evidence_coverage_summary(
         request.evidence_coverage_summary,
         fallback_covered_check_count=request.covered_check_count,
@@ -1010,19 +1018,19 @@ def build_step_context_packet(request: StepContextPacketRequest) -> dict:
     judgment_tradeoffs = _contract_string_list(run_contract.get("judgment_tradeoffs")) or build_judgment_tradeoff_trace(
         collaboration_summary=run_contract.get("collaboration_summary"),
         raw_sections=raw_sections,
-        roles=workflow_roles,
-        workflow=workflow_snapshot,
+        roles=strategy_roles,
+        strategy_source=strategy_snapshot,
     )
     execution_strategy = _contract_string_list(run_contract.get("execution_strategy")) or build_execution_strategy_trace(
         collaboration_summary=run_contract.get("collaboration_summary"),
         raw_sections=raw_sections,
-        roles=workflow_roles,
-        workflow=workflow_snapshot,
+        roles=strategy_roles,
+        strategy_source=strategy_snapshot,
     )
     local_governance = _contract_string_list(run_contract.get("local_governance")) or build_runtime_local_governance_trace(
         raw_sections=raw_sections,
-        roles=workflow_roles,
-        workflow=workflow_snapshot,
+        roles=strategy_roles,
+        strategy_source=strategy_snapshot,
     )
     continuation_context = _normalize_continuation_context(request.continuation_context or run_contract.get("continuation_context"))
     return {
@@ -1037,14 +1045,14 @@ def build_step_context_packet(request: StepContextPacketRequest) -> dict:
             "loop_fit_reasons": _contract_string_list(run_contract.get("loop_fit_reasons")) or build_loop_fit_trace(
                 run_contract.get("collaboration_summary")
             ),
-            "strategy_preset": str(workflow_snapshot.get("preset") or "custom"),
-            "strategy_collaboration_intent": str(workflow_snapshot.get("collaboration_intent") or "").strip(),
-            "workflow_preset": str(workflow_snapshot.get("preset") or "custom"),
-            "workflow_collaboration_intent": str(workflow_snapshot.get("collaboration_intent") or "").strip(),
+            "strategy_preset": str(strategy_snapshot.get("preset") or "custom"),
+            "strategy_collaboration_intent": str(strategy_snapshot.get("collaboration_intent") or "").strip(),
+            "workflow_preset": str(strategy_snapshot.get("preset") or "custom"),
+            "workflow_collaboration_intent": str(strategy_snapshot.get("collaboration_intent") or "").strip(),
             "judgment_tradeoffs": judgment_tradeoffs,
             "execution_strategy": execution_strategy,
             "local_governance": local_governance,
-            "role_postures": _contract_role_postures(run_contract.get("role_postures") or workflow_snapshot.get("roles")),
+            "role_postures": _contract_role_postures(run_contract.get("role_postures") or strategy_snapshot.get("roles")),
             "coverage_targets": _contract_mapping_list(compiled_spec.get("coverage_targets")),
             "success_surface": _contract_string_list(run_contract.get("success_surface") or compiled_spec.get("success_surface")),
             "fake_done_states": _contract_string_list(run_contract.get("fake_done_states") or compiled_spec.get("fake_done_states")),
@@ -1638,7 +1646,7 @@ def system_prompt_prefix(archetype: str) -> str:
             "- Prefer focused, incremental changes over broad resets.\n"
             "- Treat project-local instructions, design docs, and tests as contract and evidence inputs when they exist.\n"
             "- If downstream review steps run in a parallel_group, leave one coherent handoff for all reviewers instead of splitting evidence across private notes.\n"
-            "- Treat the run contract as frozen: do not reinterpret or lower Task, Done When, Guardrails, bundle collaboration summary, Loopora fit, workflow collaboration intent, role posture, Success Surface, Fake Done, Evidence Preferences, Execution Strategy, Judgment Tradeoffs, Local Governance, or Residual Risk; "
+            "- Treat the run contract as frozen: do not reinterpret or lower Task, Done When, Guardrails, bundle collaboration summary, Loopora fit, strategy collaboration intent, role posture, Success Surface, Fake Done, Evidence Preferences, Execution Strategy, Judgment Tradeoffs, Local Governance, or Residual Risk; "
             "surface contract problems as evidence gaps or blockers instead.\n"
             "- In the handoff, name which claim moved toward Proven and what remains Weak, Unproven, Blocking, or Residual risk."
         )
@@ -1650,7 +1658,7 @@ def system_prompt_prefix(archetype: str) -> str:
             "- Treat project-local instructions, design docs, and tests as contract and evidence inputs when they exist.\n"
             "- Classify important observations as Proven, Weak, Unproven, Blocking, or Residual risk when that helps downstream judgment.\n"
             "- If this step is in a parallel_group, cover only your assigned evidence responsibility and do not wait for peer reviewers.\n"
-            "- Treat the run contract as frozen: do not reinterpret or lower Task, Done When, Guardrails, bundle collaboration summary, Loopora fit, workflow collaboration intent, role posture, Success Surface, Fake Done, Evidence Preferences, Execution Strategy, Judgment Tradeoffs, Local Governance, or Residual Risk; "
+            "- Treat the run contract as frozen: do not reinterpret or lower Task, Done When, Guardrails, bundle collaboration summary, Loopora fit, strategy collaboration intent, role posture, Success Surface, Fake Done, Evidence Preferences, Execution Strategy, Judgment Tradeoffs, Local Governance, or Residual Risk; "
             "surface contract problems as evidence gaps or blockers instead.\n"
             "- Do not rewrite source files as part of inspection."
         )
@@ -1662,7 +1670,7 @@ def system_prompt_prefix(archetype: str) -> str:
             "- Treat project-local instructions, design docs, and tests as contract and evidence inputs when they exist.\n"
             "- Keep run status separate from task verdict, and organize the verdict as Proven, Weak, Unproven, Blocking, or Residual risk.\n"
             "- If upstream reviewers ran in a parallel_group, fan in every relevant review branch instead of treating the last handoff as the whole review.\n"
-            "- Treat the run contract as frozen: do not reinterpret or lower Task, Done When, Guardrails, bundle collaboration summary, Loopora fit, workflow collaboration intent, role posture, Success Surface, Fake Done, Evidence Preferences, Execution Strategy, Judgment Tradeoffs, Local Governance, or Residual Risk; "
+            "- Treat the run contract as frozen: do not reinterpret or lower Task, Done When, Guardrails, bundle collaboration summary, Loopora fit, strategy collaboration intent, role posture, Success Surface, Fake Done, Evidence Preferences, Execution Strategy, Judgment Tradeoffs, Local Governance, or Residual Risk; "
             "surface contract problems as evidence gaps or blockers instead.\n"
             "- Keep the verdict short and operational."
         )
@@ -1675,7 +1683,7 @@ def system_prompt_prefix(archetype: str) -> str:
             "- Treat project-local instructions, design docs, and tests as contract and evidence inputs when they exist.\n"
             "- Mark specialized observations as Proven, Weak, Unproven, Blocking, or Residual risk when useful.\n"
             "- If this step is in a parallel_group, cover only your custom specialization and leave evidence GateKeeper can fan in with peer branches.\n"
-            "- Treat the run contract as frozen: do not reinterpret or lower Task, Done When, Guardrails, bundle collaboration summary, Loopora fit, workflow collaboration intent, role posture, Success Surface, Fake Done, Evidence Preferences, Execution Strategy, Judgment Tradeoffs, Local Governance, or Residual Risk; "
+            "- Treat the run contract as frozen: do not reinterpret or lower Task, Done When, Guardrails, bundle collaboration summary, Loopora fit, strategy collaboration intent, role posture, Success Surface, Fake Done, Evidence Preferences, Execution Strategy, Judgment Tradeoffs, Local Governance, or Residual Risk; "
             "surface contract problems as evidence gaps or blockers instead.\n"
             "- Always return a stable takeaway with status, summary, blocking_items, and recommended_next_action."
         )
@@ -1685,7 +1693,7 @@ def system_prompt_prefix(archetype: str) -> str:
         "- Do not act like a second GateKeeper.\n"
         "- Turn Blocking or Unproven gaps into a smaller proof or repair direction while keeping Residual risk visible.\n"
         "- Treat project-local instructions, design docs, and tests as contract and evidence inputs when they exist.\n"
-        "- Treat the run contract as frozen: do not reinterpret or lower Task, Done When, Guardrails, bundle collaboration summary, Loopora fit, workflow collaboration intent, role posture, Success Surface, Fake Done, Evidence Preferences, Execution Strategy, Judgment Tradeoffs, Local Governance, or Residual Risk; "
+        "- Treat the run contract as frozen: do not reinterpret or lower Task, Done When, Guardrails, bundle collaboration summary, Loopora fit, strategy collaboration intent, role posture, Success Surface, Fake Done, Evidence Preferences, Execution Strategy, Judgment Tradeoffs, Local Governance, or Residual Risk; "
         "surface contract problems as evidence gaps or blockers instead.\n"
         "- Keep the advice grounded in the current evidence."
     )

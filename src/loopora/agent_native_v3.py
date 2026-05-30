@@ -65,7 +65,7 @@ class CurrentStepHandoffV3(TypedDict, total=False):
     role: str
     target_agent: str
     context_path: str
-    capsule_path: str
+    step_contract_path: str
     result_template: str
     submit_command: str
     dispatch_unavailable: dict[str, Any]
@@ -127,11 +127,11 @@ def agent_v3_technical_handoff(summary: dict[str, Any]) -> dict[str, Any]:
         "run_url",
         "preview_url",
         "context_path",
-        "capsule_path",
+        "step_contract_path",
         "result_template",
         "submit_command",
         "next_context_path",
-        "next_capsule_path",
+        "next_step_contract_path",
         "next_result_template",
         "next_submit_command",
         "schema_lookup",
@@ -144,5 +144,8 @@ def agent_v3_legacy_raw(*, summary_key: str, summary: dict[str, Any], payload: d
     legacy = dict(payload)
     legacy.pop("agent_v3_envelope", None)
     legacy.pop("agent_v2_envelope", None)
-    legacy[summary_key] = summary
+    legacy_summary = dict(summary)
+    if "agent_surface" in legacy_summary and "native_surface" not in legacy_summary:
+        legacy_summary["native_surface"] = legacy_summary["agent_surface"]
+    legacy[summary_key] = legacy_summary
     return {"legacy": legacy}

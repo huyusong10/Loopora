@@ -257,7 +257,7 @@ def _agent_bound_preview_recovery_result(
         session_id = str(binding.get("alignment_session_id") or "").strip()
         session = service.get_alignment_session(session_id) if session_id else {}
     except LooporaError as binding_exc:
-        if "agent binding is unreadable" not in str(binding_exc) and "agent binding is invalid" not in str(binding_exc):
+        if not _agent_context_card_error_is_repairable(str(binding_exc)):
             return {}
         return {
             "adapter": adapter,
@@ -265,6 +265,7 @@ def _agent_bound_preview_recovery_result(
             "ready": False,
             "loop_recovery": "repair_agent_binding",
             "binding_error": str(binding_exc),
+            "context_card_error": str(binding_exc),
             "check_command": prefix_loopora_command(f"loopora init {adapter} --check --workdir {shlex.quote(str(root))}"),
         }
     except Exception:  # noqa: BLE001 - error recovery must never replace the primary domain error.
@@ -442,6 +443,18 @@ def _same_recovery_workdir(candidate: object, root: Path) -> bool:
         return str(candidate).strip() == str(root)
 
 
+def _agent_context_card_error_is_repairable(error: str) -> bool:
+    return any(
+        marker in error
+        for marker in (
+            "agent context card is unreadable",
+            "agent context card is invalid",
+            "agent binding is unreadable",
+            "agent binding is invalid",
+        )
+    )
+
+
 def _print_agent_loop_recovery_result(result: dict) -> None:
     if result.get("loop_recovery") == "active_run_conflict":
         typer.echo("loop_recovery: continue or stop the active Loopora run before starting another preview or run")
@@ -464,10 +477,10 @@ def _print_agent_loop_recovery_result(result: dict) -> None:
         _print_recoverable_context_choices(result.get("context_resolution") if isinstance(result.get("context_resolution"), dict) else {})
         return
     if result.get("loop_recovery") == "repair_agent_binding":
-        typer.echo("loop_recovery: repair the current Agent binding before /loopora-run can start")
-        typer.echo(f"binding_error: {result.get('binding_error')}")
+        typer.echo("loop_recovery: repair the current Agent context card before /loopora-run can start")
+        typer.echo(f"context_card_error: {result.get('context_card_error') or result.get('binding_error')}")
         typer.echo(f"check_command: {result.get('check_command')}")
-        typer.echo("next: inspect the binding, rerun the check, or use /loopora-plan fresh if you want a new Loop.")
+        typer.echo("next: inspect the context card, rerun the check, or use /loopora-plan fresh if you want a new Loop.")
         return
     if result["requires_candidate_repair"]:
         typer.echo("loop_recovery: repair the current plan file before /loopora-run can start")

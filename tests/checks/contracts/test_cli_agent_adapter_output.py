@@ -45,7 +45,7 @@ def test_adapter_output_keeps_native_surface_and_clean_fallback_steps(tmp_path, 
     assert "Codex Loopora entry is installed" in output
     assert "target project:" in output
     assert "first task message example:" in output
-    assert "native surface:" in output
+    assert "agent surface:" in output
     assert "- slash commands: plan=/loopora-plan run=/loopora-run" in output
     assert (
         "- capabilities: execution=current_host_agent; role_dispatch=host_native; "
@@ -77,17 +77,17 @@ def test_adapter_output_keeps_native_surface_and_clean_fallback_steps(tmp_path, 
         "templates=host_command_templates_playbooks_and_dynamic_prompts_are_hints_not_loopora_reviewed_workflow",
         "workflow_kits=external_spec_workflows_prd_packs_quality_gate_recipes_and_workflow_kits_are_guidance_not_loopora_reviewed_workflow_install_proof_or_evidence",
         "role_catalogs=external_agent_catalogs_subagent_libraries_and_role_marketplaces_are_selection_hints_not_loopora_role_contract_or_policy",
-        "compaction=host_compaction_summaries_are_hints_not_loopora_binding_or_proof",
-        "host_context=host_loaded_skills_commands_agents_editor_context_and_ide_bridges_are_hints_not_loopora_binding_contract_or_evidence",
+        "compaction=host_compaction_summaries_are_hints_not_loopora_context_or_proof",
+        "host_context=host_loaded_skills_commands_agents_editor_context_and_ide_bridges_are_hints_not_loopora_context_contract_or_evidence",
         "catalog=marketplace_catalogs_and_uninstalled_components_are_not_loopora_context_or_proof",
         "- health check: adapter=loopora agent codex check --workdir <project>",
         "reload=restart_or_new_host_session_may_be_required_for_entry_discovery",
-        "- session recovery: binding=exact_agent_context_binding_first",
+        "- session recovery: context_card=exact_agent_context_card_first",
         "ready=/loopora-run option:<recoverable_context_id>",
         "host_sessions=not_auto_discovered_or_taken_over_by_loopora",
-        "checkpoints=host_checkpoints_rewinds_and_session_archives_are_recovery_hints_not_loopora_binding_or_proof",
+        "checkpoints=host_checkpoints_rewinds_and_session_archives_are_recovery_hints_not_loopora_context_or_proof",
         "- handoff: channel=host_native_role_agent",
-        "payload=path_based_context_capsule_and_template_not_large_inline_prompt",
+        "payload=path_based_context_step_contract_and_template_not_large_inline_prompt",
         "behavioral=host_auto_activation_or_rule_injection_is_hint_not_dispatch_proof",
         "external=host_swarms_party_modes_and_plugin_orchestrators_are_hints_not_loopora_parallel_contract",
         "human=surface_manual_decision_when_context_or_task_proof_is_ambiguous",

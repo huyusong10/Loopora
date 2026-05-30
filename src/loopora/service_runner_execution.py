@@ -17,13 +17,13 @@ from loopora.engine import (
     select_next_runner_step,
 )
 from loopora.engine.runner_runtime import (
-    RunnerRunProgress as _RunnerRunProgress,
-    RunnerStepRunRequest as _RunnerStepRunRequest,
+    RunnerRunProgress,
+    RunnerStepRunRequest,
 )
 from loopora.engine.runner_context import (
-    RunnerIterationState as _RunnerIterationState,
-    RunnerRunContext as _RunnerRunContext,
-    evidence_context_with_canonical_items as _evidence_context_with_canonical_items,
+    RunnerIterationState,
+    RunnerRunContext,
+    evidence_context_with_canonical_items,
 )
 from loopora.executor import ExecutionStopped
 from loopora.recovery import RetryConfig
@@ -92,7 +92,7 @@ class ServiceRunnerExecutionMixin(
             logger,
             logging.INFO,
             "service.run.execution.started",
-            "Starting workflow run execution",
+            "Starting runner run execution",
             **self._run_log_context(
                 run,
                 completion_mode=run.get("completion_mode"),
@@ -153,7 +153,7 @@ class ServiceRunnerExecutionMixin(
 
     def _run_runner_step_once(
         self,
-        request: _RunnerStepRunRequest,
+        request: RunnerStepRunRequest,
     ) -> dict:
         context = request.context
         iteration = request.iteration
@@ -179,8 +179,8 @@ class ServiceRunnerExecutionMixin(
         log_event(
             logger,
             logging.INFO,
-            "service.workflow.step.started",
-            "Starting workflow step",
+            "service.runner.step.started",
+            "Starting runner step",
             **self._run_log_context(
                 context.run,
                 iter=iteration.iter_id,
@@ -235,7 +235,7 @@ class ServiceRunnerExecutionMixin(
                 output=output,
                 compiled_spec=context.compiled_spec,
                 inspector_output=dict(state_snapshot["current_outputs_by_archetype"]).get("inspector"),
-                evidence_context=_evidence_context_with_canonical_items(context_packet, context.layout),
+                evidence_context=evidence_context_with_canonical_items(context_packet, context.layout),
                 current_evidence_id=evidence_entry_id(iteration.iter_id, step_order, step["id"]),
             )
         )
@@ -255,8 +255,8 @@ class ServiceRunnerExecutionMixin(
 
     def _run_strategy_controls_for_signal(
         self,
-        context: _RunnerRunContext,
-        iteration: _RunnerIterationState,
+        context: RunnerRunContext,
+        iteration: RunnerIterationState,
         signal: str,
         trigger: dict[str, object],
         snapshot: dict[str, object],
@@ -315,7 +315,7 @@ class ServiceRunnerExecutionMixin(
             self.append_run_event(context.run_id, "control_triggered", base_payload, role=role_id)
             try:
                 result = self._run_runner_step_once(
-                    _RunnerStepRunRequest(
+                    RunnerStepRunRequest(
                         context=context,
                         iteration=iteration,
                         step_order=control_order,
@@ -355,14 +355,14 @@ class ServiceRunnerExecutionMixin(
 
     def _run_runner_linear_step(
         self,
-        context: _RunnerRunContext,
-        iteration: _RunnerIterationState,
+        context: RunnerRunContext,
+        iteration: RunnerIterationState,
         step_order: int,
         step: dict,
     ) -> dict | None:
         try:
             step_result = self._run_runner_step_once(
-                _RunnerStepRunRequest(
+                RunnerStepRunRequest(
                     context=context,
                     iteration=iteration,
                     step_order=step_order,
@@ -388,7 +388,7 @@ class ServiceRunnerExecutionMixin(
 
     def _collect_runner_parallel_group(
         self,
-        context: _RunnerRunContext,
+        context: RunnerRunContext,
         group_start: int,
         parallel_group: str,
     ) -> tuple[int, list[tuple[int, dict]]]:
@@ -401,8 +401,8 @@ class ServiceRunnerExecutionMixin(
 
     def _run_runner_parallel_group(
         self,
-        context: _RunnerRunContext,
-        iteration: _RunnerIterationState,
+        context: RunnerRunContext,
+        iteration: RunnerIterationState,
         parallel_group: str,
         group_start: int,
         group_items: list[tuple[int, dict]],
@@ -421,8 +421,8 @@ class ServiceRunnerExecutionMixin(
         log_event(
             logger,
             logging.INFO,
-            "service.workflow.parallel_group.started",
-            "Starting workflow parallel group",
+            "service.runner.parallel_group.started",
+            "Starting runner parallel group",
             **self._run_log_context(
                 context.run,
                 iter=iteration.iter_id,
@@ -435,7 +435,7 @@ class ServiceRunnerExecutionMixin(
             futures = [
                 pool.submit(
                     self._run_runner_step_once,
-                    _RunnerStepRunRequest(
+                    RunnerStepRunRequest(
                         context=context,
                         iteration=iteration,
                         step_order=order,
@@ -481,8 +481,8 @@ class ServiceRunnerExecutionMixin(
 
     def _run_runner_iteration_steps(
         self,
-        context: _RunnerRunContext,
-        iteration: _RunnerIterationState,
+        context: RunnerRunContext,
+        iteration: RunnerIterationState,
     ) -> dict | None:
         step_index = 0
         while step_index < len(context.strategy_steps):
@@ -513,8 +513,8 @@ class ServiceRunnerExecutionMixin(
 
     def _run_strategy_iteration_controls(
         self,
-        context: _RunnerRunContext,
-        iteration: _RunnerIterationState,
+        context: RunnerRunContext,
+        iteration: RunnerIterationState,
     ) -> None:
         for trigger in strategy_iteration_control_triggers(iteration.current_gatekeeper_result, iteration.stagnation):
             self._run_strategy_controls_for_signal(
@@ -531,7 +531,7 @@ class ServiceRunnerExecutionMixin(
         run: dict,
         run_dir: Path,
         strategy_source: dict,
-    ) -> _RunnerRunContext:
+    ) -> RunnerRunContext:
         executor = self.executor_factory()
         compiled_spec = run["compiled_spec_json"]
         retry_config = RetryConfig(max_retries=run["max_role_retries"])
@@ -547,12 +547,12 @@ class ServiceRunnerExecutionMixin(
         self._write_summary(run_id, "running", "Resolving checks for this run.")
         compiled_spec = self._resolve_run_checks(run, executor, compiled_spec, run_dir, retry_config)
         run_contract = read_json(layout.run_contract_path)
-        self._write_summary(run_id, "running", "Waiting for the first workflow iteration to complete.")
+        self._write_summary(run_id, "running", "Waiting for the first runner iteration to complete.")
         log_event(
             logger,
             logging.INFO,
-            "service.workflow.execution.started",
-            "Starting workflow run execution",
+            "service.runner.execution.started",
+            "Starting runner run execution",
             **self._run_log_context(
                 run,
                 completion_mode=completion_mode,
@@ -560,7 +560,7 @@ class ServiceRunnerExecutionMixin(
                 role_count=len(role_by_id),
             ),
         )
-        return _RunnerRunContext(
+        return RunnerRunContext(
             run_id=run_id,
             run=run,
             run_dir=run_dir,
@@ -579,17 +579,17 @@ class ServiceRunnerExecutionMixin(
             completion_mode=completion_mode,
         )
 
-    def _new_runner_run_progress(self, context: _RunnerRunContext) -> _RunnerRunProgress:
-        return _RunnerRunProgress(stagnation=read_stagnation_state(context.layout.timeline_stagnation_path))
+    def _new_runner_run_progress(self, context: RunnerRunContext) -> RunnerRunProgress:
+        return RunnerRunProgress(stagnation=read_stagnation_state(context.layout.timeline_stagnation_path))
 
     def _build_runner_iteration_state(
         self,
-        context: _RunnerRunContext,
-        progress: _RunnerRunProgress,
+        context: RunnerRunContext,
+        progress: RunnerRunProgress,
         iter_id: int,
-    ) -> _RunnerIterationState:
+    ) -> RunnerIterationState:
         previous_composite = context.last_gatekeeper_result.get("composite_score") if isinstance(context.last_gatekeeper_result, dict) else None
-        return _RunnerIterationState(
+        return RunnerIterationState(
             iter_id=iter_id,
             previous_composite=previous_composite,
             stagnation=progress.stagnation,
@@ -604,14 +604,14 @@ class ServiceRunnerExecutionMixin(
 
     def _log_runner_iteration_started(
         self,
-        context: _RunnerRunContext,
-        iteration: _RunnerIterationState,
+        context: RunnerRunContext,
+        iteration: RunnerIterationState,
     ) -> None:
         log_event(
             logger,
             logging.INFO,
-            "service.workflow.iteration.started",
-            "Starting workflow iteration",
+            "service.runner.iteration.started",
+            "Starting runner iteration",
             **self._run_log_context(
                 context.run,
                 iter=iteration.iter_id,
@@ -623,9 +623,9 @@ class ServiceRunnerExecutionMixin(
 
     def _checkpoint_runner_iteration_progress(
         self,
-        context: _RunnerRunContext,
-        progress: _RunnerRunProgress,
-        iteration: _RunnerIterationState,
+        context: RunnerRunContext,
+        progress: RunnerRunProgress,
+        iteration: RunnerIterationState,
     ) -> None:
         (
             progress.previous_outputs_by_step,
@@ -668,8 +668,8 @@ class ServiceRunnerExecutionMixin(
         log_event(
             logger,
             logging.INFO,
-            "service.workflow.iteration.completed",
-            "Completed workflow iteration",
+            "service.runner.iteration.completed",
+            "Completed runner iteration",
             **self._run_log_context(
                 context.run,
                 iter=iteration.iter_id,
@@ -684,8 +684,8 @@ class ServiceRunnerExecutionMixin(
 
     def _run_runner_iteration(
         self,
-        context: _RunnerRunContext,
-        progress: _RunnerRunProgress,
+        context: RunnerRunContext,
+        progress: RunnerRunProgress,
         iter_id: int,
     ) -> dict | None:
         progress.last_iter_id = iter_id

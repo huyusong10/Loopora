@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from loopora.service_alignment_context import alignment_context_title_from_session
+from loopora.service_agent_native_contracts import agent_native_actionable_blocking_item, agent_native_submit_command
 
 from agent_adapter_test_support import (
     AgentBundleCandidateRequest,
@@ -12,7 +13,6 @@ from agent_adapter_test_support import (
     agent_adapters,
     cli_agent_adapter_commands,
     cli_agent_runtime_support,
-    service_agent_native,
     shlex,
 )
 
@@ -765,11 +765,11 @@ def test_agent_native_blocking_summaries_explain_contract_target_tokens() -> Non
     expected = "check_001: required check id; see required_coverage.missing_check_ids and top_coverage_gaps for the contract text"
 
     assert cli_agent_adapter_commands._actionable_blocking_item("check_001") == expected
-    assert service_agent_native._agent_native_actionable_blocking_item("check_001") == expected
+    assert agent_native_actionable_blocking_item("check_001") == expected
     assert cli_agent_adapter_commands._actionable_blocking_item("done_when.check_001").startswith(
         "done_when.check_001: coverage target id"
     )
-    assert service_agent_native._agent_native_actionable_blocking_item("gatekeeper.finish").startswith(
+    assert agent_native_actionable_blocking_item("gatekeeper.finish").startswith(
         "gatekeeper.finish: GateKeeper finish target"
     )
 
@@ -781,7 +781,7 @@ def test_agent_native_generated_cli_commands_preserve_loopora_home(monkeypatch, 
     expected_prefix = f"LOOPORA_HOME={shlex.quote(str(home))} LOOPORA_AGENT_ENTRY_SOURCE=codex_project_skill "
 
     run_command = agent_adapters.agent_loop_json_command("codex", workdir, entry_source="codex_project_skill")
-    submit_command = service_agent_native._agent_native_submit_command(
+    submit_command = agent_native_submit_command(
         adapter="codex",
         run_id="run_agent",
         step_id="builder_step",

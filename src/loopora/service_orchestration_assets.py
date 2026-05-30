@@ -15,9 +15,13 @@ T = TypeVar("T")
 class OrchestrationMutationRequest:
     name: str
     description: str = ""
-    workflow: dict | None = None
+    strategy_source: dict | None = None
     prompt_files: dict | None = None
     role_models: dict | None = None
+
+    @property
+    def workflow(self) -> dict | None:
+        return self.strategy_source
 
 
 class ServiceOrchestrationAssetMixin:
@@ -37,14 +41,16 @@ class ServiceOrchestrationAssetMixin:
         prompt_files: dict | None = None,
         role_models: dict | None = None,
     ) -> dict:
+        strategy_source = workflow
         orchestration = self._asset_call(
             self.asset_catalog.create_orchestration,
             name=name,
             description=description,
-            workflow=workflow,
+            workflow=strategy_source,
             prompt_files=prompt_files,
             role_models=role_models,
         )
+        role_count, step_count = _strategy_source_counts(orchestration)
         log_event(
             logger,
             logging.INFO,
@@ -52,8 +58,8 @@ class ServiceOrchestrationAssetMixin:
             "Created orchestration definition",
             orchestration_id=orchestration["id"],
             orchestration_name=orchestration["name"],
-            role_count=len(orchestration.get("workflow_json", {}).get("roles", [])),
-            step_count=len(orchestration.get("workflow_json", {}).get("steps", [])),
+            role_count=role_count,
+            step_count=step_count,
         )
         return orchestration
 
@@ -79,7 +85,7 @@ class ServiceOrchestrationAssetMixin:
             orchestration_id,
             name=request.name,
             description=request.description,
-            workflow=request.workflow,
+            strategy_source=request.strategy_source,
             prompt_files=request.prompt_files,
             role_models=request.role_models,
         )
@@ -103,6 +109,7 @@ class ServiceOrchestrationAssetMixin:
                         except Exception as rollback_exc:  # noqa: BLE001 - rollback diagnostics must preserve the original update error.
                             record_bundle_asset_update_rollback_failure(self, bundle, rollback_exc)
                 raise
+        role_count, step_count = _strategy_source_counts(orchestration)
         log_event(
             logger,
             logging.INFO,
@@ -110,8 +117,8 @@ class ServiceOrchestrationAssetMixin:
             "Updated orchestration definition",
             orchestration_id=orchestration["id"],
             orchestration_name=orchestration["name"],
-            role_count=len(orchestration.get("workflow_json", {}).get("roles", [])),
-            step_count=len(orchestration.get("workflow_json", {}).get("steps", [])),
+            role_count=role_count,
+            step_count=step_count,
         )
         return orchestration
 
@@ -146,12 +153,27 @@ def _validated_request(request: T, raw_request: dict[str, Any]) -> T:
     return request
 
 
+_MISSING: Any = object()
+
+
+def _pop_strategy_source_field(fields: dict[str, Any]) -> dict | None:
+    strategy_source = fields.pop("strategy_source", _MISSING)
+    workflow = fields.pop("workflow", _MISSING)
+    if strategy_source is not _MISSING and workflow is not _MISSING:
+        raise TypeError("orchestration request fields strategy_source and workflow cannot both be provided")
+    if strategy_source is not _MISSING:
+        return strategy_source
+    if workflow is not _MISSING:
+        return workflow
+    return None
+
+
 def _orchestration_mutation_request_from_kwargs(raw_request: dict[str, Any]) -> OrchestrationMutationRequest:
     fields = dict(raw_request)
     request = OrchestrationMutationRequest(
         name=_pop_required(fields, "name"),
         description=fields.pop("description", ""),
-        workflow=fields.pop("workflow", None),
+        strategy_source=_pop_strategy_source_field(fields),
         prompt_files=fields.pop("prompt_files", None),
         role_models=fields.pop("role_models", None),
     )
@@ -159,3 +181,10 @@ def _orchestration_mutation_request_from_kwargs(raw_request: dict[str, Any]) -> 
         unexpected_fields = ", ".join(sorted(fields))
         raise TypeError(f"unexpected orchestration request fields: {unexpected_fields}")
     return request
+
+
+def _strategy_source_counts(orchestration: dict) -> tuple[int, int]:
+    strategy_source = orchestration.get("workflow_json") or {}
+    if not isinstance(strategy_source, dict):
+        return 0, 0
+    return len(list(strategy_source.get("roles") or [])), len(list(strategy_source.get("steps") or []))

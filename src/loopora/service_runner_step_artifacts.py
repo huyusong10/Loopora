@@ -141,8 +141,8 @@ class ServiceRunnerStepArtifactsMixin:
         log_event(
             logger,
             logging.INFO,
-            "service.workflow.step.completed",
-            "Completed workflow step",
+            "service.runner.step.completed",
+            "Completed runner step",
             **self._run_log_context(
                 request.run,
                 iter=request.iter_id,

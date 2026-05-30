@@ -31,7 +31,10 @@ from loopora.cli_agent_work_panel import agent_work_panel
 
 def _assert_cli_native_dispatch_contract(output: str, target_agent: str) -> None:
     _assert_codex_native_surface_plain(output)
-    assert f"dispatch_next: invoke {target_agent} with the next context/capsule paths below; do not perform this role inline" in output
+    assert (
+        f"dispatch_next: invoke {target_agent} with the next context and step contract paths below; "
+        "do not perform this role inline"
+    ) in output
     assert f"native_dispatch_contract: host-native {target_agent}; nested_provider_cli=not_used" in output
     assert "submit_contract=loopora_host_dispatch + schema-shaped result template" in output
     assert "native_dispatch_mechanism: Codex spawn_agent with agent_type=<role_dispatch.target_agent>" in output
