@@ -127,7 +127,7 @@ class RepositorySchemaMixin:
                     kind TEXT NOT NULL,
                     uri TEXT NOT NULL,
                     content_hash TEXT,
-                    created_by_event_id TEXT,
+                    created_by_event_id TEXT NOT NULL REFERENCES event_store(event_id),
                     created_at TEXT NOT NULL
                 );
 
@@ -304,7 +304,7 @@ class RepositorySchemaMixin:
             "loop_runs": {"id", "orchestration_id", "executor_kind", "workflow_json", "task_verdict_json", "completion_mode"},
             "event_store": {"event_id", "stream_id", "sequence", "event_type", "payload_json"},
             "projection_store": {"projection_name", "projection_key", "source_sequence", "payload_json"},
-            "artifact_index": {"artifact_id", "kind", "uri"},
+            "artifact_index": {"artifact_id", "kind", "uri", "created_by_event_id"},
             "alignment_sessions": {"id", "alignment_stage", "working_agreement_json", "executor_session_ref_json", "linked_run_id"},
             "local_asset_roots": {"resource_type", "resource_id", "path", "state"},
             "bundle_asset_ownership": {"bundle_id", "asset_type", "asset_id"},

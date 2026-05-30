@@ -1,11 +1,14 @@
 from __future__ import annotations
 
-from loopora.events.run_event_payloads import step_committed_payload, step_instruction_payload, step_submitted_payload
+from loopora.events.run_event_payloads import (
+    step_committed_payload,
+    step_instruction_payload,
+    step_submitted_payload,
+)
 from loopora.engine.run_requests import (
     RunEngineClaimStepRequest,
     RunEngineClaimRunnerStepRequest,
     RunEngineClaimRunnerStepResult,
-    RunEngineCommitStepRequest,
     RunEngineSubmitStepRequest,
     RunEngineSubmitStepResult,
 )
@@ -36,7 +39,6 @@ def append_step_instruction_and_rebuild_projection_cache(
             causation_id=request.causation_id,
         ),
     )
-
 
 def append_runner_step_instruction_and_rebuild_projection_cache(
     repository,
@@ -94,27 +96,5 @@ def append_step_submission_and_rebuild_projection_cache(
             ),
             correlation_id=request.correlation_id,
             causation_id=None,
-        ),
-    )
-
-
-def append_step_commit_and_rebuild_projection_cache(
-    repository,
-    request: RunEngineCommitStepRequest,
-) -> EventEnvelope:
-    return append_run_event_and_rebuild_projection_cache(
-        repository,
-        RunEventAppend(
-            run_id=request.run_id,
-            event_type="StepCommitted",
-            actor=request.actor,
-            payload=step_committed_payload(
-                run_id=request.run_id,
-                step_id=request.step_id,
-                iteration=request.iteration,
-                result_status=request.result_status,
-            ),
-            correlation_id=request.correlation_id,
-            causation_id=request.causation_id,
         ),
     )

@@ -6,7 +6,8 @@ from collections.abc import Callable
 from typing import TypeVar
 
 from loopora.events.envelope import EventEnvelope
-from loopora.events.schemas import require_core_event_family
+from loopora.events.run_event_invariants import require_run_event_append_invariants
+from loopora.events.schemas import require_core_event_payload_identity, require_core_event_stream_boundary
 from loopora.events.store import DomainEventAppendRequest, DomainEventTransaction
 from loopora.kernel.actors import ActorRef
 from loopora.structured_numbers import structured_non_negative_int
@@ -40,7 +41,19 @@ class RepositoryDomainEventRecordsMixin:
         connection: sqlite3.Connection,
         request: DomainEventAppendRequest,
     ) -> EventEnvelope:
-        require_core_event_family(request.event_type, request.aggregate_type)
+        require_core_event_stream_boundary(
+            event_type=request.event_type,
+            aggregate_type=request.aggregate_type,
+            aggregate_id=request.aggregate_id,
+            stream_id=request.stream_id,
+        )
+        require_core_event_payload_identity(
+            aggregate_type=request.aggregate_type,
+            aggregate_id=request.aggregate_id,
+            payload=request.payload or {},
+        )
+        self._require_causation_event_exists_for_connection(connection, request)
+        require_run_event_append_invariants(connection, request)
         event_id = make_id("event")
         normalized_actor = request.actor or ActorRef.system()
         row = connection.execute(
@@ -86,6 +99,20 @@ class RepositoryDomainEventRecordsMixin:
             ),
         )
         return envelope
+
+    def _require_causation_event_exists_for_connection(
+        self,
+        connection: sqlite3.Connection,
+        request: DomainEventAppendRequest,
+    ) -> None:
+        if not request.causation_id:
+            return
+        row = connection.execute(
+            "SELECT event_id FROM event_store WHERE event_id = ? LIMIT 1",
+            (request.causation_id,),
+        ).fetchone()
+        if row is None:
+            raise ValueError("core domain event causation_id must reference existing event")
 
     def list_domain_events(self, stream_id: str, *, after_sequence: int = 0, limit: int = 5000) -> list[EventEnvelope]:
         with self._connect() as connection:
@@ -194,6 +221,15 @@ class RepositoryDomainEventRecordsMixin:
 
     def _record_artifact_index_for_connection(self, connection: sqlite3.Connection, payload: dict) -> dict:
         artifact_id = str(payload.get("artifact_id") or payload.get("id") or make_id("artifact"))
+        created_by_event_id = str(payload.get("created_by_event_id") or "")
+        if not created_by_event_id:
+            raise ValueError("artifact_index records require created_by_event_id")
+        source_event = connection.execute(
+            "SELECT event_id FROM event_store WHERE event_id = ?",
+            (created_by_event_id,),
+        ).fetchone()
+        if source_event is None:
+            raise ValueError("artifact_index records require created_by_event_id to reference an event_store event")
         created_at = utc_now()
         connection.execute(
             """
@@ -208,7 +244,7 @@ class RepositoryDomainEventRecordsMixin:
                 str(payload.get("kind") or "artifact"),
                 str(payload.get("uri") or ""),
                 str(payload.get("content_hash") or ""),
-                str(payload.get("created_by_event_id") or ""),
+                created_by_event_id,
                 created_at,
             ),
         )

@@ -123,7 +123,7 @@ def test_builder_abandoned_note_is_residual_risk_not_blocking_item(tmp_path: Pat
     assert handoff["status"] == "completed"
     assert handoff["blocking_items"] == []
     assert "Out-of-scope or unfinished note: Did not broaden the sandbox into a full application." in handoff["summary"]
-    assert evidence["residual_risk"] == "Did not broaden the sandbox into a full application."
+    assert evidence["residual_risk"] == "Did not broaden the sandbox into a full application." and evidence["verifies"] == ["step_result:builder_step:completed"]
 
 
 def test_inspector_handoff_deduplicates_failed_items_and_check_results(tmp_path: Path) -> None:

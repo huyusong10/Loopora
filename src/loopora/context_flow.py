@@ -1275,12 +1275,12 @@ def build_step_evidence_entry(request: StepEvidenceEntryRequest) -> dict:
     output = result.output
     handoff = request.handoff
     archetype = str(role["archetype"])
-    verifies = _evidence_verifies(archetype, output)
+    current_evidence_id = evidence_entry_id(result.iter_id, step_order, step["id"])
+    verifies = _evidence_verifies(archetype, output, current_evidence_id=current_evidence_id)
     related_evidence_ids = _unique_string_list(output.get("evidence_refs"))
     for coverage_result in list(output.get("coverage_results") or []):
         if isinstance(coverage_result, dict):
             related_evidence_ids.extend(_unique_string_list(coverage_result.get("evidence_refs")))
-    current_evidence_id = evidence_entry_id(result.iter_id, step_order, step["id"])
     related_evidence_ids = list(dict.fromkeys(item for item in related_evidence_ids if item != current_evidence_id))
     evidence_claims = _string_list(output.get("evidence_claims"))
     claim = _clean_text(output.get("decision_summary") if archetype == "gatekeeper" else handoff.get("summary"))
@@ -1296,6 +1296,8 @@ def build_step_evidence_entry(request: StepEvidenceEntryRequest) -> dict:
         related_evidence_ids = list(dict.fromkeys([*trigger_refs, *related_evidence_ids]))[:20]
         claim = f"{reason} {claim}".strip()
         verifies = list(dict.fromkeys([f"control:{signal}", *verifies]))[:20]
+    if not verifies:
+        verifies = [_step_result_verify_ref(step["id"], handoff.get("status"))]
     return {
         "id": evidence_entry_id(result.iter_id, step_order, step["id"]),
         "timestamp": utc_now(),
@@ -1351,7 +1353,7 @@ def _evidence_source(archetype: str) -> str:
     }.get(archetype, "role_output")
 
 
-def _evidence_verifies(archetype: str, output: dict) -> list[str]:
+def _evidence_verifies(archetype: str, output: dict, *, current_evidence_id: str = "") -> list[str]:
     refs: list[str] = []
     refs.extend(_coverage_result_verify_refs(output.get("coverage_results")))
     if archetype == "inspector":
@@ -1365,11 +1367,21 @@ def _evidence_verifies(archetype: str, output: dict) -> list[str]:
                     refs.append(f"{bucket_name}:{item_id}:{status or 'unknown'}")
     elif archetype == "gatekeeper":
         refs.extend(f"check:{item}" for item in _string_list(output.get("failed_check_ids")))
-        refs.extend(f"evidence:{item}" for item in _string_list(output.get("evidence_refs")))
+        has_measured_evidence = has_measured_gate_evidence(output.get("metric_scores"), output.get("metrics"))
+        for item in _string_list(output.get("evidence_refs")):
+            if item == current_evidence_id and not has_measured_evidence:
+                continue
+            refs.append(f"evidence:{item}")
     else:
         refs.extend(_string_list(output.get("changed_files")))
         refs.extend(_string_list(output.get("observations")))
     return refs[:20]
+
+
+def _step_result_verify_ref(step_id: object, status: object) -> str:
+    cleaned_step = "".join(ch if ch.isalnum() or ch in {"_", "-"} else "_" for ch in str(step_id))
+    cleaned_status = _clean_text(status).strip().lower().replace(" ", "_") or "completed"
+    return f"step_result:{cleaned_step}:{cleaned_status}"
 
 
 def _coverage_result_verify_refs(value: object) -> list[str]:

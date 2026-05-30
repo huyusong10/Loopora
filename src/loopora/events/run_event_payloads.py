@@ -3,6 +3,11 @@ from __future__ import annotations
 from loopora.events.step_instruction_payloads import step_instruction_event_payload
 from loopora.kernel.step import StepInstruction, StepResult
 
+LEGACY_VERDICT_STATUS_ALIASES = {
+    "insufficient_evidence": "continue_required",
+    "failed": "blocked",
+}
+
 
 def step_instruction_payload(instruction: StepInstruction) -> dict:
     return step_instruction_event_payload(instruction)
@@ -38,6 +43,7 @@ def step_committed_payload(
 
 
 def evidence_accepted_payload(run_id: str, evidence_entry: dict) -> dict:
+    artifact_refs = _artifact_ref_payloads(evidence_entry.get("artifact_refs"))
     return {
         "run_id": run_id,
         "evidence_id": str(evidence_entry.get("id") or ""),
@@ -48,7 +54,9 @@ def evidence_accepted_payload(run_id: str, evidence_entry: dict) -> dict:
         "method": str(evidence_entry.get("method") or ""),
         "result": str(evidence_entry.get("result") or ""),
         "verifies": [str(item) for item in list(evidence_entry.get("verifies") or []) if str(item).strip()],
-        "artifact_ref_count": len([item for item in list(evidence_entry.get("artifact_refs") or []) if isinstance(item, dict)]),
+        "measured_evidence": evidence_entry.get("measured_evidence") is True,
+        "artifact_ref_count": len(artifact_refs),
+        "artifact_refs": artifact_refs,
         "residual_risk": str(evidence_entry.get("residual_risk") or ""),
     }
 
@@ -69,7 +77,7 @@ def coverage_recomputed_payload(run_id: str, coverage: dict) -> dict:
 def verdict_issued_payload(run_id: str, verdict: dict) -> dict:
     payload = {
         "run_id": run_id,
-        "status": str(verdict.get("status") or "not_evaluated"),
+        "status": _canonical_verdict_status(verdict.get("status")),
         "source": str(verdict.get("source") or ""),
         "summary": str(verdict.get("summary") or ""),
     }
@@ -112,3 +120,28 @@ def _dict_list_payload(value: object) -> dict:
 
 def _dict_entries(value: object) -> list[dict]:
     return [dict(item) for item in list(value or []) if isinstance(item, dict)]
+
+
+def _canonical_verdict_status(value: object) -> str:
+    status = str(value or "not_evaluated").strip().lower()
+    return LEGACY_VERDICT_STATUS_ALIASES.get(status, status)
+
+
+def _artifact_ref_payloads(value: object) -> list[dict]:
+    refs: list[dict] = []
+    for item in list(value or []):
+        if not isinstance(item, dict):
+            continue
+        ref = {
+            "kind": str(item.get("kind") or ""),
+            "label": str(item.get("label") or ""),
+            "uri": str(item.get("uri") or ""),
+        }
+        content_hash = str(item.get("content_hash") or "")
+        if content_hash:
+            ref["content_hash"] = content_hash
+        created_by_event_id = str(item.get("created_by_event_id") or "")
+        if created_by_event_id:
+            ref["created_by_event_id"] = created_by_event_id
+        refs.append(ref)
+    return refs

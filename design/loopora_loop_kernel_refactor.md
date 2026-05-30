@@ -997,7 +997,7 @@ create table artifact_index (
   kind text not null,
   uri text not null,
   content_hash text,
-  created_by_event_id text,
+  created_by_event_id text not null references event_store(event_id),
   created_at text not null
 );
 ```
@@ -1056,6 +1056,7 @@ running / awaiting_actor / closed / stopped / failed
 ```text
 closed 只是 run lifecycle 关闭
 任务是否 passed 看 Verdict
+closed / stopped / failed 是 lifecycle 终态，Event Core 不能用后续 lifecycle event 重新打开
 ```
 
 ### 14.3 Step 状态
@@ -1110,6 +1111,8 @@ Approval 不是强证据
 只有被提交、接受、关联到 EvidenceTarget 的材料才进入证据层
 ```
 
+`EvidenceAccepted` 必须有稳定 `evidence_id` 和至少一条 `verifies` 引用，否则不能成为 Coverage 或 Verdict 可引用的事实；没有 target/check/control 级引用的普通 step evidence 只能回退到 step-result 引用，不能伪装成 proof。
+
 ### 15.2 Coverage 是派生状态
 
 ```python
@@ -1117,6 +1120,10 @@ coverage = build_coverage(contract, evidence_ledger)
 ```
 
 Coverage 不能被 Surface 直接写入。
+`CoverageRecomputed` 如果跟随已接受 Evidence，必须通过 causation_id 指向对应的 `EvidenceAccepted`。
+`covered` / `weak` 的 `CoverageRecomputed` 必须在同一 run stream 已有 `EvidenceAccepted`，且 causation_id 指向最近接受的 Evidence。
+`covered` / `weak` 的 `CoverageRecomputed` 不能由仅有 step-result 引用的普通 handoff 推导；因果 Evidence 至少要验证 `target:` 或 `evidence:` 引用。
+`CoverageRecomputed` 的 status 必须与 target counts 和 top gap status 自洽：`covered` 不能带 weak/missing/blocked targets，`weak` / `partial` 不能带 blocked targets，blocked `top_gaps` 只能出现在 `blocked` coverage 中。
 
 ### 15.3 Verdict 是决策结果
 
@@ -1124,11 +1131,16 @@ Coverage 不能被 Surface 直接写入。
 verdict = judge(contract, coverage, gatekeeper_result)
 ```
 
+`VerdictIssued` 如果跟随已重算 Coverage，必须通过 causation_id 指向对应的 `CoverageRecomputed`；passing verdict 必须指向最近的 passable coverage。
+
 规则：
 
 ```text
 required target 未覆盖 → 不能 passed
+latest CoverageRecomputed 不存在或不是 covered/weak → 不能 passed / passed_with_residual_risk
 blocking target 存在 → blocked
+blocked next_gap 存在 → blocked
+passed / passed_with_residual_risk → 不能携带 next_gap，残余风险必须进入 residual_risk bucket
 残余风险无 owner/follow-up/acceptance path → continue_required 或 blocked
 GateKeeper pass 不能覆盖证据缺失
 ```
@@ -1159,6 +1171,9 @@ LoopContract 在 Run start 前冻结。
 每个 StepResult 必须进入 EvidenceEngine，或明确被拒绝。
 ```
 
+事件链必须保留这个判断边界：`StepAccepted` / `StepSubmissionRejected` 只能由对应 `StepSubmitted`
+触发，`StepCommitted` 只能由已接受的 `StepAccepted` 触发，不能绕过接受/拒绝记录直接提交结果。
+
 ### 16.3 Verdict changes future action
 
 ```text
@@ -1170,6 +1185,7 @@ Verdict 的 next_gap 会影响下一步 StepInstruction。
 ```text
 Run lifecycle 关闭不代表 task passed。
 Task passed 只能来自 Verdict。
+如果 `RunClosed` 由 passed / passed_with_residual_risk Verdict 触发，必须通过 causation_id 指向该 `VerdictIssued`。
 ```
 
 这四条就是 Human-Shaped Loop 的架构表达。
@@ -1605,4 +1621,3 @@ Strategy 是高级能力，不是使用门槛。
 核心思想不变：
 
 > **Human-Shaped Loop 不是让人消失，而是让人的判断以更好的时间形状进入长期 Agent 任务。**
-

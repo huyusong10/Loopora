@@ -33,6 +33,7 @@ def _event_summary(event: EventEnvelope) -> str:
         "VerdictIssued": ("summary", "status"),
         "StepInstructionIssued": ("step_id",),
         "StepSubmitted": ("summary", "status"),
+        "StepAccepted": ("result_status", "step_id"),
         "StepCommitted": ("result_status", "step_id"),
         "IterationStarted": ("iteration",),
         "IterationCompleted": ("reason", "iteration"),

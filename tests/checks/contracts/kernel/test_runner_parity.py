@@ -124,7 +124,6 @@ def _run_submission_flow(tmp_path: Path, *, actor: ActorRef, run_id: str, loop_i
                     "proven": [{"label": "Required proof", "evidence_refs": ["ev_runner_parity"]}],
                     "residual_risk": [{"label": "Manual follow-up remains.", "managed": True}],
                 },
-                "next_gap": [{"target_id": "done_when.follow_up", "status": "weak"}],
             },
             actor=actor,
         )

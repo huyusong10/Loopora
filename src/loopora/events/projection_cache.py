@@ -74,8 +74,8 @@ def _is_fresh_run_projection_payload(
         and str(payload.get("run_id") or "") == run_id
         and cached_record_sequence > 0
         and cached_payload_sequence > 0
-        and cached_record_sequence >= latest_sequence
-        and cached_payload_sequence >= latest_sequence
+        and cached_record_sequence == latest_sequence
+        and cached_payload_sequence == latest_sequence
     )
 
 

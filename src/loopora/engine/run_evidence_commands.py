@@ -10,16 +10,21 @@ from loopora.engine.run_requests import (
 from loopora.events.append_requests import RunEventAppend
 from loopora.events.envelope import EventEnvelope
 from loopora.events.run_event_commands import append_run_event_and_rebuild_projection_cache
-from loopora.events.run_event_transactions import append_step_evidence_events_and_rebuild_projection_cache
+from loopora.events.run_event_transactions import (
+    append_evidence_acceptance_event_and_rebuild_projection_cache,
+    append_step_evidence_events_and_rebuild_projection_cache,
+)
+from loopora.events.streams import run_stream_id
 
 
 def append_evidence_acceptance_and_rebuild_projection_cache(
     repository,
     request: RunEngineAcceptEvidenceRequest,
 ) -> EventEnvelope:
-    return append_run_event_and_rebuild_projection_cache(
+    return append_evidence_acceptance_event_and_rebuild_projection_cache(
         repository,
-        RunEventAppend(
+        run_id=request.run_id,
+        evidence_request=RunEventAppend(
             run_id=request.run_id,
             event_type="EvidenceAccepted",
             actor=request.actor,
@@ -42,7 +47,7 @@ def append_coverage_recompute_and_rebuild_projection_cache(
             actor=request.actor,
             payload=coverage_recomputed_payload(request.run_id, request.coverage_projection),
             correlation_id=request.correlation_id,
-            causation_id=request.causation_id,
+            causation_id=request.causation_id or _latest_evidence_event_id(repository, request.run_id),
         ),
     )
 
@@ -71,3 +76,11 @@ def append_step_evidence_and_rebuild_projection_cache(
             causation_id=None,
         ),
     )
+
+
+def _latest_evidence_event_id(repository, run_id: str) -> str | None:
+    events = repository.list_domain_events(run_stream_id(run_id))
+    for event in reversed(events):
+        if event.event_type == "EvidenceAccepted":
+            return event.event_id
+    return None

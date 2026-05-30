@@ -16,7 +16,6 @@ from loopora.engine.run_requests import (
     RunEngineClaimStepRequest,
     RunEngineClaimRunnerStepRequest,
     RunEngineClaimRunnerStepResult,
-    RunEngineCommitStepRequest,
     RunEngineCompleteIterationRequest,
     RunEngineCoverageRecomputedRequest,
     RunEngineIssueStepRequest,
@@ -29,7 +28,6 @@ from loopora.engine.run_requests import (
 )
 from loopora.engine.run_snapshot_source import run_snapshot_from_repository
 from loopora.engine.run_step_commands import (
-    append_step_commit_and_rebuild_projection_cache,
     append_step_instruction_and_rebuild_projection_cache,
     append_step_submission_and_rebuild_projection_cache,
     append_runner_step_instruction_and_rebuild_projection_cache,
@@ -81,12 +79,6 @@ class RepositoryRunEngine:
 
     def submit_step(self, request: RunEngineSubmitStepRequest) -> RunEngineSubmitStepResult:
         return append_step_submission_and_rebuild_projection_cache(
-            self.repository,
-            request,
-        )
-
-    def commit_step(self, request: RunEngineCommitStepRequest):
-        return append_step_commit_and_rebuild_projection_cache(
             self.repository,
             request,
         )

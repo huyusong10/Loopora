@@ -12,7 +12,6 @@ from loopora.engine import (
     RunEngineAdvanceStatus,
     RunEngineClaimStepRequest,
     RunEngineClaimRunnerStepRequest,
-    RunEngineCommitStepRequest,
     RunEngineCoverageRecomputedRequest,
     RunEngineCompleteIterationRequest,
     RunEngineIssueVerdictRequest,
@@ -88,6 +87,7 @@ def test_run_creation_and_status_updates_are_replayable_domain_events(tmp_path: 
     engine_snapshot = RepositoryRunEngine(repository).snapshot(run["id"])
 
     assert [event.event_type for event in events] == ["RunCreated", "RunStarted", "RunClosed"]
+    assert events[-1].causation_id is None
     assert [event.sequence for event in events] == [1, 2, 3]
     assert snapshot.state.id == run["id"]
     assert snapshot.state.loop_id == run["loop_id"]
@@ -338,6 +338,21 @@ def test_run_engine_advance_closes_passing_verdict(tmp_path: Path) -> None:
     actor = ActorRef(kind="runner", id="headless")
 
     engine.start(run["id"])
+    engine.record_step_evidence(
+        RunEngineRecordStepEvidenceRequest(
+            run_id=run["id"],
+            actor=actor,
+            evidence_entry={
+                "id": "ev_close",
+                "step_id": "builder",
+                "role_id": "builder",
+                "claim": "Closure proof exists.",
+                "result": "passed",
+                "verifies": ["target:done_when.proof:covered"],
+            },
+            coverage_projection={"status": "covered", "target_count": 1, "covered_target_count": 1},
+        )
+    )
     engine.issue_verdict(
         RunEngineIssueVerdictRequest(
             run_id=run["id"],
@@ -354,7 +369,33 @@ def test_run_engine_advance_closes_passing_verdict(tmp_path: Path) -> None:
     assert outcome.next_action == "complete"
     assert outcome.verdict_status.value == "passed"
     assert events[-1].event_type == "RunClosed"
+    assert events[-1].causation_id == events[-2].event_id
+    assert events[-2].causation_id == events[-3].event_id
     assert cached_snapshot["payload"]["lifecycle_status"] == "closed"
+
+
+def test_run_lifecycle_close_does_not_causally_promote_nonpassing_verdict(tmp_path: Path) -> None:
+    repository = LooporaRepository(tmp_path / "app.db")
+    run = _create_run(repository, tmp_path)
+    actor = ActorRef(kind="runner", id="headless")
+    engine = RepositoryRunEngine(repository)
+
+    engine.recompute_coverage(
+        RunEngineCoverageRecomputedRequest(
+            run_id=run["id"],
+            actor=actor,
+            coverage_projection={"status": "partial", "target_count": 1, "missing_target_count": 1},
+        )
+    )
+    engine.issue_verdict(
+        RunEngineIssueVerdictRequest(
+            run_id=run["id"], actor=actor, verdict={"status": "continue_required", "summary": "More proof is needed."}
+        )
+    )
+    repository.update_run(run["id"], RunUpdate(status="succeeded", finished_at="2026-01-01T00:01:00+00:00"))
+    events = repository.list_domain_events(run_stream_id(run["id"]))
+    assert [event.event_type for event in events[-3:]] == ["CoverageRecomputed", "VerdictIssued", "RunClosed"]
+    assert events[-1].causation_id is None
 
 
 def test_run_engine_advance_preserves_awaiting_actor_state(tmp_path: Path) -> None:
@@ -441,12 +482,16 @@ def test_run_engine_step_instruction_events_drive_current_step_replay(tmp_path: 
     assert claimed.state.current_iteration == 1
     assert claimed.state.pending_actor == actor
 
-    engine.commit_step(
-        RunEngineCommitStepRequest(
-            run_id=run["id"],
-            step_id="builder",
-            iteration=1,
-            actor=actor,
+    engine.submit_step(
+        RunEngineSubmitStepRequest(
+            result=StepResult(
+                run_id=run["id"],
+                step_id="builder",
+                iteration=1,
+                actor=actor,
+                status=StepResultStatus.COMPLETED,
+                summary="Builder completed the proof.",
+            )
         )
     )
 
@@ -549,7 +594,7 @@ def test_run_engine_records_iteration_lifecycle_events_idempotently(tmp_path: Pa
     assert events[-1].payload["completed_step_count"] == 2
 
 
-def test_run_engine_submit_step_records_submitted_and_committed_events(tmp_path: Path) -> None:
+def test_run_engine_submit_step_records_submitted_accepted_and_committed_events(tmp_path: Path) -> None:
     repository = LooporaRepository(tmp_path / "app.db")
     run = _create_run(repository, tmp_path)
     engine = RepositoryRunEngine(repository)
@@ -574,10 +619,12 @@ def test_run_engine_submit_step_records_submitted_and_committed_events(tmp_path:
     artifacts = repository.list_artifact_index(run_id=run["id"])
 
     assert result.submitted_event.event_type == "StepSubmitted"
+    assert result.accepted_event.event_type == "StepAccepted"
     assert result.committed_event.event_type == "StepCommitted"
-    assert [item.event_type for item in events[-2:]] == ["StepSubmitted", "StepCommitted"]
-    assert events[-2].payload["summary"] == "Builder completed the proof."
-    assert result.committed_event.causation_id == result.submitted_event.event_id
+    assert [item.event_type for item in events[-3:]] == ["StepSubmitted", "StepAccepted", "StepCommitted"]
+    assert events[-3].payload["summary"] == "Builder completed the proof."
+    assert result.accepted_event.causation_id == result.submitted_event.event_id
+    assert result.committed_event.causation_id == result.accepted_event.event_id
     assert events[-1].event_id == result.committed_event.event_id
     assert artifacts[0]["loop_id"] == run["loop_id"]
     assert artifacts[0]["kind"] == "workspace"
@@ -605,7 +652,7 @@ def test_run_engine_records_evidence_coverage_and_verdict_domain_events(tmp_path
                 "method": "pytest",
                 "result": "passed",
                 "verifies": ["target:done_when.proof:covered"],
-                "artifact_refs": [{"kind": "workspace"}],
+                "artifact_refs": [{"kind": "workspace", "label": "proof", "uri": "evidence.txt"}],
             },
         )
     )
@@ -630,9 +677,14 @@ def test_run_engine_records_evidence_coverage_and_verdict_domain_events(tmp_path
     )
 
     events = repository.list_domain_events(run_stream_id(run["id"]))
+    artifacts = repository.list_artifact_index(run_id=run["id"])
 
     assert [event.event_type for event in events[-3:]] == ["EvidenceAccepted", "CoverageRecomputed", "VerdictIssued"]
     assert events[-3].payload["evidence_id"] == "ev_001"
+    assert events[-2].causation_id == events[-3].event_id
+    assert events[-1].causation_id == events[-2].event_id
+    assert artifacts[0]["uri"] == "evidence.txt"
+    assert artifacts[0]["created_by_event_id"] == events[-3].event_id
     assert events[-2].payload["covered_target_count"] == 1
     assert replay_run_snapshot(events).verdict_status.value == "passed"
 
@@ -660,9 +712,7 @@ def test_event_replay_maps_legacy_task_verdict_statuses_to_kernel_statuses(
         )
     )
 
-    snapshot = replay_run_snapshot(repository.list_domain_events(run_stream_id(run["id"])))
-
-    assert snapshot.verdict_status == kernel_status
+    assert replay_run_snapshot(repository.list_domain_events(run_stream_id(run["id"]))).verdict_status == kernel_status
 
 
 def test_run_engine_records_step_evidence_and_coverage_as_one_command(tmp_path: Path) -> None:
@@ -685,7 +735,14 @@ def test_run_engine_records_step_evidence_and_coverage_as_one_command(tmp_path: 
                 "method": "pytest",
                 "result": "passed",
                 "verifies": ["target:done_when.proof:covered"],
-                "artifact_refs": [{"kind": "workspace"}],
+                "artifact_refs": [
+                    {
+                        "kind": "workspace",
+                        "label": "proof",
+                        "uri": "proof.txt",
+                        "content_hash": "sha256:def",
+                    }
+                ],
             },
             coverage_projection={
                 "status": "covered",
@@ -699,6 +756,7 @@ def test_run_engine_records_step_evidence_and_coverage_as_one_command(tmp_path: 
     events = repository.list_domain_events(run_stream_id(run["id"]))
     cached_ledger = repository.get_projection_record("evidence_ledger", run["id"])
     cached_coverage = repository.get_projection_record("coverage", run["id"])
+    artifacts = repository.list_artifact_index(run_id=run["id"])
 
     assert [event.event_type for event in events[-2:]] == ["EvidenceAccepted", "CoverageRecomputed"]
     assert result.evidence_event.event_id == events[-2].event_id
@@ -706,9 +764,15 @@ def test_run_engine_records_step_evidence_and_coverage_as_one_command(tmp_path: 
     assert events[-2].correlation_id == "corr-step-evidence"
     assert events[-1].correlation_id == "corr-step-evidence"
     assert events[-1].causation_id == events[-2].event_id
+    assert events[-2].payload["artifact_refs"] == [
+        {"kind": "workspace", "label": "proof", "uri": "proof.txt", "content_hash": "sha256:def"}
+    ]
     assert cached_ledger["payload"]["entries"][0]["evidence_id"] == "ev_step_001"
+    assert cached_ledger["payload"]["entries"][0]["artifact_refs"] == events[-2].payload["artifact_refs"]
     assert cached_coverage["payload"]["status"] == "covered"
     assert cached_coverage["payload"]["source_sequence"] == events[-1].sequence
+    assert artifacts[0]["uri"] == "proof.txt"
+    assert artifacts[0]["created_by_event_id"] == result.evidence_event.event_id
 
 
 def test_run_engine_record_step_evidence_does_not_leave_half_events_on_invalid_coverage(tmp_path: Path) -> None:

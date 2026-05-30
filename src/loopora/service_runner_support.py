@@ -212,6 +212,7 @@ def _apply_gatekeeper_evidence_gate(state: GatekeeperEvidenceGateState) -> list[
     if invalid_refs:
         state.blocking_issues.append(_invalid_ref_blocker(invalid_refs))
         state.result["passed"] = False
+        evidence_refs = [item for item in evidence_refs if item == state.context.current_id or item in state.context.known_ids]
     elif evidence_refs and not supporting_refs and blocking_non_supporting_refs:
         state.blocking_issues.append("gatekeeper_pass_refs_not_supporting_evidence")
         state.result["passed"] = False

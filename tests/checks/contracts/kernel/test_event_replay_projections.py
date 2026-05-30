@@ -105,7 +105,7 @@ def test_run_engine_replays_evidence_coverage_verdict_and_audit_projections(tmp_
                 "status": "covered",
                 "target_count": 1,
                 "covered_target_count": 1,
-                "top_gaps": [{"target_id": "gatekeeper.finish", "status": "missing"}],
+                "top_gaps": [],
             },
         )
     )
@@ -127,7 +127,7 @@ def test_run_engine_replays_evidence_coverage_verdict_and_audit_projections(tmp_
     assert projections["evidence_ledger"]["entries"][0]["claim"] == "Replay proof exists."
     assert projections["coverage"]["status"] == "covered"
     assert projections["coverage"]["covered_target_count"] == 1
-    assert projections["coverage"]["top_gaps"] == [{"target_id": "gatekeeper.finish", "status": "missing"}]
+    assert projections["coverage"]["top_gaps"] == []
     assert projections["task_verdict"] == {
         "schema_version": 1,
         "kind": "event_replayed_task_verdict",
@@ -140,6 +140,13 @@ def test_run_engine_replays_evidence_coverage_verdict_and_audit_projections(tmp_
     assert cached_coverage["payload"]["source_sequence"] == 3
     assert cached_verdict["source_sequence"] == 4
     assert cached_verdict["payload"]["status"] == "passed"
+    assert projections["audit_timeline"]["events"][2]["event_type"] == "CoverageRecomputed"
+    events = repository.list_domain_events(run_stream_id(run["id"]))
+    coverage_event = events[2]
+    evidence_event = events[1]
+    verdict_event = events[3]
+    assert coverage_event.causation_id == evidence_event.event_id
+    assert verdict_event.causation_id == coverage_event.event_id
     assert [event["event_type"] for event in projections["audit_timeline"]["events"]] == [
         "RunCreated",
         "EvidenceAccepted",
@@ -364,6 +371,38 @@ def test_run_engine_current_step_projection_replays_when_cache_is_stale(tmp_path
     engine.claim_step(RunEngineClaimStepRequest(instruction=instruction, pending_actor=actor))
     cached_current_step = repository.get_projection_record("current_step", run["id"])
 
+    submitted_event = repository.append_domain_event(
+        DomainEventAppendRequest(
+            stream_id=run_stream_id(run["id"]),
+            aggregate_type="run",
+            aggregate_id=run["id"],
+            event_type="StepSubmitted",
+            payload={
+                "run_id": run["id"],
+                "step_id": "builder",
+                "iteration": 1,
+                "status": "completed",
+                "summary": "Builder completed.",
+            },
+            actor=actor,
+        )
+    )
+    accepted_event = repository.append_domain_event(
+        DomainEventAppendRequest(
+            stream_id=run_stream_id(run["id"]),
+            aggregate_type="run",
+            aggregate_id=run["id"],
+            event_type="StepAccepted",
+            payload={
+                "run_id": run["id"],
+                "step_id": "builder",
+                "iteration": 1,
+                "result_status": "completed",
+            },
+            actor=actor,
+            causation_id=submitted_event.event_id,
+        )
+    )
     repository.append_domain_event(
         DomainEventAppendRequest(
             stream_id=run_stream_id(run["id"]),
@@ -377,6 +416,7 @@ def test_run_engine_current_step_projection_replays_when_cache_is_stale(tmp_path
                 "result_status": "completed",
             },
             actor=actor,
+            causation_id=accepted_event.event_id,
         )
     )
     tampered_payload = {**cached_current_step["payload"], "source_sequence": 999}
@@ -394,10 +434,10 @@ def test_run_engine_current_step_projection_replays_when_cache_is_stale(tmp_path
     refreshed_cache = repository.get_projection_record("current_step", run["id"])
 
     assert cached_current_step["payload"]["source_sequence"] == 2
-    assert projection["source_sequence"] == 3
+    assert projection["source_sequence"] == 5
     assert projection["step_id"] is None
     assert projection["claimable"] is False
-    assert refreshed_cache["source_sequence"] == 3
+    assert refreshed_cache["source_sequence"] == 5
     assert refreshed_cache["payload"] == projection
 
 
@@ -425,11 +465,39 @@ def test_run_engine_replays_rich_task_verdict_projection(tmp_path: Path) -> None
     repository = LooporaRepository(tmp_path / "app.db")
     run = _create_run(repository, tmp_path)
     engine = RepositoryRunEngine(repository)
+    actor = ActorRef(kind="system", id="verdict-engine")
 
+    engine.accept_evidence(
+        RunEngineAcceptEvidenceRequest(
+            run_id=run["id"],
+            actor=actor,
+            evidence_entry={
+                "id": "ev_checks",
+                "step_id": "builder",
+                "role_id": "builder",
+                "claim": "Automated checks passed.",
+                "result": "passed",
+                "verifies": ["target:done_when.proof:covered"],
+            },
+        )
+    )
+    engine.recompute_coverage(
+        RunEngineCoverageRecomputedRequest(
+            run_id=run["id"],
+            actor=actor,
+            coverage_projection={
+                "status": "weak",
+                "target_count": 2,
+                "covered_target_count": 1,
+                "weak_target_count": 1,
+                "top_gaps": [{"target_id": "done_when.manual_export", "status": "weak"}],
+            },
+        )
+    )
     engine.issue_verdict(
         RunEngineIssueVerdictRequest(
             run_id=run["id"],
-            actor=ActorRef(kind="system", id="verdict-engine"),
+            actor=actor,
             verdict={
                 "status": "passed_with_residual_risk",
                 "source": "gatekeeper",
@@ -438,7 +506,6 @@ def test_run_engine_replays_rich_task_verdict_projection(tmp_path: Path) -> None
                     "proven": [{"label": "Automated checks passed.", "evidence_refs": ["ev_checks"]}],
                     "residual_risk": [{"label": "Manual export remains.", "managed": True}],
                 },
-                "next_gap": [{"target_id": "done_when.manual_export", "status": "weak"}],
             },
         )
     )
@@ -449,7 +516,7 @@ def test_run_engine_replays_rich_task_verdict_projection(tmp_path: Path) -> None
     assert projection["status"] == "passed_with_residual_risk"
     assert projection["buckets"]["proven"] == [{"label": "Automated checks passed.", "evidence_refs": ["ev_checks"]}]
     assert projection["buckets"]["residual_risk"] == [{"label": "Manual export remains.", "managed": True}]
-    assert projection["next_gap"] == [{"target_id": "done_when.manual_export", "status": "weak"}]
+    assert "next_gap" not in projection
     assert cached["payload"] == projection
 
 

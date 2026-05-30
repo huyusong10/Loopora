@@ -91,6 +91,7 @@ def test_core_event_schema_excludes_surface_observability_events() -> None:
 def test_core_event_schema_binds_event_types_to_aggregate_families() -> None:
     schemas_source = (REPO_ROOT / "src" / "loopora" / "events" / "schemas.py").read_text(encoding="utf-8")
     append_source = (REPO_ROOT / "src" / "loopora" / "events" / "append_requests.py").read_text(encoding="utf-8")
+    invariants_source = (REPO_ROOT / "src" / "loopora" / "events" / "run_event_invariants.py").read_text(encoding="utf-8")
     db_event_source = (REPO_ROOT / "src" / "loopora" / "db_domain_event_records.py").read_text(encoding="utf-8")
 
     assert set(CORE_EVENT_AGGREGATE_TYPES) == CORE_EVENT_TYPES
@@ -101,8 +102,11 @@ def test_core_event_schema_binds_event_types_to_aggregate_families() -> None:
     assert CORE_EVENT_AGGREGATE_TYPES["VerdictIssued"] == "run"
     assert CORE_EVENT_AGGREGATE_TYPES["IterationStarted"] == "run"
     assert "def require_core_event_family" in schemas_source
+    assert "def require_core_event_stream_boundary" in schemas_source
     assert "require_core_event_family" in append_source
-    assert "require_core_event_family" in db_event_source
+    assert "def require_run_event_append_invariants" in invariants_source
+    assert "require_run_event_append_invariants" in db_event_source
+    assert "require_core_event_stream_boundary" in db_event_source
 
 
 def test_run_engine_uses_public_event_store_boundary_for_atomic_writes() -> None:
@@ -185,7 +189,7 @@ def test_run_engine_delegates_single_event_projection_refreshes() -> None:
     assert "RunEventAppend" not in engine_source
     assert "append_run_event_and_rebuild_projection_cache" not in engine_source
     assert "append_step_instruction_and_rebuild_projection_cache" in engine_source
-    assert "append_step_commit_and_rebuild_projection_cache" in engine_source
+    assert "append_step_commit_and_rebuild_projection_cache" not in engine_source
     assert "append_evidence_acceptance_and_rebuild_projection_cache" in engine_source
     assert "append_coverage_recompute_and_rebuild_projection_cache" in engine_source
     assert "append_verdict_issue_and_rebuild_projection_cache" in engine_source
@@ -307,6 +311,7 @@ def test_run_engine_delegates_multi_event_transaction_commands() -> None:
     assert "append_step_evidence_events" not in engine_source
     assert "self.snapshot(result.run_id)" not in engine_source
     assert "append_step_submission_and_rebuild_projection_cache" in engine_source
+    assert "append_step_commit_and_rebuild_projection_cache" not in engine_source
     assert "append_step_evidence_and_rebuild_projection_cache" in engine_source
     assert "append_domain_event_transaction" not in event_commands_source
     assert "run_event_append_request" not in event_commands_source
@@ -323,15 +328,19 @@ def test_run_engine_delegates_multi_event_transaction_commands() -> None:
     assert "append_step_submission_events(" not in step_commands_source
     assert "append_step_evidence_events_and_rebuild_projection_cache" in evidence_commands_source
     assert "append_step_submission_events_and_rebuild_projection_cache" in step_commands_source
+    assert "def append_step_commit_and_rebuild_projection_cache" not in step_commands_source
     assert "run_snapshot_from_repository" in step_commands_source
     assert not engine_artifact_index_path.exists()
     assert "def step_result_artifact_index_entries" in event_artifact_index_source
+    assert "def evidence_artifact_index_entries" in event_artifact_index_source
     assert "class StepSubmissionEventsResult" in event_results_source
     assert "class StepEvidenceEventsResult" in event_results_source
     assert "RunEngineSubmitStepResult = StepSubmissionEventsResult" in run_requests_source
+    assert "RunEngineCommitStepRequest" not in run_requests_source
     assert "RunEngineRecordStepEvidenceResult = StepEvidenceEventsResult" in run_requests_source
     assert "from loopora.engine.run_requests import" not in event_transactions_source
-    assert "from loopora.events.run_artifact_index import step_result_artifact_index_entries" in event_transactions_source
+    assert "from loopora.events.run_artifact_index import evidence_artifact_index_entries" in event_transactions_source
+    assert "step_result_artifact_index_entries" in event_transactions_source
     assert "from loopora.events.run_event_results import StepEvidenceEventsResult, StepSubmissionEventsResult" in event_transactions_source
     assert "run_event_append_request" in event_transactions_source
     assert "rebuild_run_projection_cache" in event_transactions_source
@@ -345,8 +354,10 @@ def test_run_event_transaction_helpers_live_under_event_core() -> None:
     )
 
     assert not engine_transactions_path.exists()
+    assert "def append_evidence_acceptance_event" in event_transactions_source
     assert "def append_step_submission_events" in event_transactions_source
     assert "def append_step_evidence_events" in event_transactions_source
+    assert "def append_evidence_acceptance_event_and_rebuild_projection_cache" in event_transactions_source
     assert "def append_step_submission_events_and_rebuild_projection_cache" in event_transactions_source
     assert "def append_step_evidence_events_and_rebuild_projection_cache" in event_transactions_source
 

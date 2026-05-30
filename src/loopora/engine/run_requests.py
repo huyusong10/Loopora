@@ -40,17 +40,6 @@ class RunEngineClaimRunnerStepResult:
 
 
 @dataclass(frozen=True, slots=True)
-class RunEngineCommitStepRequest:
-    run_id: str
-    step_id: str
-    iteration: int
-    actor: ActorRef
-    result_status: str = "completed"
-    correlation_id: str = ""
-    causation_id: str | None = None
-
-
-@dataclass(frozen=True, slots=True)
 class RunEngineSubmitStepRequest:
     result: StepResult
     correlation_id: str = ""

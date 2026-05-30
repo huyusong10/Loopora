@@ -66,21 +66,29 @@ def _coerce_verdict_status(value: object) -> VerdictStatus:
 
 
 def _apply_run_created(state: _ReplayState, event: EventEnvelope) -> None:
+    if _is_terminal_lifecycle(state):
+        return
     state.loop_id = str(event.payload.get("loop_id") or state.loop_id)
     state.lifecycle_status = RunLifecycleStatus.CREATED
 
 
 def _apply_run_active(state: _ReplayState, _event: EventEnvelope) -> None:
+    if _is_terminal_lifecycle(state):
+        return
     state.lifecycle_status = RunLifecycleStatus.RUNNING
     state.pending_actor = None
 
 
 def _apply_run_paused(state: _ReplayState, event: EventEnvelope) -> None:
+    if _is_terminal_lifecycle(state):
+        return
     state.lifecycle_status = RunLifecycleStatus.AWAITING_ACTOR
     state.pending_actor = ActorRef.from_dict(event.payload.get("pending_actor"))
 
 
 def _apply_step_instruction(state: _ReplayState, event: EventEnvelope) -> None:
+    if _is_terminal_lifecycle(state):
+        return
     state.lifecycle_status = RunLifecycleStatus.AWAITING_ACTOR
     state.current_step_id = str(event.payload.get("step_id") or state.current_step_id or "")
     state.current_iteration = _event_payload_int(event, "iteration", default=state.current_iteration)
@@ -88,10 +96,14 @@ def _apply_step_instruction(state: _ReplayState, event: EventEnvelope) -> None:
 
 
 def _apply_iteration_started(state: _ReplayState, event: EventEnvelope) -> None:
+    if _is_terminal_lifecycle(state):
+        return
     state.current_iteration = _event_payload_int(event, "iteration", default=state.current_iteration)
 
 
 def _apply_step_committed(state: _ReplayState, _event: EventEnvelope) -> None:
+    if _is_terminal_lifecycle(state):
+        return
     state.current_step_id = None
     state.pending_actor = None
 
@@ -102,12 +114,22 @@ def _apply_verdict(state: _ReplayState, event: EventEnvelope) -> None:
 
 def _apply_terminal(status: RunLifecycleStatus, *, stop_requested: bool = False) -> Callable[[_ReplayState, EventEnvelope], None]:
     def apply(state: _ReplayState, _event: EventEnvelope) -> None:
+        if _is_terminal_lifecycle(state):
+            return
         state.lifecycle_status = status
         state.current_step_id = None
         state.stop_requested = stop_requested
         state.pending_actor = None
 
     return apply
+
+
+def _is_terminal_lifecycle(state: _ReplayState) -> bool:
+    return state.lifecycle_status in {
+        RunLifecycleStatus.CLOSED,
+        RunLifecycleStatus.STOPPED,
+        RunLifecycleStatus.FAILED,
+    }
 
 
 def _event_payload_int(event: EventEnvelope, key: str, *, default: int) -> int:

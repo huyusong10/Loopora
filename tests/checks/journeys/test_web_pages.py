@@ -104,7 +104,7 @@ def test_run_pages_prioritize_loop_verdict_over_process_success(
 ) -> None:
     service = service_factory(scenario="success")
     loop = _create_loop(service, sample_spec_file, sample_workdir, name="Verdict Journey")
-    run = service.rerun(loop["id"])
+    run = service.start_run(loop["id"])
     service.repository.update_run(
         run["id"],
         status="succeeded",

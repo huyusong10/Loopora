@@ -8,6 +8,7 @@ from loopora.events.envelope import EventEnvelope
 @dataclass(frozen=True, slots=True)
 class StepSubmissionEventsResult:
     submitted_event: EventEnvelope
+    accepted_event: EventEnvelope
     committed_event: EventEnvelope
 
 
