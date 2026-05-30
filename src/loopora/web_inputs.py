@@ -28,6 +28,7 @@ from loopora.strategy_source import (
     normalize_strategy_source,
     resolve_strategy_prompt_files,
     strategy_archetype_display_name,
+    strategy_source_from_record,
 )
 
 DEFAULT_LOOP_FORM = {
@@ -56,6 +57,7 @@ DEFAULT_ORCHESTRATION_FORM = {
     "name": "",
     "description": "",
     "workflow_preset": "",
+    "strategy_json": "",
     "workflow_json": "",
     "prompt_files_json": "",
 }
@@ -168,7 +170,7 @@ def _orchestration_payload_from_mapping(
     return {
         "name": name,
         "description": description,
-        "workflow": _strategy_source_from_mapping(payload, default_to_preset=default_to_preset),
+        "strategy_source": _strategy_source_from_mapping(payload, default_to_preset=default_to_preset),
         "prompt_files": _prompt_files_from_mapping(payload),
         "role_models": _role_models_from_mapping(payload),
     }
@@ -377,28 +379,42 @@ def _coerce_loop_form_number(value: object, *, integer_only: bool) -> object:
 def _normalize_orchestration_form(values: Mapping[str, object] | None) -> dict[str, object]:
     normalized = dict(DEFAULT_ORCHESTRATION_FORM)
     if not values:
-        normalized["workflow_json"] = json.dumps({"version": 1, "preset": "", "roles": [], "steps": []}, ensure_ascii=False, indent=2)
+        strategy_json = json.dumps({"version": 1, "preset": "", "roles": [], "steps": []}, ensure_ascii=False, indent=2)
+        normalized["strategy_json"] = strategy_json
+        normalized["workflow_json"] = strategy_json
         normalized["prompt_files_json"] = json.dumps({}, ensure_ascii=False, indent=2)
         return normalized
     for key in normalized:
         if key in values:
             normalized[key] = values[key]
+    if isinstance(normalized.get("strategy_json"), Mapping):
+        normalized["strategy_json"] = json.dumps(normalized["strategy_json"], ensure_ascii=False, indent=2)
     if isinstance(normalized.get("workflow_json"), Mapping):
         normalized["workflow_json"] = json.dumps(normalized["workflow_json"], ensure_ascii=False, indent=2)
     if isinstance(normalized.get("prompt_files_json"), Mapping):
         normalized["prompt_files_json"] = json.dumps(normalized["prompt_files_json"], ensure_ascii=False, indent=2)
-    if not str(normalized.get("workflow_json", "")).strip():
+    strategy_json_text = str(normalized.get("strategy_json", "")).strip()
+    workflow_json_text = str(normalized.get("workflow_json", "")).strip()
+    if strategy_json_text:
+        normalized["workflow_json"] = normalized["strategy_json"]
+    elif workflow_json_text:
+        normalized["strategy_json"] = normalized["workflow_json"]
+    else:
         preset_name = _strategy_preset_from_mapping(normalized)
         if preset_name:
             strategy_source = build_preset_strategy_source(preset_name)
-            normalized["workflow_json"] = json.dumps(strategy_source, ensure_ascii=False, indent=2)
+            strategy_json = json.dumps(strategy_source, ensure_ascii=False, indent=2)
+            normalized["strategy_json"] = strategy_json
+            normalized["workflow_json"] = strategy_json
             normalized["prompt_files_json"] = json.dumps(
                 resolve_strategy_prompt_files(strategy_source),
                 ensure_ascii=False,
                 indent=2,
             )
         else:
-            normalized["workflow_json"] = json.dumps({"version": 1, "preset": "", "roles": [], "steps": []}, ensure_ascii=False, indent=2)
+            strategy_json = json.dumps({"version": 1, "preset": "", "roles": [], "steps": []}, ensure_ascii=False, indent=2)
+            normalized["strategy_json"] = strategy_json
+            normalized["workflow_json"] = strategy_json
             normalized["prompt_files_json"] = json.dumps({}, ensure_ascii=False, indent=2)
     return normalized
 
@@ -525,12 +541,14 @@ def _archetype_options() -> list[dict[str, str]]:
 
 
 def _orchestration_form_values_from_record(orchestration: Mapping[str, object]) -> dict[str, object]:
-    strategy_source = dict(orchestration.get("workflow_json") or {})
+    strategy_source = strategy_source_from_record(orchestration) or {}
+    strategy_json = json.dumps(strategy_source, ensure_ascii=False, indent=2)
     return {
         "name": str(orchestration.get("name", "")),
         "description": str(orchestration.get("description", "")),
         "workflow_preset": str(strategy_source.get("preset", "")).strip(),
-        "workflow_json": json.dumps(strategy_source, ensure_ascii=False, indent=2),
+        "strategy_json": strategy_json,
+        "workflow_json": strategy_json,
         "prompt_files_json": json.dumps(orchestration.get("prompt_files_json") or {}, ensure_ascii=False, indent=2),
     }
 

@@ -89,7 +89,7 @@ def test_takeaway_projection_normalization_does_not_promote_boolean_counts() -> 
                 "collaboration_summary": True,
                 "loop_fit_reasons": [False, "Future rounds keep proof alive."],
                 "goal": "  Keep the frozen task visible.  ",
-                "workflow_collaboration_intent": 8,
+                "workflow_collaboration_intent": "legacy alias ignored by projection",
                 "execution_strategy": [False, "Prove the focused path first."],
                 "local_governance": [False, "GateKeeper treats skipped AGENTS.md evidence as Blocking."],
                 "role_postures": [
@@ -140,8 +140,8 @@ def test_takeaway_projection_normalization_does_not_promote_boolean_counts() -> 
     assert projection["judgment_contract"]["completion_mode"] == ""
     assert projection["judgment_contract"]["strategy_preset"] == ""
     assert projection["judgment_contract"]["strategy_collaboration_intent"] == ""
-    assert projection["judgment_contract"]["workflow_preset"] == ""
-    assert projection["judgment_contract"]["workflow_collaboration_intent"] == ""
+    assert "workflow_preset" not in projection["judgment_contract"]
+    assert "workflow_collaboration_intent" not in projection["judgment_contract"]
     assert projection["judgment_contract"]["execution_strategy"] == ["Prove the focused path first."]
     assert projection["judgment_contract"]["local_governance"] == ["GateKeeper treats skipped AGENTS.md evidence as Blocking."]
     assert projection["judgment_contract"]["role_postures"] == ["Builder: Keep the change narrow and verifiable."]
@@ -393,6 +393,12 @@ def test_api_run_observation_snapshot_projects_stable_timeline_events(
         {"role_name": "Builder", "role": "builder", "step_id": "build", "iter": 0},
         role="builder",
     )
+    service.repository.append_event(
+        run["id"],
+        "step_instruction_context_prepared",
+        {"step_id": "build", "context_path": "steps/build/step_instruction_context.json"},
+        role="builder",
+    )
     payload = {
         "iter": 0,
         "parallel_group": "inspection_pack",
@@ -413,10 +419,12 @@ def test_api_run_observation_snapshot_projects_stable_timeline_events(
     )
 
     assert "role_request_prepared" in TIMELINE_EVENT_TYPES
+    assert "step_instruction_context_prepared" in TIMELINE_EVENT_TYPES
     assert "control_triggered" in TIMELINE_EVENT_TYPES
     assert "parallel_group_started" in TIMELINE_EVENT_TYPES
     assert "run_finished" in TIMELINE_EVENT_TYPES
     assert "parallel_group_started" in PROGRESS_EVENT_TYPES
+    assert "step_instruction_context_prepared" in PROGRESS_EVENT_TYPES
     assert "run_finished" in PROGRESS_EVENT_TYPES
     client = TestClient(build_app(service=service))
     response = client.get(f"/api/runs/{run['id']}/observation-snapshot")
@@ -427,6 +435,8 @@ def test_api_run_observation_snapshot_projects_stable_timeline_events(
     timeline_event_by_type = {event["event_type"]: event for event in snapshot["timeline_events"]}
     progress_types = [event["event_type"] for event in snapshot["progress_events"]]
     assert timeline_event_by_type["role_request_prepared"]["title"] == "Role request prepared"
+    assert timeline_event_by_type["step_instruction_context_prepared"]["title"] == "StepInstruction context prepared"
+    assert timeline_event_by_type["step_instruction_context_prepared"]["detail"] == "build"
     assert timeline_event_by_type["control_triggered"]["title"] == "Control triggered"
     assert [event["event_type"] for event in timeline_events] == ["parallel_group_started", "parallel_group_finished"]
     assert timeline_events[0]["title"] == "Parallel review started"

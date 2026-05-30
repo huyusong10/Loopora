@@ -137,11 +137,11 @@ def test_cli_agent_submit_schema_error_prints_result_repair_guidance(monkeypatch
         json.dumps(
             {
                 "active_step": {
-                    "capsule": {
+                    "agent_step_view": {
                         "step_id": "gatekeeper_step",
                         "role": {"name": "GateKeeper", "id": "gatekeeper", "archetype": "gatekeeper"},
                         "role_dispatch": {"target_agent": "loopora-gatekeeper"},
-                        "context_absolute_path": str(layout.step_context_path(0, 3, "gatekeeper_step")),
+                        "context_absolute_path": str(layout.step_instruction_context_path(0, 3, "gatekeeper_step")),
                         "known_evidence_ids": ["ev_000_00_builder_step", "ev_000_01_inspector_step"],
                         "output_schema": {
                             "type": "object",
@@ -292,13 +292,13 @@ def test_cli_agent_submit_unfilled_template_reports_multiple_schema_repairs(monk
         json.dumps(
             {
                 "active_step": {
-                    "capsule": {
+                    "agent_step_view": {
                         "iter": 1,
                         "step_id": "builder_step",
                         "step_order": 0,
                         "role": {"name": "Builder", "id": "builder", "archetype": "builder"},
                         "role_dispatch": {"target_agent": "loopora-builder"},
-                        "context_absolute_path": str(layout.step_context_path(0, 0, "builder_step")),
+                        "context_absolute_path": str(layout.step_instruction_context_path(0, 0, "builder_step")),
                         "output_schema": output_schema,
                         "submit_hint": {
                             "result_template_absolute_path": str(result_file),
@@ -441,13 +441,13 @@ def test_cli_agent_submit_host_dispatch_errors_report_repair_guidance(monkeypatc
         json.dumps(
             {
                 "active_step": {
-                    "capsule": {
+                    "agent_step_view": {
                         "iter": 1,
                         "step_id": "builder_step",
                         "step_order": 0,
                         "role": {"name": "Builder", "id": "builder", "archetype": "builder"},
                         "role_dispatch": {"target_agent": "loopora-builder"},
-                        "context_absolute_path": str(layout.step_context_path(0, 0, "builder_step")),
+                        "context_absolute_path": str(layout.step_instruction_context_path(0, 0, "builder_step")),
                         "output_schema": {
                             "type": "object",
                             "properties": {

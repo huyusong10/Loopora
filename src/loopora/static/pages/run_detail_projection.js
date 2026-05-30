@@ -15,6 +15,9 @@
     const lifecycle = projection.lifecycle && typeof projection.lifecycle === "object" ? projection.lifecycle : {};
     const timing = projection.timing && typeof projection.timing === "object" ? projection.timing : {};
     const display = projection.display && typeof projection.display === "object" ? projection.display : {};
+    const strategySource = projection.strategy_source && typeof projection.strategy_source === "object"
+      ? projection.strategy_source
+      : {};
     const taskVerdict = projection.task_verdict && typeof projection.task_verdict === "object"
       ? projection.task_verdict
       : {status: String(summary.task_verdict_status || "not_evaluated").trim() || "not_evaluated"};
@@ -31,6 +34,7 @@
       active_role: String(summary.active_role || lifecycle.active_role || "").trim(),
       workdir: String(summary.workdir || lifecycle.workdir || "").trim(),
       task_verdict: taskVerdict,
+      strategy_source: strategySource,
       summary_md: String(display.summary_md || ""),
       queued_at: String(timing.queued_at || ""),
       started_at: String(timing.started_at || ""),
@@ -49,6 +53,9 @@
     }
     const summary = projectionSummary(raw);
     const runStatus = String(summary.run_status || raw.run_status || raw.status || "").trim();
+    const rawStrategySource = raw.strategy_source && typeof raw.strategy_source === "object"
+      ? raw.strategy_source
+      : (raw.workflow_json && typeof raw.workflow_json === "object" ? raw.workflow_json : {});
     return {
       ...raw,
       id: String(summary.run_id || raw.id || "").trim(),
@@ -58,6 +65,7 @@
       current_iter: Number.isInteger(summary.current_iter) ? summary.current_iter : raw.current_iter,
       active_role: String(summary.active_role || raw.active_role || "").trim(),
       workdir: String(summary.workdir || raw.workdir || "").trim(),
+      strategy_source: rawStrategySource,
       web_projection: raw.web_projection || raw.initialProjection || null,
     };
   }

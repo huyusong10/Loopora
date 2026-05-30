@@ -16,7 +16,7 @@ from loopora.run_takeaways import (
 )
 from loopora.structured_booleans import structured_bool_is_true
 from loopora.structured_numbers import structured_non_negative_int
-from loopora.strategy_source import normalize_strategy_role_display_name, strategy_archetype_display_name
+from loopora.strategy_source import strategy_source_from_record
 
 SIMPLE_TIMELINE_TITLES = {
     "run_started": "Run started",
@@ -70,8 +70,8 @@ def _format_role_request_prepared(payload: Mapping[str, object], role: object, _
     return "Role request prepared", str(payload.get("role_name") or role or "").strip()
 
 
-def _format_step_context_prepared(payload: Mapping[str, object], _role: object, _event_type: str) -> tuple[str, str]:
-    return "Step context prepared", str(payload.get("step_id") or "").strip()
+def _format_step_instruction_context_prepared(payload: Mapping[str, object], _role: object, _event_type: str) -> tuple[str, str]:
+    return "StepInstruction context prepared", str(payload.get("step_id") or "").strip()
 
 
 def _format_role_execution_summary(payload: Mapping[str, object], role: object, _event_type: str) -> tuple[str, str]:
@@ -257,7 +257,7 @@ def _recorded_verdict_title(task_status: str) -> str:
 TIMELINE_EVENT_FORMATTERS = {
     "checks_resolved": _format_checks_resolved,
     "role_request_prepared": _format_role_request_prepared,
-    "step_context_prepared": _format_step_context_prepared,
+    "step_instruction_context_prepared": _format_step_instruction_context_prepared,
     "role_execution_summary": _format_role_execution_summary,
     "role_degraded": _format_role_degraded,
     "step_handoff_written": _format_step_handoff_written,
@@ -304,6 +304,10 @@ def _strategy_role_executor_summary(
     return " · ".join(f"{label} x{count}" if count > 1 else label for label, count in counts.items())
 
 
+def _overview_strategy_source(record: Mapping[str, object] | None) -> Mapping[str, object]:
+    return strategy_source_from_record(record) or {}
+
+
 def _task_verdict_status(verdict: object) -> str:
     if not isinstance(verdict, Mapping):
         return "not_evaluated"
@@ -326,7 +330,7 @@ def _decorate_loop_overview(loop: dict) -> dict:
     latest_run_id = loop.get("latest_run_id")
     latest_status = loop.get("latest_status") or "draft"
     summary_excerpt = _summary_excerpt(loop.get("latest_summary_md"))
-    strategy_source = loop.get("workflow_json") or {}
+    strategy_source = _overview_strategy_source(loop)
     task_verdict = loop.get("latest_task_verdict_json") if isinstance(loop.get("latest_task_verdict_json"), Mapping) else {}
     task_status = _task_verdict_status(task_verdict)
     task_label_zh, task_label_en = _task_verdict_label(task_status)
@@ -375,7 +379,7 @@ def _decorate_loop_overview(loop: dict) -> dict:
 
 
 def _decorate_run_overview(run: dict) -> dict:
-    strategy_source = run.get("workflow_json") or {}
+    strategy_source = _overview_strategy_source(run)
     summary = _build_run_summary_snapshot(run)
     task_status = _task_verdict_status(run.get("task_verdict") or run.get("task_verdict_json"))
     return {
@@ -392,52 +396,6 @@ def _decorate_run_overview(run: dict) -> dict:
         "task_verdict_note_zh": summary["verdict_note_zh"],
         "task_verdict_note_en": summary["verdict_note_en"],
     }
-
-
-def _progress_stage_seed(run: Mapping[str, object] | None) -> list[dict[str, str]]:
-    strategy_source = run.get("workflow_json") if isinstance(run, Mapping) else {}
-    roles = strategy_source.get("roles", []) if isinstance(strategy_source, Mapping) else []
-    steps = strategy_source.get("steps", []) if isinstance(strategy_source, Mapping) else []
-    role_by_id = {str(role.get("id") or "").strip(): role for role in roles if isinstance(role, Mapping) and str(role.get("id") or "").strip()}
-
-    stages = [
-        {
-            "key": "checks",
-            "label": "Checks",
-            "kind": "checks",
-        }
-    ]
-    for step in steps:
-        if not isinstance(step, Mapping):
-            continue
-        step_id = str(step.get("id") or "").strip()
-        if not step_id:
-            continue
-        role = role_by_id.get(str(step.get("role_id") or "").strip(), {})
-        archetype = str(role.get("archetype") or "").strip()
-        fallback_name = strategy_archetype_display_name(archetype, locale="en") if archetype else step_id
-        label = normalize_strategy_role_display_name(str(role.get("name") or "").strip(), archetype) or fallback_name
-        stages.append(
-            {
-                "key": f"step:{step_id}",
-                "label": label,
-                "kind": "workflow_step",
-            }
-        )
-    stages.append(
-        {
-            "key": "finished",
-            "label": "Run closed",
-            "kind": "finished",
-        }
-    )
-    return [
-        {
-            **stage,
-            "sequence": index + 1,
-        }
-        for index, stage in enumerate(stages)
-    ]
 
 
 def _build_run_summary_snapshot(run: dict) -> dict:
@@ -617,5 +575,5 @@ __all__ = [
     "_decorate_run_overview",
     "_display_iter",
     "_format_timeline_event",
-    "_progress_stage_seed",
+    "_overview_strategy_source",
 ]

@@ -207,7 +207,7 @@ def test_exploratory_run_generates_and_freezes_checks(
     compiled_spec = json.loads((run_dir / "contract" / "compiled_spec.json").read_text(encoding="utf-8"))
     run_contract = json.loads((run_dir / "contract" / "run_contract.json").read_text(encoding="utf-8"))
     auto_checks = json.loads((run_dir / "contract" / "auto_checks.json").read_text(encoding="utf-8"))
-    step_contexts = sorted(run_dir.glob("iterations/iter_000/steps/*/input.context.json"))
+    step_contexts = sorted(run_dir.glob("iterations/iter_000/steps/*/step_instruction_context.json"))
     first_step_context = json.loads(step_contexts[0].read_text(encoding="utf-8"))
     tester_output = json.loads((run_dir / "tester_output.json").read_text(encoding="utf-8"))
     snapshot_contract = service.run_observation_snapshot(run["id"])["key_takeaways"]["judgment_contract"]

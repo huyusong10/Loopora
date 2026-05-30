@@ -59,6 +59,7 @@ def _assert_orchestration_catalog_flags(
     custom_orchestration: dict,
 ) -> None:
     assert builtin_orchestration["source"] == "builtin"
+    assert builtin_orchestration["strategy_source"] == builtin_orchestration["workflow_json"]
     assert builtin_orchestration["workflow_json"]["preset"] == "quality_gate"
     assert builtin_orchestration["workflow_json"]["steps"][0]["inherit_session"] is True
     assert builtin_orchestration["workflow_json"]["steps"][1]["inherit_session"] is False
@@ -69,6 +70,7 @@ def _assert_orchestration_catalog_flags(
     assert builtin_orchestration["scenario_en"]
 
     assert custom_orchestration["source"] == "custom"
+    assert custom_orchestration["strategy_source"] == custom_orchestration["workflow_json"]
     assert custom_orchestration["workflow_json"]["preset"] == "inspect_first"
     assert custom_orchestration["parallel_groups"] == []
     assert custom_orchestration["parallel_group_count"] == 0
@@ -120,6 +122,7 @@ def _assert_hidden_legacy_orchestrations_remain_addressable(catalog: StrategyTem
     for orchestration_id, (name, preset) in expectations.items():
         orchestration = catalog.get_orchestration(orchestration_id)
         assert orchestration["name"] == name
+        assert orchestration["strategy_source"] == orchestration["workflow_json"]
         assert orchestration["workflow_json"]["preset"] == preset
 
 
@@ -152,8 +155,8 @@ def test_asset_catalog_accepts_strategy_source_for_orchestration_templates(tmp_p
 
     created = catalog.create_orchestration(
         name="Strategy Source Inspect First",
-        description="Creates through the legacy Loopfile-compatible source field.",
-        workflow={"preset": "inspect_first"},
+        description="Creates through the Strategy Source mutation boundary.",
+        strategy_source={"preset": "inspect_first"},
     )
     updated = catalog.update_orchestration(
         created["id"],
@@ -163,7 +166,9 @@ def test_asset_catalog_accepts_strategy_source_for_orchestration_templates(tmp_p
     )
 
     assert created["workflow_json"]["preset"] == "inspect_first"
+    assert created["strategy_source"] == created["workflow_json"]
     assert updated["workflow_json"]["preset"] == "build_first"
+    assert updated["strategy_source"] == updated["workflow_json"]
 
 
 def test_asset_catalog_resolves_builtin_orchestration_input_and_applies_role_overrides(tmp_path: Path) -> None:

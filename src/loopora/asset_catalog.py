@@ -3,6 +3,7 @@ from __future__ import annotations
 from copy import deepcopy
 from dataclasses import dataclass, replace
 import re
+from typing import Any, cast
 
 from loopora.db import LooporaRepository
 from loopora.strategy_source import (
@@ -21,6 +22,7 @@ from loopora.strategy_source import (
     strategy_archetype_display_name,
     strategy_source_preset_copy,
     strategy_source_preset_names,
+    strategy_source_from_record,
     strategy_source_warnings,
     validate_strategy_prompt_markdown,
 )
@@ -162,6 +164,16 @@ def _pop_strategy_source_payload(fields: dict[str, object]) -> object:
     return None
 
 
+def _strategy_source_from_legacy_fields(strategy_source: dict | None, legacy_fields: dict[str, Any]) -> dict | None:
+    workflow = legacy_fields.pop("workflow", _MISSING)
+    if legacy_fields:
+        unexpected_fields = ", ".join(sorted(legacy_fields))
+        raise TypeError(f"unexpected orchestration fields: {unexpected_fields}")
+    if strategy_source is not None and workflow is not _MISSING:
+        raise TypeError("orchestration fields strategy_source and workflow cannot both be provided")
+    return strategy_source if workflow is _MISSING else cast(dict | None, workflow)
+
+
 def _strategy_parallel_groups(strategy_source: dict | None) -> list[str]:
     if not isinstance(strategy_source, dict):
         return []
@@ -215,6 +227,7 @@ class StrategyTemplateAssetCatalog:
                     "preset": preset_name,
                     "editable": False,
                     "deletable": False,
+                    "strategy_source": strategy_source,
                     "workflow_json": strategy_source,
                     "parallel_groups": parallel_groups,
                     "parallel_group_count": len(parallel_groups),
@@ -271,8 +284,10 @@ class StrategyTemplateAssetCatalog:
         decorated["source"] = source
         decorated["editable"] = source == "custom"
         decorated["deletable"] = source == "custom"
-        decorated["workflow_warnings"] = strategy_source_warnings(decorated.get("workflow_json") or {})
-        decorated["parallel_groups"] = _strategy_parallel_groups(decorated.get("workflow_json"))
+        strategy_source = strategy_source_from_record(decorated) or {}
+        decorated["strategy_source"] = strategy_source
+        decorated["workflow_warnings"] = strategy_source_warnings(strategy_source)
+        decorated["parallel_groups"] = _strategy_parallel_groups(strategy_source)
         decorated["parallel_group_count"] = len(decorated["parallel_groups"])
         return decorated
 
@@ -587,7 +602,7 @@ class StrategyTemplateAssetCatalog:
         if orchestration_id and workflow is None and not prompt_files:
             orchestration = self.get_orchestration(orchestration_id)
             hydrated_strategy_source, hydrated_prompt_files = self._hydrate_strategy_role_snapshots(
-                orchestration["workflow_json"],
+                strategy_source_from_record(orchestration) or {},
                 orchestration.get("prompt_files_json") or {},
             )
             normalized_strategy_source = normalize_strategy_source(hydrated_strategy_source, role_models=role_models)
@@ -634,14 +649,15 @@ class StrategyTemplateAssetCatalog:
         *,
         name: str,
         description: str = "",
-        workflow: dict | None = None,
+        strategy_source: dict | None = None,
         prompt_files: dict | None = None,
         role_models: dict | None = None,
+        **legacy_fields: Any,
     ) -> dict:
         normalized_name = str(name or "").strip()
         if not normalized_name:
             raise ValueError("name is required")
-        strategy_source = workflow
+        strategy_source = _strategy_source_from_legacy_fields(strategy_source, legacy_fields)
         resolved = self.resolve_orchestration_input(
             orchestration_id=None,
             workflow=strategy_source,
@@ -672,7 +688,7 @@ class StrategyTemplateAssetCatalog:
         normalized_name = str(payload_input.name or "").strip()
         if not normalized_name:
             raise ValueError("name is required")
-        current_strategy_source = deepcopy(current.get("workflow_json") or {})
+        current_strategy_source = deepcopy(strategy_source_from_record(current) or {})
         current_prompt_files = dict(current.get("prompt_files_json") or {})
         effective_strategy_source = (
             payload_input.strategy_source if payload_input.strategy_source is not None else current_strategy_source

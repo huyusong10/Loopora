@@ -10,6 +10,7 @@ from loopora.agent_native_step_view import (
     AgentNativeStepViewRequest,
     agent_native_step_view,
 )
+from loopora.agent_native_step_view_paths import agent_native_step_contract_path_text, agent_native_step_view_path_text
 from loopora.agent_native_step_view_refresh import refresh_agent_native_step_view_with_judgment_contract
 from loopora.agent_native_controls import (
     AgentNativeControlQueueRequest,
@@ -26,7 +27,12 @@ from loopora.agent_native_parallel_groups import (
     agent_native_claim_input_snapshot,
     agent_native_parallel_group_started_payload,
 )
-from loopora.agent_native_projection_state import agent_native_active_step_is_stale, agent_native_active_step_view
+from loopora.agent_native_projection_state import (
+    agent_native_active_step_is_stale,
+    agent_native_active_step_view,
+    agent_native_active_step_view_fields,
+    agent_native_active_step_view_payload,
+)
 from loopora.agent_native_result_template import (
     write_agent_native_step_view_files,
 )
@@ -70,9 +76,8 @@ from loopora.run_artifacts import RunArtifactLayout
 from loopora.service_agent_native_contracts import agent_native_unknown_evidence_refs
 from loopora.service_types import ACTIVE_RUN_STATUSES, LooporaConflictError, LooporaError, LooporaNotFoundError, TERMINAL_RUN_STATUSES, normalize_completion_mode
 from loopora.step_instruction_context import (
-    LEGACY_CONTEXT_PACKET_KEY,
+    STEP_INSTRUCTION_CONTEXT_KEY,
     step_instruction_context_from_mapping,
-    step_instruction_context_legacy_fields,
 )
 from loopora.structured_numbers import structured_non_negative_int
 from loopora.utils import utc_now, write_json
@@ -233,7 +238,7 @@ class ServiceAgentNativeMixin:
             write_agent_native_state(layout, state)
         active = state.get("active_step") if isinstance(state.get("active_step"), dict) else {}
         current_step_projection = current_step_projection_for_run(self.repository, run["id"])
-        active_step_payload = active.get("capsule")
+        active_step_payload = agent_native_active_step_view_payload(active)
         active_step_view = agent_native_active_step_view(active)
         if active and active_step_payload and agent_native_active_step_is_stale(active, current_step_projection):
             active = {}
@@ -247,16 +252,17 @@ class ServiceAgentNativeMixin:
                 layout,
                 step_instruction_context,
             )
-            context_changed = active.get(LEGACY_CONTEXT_PACKET_KEY) != refreshed_step_instruction_context
+            context_fields = {STEP_INSTRUCTION_CONTEXT_KEY: refreshed_step_instruction_context}
+            context_changed = any(active.get(key) != value for key, value in context_fields.items())
             if context_changed:
-                active[LEGACY_CONTEXT_PACKET_KEY] = refreshed_step_instruction_context
+                active.update(context_fields)
             step_view = refresh_agent_native_step_view_with_judgment_contract(
                 run,
                 active_step_payload,
                 step_instruction_context=refreshed_step_instruction_context,
             )
             if context_changed or step_view != active_step_view:
-                active["capsule"] = step_view
+                active.update(agent_native_active_step_view_fields(step_view))
                 state["active_step"] = active
                 write_agent_native_state(layout, state)
             write_agent_native_step_view_files(step_view)
@@ -399,8 +405,8 @@ class ServiceAgentNativeMixin:
         write_agent_native_step_view_files(step_view)
         state["active_step"] = {
             "claimed_at": utc_now(),
-            "capsule": step_view,
-            LEGACY_CONTEXT_PACKET_KEY: step_instruction_context,
+            **agent_native_active_step_view_fields(step_view),
+            STEP_INSTRUCTION_CONTEXT_KEY: step_instruction_context,
             "execution_settings": execution_settings,
             "role": role,
             "runtime_role": runtime_role,
@@ -421,9 +427,8 @@ class ServiceAgentNativeMixin:
                 "archetype": role["archetype"],
                 "runtime_role": runtime_role,
                 "target_agent": str((step_view.get("role_dispatch") or {}).get("target_agent") or ""),
-                "agent_step_view_path": str(step_view.get("agent_step_view_path") or step_view.get("capsule_path") or ""),
-                "step_contract_path": str(step_view.get("step_contract_path") or step_view.get("capsule_path") or ""),
-                "capsule_path": str(step_view.get("capsule_path") or ""),
+                "agent_step_view_path": agent_native_step_view_path_text(step_view),
+                "step_contract_path": agent_native_step_contract_path_text(step_view),
                 "result_template_path": str((step_view.get("submit_hint") or {}).get("result_template_path") or ""),
                 "parallel_group": str(step.get("parallel_group") or ""),
                 "control_id": str(step.get("control_id") or ""),
@@ -596,7 +601,7 @@ class ServiceAgentNativeMixin:
             "runtime_role": runtime_role,
             "execution_settings": active.get("execution_settings") if isinstance(active.get("execution_settings"), dict) else {},
             "normalized_output": normalized_output,
-            **step_instruction_context_legacy_fields(step_instruction_context),
+            STEP_INSTRUCTION_CONTEXT_KEY: step_instruction_context,
             "session_ref": submitted_session_ref,
             "actor_ref": agent_runner_actor(submit_context.kind).to_dict(),
             "duration_ms": 0,

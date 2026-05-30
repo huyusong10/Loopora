@@ -218,7 +218,7 @@
 
     function createStageChip(stage) {
       const chip = document.createElement("div");
-      chip.className = `stage-chip ${stage.kind === "workflow_step" ? "stage-chip--workflow" : "stage-chip--terminal"}`;
+      chip.className = `stage-chip ${stage.kind === "strategy_step" ? "stage-chip--strategy" : "stage-chip--terminal"}`;
       chip.dataset.stage = stage.key;
       chip.dataset.stageKind = stage.kind;
       chip.tabIndex = 0;
@@ -229,7 +229,7 @@
     function buildStageStripLayout(stages) {
       const fragment = document.createDocumentFragment();
       const checksStage = stages.find((stage) => stage.kind === "checks") || null;
-      const workflowStages = stages.filter((stage) => stage.kind === "workflow_step");
+      const strategyStages = stages.filter((stage) => stage.kind === "strategy_step");
       const finishedStage = stages.find((stage) => stage.kind === "finished") || null;
 
       if (checksStage) {
@@ -240,9 +240,9 @@
       }
 
       const loopShell = document.createElement("div");
-      loopShell.className = `stage-loop-shell${workflowStages.length ? "" : " is-empty"}`;
+      loopShell.className = `stage-loop-shell${strategyStages.length ? "" : " is-empty"}`;
       loopShell.dataset.testid = "run-stage-loop-shell";
-      loopShell.dataset.workflowEmpty = workflowStages.length ? "false" : "true";
+      loopShell.dataset.strategyEmpty = strategyStages.length ? "false" : "true";
       loopShell.innerHTML = `
         <div class="stage-loop-banner">
           <span class="stage-loop-eyebrow" id="stage-loop-eyebrow">-</span>
@@ -259,11 +259,11 @@
           </div>
         </div>
       `;
-      const workflowContainer = loopShell.querySelector(".stage-loop-steps");
-      if (workflowStages.length) {
-        workflowContainer.replaceChildren(...workflowStages.map(createStageChip));
+      const strategyContainer = loopShell.querySelector(".stage-loop-steps");
+      if (strategyStages.length) {
+        strategyContainer.replaceChildren(...strategyStages.map(createStageChip));
       } else {
-        workflowContainer.innerHTML = `
+        strategyContainer.innerHTML = `
           <div class="stage-loop-empty" data-testid="run-stage-loop-empty">
             <strong>${escapeHtml(localeText("还没有中间步骤", "No middle steps yet"))}</strong>
             <p>${escapeHtml(localeText(
@@ -285,15 +285,15 @@
     }
 
     function updateStageLoopSummary(run = getRun()) {
-      const summary = progressProjector.workflowLoopSummary(run);
+      const summary = progressProjector.strategyLoopSummary(run);
       setTextContentIfChanged("stage-loop-eyebrow", summary.eyebrow);
       setTextContentIfChanged("stage-loop-title", summary.title);
       setTextContentIfChanged("stage-loop-copy", summary.detail);
       const loopShell = document.querySelector("#stage-strip .stage-loop-shell");
       if (loopShell) {
-        const workflowEmpty = !progressProjector.getProgressStages(run).some((stage) => stage.kind === "workflow_step");
-        loopShell.classList.toggle("is-empty", workflowEmpty);
-        loopShell.dataset.workflowEmpty = workflowEmpty ? "true" : "false";
+        const strategyEmpty = !progressProjector.getProgressStages(run).some((stage) => stage.kind === "strategy_step");
+        loopShell.classList.toggle("is-empty", strategyEmpty);
+        loopShell.dataset.strategyEmpty = strategyEmpty ? "true" : "false";
       }
     }
 
@@ -439,7 +439,7 @@
       const policy = actionPolicyText(step.action_policy || {});
       const title = policy ? `${roleLabel} -> ${targetAgent} · ${policy}` : `${roleLabel} -> ${targetAgent}`;
       const contextPath = String(step.context_path || step.context_absolute_path || "-");
-      const stepContractPath = String(step.step_contract_path || step.step_contract_absolute_path || step.capsule_path || step.capsule_absolute_path || "-");
+      const stepContractPath = String(step.step_contract_path || step.step_contract_absolute_path || "-");
       const templatePath = String(submitHint.result_template_path || submitHint.result_template_absolute_path || "-");
       const outboxPath = String(submitHint.result_outbox_dir || submitHint.result_outbox_absolute_dir || "-");
       const submitCommand = String(submitHint.command || "-");
@@ -902,8 +902,8 @@
         const snapshot = snapshots[chip.dataset.stage] || {state: "pending", stateLabel: "-", durationLabel: "-", meta: "-"};
         const definition = stageDefinitions.get(chip.dataset.stage);
         const tooltip = progressProjector.stageTooltipText(chip.dataset.stage, run, snapshots);
-        const baseClass = chip.dataset.stageKind === "workflow_step"
-          ? "stage-chip stage-chip--workflow"
+        const baseClass = chip.dataset.stageKind === "strategy_step"
+          ? "stage-chip stage-chip--strategy"
           : "stage-chip stage-chip--terminal";
         setClassNameIfChanged(chip, `${baseClass} ${snapshot.state}`);
         setAttributeIfChanged(chip, "data-stage-snapshot-state", snapshot.state || "pending");

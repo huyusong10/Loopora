@@ -26,7 +26,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const roleDefinitionSelect = document.getElementById("role-definition-select");
   const addStepButton = document.getElementById("add-step-button");
   const workflowStepsList = document.getElementById("workflow-steps-list");
-  const workflowJsonInput = document.getElementById("workflow-json-input");
+  const strategyJsonInput = document.getElementById("workflow-json-input");
   const promptFilesJsonInput = document.getElementById("prompt-files-json-input");
   const saveOrchestrationButton = document.getElementById("save-orchestration-button");
   const openSpecPracticeButton = document.getElementById("open-orchestration-spec-practice-modal");
@@ -430,8 +430,8 @@ document.addEventListener("DOMContentLoaded", () => {
     ensureActiveSelection();
   }
 
-  function syncWorkflowJsonFields() {
-    workflowJsonInput.value = JSON.stringify(workflowState, null, 2);
+  function syncStrategyJsonFields() {
+    strategyJsonInput.value = JSON.stringify(workflowState, null, 2);
     const nextPromptFiles = {};
     workflowState.roles.forEach((role) => {
       if (role.prompt_ref && promptFilesState[role.prompt_ref]) {
@@ -877,7 +877,7 @@ document.addEventListener("DOMContentLoaded", () => {
   function renderWorkflowEditor({forceValidation = false} = {}) {
     ensureActiveSelection();
     localizeSelectOptions(workflowStarterSelect);
-    syncWorkflowJsonFields();
+    syncStrategyJsonFields();
     renderWorkflowLoopPreview();
     renderSteps();
     renderWorkflowSettingsModal();
@@ -902,7 +902,7 @@ document.addEventListener("DOMContentLoaded", () => {
       headers: {"Content-Type": "application/json"},
       body: JSON.stringify({
         locale: window.LooporaUI.currentLocale(),
-        workflow_json: workflowState,
+        strategy_json: workflowState,
       }),
     });
     if (error || !response || !payload.ok) {
@@ -1225,7 +1225,7 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
-    syncWorkflowJsonFields();
+    syncStrategyJsonFields();
     renderWorkflowValidation({forceErrors: submitAttempted});
     if (requiresRender) {
       renderWorkflowEditor({forceValidation: submitAttempted});
@@ -1261,7 +1261,7 @@ document.addEventListener("DOMContentLoaded", () => {
       showStatus(formError, localeText("编排结构不完整，请先修正。", "The orchestration is incomplete. Please fix it before saving."), "error");
       return;
     }
-    syncWorkflowJsonFields();
+    syncStrategyJsonFields();
     if (saveOrchestrationButton) {
       saveOrchestrationButton.disabled = true;
     }
@@ -1294,7 +1294,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   try {
     normalizeWorkflowState(
-      JSON.parse(workflowJsonInput.value || "{}"),
+      JSON.parse(strategyJsonInput.value || "{}"),
       JSON.parse(promptFilesJsonInput.value || "{}"),
     );
   } catch (_) {

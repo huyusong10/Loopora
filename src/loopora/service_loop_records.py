@@ -14,6 +14,7 @@ from loopora.strategy_source import (
     normalize_strategy_source,
     resolve_strategy_prompt_files,
     strategy_prompt_asset_path,
+    strategy_source_from_record,
     strategy_source_warnings,
 )
 from loopora.task_verdicts import hydrate_run_status_and_task_verdict
@@ -27,7 +28,15 @@ class ServiceLoopRecordMixin:
         return build_preset_strategy_source(DEFAULT_STRATEGY_SOURCE_PRESET, role_models=role_models)
 
     def _normalized_strategy_source_from_record(self, loop_or_run: dict) -> dict:
-        strategy_source = loop_or_run.get("workflow_json") or self._legacy_strategy_source_from_loop(loop_or_run)
+        return (
+            self._strategy_source_snapshot_from_record(loop_or_run)
+            or self._legacy_strategy_source_from_loop(loop_or_run)
+        )
+
+    def _strategy_source_snapshot_from_record(self, loop_or_run: dict) -> dict:
+        strategy_source = strategy_source_from_record(loop_or_run)
+        if strategy_source is None:
+            return {}
         try:
             return normalize_strategy_source(strategy_source)
         except StrategySourceError:
@@ -71,7 +80,7 @@ class ServiceLoopRecordMixin:
         return self._read_prompt_files(loop_dir, strategy_source)
 
     def _read_prompt_files_for_run(self, run: dict) -> dict[str, str]:
-        strategy_source = run.get("workflow_json") or self._legacy_strategy_source_from_loop(run)
+        strategy_source = self._normalized_strategy_source_from_record(run)
         layout = self._run_artifact_layout(Path(run["runs_dir"]))
         return self._read_prompt_files(layout.contract_dir, strategy_source)
 
@@ -79,6 +88,7 @@ class ServiceLoopRecordMixin:
         if not loop:
             return loop
         strategy_source = self._normalized_strategy_source_from_record(loop)
+        loop["strategy_source"] = strategy_source
         loop["workflow_json"] = strategy_source
         loop["workflow_warnings"] = strategy_source_warnings(strategy_source)
         if loop.get("orchestration_id"):
@@ -105,6 +115,7 @@ class ServiceLoopRecordMixin:
         self._reap_terminal_thread_handle(run.get("id"), status=run.get("status"))
         hydrate_run_status_and_task_verdict(run)
         strategy_source = self._normalized_strategy_source_from_record(run)
+        run["strategy_source"] = strategy_source
         run["workflow_json"] = strategy_source
         run["workflow_warnings"] = strategy_source_warnings(strategy_source)
         if run.get("orchestration_id"):

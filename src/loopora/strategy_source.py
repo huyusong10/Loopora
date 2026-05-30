@@ -58,6 +58,17 @@ def normalize_strategy_source(
     return definition_normalize_strategy_source(strategy_source, role_models=role_models)
 
 
+def strategy_source_from_record(record: Mapping[str, Any] | None) -> dict[str, Any] | None:
+    """Read a Strategy Source from a projected record with storage compatibility."""
+    if not isinstance(record, Mapping):
+        return None
+    strategy_source = record.get("strategy_source")
+    if isinstance(strategy_source, Mapping):
+        return dict(strategy_source)
+    storage_source = record.get("workflow_json")
+    return dict(storage_source) if isinstance(storage_source, Mapping) else None
+
+
 def normalize_strategy_source_identifier(value: object, *, field_name: str) -> str:
     return definition_normalize_strategy_source_identifier(value, field_name=field_name)
 

@@ -454,7 +454,7 @@
     </summary>
     {% set checks_stage = progress_stages[0] if progress_stages else None %}
     {% set finished_stage = progress_stages[-1] if progress_stages else None %}
-    {% set workflow_stages = progress_stages[1:-1] if progress_stages|length > 2 else [] %}
+    {% set strategy_stages = progress_stages[1:-1] if progress_stages|length > 2 else [] %}
     <div class="stage-strip" id="stage-strip" data-testid="run-stage-strip">
       {% if checks_stage %}
       <div class="stage-strip-terminal stage-strip-terminal--entry">
@@ -470,16 +470,16 @@
       </div>
       {% endif %}
       <div
-        class="stage-loop-shell{% if not workflow_stages %} is-empty{% endif %}"
+        class="stage-loop-shell{% if not strategy_stages %} is-empty{% endif %}"
         data-testid="run-stage-loop-shell"
-        data-workflow-empty="{{ 'false' if workflow_stages else 'true' }}"
+        data-strategy-empty="{{ 'false' if strategy_stages else 'true' }}"
       >
         <div class="stage-loop-banner">
           <span class="stage-loop-eyebrow" id="stage-loop-eyebrow">
             <span data-lang="zh">Loop 步骤</span>
             <span data-lang="en">Loop steps</span>
           </span>
-          <strong class="stage-loop-title" id="stage-loop-title">{{ workflow_stages | map(attribute='label') | join(' → ') if workflow_stages else ("还没有中间步骤" if page_locale == "zh" else "No middle steps yet") }}</strong>
+          <strong class="stage-loop-title" id="stage-loop-title">{{ strategy_stages | map(attribute='label') | join(' → ') if strategy_stages else ("还没有中间步骤" if page_locale == "zh" else "No middle steps yet") }}</strong>
           <p class="stage-loop-copy" id="stage-loop-copy">
             <span data-lang="zh">中间步骤会按 Loop 计划重复推进；守门裁决负责判断证据是否足以收束。</span>
             <span data-lang="en">Middle steps repeat according to the Loop plan. GateKeeper decides whether the evidence is strong enough to close.</span>
@@ -488,9 +488,9 @@
         <div class="stage-loop-track">
           <span class="stage-loop-connector stage-loop-connector--entry" aria-hidden="true"></span>
           <div class="stage-loop-steps">
-            {% if workflow_stages %}
-              {% for stage in workflow_stages %}
-              <div class="stage-chip stage-chip--workflow" data-stage="{{ stage.key }}" data-stage-kind="{{ stage.kind }}" tabindex="0">
+            {% if strategy_stages %}
+              {% for stage in strategy_stages %}
+              <div class="stage-chip stage-chip--strategy" data-stage="{{ stage.key }}" data-stage-kind="{{ stage.kind }}" tabindex="0">
                 <div class="stage-chip-head">
                   <span class="stage-chip-order" data-stage-order>{{ "%02d"|format(stage.sequence or loop.index) }}</span>
                   <span class="stage-chip-label" data-stage-label>{{ stage.label }}</span>

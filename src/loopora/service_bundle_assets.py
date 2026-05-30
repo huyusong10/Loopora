@@ -25,6 +25,7 @@ from loopora.strategy_source import (
     STRATEGY_ROLE_POSTURE_FIELDS,
     normalize_strategy_source,
     strategy_source_has_finish_gatekeeper_step,
+    strategy_source_from_record,
 )
 from loopora.structured_booleans import structured_bool_is_true
 from loopora.utils import make_id
@@ -323,7 +324,7 @@ class ServiceBundleAssetMixin:
         request = _derive_bundle_request_from_args(request, raw_request)
         loop_id = request.loop_id
         loop = self.get_loop(loop_id)
-        strategy_source = normalize_strategy_source(loop.get("workflow_json") or {})
+        strategy_source = normalize_strategy_source(strategy_source_from_record(loop) or {})
         prompt_files = dict(loop.get("prompt_files") or {})
         role_definition_by_id = {}
         for role in strategy_source.get("roles", []):
@@ -465,7 +466,7 @@ class ServiceBundleAssetMixin:
             orchestration = self.create_orchestration(
                 name=bundle["metadata"]["name"],
                 description=bundle["metadata"].get("description", ""),
-                workflow=workflow_payload,
+                strategy_source=workflow_payload,
                 prompt_files=None,
                 role_models=None,
             )
@@ -880,7 +881,7 @@ class ServiceBundleAssetMixin:
             raise LooporaError(f"bundle {bundle['id']} has no orchestration")
         orchestration = self.get_orchestration(orchestration_id)
         workflow, prompt_files = self._refresh_bundle_role_snapshots(
-            workflow=orchestration.get("workflow_json") or {},
+            workflow=strategy_source_from_record(orchestration) or {},
             prompt_files=orchestration.get("prompt_files_json") or {},
             role_definition_ids=[
                 str(item).strip()
@@ -907,14 +908,16 @@ class ServiceBundleAssetMixin:
             return
         workflow = resolved_orchestration.get("refreshed_workflow") or {}
         prompt_files = resolved_orchestration.get("refreshed_prompt_files") or {}
-        if workflow == orchestration.get("workflow_json") and prompt_files == orchestration.get("prompt_files_json"):
+        if workflow == (strategy_source_from_record(orchestration) or {}) and prompt_files == orchestration.get(
+            "prompt_files_json"
+        ):
             return
         self._asset_call(
             self.asset_catalog.update_orchestration,
             orchestration_id,
             name=orchestration["name"],
             description=orchestration.get("description", ""),
-            workflow=workflow,
+            strategy_source=workflow,
             prompt_files=prompt_files,
             role_models=None,
         )

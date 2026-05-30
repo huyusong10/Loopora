@@ -60,10 +60,6 @@ class StepInstructionContextRequest:
     evidence_manifest_claims: list[dict] | None = None
     continuation_context: dict | None = None
 
-
-StepContextPacketRequest = StepInstructionContextRequest
-
-
 @dataclass(frozen=True)
 class StepResultContext:
     layout: RunArtifactLayout
@@ -383,7 +379,7 @@ CONTINUATION_CONTEXT_SCHEMA = {
     "additionalProperties": False,
 }
 
-STEP_CONTEXT_PACKET_SCHEMA = {
+STEP_INSTRUCTION_CONTEXT_SCHEMA = {
     "type": "object",
     "required": ["contract", "continuation", "iteration", "current_step", "upstream", "evidence", "artifacts"],
     "properties": {
@@ -400,8 +396,6 @@ STEP_CONTEXT_PACKET_SCHEMA = {
                 "loop_fit_reasons",
                 "strategy_preset",
                 "strategy_collaboration_intent",
-                "workflow_preset",
-                "workflow_collaboration_intent",
                 "judgment_tradeoffs",
                 "execution_strategy",
                 "local_governance",
@@ -423,8 +417,6 @@ STEP_CONTEXT_PACKET_SCHEMA = {
                 "loop_fit_reasons": {"type": "array", "items": {"type": "string"}},
                 "strategy_preset": {"type": "string"},
                 "strategy_collaboration_intent": {"type": "string"},
-                "workflow_preset": {"type": "string"},
-                "workflow_collaboration_intent": {"type": "string"},
                 "judgment_tradeoffs": {"type": "array", "items": {"type": "string"}},
                 "execution_strategy": {"type": "array", "items": {"type": "string"}},
                 "local_governance": {"type": "array", "items": {"type": "string"}},
@@ -1050,8 +1042,6 @@ def build_step_instruction_context(request: StepInstructionContextRequest) -> di
             ),
             "strategy_preset": str(strategy_snapshot.get("preset") or "custom"),
             "strategy_collaboration_intent": str(strategy_snapshot.get("collaboration_intent") or "").strip(),
-            "workflow_preset": str(strategy_snapshot.get("preset") or "custom"),
-            "workflow_collaboration_intent": str(strategy_snapshot.get("collaboration_intent") or "").strip(),
             "judgment_tradeoffs": judgment_tradeoffs,
             "execution_strategy": execution_strategy,
             "local_governance": local_governance,
@@ -1125,11 +1115,6 @@ def build_step_instruction_context(request: StepInstructionContextRequest) -> di
             artifact_ref(layout, layout.evidence_manifest_path, kind="evidence", label="evidence-manifest"),
         ],
     }
-
-
-def build_step_context_packet(request: StepContextPacketRequest) -> dict:
-    return build_step_instruction_context(request)
-
 
 def build_step_handoff(result: StepResultContext) -> dict:
     layout = result.layout
@@ -1565,7 +1550,7 @@ def render_step_prompt(
     role: dict,
     prompt_label: str,
     prompt_body: str,
-    packet: dict,
+    step_instruction_context: dict,
     compiled_spec: dict,
 ) -> str:
     from loopora.headless_prompt import HeadlessPromptRequest, build_headless_prompt
@@ -1575,7 +1560,7 @@ def render_step_prompt(
             role=role,
             prompt_label=prompt_label,
             prompt_body=prompt_body,
-            step_instruction_context=packet,
+            step_instruction_context=step_instruction_context,
             compiled_spec=compiled_spec,
         )
     )
@@ -1733,7 +1718,6 @@ def render_run_contract_section(contract: dict, compiled_spec: dict) -> str:
     ).strip()
     strategy_collaboration_intent = str(
         contract.get("strategy_collaboration_intent")
-        or contract.get("workflow_collaboration_intent")
         or "No explicit strategy collaboration intent was provided."
     ).strip()
     loop_fit_reasons = json.dumps(contract.get("loop_fit_reasons") or [], ensure_ascii=False, indent=2)
@@ -1751,7 +1735,7 @@ def render_run_contract_section(contract: dict, compiled_spec: dict) -> str:
         f"- Execution strategy: {execution_strategy}\n"
         f"- Local governance: {local_governance}\n"
         f"- Role postures: {role_postures}\n"
-        f"- Strategy preset: {contract.get('strategy_preset') or contract.get('workflow_preset')}\n"
+        f"- Strategy preset: {contract.get('strategy_preset')}\n"
         f"- Strategy collaboration intent: {strategy_collaboration_intent}\n"
         f"- Check mode: {contract.get('check_mode')}\n"
         f"- Check count: {contract.get('check_count')}\n\n"

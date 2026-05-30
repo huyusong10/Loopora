@@ -4,10 +4,10 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function renderAllWorkflowDiagrams() {
-    document.querySelectorAll("[data-workflow-diagram]").forEach((element) => {
+    document.querySelectorAll("[data-strategy-diagram], [data-workflow-diagram]").forEach((element) => {
       try {
-        const workflow = JSON.parse(element.dataset.workflowDiagram || "{}");
-        window.LooporaWorkflowDiagram.renderInto(element, workflow, {variant: "card"});
+        const strategySource = JSON.parse(element.dataset.strategyDiagram || element.dataset.workflowDiagram || "{}");
+        window.LooporaWorkflowDiagram.renderInto(element, strategySource, {variant: "card"});
       } catch (_) {
         element.innerHTML = "";
       }

@@ -11,7 +11,7 @@ from loopora.compiler.sources import LoopSource, LoopSourceKind
 from loopora.compiler.strategy_compiler import compile_loop_strategy
 from loopora.kernel.definition import LoopDefinition, LoopMetadata, RuntimeDefaults
 from loopora.specs import compile_markdown_spec
-from loopora.strategy_source import build_preset_strategy_source
+from loopora.strategy_source import build_preset_strategy_source, strategy_source_from_record
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -83,7 +83,7 @@ def compile_agent_message_source(source: LoopSource) -> LoopDefinition:
 def compile_existing_loop_record(record: Mapping[str, object]) -> LoopDefinition:
     loop_id = text(record.get("id"), fallback="loop")
     compiled_spec = mapping(record.get("compiled_spec") or record.get("compiled_spec_json"))
-    strategy_source = mapping(record.get("workflow") or record.get("workflow_json"))
+    strategy_source = _existing_loop_record_strategy_source(record)
     completion_mode = text(record.get("completion_mode"), fallback="gatekeeper")
     max_iterations = integer(record.get("max_iters"), fallback=1)
     max_step_retries = integer(record.get("max_role_retries"), fallback=1)
@@ -110,6 +110,16 @@ def compile_existing_loop_record(record: Mapping[str, object]) -> LoopDefinition
             ),
         )
     )
+
+
+def _existing_loop_record_strategy_source(record: Mapping[str, object]) -> Mapping[str, object]:
+    strategy_source = record.get("strategy_source")
+    if strategy_source is not None:
+        return mapping(strategy_source)
+    strategy_source_alias = record.get("workflow")
+    if strategy_source_alias is not None:
+        return mapping(strategy_source_alias)
+    return mapping(strategy_source_from_record(record))
 
 
 def _compile_loop_definition(parts: _LoopDefinitionParts) -> LoopDefinition:

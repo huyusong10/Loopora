@@ -323,7 +323,7 @@ class ServiceRunRegistrationMixin:
         if self.repository.has_active_run_for_workdir(loop["workdir"]):
             raise LooporaConflictError(f"another active run is already using {loop['workdir']}")
 
-        strategy_source = loop.get("workflow_json") or self._legacy_strategy_source_from_loop(loop)
+        strategy_source = self._normalized_strategy_source_from_record(loop)
         try:
             prompt_files = self._read_prompt_files_for_loop(loop["workdir"], loop["id"], strategy_source)
         except StrategySourceError as exc:

@@ -341,7 +341,7 @@ def test_agent_native_host_dispatch_requires_literal_role_dispatch_booleans(serv
         "step_id": "builder_step",
         "role": {"archetype": "builder"},
         "active": {
-            "capsule": {
+            "agent_step_view": {
                 "role_dispatch": {
                     "required": "true",
                     "target_agent": "loopora-builder",
@@ -352,11 +352,11 @@ def test_agent_native_host_dispatch_requires_literal_role_dispatch_booleans(serv
         },
     }
 
-    context["active"]["capsule"]["role_dispatch"] = {}
+    context["active"]["agent_step_view"]["role_dispatch"] = {}
     with pytest.raises(LooporaConflictError, match="role_dispatch is required"):
         service._validate_agent_native_host_dispatch(context, None)
 
-    context["active"]["capsule"]["role_dispatch"] = {
+    context["active"]["agent_step_view"]["role_dispatch"] = {
         "required": True,
         "target_agent": "loopora-builder",
         "inline_allowed": False,
@@ -365,7 +365,7 @@ def test_agent_native_host_dispatch_requires_literal_role_dispatch_booleans(serv
     with pytest.raises(LooporaConflictError, match="requires loopora_host_dispatch"):
         service._validate_agent_native_host_dispatch(context, None)
 
-    context["active"]["capsule"]["role_dispatch"] = {
+    context["active"]["agent_step_view"]["role_dispatch"] = {
         "required": True,
         "target_agent": "loopora-builder",
         "inline_allowed": False,
@@ -374,7 +374,7 @@ def test_agent_native_host_dispatch_requires_literal_role_dispatch_booleans(serv
     with pytest.raises(LooporaConflictError, match="requires loopora_host_dispatch"):
         service._validate_agent_native_host_dispatch(context, {})
 
-    context["active"]["capsule"]["role_dispatch"] = {
+    context["active"]["agent_step_view"]["role_dispatch"] = {
         "required": "true",
         "target_agent": "loopora-builder",
         "inline_allowed": False,
@@ -383,7 +383,7 @@ def test_agent_native_host_dispatch_requires_literal_role_dispatch_booleans(serv
     with pytest.raises(LooporaConflictError, match="required must be literal true"):
         service._validate_agent_native_host_dispatch(context, None)
 
-    context["active"]["capsule"]["role_dispatch"] = {
+    context["active"]["agent_step_view"]["role_dispatch"] = {
         "required": True,
         "target_agent": "loopora-builder",
         "inline_allowed": "false",
@@ -404,7 +404,7 @@ def test_agent_native_host_dispatch_requires_literal_role_dispatch_booleans(serv
             },
         )
 
-    context["active"]["capsule"]["role_dispatch"] = {
+    context["active"]["agent_step_view"]["role_dispatch"] = {
         "required": True,
         "inline_allowed": False,
         "accepted_dispatch_modes": ["host_subagent"],
@@ -424,7 +424,7 @@ def test_agent_native_host_dispatch_requires_literal_role_dispatch_booleans(serv
             },
         )
 
-    context["active"]["capsule"]["role_dispatch"] = {
+    context["active"]["agent_step_view"]["role_dispatch"] = {
         "required": True,
         "target_agent": "loopora-builder",
         "inline_allowed": False,
@@ -445,7 +445,7 @@ def test_agent_native_host_dispatch_requires_literal_role_dispatch_booleans(serv
             },
         )
 
-    context["active"]["capsule"]["role_dispatch"] = {
+    context["active"]["agent_step_view"]["role_dispatch"] = {
         "required": True,
         "target_agent": "loopora-builder",
         "inline_allowed": False,
@@ -511,13 +511,13 @@ def test_agent_native_host_dispatch_requires_literal_role_dispatch_booleans(serv
         with pytest.raises(LooporaConflictError, match="schema_version must be an integer"):
             service._validate_agent_native_host_dispatch(context, dispatch)
 
-def test_agent_native_output_contract_requires_capsule_output_schema(service_factory) -> None:
+def test_agent_native_output_contract_requires_step_view_output_schema(service_factory) -> None:
     service = service_factory(scenario="success")
 
     with pytest.raises(LooporaConflictError, match="output_schema is required"):
         service._validate_agent_native_step_output_contract(
-            {"summary": "This malformed capsule should fail closed."},
-            active={"capsule": {"action_policy": {"workspace": "read_only"}}},
+            {"summary": "This malformed step view should fail closed."},
+            active={"agent_step_view": {"action_policy": {"workspace": "read_only"}}},
         )
 
 @pytest.mark.parametrize(
@@ -528,47 +528,47 @@ def test_agent_native_output_contract_requires_capsule_output_schema(service_fac
         ("action_policy", "action_policy is required"),
     ],
 )
-def test_agent_native_output_contract_requires_frozen_capsule_objects(
+def test_agent_native_output_contract_requires_frozen_step_view_objects(
     service_factory,
     missing_field: str,
     message: str,
 ) -> None:
     service = service_factory(scenario="success")
-    capsule = {
+    step_view = {
         "output_schema": {"type": "object", "required": ["summary"], "properties": {"summary": {"type": "string"}}},
         "judgment_contract": {"goal": "Keep the role tied to the reviewed Loop."},
         "required_coverage": {"status": "pending"},
         "action_policy": {"workspace": "read_only", "can_block": True, "can_finish_run": False},
         "known_evidence_ids": [],
     }
-    capsule.pop(missing_field)
+    step_view.pop(missing_field)
 
     with pytest.raises(LooporaConflictError, match=message):
         service._validate_agent_native_step_output_contract(
-            {"summary": "This malformed capsule should fail closed."},
-            active={"capsule": capsule},
+            {"summary": "This malformed step view should fail closed."},
+            active={"agent_step_view": step_view},
         )
 
 def test_agent_native_output_contract_requires_known_evidence_id_closed_set(service_factory) -> None:
     service = service_factory(scenario="success")
-    capsule = {
+    step_view = {
         "output_schema": {"type": "object", "required": ["summary"], "properties": {"summary": {"type": "string"}}},
-        "judgment_contract": {"goal": "Keep evidence refs inside the capsule."},
+        "judgment_contract": {"goal": "Keep evidence refs inside the step view."},
         "required_coverage": {"status": "pending"},
         "action_policy": {"workspace": "read_only", "can_block": True, "can_finish_run": False},
     }
 
     with pytest.raises(LooporaConflictError, match="known_evidence_ids must be a list"):
         service._validate_agent_native_step_output_contract(
-            {"summary": "This malformed capsule should fail closed."},
-            active={"capsule": capsule},
+            {"summary": "This malformed step view should fail closed."},
+            active={"agent_step_view": step_view},
         )
 
-    capsule["known_evidence_ids"] = [123]
+    step_view["known_evidence_ids"] = [123]
     with pytest.raises(LooporaConflictError, match="known_evidence_ids must contain strings"):
         service._validate_agent_native_step_output_contract(
-            {"summary": "This malformed capsule should fail closed."},
-            active={"capsule": capsule},
+            {"summary": "This malformed step view should fail closed."},
+            active={"agent_step_view": step_view},
         )
 
 @pytest.mark.parametrize(
@@ -585,7 +585,7 @@ def test_agent_native_output_contract_rejects_malformed_action_policy(
     message: str,
 ) -> None:
     service = service_factory(scenario="success")
-    capsule = {
+    step_view = {
         "output_schema": {"type": "object", "required": ["summary"], "properties": {"summary": {"type": "string"}}},
         "judgment_contract": {"goal": "Keep permissions literal and inspectable."},
         "required_coverage": {"status": "pending"},
@@ -595,8 +595,8 @@ def test_agent_native_output_contract_rejects_malformed_action_policy(
 
     with pytest.raises(LooporaConflictError, match=message):
         service._validate_agent_native_step_output_contract(
-            {"summary": "This malformed capsule should fail closed."},
-            active={"capsule": capsule},
+            {"summary": "This malformed step view should fail closed."},
+            active={"agent_step_view": step_view},
         )
 
 def test_agent_native_gatekeeper_blocks_unknown_coverage_result_refs(
@@ -799,7 +799,7 @@ def test_agent_native_submitted_step_exposes_coverage_results(
         }
     ]
 
-def test_agent_native_known_evidence_ids_empty_capsule_stays_closed(
+def test_agent_native_known_evidence_ids_empty_step_view_stays_closed(
     service_factory,
     tmp_path: Path,
     sample_workdir: Path,
@@ -822,8 +822,8 @@ def test_agent_native_known_evidence_ids_empty_capsule_stays_closed(
     layout = RunArtifactLayout(Path(result["run"]["runs_dir"]))
     state_path = layout.run_dir / "agent_native" / "state.json"
     state = json.loads(state_path.read_text(encoding="utf-8"))
-    assert "ev_000_00_builder_step" in state["active_step"]["context_packet"]["evidence"]["known_ids"]
-    state["active_step"]["capsule"]["known_evidence_ids"] = []
+    assert "ev_000_00_builder_step" in state["active_step"]["step_instruction_context"]["evidence"]["known_ids"]
+    state["active_step"]["agent_step_view"]["known_evidence_ids"] = []
     state_path.write_text(json.dumps(state, ensure_ascii=False), encoding="utf-8")
 
     inspector_output = _agent_native_step_output(step)
@@ -832,7 +832,7 @@ def test_agent_native_known_evidence_ids_empty_capsule_stays_closed(
             "target_id": "fake_done.risk_001",
             "status": "covered",
             "evidence_refs": ["ev_000_00_builder_step"],
-            "note": "The ref exists in context but not in the capsule closed set.",
+            "note": "The ref exists in context but not in the step view closed set.",
         }
     ]
 
@@ -853,7 +853,7 @@ def test_agent_native_known_evidence_ids_empty_capsule_stays_closed(
     ledger = read_jsonl(layout.evidence_ledger_path)
     assert not any(item.get("step_id") == step["step_id"] for item in ledger)
 
-def test_agent_native_active_capsule_refresh_persists_known_evidence_count(
+def test_agent_native_active_step_view_refresh_persists_known_evidence_count(
     service_factory,
     tmp_path: Path,
     sample_workdir: Path,
@@ -874,20 +874,20 @@ def test_agent_native_active_capsule_refresh_persists_known_evidence_count(
     step = result["next_step"]
     layout = RunArtifactLayout(Path(result["run"]["runs_dir"]))
     state_path = layout.run_dir / "agent_native" / "state.json"
-    capsule_path = Path(step["capsule_absolute_path"])
+    step_contract_path = Path(step["step_contract_absolute_path"])
     state = json.loads(state_path.read_text(encoding="utf-8"))
-    capsule_file = json.loads(capsule_path.read_text(encoding="utf-8"))
-    state["active_step"]["capsule"].pop("known_evidence_count", None)
-    state["active_step"]["capsule"]["evidence_rules"] = [
+    step_contract_file = json.loads(step_contract_path.read_text(encoding="utf-8"))
+    state["active_step"]["agent_step_view"].pop("known_evidence_count", None)
+    state["active_step"]["agent_step_view"]["evidence_rules"] = [
         {
             "id": "coverage_results.target_id_must_be_known_coverage_target",
             "severity": "hard",
             "rule": "Every coverage_results.target_id must be copied exactly from judgment_contract.coverage_targets[].id.",
         }
     ]
-    capsule_file.pop("known_evidence_count", None)
+    step_contract_file.pop("known_evidence_count", None)
     state_path.write_text(json.dumps(state, ensure_ascii=False), encoding="utf-8")
-    capsule_path.write_text(json.dumps(capsule_file, ensure_ascii=False), encoding="utf-8")
+    step_contract_path.write_text(json.dumps(step_contract_file, ensure_ascii=False), encoding="utf-8")
 
     refreshed = service.claim_agent_native_step(
         AgentNativeStepClaimRequest(
@@ -906,6 +906,6 @@ def test_agent_native_active_capsule_refresh_persists_known_evidence_count(
     }
     assert "loopora_result_contract.coverage_target_ids" in refreshed_rules["coverage_results.target_id_must_be_known_coverage_target"]
     assert json.loads(Path(refreshed["next_step"]["agent_step_view_absolute_path"]).read_text(encoding="utf-8"))["known_evidence_count"] == 0
-    assert json.loads(capsule_path.read_text(encoding="utf-8"))["known_evidence_count"] == 0
+    assert json.loads(step_contract_path.read_text(encoding="utf-8"))["known_evidence_count"] == 0
     refreshed_state = json.loads(state_path.read_text(encoding="utf-8"))
-    assert refreshed_state["active_step"]["capsule"]["known_evidence_count"] == 0
+    assert refreshed_state["active_step"]["agent_step_view"]["known_evidence_count"] == 0

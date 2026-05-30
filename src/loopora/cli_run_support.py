@@ -132,7 +132,6 @@ def _cli_judgment_summary(run_contract: dict) -> str:
         run_contract.get("goal"),
         compiled_spec.get("goal"),
         run_contract.get("strategy_collaboration_intent"),
-        run_contract.get("workflow_collaboration_intent"),
         workflow.get("collaboration_intent"),
         run_contract.get("residual_risk"),
         compiled_spec.get("residual_risk"),

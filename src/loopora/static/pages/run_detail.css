@@ -460,13 +460,13 @@ html[data-locale="zh"] .stage-loop-eyebrow {
   cursor: default;
 }
 
-.stage-chip--workflow {
+.stage-chip--strategy {
   position: relative;
   z-index: 1;
   min-height: 148px;
   padding: 16px 16px 18px;
-  background: var(--run-progress-chip-workflow-bg);
-  box-shadow: var(--run-progress-chip-workflow-shadow);
+  background: var(--run-progress-chip-strategy-bg);
+  box-shadow: var(--run-progress-chip-strategy-shadow);
 }
 
 .stage-chip--terminal {

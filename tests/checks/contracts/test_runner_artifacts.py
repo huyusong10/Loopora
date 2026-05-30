@@ -8,7 +8,7 @@ import pytest
 from loopora.branding import state_dir_for_workdir
 from loopora.context_flow import (
     RunContractSnapshotRequest,
-    STEP_CONTEXT_PACKET_SCHEMA,
+    STEP_INSTRUCTION_CONTEXT_SCHEMA,
     StepInstructionContextRequest,
     build_run_contract_snapshot,
     build_step_instruction_context,
@@ -239,10 +239,10 @@ def test_manifest_prompt_context_does_not_promote_string_booleans(tmp_path: Path
     assert claims[0]["coverage_targets"][2]["required"] is True
 
 
-def test_step_context_packet_preserves_manifest_claim_target_trace(tmp_path: Path) -> None:
+def test_step_instruction_context_preserves_manifest_claim_target_trace(tmp_path: Path) -> None:
     layout = RunArtifactLayout(tmp_path / "run_prompt")
     layout.initialize()
-    packet = build_step_instruction_context(
+    step_context = build_step_instruction_context(
         StepInstructionContextRequest(
             run_contract={
                 "compiled_spec": {},
@@ -315,12 +315,12 @@ def test_step_context_packet_preserves_manifest_claim_target_trace(tmp_path: Pat
         )
     )
 
-    assert packet["contract"]["collaboration_summary"] == "Prefer evidence before closure."
-    assert packet["contract"]["loop_fit_reasons"] == ["Future iterations keep the proof target visible."]
-    assert packet["contract"]["judgment_tradeoffs"] == ["Evidence before polish."]
-    assert packet["contract"]["execution_strategy"] == ["Prove the smallest path first, then expand only after evidence is strong."]
-    assert packet["contract"]["local_governance"] == ["GateKeeper treats skipped AGENTS.md responsibilities as Blocking."]
-    assert packet["contract"]["role_postures"] == [
+    assert step_context["contract"]["collaboration_summary"] == "Prefer evidence before closure."
+    assert step_context["contract"]["loop_fit_reasons"] == ["Future iterations keep the proof target visible."]
+    assert step_context["contract"]["judgment_tradeoffs"] == ["Evidence before polish."]
+    assert step_context["contract"]["execution_strategy"] == ["Prove the smallest path first, then expand only after evidence is strong."]
+    assert step_context["contract"]["local_governance"] == ["GateKeeper treats skipped AGENTS.md responsibilities as Blocking."]
+    assert step_context["contract"]["role_postures"] == [
         {
             "role_id": "gatekeeper",
             "role_name": "GateKeeper",
@@ -328,17 +328,17 @@ def test_step_context_packet_preserves_manifest_claim_target_trace(tmp_path: Pat
             "posture_notes": "Fail closed when evidence is weak.",
         }
     ]
-    assert "loop_fit_reasons" in STEP_CONTEXT_PACKET_SCHEMA["properties"]["contract"]["required"]
-    assert STEP_CONTEXT_PACKET_SCHEMA["properties"]["contract"]["properties"]["loop_fit_reasons"]["type"] == "array"
-    assert "judgment_tradeoffs" in STEP_CONTEXT_PACKET_SCHEMA["properties"]["contract"]["required"]
-    assert STEP_CONTEXT_PACKET_SCHEMA["properties"]["contract"]["properties"]["judgment_tradeoffs"]["type"] == "array"
-    assert "execution_strategy" in STEP_CONTEXT_PACKET_SCHEMA["properties"]["contract"]["required"]
-    assert STEP_CONTEXT_PACKET_SCHEMA["properties"]["contract"]["properties"]["execution_strategy"]["type"] == "array"
-    assert "local_governance" in STEP_CONTEXT_PACKET_SCHEMA["properties"]["contract"]["required"]
-    assert STEP_CONTEXT_PACKET_SCHEMA["properties"]["contract"]["properties"]["local_governance"]["type"] == "array"
-    assert "role_postures" in STEP_CONTEXT_PACKET_SCHEMA["properties"]["contract"]["required"]
-    assert STEP_CONTEXT_PACKET_SCHEMA["properties"]["contract"]["properties"]["role_postures"]["type"] == "array"
-    target_trace = packet["evidence"]["manifest_claims"][0]["coverage_targets"][0]
+    assert "loop_fit_reasons" in STEP_INSTRUCTION_CONTEXT_SCHEMA["properties"]["contract"]["required"]
+    assert STEP_INSTRUCTION_CONTEXT_SCHEMA["properties"]["contract"]["properties"]["loop_fit_reasons"]["type"] == "array"
+    assert "judgment_tradeoffs" in STEP_INSTRUCTION_CONTEXT_SCHEMA["properties"]["contract"]["required"]
+    assert STEP_INSTRUCTION_CONTEXT_SCHEMA["properties"]["contract"]["properties"]["judgment_tradeoffs"]["type"] == "array"
+    assert "execution_strategy" in STEP_INSTRUCTION_CONTEXT_SCHEMA["properties"]["contract"]["required"]
+    assert STEP_INSTRUCTION_CONTEXT_SCHEMA["properties"]["contract"]["properties"]["execution_strategy"]["type"] == "array"
+    assert "local_governance" in STEP_INSTRUCTION_CONTEXT_SCHEMA["properties"]["contract"]["required"]
+    assert STEP_INSTRUCTION_CONTEXT_SCHEMA["properties"]["contract"]["properties"]["local_governance"]["type"] == "array"
+    assert "role_postures" in STEP_INSTRUCTION_CONTEXT_SCHEMA["properties"]["contract"]["required"]
+    assert STEP_INSTRUCTION_CONTEXT_SCHEMA["properties"]["contract"]["properties"]["role_postures"]["type"] == "array"
+    target_trace = step_context["evidence"]["manifest_claims"][0]["coverage_targets"][0]
     assert target_trace == {
         "id": "done_when.check",
         "kind": "done_when",
@@ -348,16 +348,16 @@ def test_step_context_packet_preserves_manifest_claim_target_trace(tmp_path: Pat
         "required": True,
         "evidence_refs": ["ev_target"],
     }
-    prompt_section = render_evidence_section(packet["evidence"])
+    prompt_section = render_evidence_section(step_context["evidence"])
     assert '"id": "done_when.check"' in prompt_section
     assert '"required": true' in prompt_section
 
 
-def test_step_context_packet_derives_legacy_local_governance_before_prompting(tmp_path: Path) -> None:
+def test_step_instruction_context_derives_legacy_local_governance_before_prompting(tmp_path: Path) -> None:
     layout = RunArtifactLayout(tmp_path / "run_prompt_legacy_governance")
     layout.initialize()
 
-    packet = build_step_instruction_context(
+    step_context = build_step_instruction_context(
         StepInstructionContextRequest(
             run_contract={
                 "compiled_spec": {
@@ -400,16 +400,16 @@ def test_step_context_packet_derives_legacy_local_governance_before_prompting(tm
         )
     )
 
-    assert any("Builder reads AGENTS.md" in item for item in packet["contract"]["local_governance"])
-    assert any("Inspector verifies design/" in item for item in packet["contract"]["local_governance"])
-    assert any("GateKeeper treats skipped AGENTS.md" in item for item in packet["contract"]["local_governance"])
+    assert any("Builder reads AGENTS.md" in item for item in step_context["contract"]["local_governance"])
+    assert any("Inspector verifies design/" in item for item in step_context["contract"]["local_governance"])
+    assert any("GateKeeper treats skipped AGENTS.md" in item for item in step_context["contract"]["local_governance"])
 
 
-def test_step_context_packet_normalizes_judgment_contract_field_types(tmp_path: Path) -> None:
+def test_step_instruction_context_normalizes_judgment_contract_field_types(tmp_path: Path) -> None:
     layout = RunArtifactLayout(tmp_path / "run_prompt_contract_types")
     layout.initialize()
 
-    packet = build_step_instruction_context(
+    step_context = build_step_instruction_context(
         StepInstructionContextRequest(
             run_contract={
                 "compiled_spec": {
@@ -425,7 +425,7 @@ def test_step_context_packet_normalizes_judgment_contract_field_types(tmp_path: 
                 "collaboration_summary": "Keep frozen judgment typed.",
                 "loop_fit_reasons": ["Future rounds use the same contract.", False],
                 "judgment_tradeoffs": "proof before polish",
-                "execution_strategy": ["Prove the typed packet first.", 3],
+                "execution_strategy": ["Prove the typed context first.", 3],
                 "local_governance": [False, "GateKeeper blocks skipped local rules."],
                 "role_postures": [
                     {
@@ -458,12 +458,12 @@ def test_step_context_packet_normalizes_judgment_contract_field_types(tmp_path: 
         )
     )
 
-    assert packet["contract"]["coverage_targets"] == [{"id": "done_when.typed"}]
-    assert packet["contract"]["loop_fit_reasons"] == ["Future rounds use the same contract."]
-    assert packet["contract"]["judgment_tradeoffs"] == []
-    assert packet["contract"]["execution_strategy"] == ["Prove the typed packet first."]
-    assert packet["contract"]["local_governance"] == ["GateKeeper blocks skipped local rules."]
-    assert packet["contract"]["role_postures"] == [
+    assert step_context["contract"]["coverage_targets"] == [{"id": "done_when.typed"}]
+    assert step_context["contract"]["loop_fit_reasons"] == ["Future rounds use the same contract."]
+    assert step_context["contract"]["judgment_tradeoffs"] == []
+    assert step_context["contract"]["execution_strategy"] == ["Prove the typed context first."]
+    assert step_context["contract"]["local_governance"] == ["GateKeeper blocks skipped local rules."]
+    assert step_context["contract"]["role_postures"] == [
         {
             "role_id": "builder",
             "role_name": "Builder",
@@ -471,10 +471,10 @@ def test_step_context_packet_normalizes_judgment_contract_field_types(tmp_path: 
             "posture_notes": "Keep the implementation narrow.",
         }
     ]
-    assert packet["contract"]["success_surface"] == ["Top-level stable user-visible result."]
-    assert packet["contract"]["fake_done_states"] == ["Top-level happy-path-only proof is fake done."]
-    assert packet["contract"]["evidence_preferences"] == ["Top-level direct command proof."]
-    assert packet["contract"]["residual_risk"] == "Top-level manual copy polish remains a visible follow-up."
+    assert step_context["contract"]["success_surface"] == ["Top-level stable user-visible result."]
+    assert step_context["contract"]["fake_done_states"] == ["Top-level happy-path-only proof is fake done."]
+    assert step_context["contract"]["evidence_preferences"] == ["Top-level direct command proof."]
+    assert step_context["contract"]["residual_risk"] == "Top-level manual copy polish remains a visible follow-up."
 
 
 def test_run_contract_tradeoffs_include_role_prompt_files(tmp_path: Path) -> None:
@@ -688,7 +688,7 @@ def test_judgment_contract_preserves_empty_runtime_local_governance(tmp_path: Pa
     assert judgment_contract["check_mode"] == "specified"
     assert judgment_contract["check_count"] == 1
     assert judgment_contract["completion_mode"] == "gatekeeper"
-    assert judgment_contract["strategy_preset"] == judgment_contract["workflow_preset"] == "custom"
+    assert judgment_contract["strategy_preset"] == "custom" and "workflow_preset" not in judgment_contract
     assert judgment_contract["coverage_targets"] == [{"id": "done_when.check_001", "required": True}]
     assert judgment_contract["role_postures"] == [
         "Builder: Treat project-local rules as part of the task evidence."
@@ -919,8 +919,8 @@ def test_gatekeeper_coverage_results_cover_advisory_targets(
                     "coverage_results": [],
                 }
             else:
-                context_packet = request.extra_context["step_instruction_context"]
-                evidence_refs = [item["id"] for item in context_packet["evidence"]["items"]]
+                step_context = request.extra_context["step_instruction_context"]
+                evidence_refs = [item["id"] for item in step_context["evidence"]["items"]]
                 targets = list((request.extra_context.get("compiled_spec") or {}).get("coverage_targets") or [])
                 payload = {
                     "passed": True,

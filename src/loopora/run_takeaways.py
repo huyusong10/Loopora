@@ -610,8 +610,6 @@ def empty_judgment_contract() -> dict[str, Any]:
         "completion_mode": "",
         "strategy_preset": "",
         "strategy_collaboration_intent": "",
-        "workflow_preset": "",
-        "workflow_collaboration_intent": "",
         "judgment_tradeoffs": [],
         "execution_strategy": [],
         "local_governance": [],
@@ -853,20 +851,13 @@ def _normalize_judgment_contract_payload(value: object, *, default_contract_path
     normalized["check_mode"] = clean_takeaway_text(raw.get("check_mode") or compiled_spec.get("check_mode"), max_length=80)
     normalized["check_count"] = structured_non_negative_int(raw.get("check_count"), default=len(list(compiled_spec.get("checks") or [])))
     normalized["completion_mode"] = clean_takeaway_text(raw.get("completion_mode"), max_length=80)
-    strategy_preset = clean_takeaway_text(
-        raw.get("strategy_preset") or raw.get("workflow_preset") or strategy_snapshot.get("preset"),
-        max_length=120,
-    )
+    strategy_preset = clean_takeaway_text(raw.get("strategy_preset") or strategy_snapshot.get("preset"), max_length=120)
     strategy_collaboration_intent = clean_takeaway_text(
-        raw.get("strategy_collaboration_intent")
-        or raw.get("workflow_collaboration_intent")
-        or strategy_snapshot.get("collaboration_intent"),
+        raw.get("strategy_collaboration_intent") or strategy_snapshot.get("collaboration_intent"),
         max_length=600,
     )
     normalized["strategy_preset"] = strategy_preset
     normalized["strategy_collaboration_intent"] = strategy_collaboration_intent
-    normalized["workflow_preset"] = strategy_preset
-    normalized["workflow_collaboration_intent"] = strategy_collaboration_intent
     normalized["judgment_tradeoffs"] = _takeaway_text_list(
         raw.get("judgment_tradeoffs")
         or build_judgment_tradeoff_trace(

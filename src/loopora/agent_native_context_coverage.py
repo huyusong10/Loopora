@@ -31,6 +31,3 @@ def agent_native_step_instruction_context_with_coverage(
     refreshed_context = dict(step_instruction_context)
     refreshed_context["iteration"] = refreshed_iteration
     return refreshed_context
-
-
-agent_native_context_packet_with_coverage = agent_native_step_instruction_context_with_coverage

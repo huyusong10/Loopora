@@ -118,9 +118,9 @@ def test_agent_loop_restarts_after_terminal_insufficient_evidence(
     _assert_codex_native_surface_summary(continued["agent_run_summary"])
     assert continuation_summary["next_focus"]
     assert continued["next_step"]["execution_plane"] == "agent_native"
-    context_packet = json.loads(Path(continued["next_step"]["context_absolute_path"]).read_text(encoding="utf-8"))
-    capsule = json.loads(Path(continued["next_step"]["capsule_absolute_path"]).read_text(encoding="utf-8"))
-    continuation = context_packet["continuation"]
+    step_instruction_context = json.loads(Path(continued["next_step"]["context_absolute_path"]).read_text(encoding="utf-8"))
+    agent_step_view = json.loads(Path(continued["next_step"]["agent_step_view_absolute_path"]).read_text(encoding="utf-8"))
+    continuation = step_instruction_context["continuation"]
     assert continuation["previous_run_id"] == previous_run["id"]
     assert continuation["previous_task_verdict"]["status"] == "insufficient_evidence"
     assert continuation["previous_task_verdict_path"].endswith("evidence/task_verdict.json")
@@ -128,7 +128,7 @@ def test_agent_loop_restarts_after_terminal_insufficient_evidence(
     assert continuation["coverage"]["target_count"] > 0
     assert continuation["coverage"]["missing_target_count"] > 0
     assert any(gap["target_id"] == "done_when.check_001" for gap in continuation["coverage"]["top_gaps"])
-    assert capsule["continuation"]["previous_run_id"] == previous_run["id"]
+    assert agent_step_view["continuation"]["previous_run_id"] == previous_run["id"]
     assert previous_run["id"] in continued["next_step"]["prompt"]
     assert "insufficient_evidence" in continued["next_step"]["prompt"]
     client = TestClient(build_app(service=service))

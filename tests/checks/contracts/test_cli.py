@@ -1056,7 +1056,7 @@ def test_cli_orchestrations_create_and_list(monkeypatch) -> None:
     create_result = runner.invoke(cli.app, ["orchestrations", "create", "--name", "Custom", "--workflow-preset", "inspect_first"])
     assert create_result.exit_code == 0, create_result.stdout
     assert calls["create_orchestration"]["name"] == "Custom"
-    assert calls["create_orchestration"]["workflow"] == {"preset": "inspect_first"}
+    assert calls["create_orchestration"]["strategy_source"] == {"preset": "inspect_first"}
 
     list_result = runner.invoke(cli.app, ["orchestrations", "list"])
     assert list_result.exit_code == 0, list_result.stdout
@@ -1092,11 +1092,11 @@ def test_cli_orchestrations_get_update_derive_and_delete(monkeypatch) -> None:
 
         def update_orchestration(self, orchestration_id: str, **kwargs):
             calls["update"] = (orchestration_id, kwargs)
-            return {"id": orchestration_id, **kwargs, "workflow_json": kwargs["workflow"]}
+            return {"id": orchestration_id, **kwargs, "workflow_json": kwargs["strategy_source"]}
 
         def create_orchestration(self, **kwargs):
             calls.setdefault("create", []).append(kwargs)
-            return {"id": "orch_new", **kwargs, "workflow_json": kwargs["workflow"]}
+            return {"id": "orch_new", **kwargs, "workflow_json": kwargs["strategy_source"]}
 
         def delete_orchestration(self, orchestration_id: str):
             calls["delete"] = orchestration_id
@@ -1114,12 +1114,12 @@ def test_cli_orchestrations_get_update_derive_and_delete(monkeypatch) -> None:
     update_id, update_kwargs = calls["update"]
     assert update_id == "orch_1"
     assert update_kwargs["name"] == "Updated"
-    assert update_kwargs["workflow"] == {"preset": "repair_loop"}
+    assert update_kwargs["strategy_source"] == {"preset": "repair_loop"}
 
     derive_result = runner.invoke(cli.app, ["orchestrations", "derive", "builtin:build_first", "--name", "Derived"])
     assert derive_result.exit_code == 0, derive_result.stdout
     assert calls["create"][-1]["name"] == "Derived"
-    assert calls["create"][-1]["workflow"] == {"preset": "build_first"}
+    assert calls["create"][-1]["strategy_source"] == {"preset": "build_first"}
 
     delete_result = runner.invoke(cli.app, ["orchestrations", "delete", "orch_1"])
     assert delete_result.exit_code == 0, delete_result.stdout

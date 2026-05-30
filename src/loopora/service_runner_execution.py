@@ -37,7 +37,7 @@ from loopora.service_types import (
     WorkspaceSafetyError,
     normalize_completion_mode,
 )
-from loopora.step_instruction_context import step_instruction_context_legacy_fields
+from loopora.step_instruction_context import STEP_INSTRUCTION_CONTEXT_KEY
 from loopora.structured_booleans import structured_bool_is_true
 from loopora.service_runner_failure_handling import ServiceRunnerFailureHandlingMixin
 from loopora.service_runner_iteration_state import ServiceRunnerIterationStateMixin
@@ -102,7 +102,7 @@ class ServiceRunnerExecutionMixin(
         )
         run_dir = Path(run["runs_dir"])
         try:
-            strategy_source = self._normalized_strategy_source_from_record(run) if run.get("workflow_json") else {}
+            strategy_source = self._strategy_source_snapshot_from_record(run)
         except Exception:
             self._mark_run_inactive(run_id)
             self._threads.pop(run_id, None)
@@ -248,7 +248,7 @@ class ServiceRunnerExecutionMixin(
             "runtime_role": runtime_role,
             "execution_settings": execution_settings,
             "normalized_output": normalized_output,
-            **step_instruction_context_legacy_fields(step_instruction_context),
+            STEP_INSTRUCTION_CONTEXT_KEY: step_instruction_context,
             "session_ref": session_ref,
             "actor_ref": actor.to_dict(),
             "duration_ms": int((time.perf_counter() - step_started_at) * 1000),

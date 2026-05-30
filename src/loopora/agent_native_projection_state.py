@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
+AGENT_NATIVE_STEP_VIEW_KEY = "agent_step_view"
+
 
 def agent_native_active_step_is_stale(active: dict[str, Any], current_step_projection: dict[str, Any]) -> bool:
     source_sequence = _safe_int(current_step_projection.get("source_sequence"))
@@ -24,8 +26,16 @@ def agent_native_active_step_is_stale(active: dict[str, Any], current_step_proje
 
 
 def agent_native_active_step_view(active: dict[str, Any]) -> dict[str, Any]:
-    step_view = active.get("capsule")
+    step_view = agent_native_active_step_view_payload(active)
     return dict(step_view) if isinstance(step_view, dict) else {}
+
+
+def agent_native_active_step_view_payload(active: dict[str, Any]) -> object:
+    return active.get(AGENT_NATIVE_STEP_VIEW_KEY)
+
+
+def agent_native_active_step_view_fields(step_view: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    return {AGENT_NATIVE_STEP_VIEW_KEY: step_view}
 
 
 def _safe_int(value: object, *, default: int = 0) -> int:

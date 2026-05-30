@@ -161,7 +161,8 @@ def _assert_acceptance_evidence_payload(payload: dict) -> None:
     assert payload["check_mode"] == "specified"
     assert payload["check_count"] == 2
     assert payload["completion_mode"] == "gatekeeper"
-    assert payload["workflow_preset"]
+    assert payload["strategy_preset"]
+    assert "workflow_preset" not in payload
     assert any(target["id"] == "done_when.check_001" for target in payload["coverage_targets"])
     assert any(target["id"] == "gatekeeper.finish" for target in payload["coverage_targets"])
     assert isinstance(payload["loop_fit_reasons"], list)
@@ -342,7 +343,8 @@ def _assert_key_takeaway_judgment_contract(judgment_contract: dict) -> None:
     assert judgment_contract["check_mode"] == "specified"
     assert judgment_contract["check_count"] == 2
     assert judgment_contract["completion_mode"] == "gatekeeper"
-    assert judgment_contract["workflow_preset"]
+    assert judgment_contract["strategy_preset"]
+    assert "workflow_preset" not in judgment_contract
     assert any(target["id"] == "done_when.check_001" for target in judgment_contract["coverage_targets"])
     assert any(target["id"] == "gatekeeper.finish" for target in judgment_contract["coverage_targets"])
     assert judgment_contract["success_surface"] == [

@@ -90,11 +90,11 @@ def test_cli_agent_submit_invalid_json_prints_result_file_repair_guidance(monkey
         json.dumps(
             {
                 "active_step": {
-                    "capsule": {
+                    "agent_step_view": {
                         "step_id": "builder_step",
                         "role": {"name": "Builder", "id": "builder", "archetype": "builder"},
                         "role_dispatch": {"target_agent": "loopora-builder"},
-                        "context_absolute_path": str(layout.step_context_path(0, 0, "builder_step")),
+                        "context_absolute_path": str(layout.step_instruction_context_path(0, 0, "builder_step")),
                         "output_schema": {"type": "object", "required": ["summary"], "properties": {"summary": {"type": "string"}}},
                         "submit_hint": {
                             "result_template_absolute_path": str(tmp_path / "run_bad_json__builder_step.result.template.json"),

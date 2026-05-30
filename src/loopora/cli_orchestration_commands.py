@@ -34,11 +34,12 @@ def _register_orchestration_list_command(orchestrations_app: typer.Typer) -> Non
             service = get_service()
             orchestrations = service.list_orchestrations()
             for item in orchestrations:
+                strategy_source = strategy_source_bundle_from_entity(item)[0] or {}
                 typer.echo(
                     f"{item['id']}  {item['name']}  "
                     f"source={item.get('source', 'custom')}  "
-                    f"roles={len(item.get('workflow_json', {}).get('roles', []))}  "
-                    f"steps={len(item.get('workflow_json', {}).get('steps', []))}"
+                    f"roles={len(strategy_source.get('roles', []))}  "
+                    f"steps={len(strategy_source.get('steps', []))}"
                 )
         except LooporaError as exc:
             handle_error(exc)
@@ -73,7 +74,7 @@ def _register_orchestration_create_command(orchestrations_app: typer.Typer) -> N
             orchestration = service.create_orchestration(
                 name=name,
                 description=description,
-                workflow=strategy_source,
+                strategy_source=strategy_source,
                 prompt_files=prompt_files,
                 role_models=parse_role_models(role_model),
             )
@@ -107,7 +108,7 @@ def _register_orchestration_update_command(orchestrations_app: typer.Typer) -> N
                 orchestration_id,
                 name=name if name is not None else current["name"],
                 description=description if description is not None else str(current.get("description", "")),
-                workflow=strategy_source,
+                strategy_source=strategy_source,
                 prompt_files=prompt_files,
                 role_models=parse_role_models(role_model) or current.get("role_models_json") or current.get("role_models") or {},
             )
@@ -140,7 +141,7 @@ def _register_orchestration_derive_command(orchestrations_app: typer.Typer) -> N
             orchestration = service.create_orchestration(
                 name=name or f"{source['name']} Copy",
                 description=description if description is not None else str(source.get("description", "")),
-                workflow=strategy_source,
+                strategy_source=strategy_source,
                 prompt_files=prompt_files,
                 role_models=parse_role_models(role_model) or source.get("role_models_json") or source.get("role_models") or {},
             )

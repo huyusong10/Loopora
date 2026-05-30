@@ -11,7 +11,7 @@ PROBE_ROOT = CONTRACT_ROOT.parents[1] / "probes" / "real_environment"
 LINE_COUNT_BUDGET = {
     "test_agent_adapter_cli_recovery.py": 885,
     "test_agent_adapter_install.py": 1114,
-    "test_agent_native_capsules.py": 1069,
+    "test_agent_native_step_view.py": 1069,
     "test_agent_native_controls.py": 835,
     "test_agent_native_recovery.py": 886,
     "test_agent_native_submit_contract.py": 911,

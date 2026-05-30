@@ -144,7 +144,7 @@ def _write_agent_submit_auto_repair_fixture(tmp_path: Path) -> dict:
         json.dumps(
             {
                 "active_step": {
-                    "capsule": {
+                    "agent_step_view": {
                         "adapter": "codex",
                         "run_id": "run_auto_repair",
                         "iter": 0,
@@ -153,7 +153,7 @@ def _write_agent_submit_auto_repair_fixture(tmp_path: Path) -> dict:
                         "role": {"name": "Builder", "id": "builder", "archetype": "builder"},
                         "role_dispatch": {"target_agent": "loopora-builder"},
                         "known_evidence_ids": ["ev_known"],
-                        "context_absolute_path": str(layout.step_context_path(0, 0, "builder_step")),
+                        "context_absolute_path": str(layout.step_instruction_context_path(0, 0, "builder_step")),
                         "output_schema": {"type": "object", "properties": {"summary": {"type": "string"}}},
                         "submit_hint": {
                             "result_template_absolute_path": str(active_template),

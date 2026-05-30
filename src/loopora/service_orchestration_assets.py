@@ -2,11 +2,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import logging
-from typing import Any, TypeVar
+from typing import Any, TypeVar, cast
 
 from loopora.diagnostics import log_event
 from loopora.service_asset_common import logger, record_bundle_asset_update_rollback_failure
 from loopora.service_types import LooporaConflictError, LooporaError
+from loopora.strategy_source import strategy_source_from_record
 
 T = TypeVar("T")
 
@@ -37,16 +38,17 @@ class ServiceOrchestrationAssetMixin:
         *,
         name: str,
         description: str = "",
-        workflow: dict | None = None,
+        strategy_source: dict | None = None,
         prompt_files: dict | None = None,
         role_models: dict | None = None,
+        **legacy_fields: Any,
     ) -> dict:
-        strategy_source = workflow
+        strategy_source = _strategy_source_from_legacy_fields(strategy_source, legacy_fields)
         orchestration = self._asset_call(
             self.asset_catalog.create_orchestration,
             name=name,
             description=description,
-            workflow=strategy_source,
+            strategy_source=strategy_source,
             prompt_files=prompt_files,
             role_models=role_models,
         )
@@ -99,7 +101,7 @@ class ServiceOrchestrationAssetMixin:
                         {
                             "name": previous_orchestration["name"],
                             "description": previous_orchestration.get("description", ""),
-                            "workflow": previous_orchestration.get("workflow_json") or {},
+                            "workflow": strategy_source_from_record(previous_orchestration) or {},
                             "prompt_files": previous_orchestration.get("prompt_files_json") or {},
                         },
                     )
@@ -168,6 +170,16 @@ def _pop_strategy_source_field(fields: dict[str, Any]) -> dict | None:
     return None
 
 
+def _strategy_source_from_legacy_fields(strategy_source: dict | None, legacy_fields: dict[str, Any]) -> dict | None:
+    workflow = legacy_fields.pop("workflow", _MISSING)
+    if legacy_fields:
+        unexpected_fields = ", ".join(sorted(legacy_fields))
+        raise TypeError(f"unexpected orchestration request fields: {unexpected_fields}")
+    if strategy_source is not None and workflow is not _MISSING:
+        raise TypeError("orchestration request fields strategy_source and workflow cannot both be provided")
+    return strategy_source if workflow is _MISSING else cast(dict | None, workflow)
+
+
 def _orchestration_mutation_request_from_kwargs(raw_request: dict[str, Any]) -> OrchestrationMutationRequest:
     fields = dict(raw_request)
     request = OrchestrationMutationRequest(
@@ -184,7 +196,7 @@ def _orchestration_mutation_request_from_kwargs(raw_request: dict[str, Any]) -> 
 
 
 def _strategy_source_counts(orchestration: dict) -> tuple[int, int]:
-    strategy_source = orchestration.get("workflow_json") or {}
-    if not isinstance(strategy_source, dict):
+    strategy_source = strategy_source_from_record(orchestration)
+    if not strategy_source:
         return 0, 0
     return len(list(strategy_source.get("roles") or [])), len(list(strategy_source.get("steps") or []))

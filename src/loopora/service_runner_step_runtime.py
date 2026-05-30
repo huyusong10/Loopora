@@ -14,7 +14,7 @@ from loopora.providers import executor_profile, normalize_executor_kind, normali
 from loopora.run_artifacts import RunArtifactLayout, read_jsonl
 from loopora.service_role_execution import RoleExecutionRequest
 from loopora.service_types import LooporaError
-from loopora.step_instruction_context import step_instruction_context_legacy_fields
+from loopora.step_instruction_context import STEP_INSTRUCTION_CONTEXT_KEY
 from loopora.strategy_source import (
     StrategySourceError,
     normalize_strategy_step_evidence_limit,
@@ -299,11 +299,11 @@ class ServiceRunnerStepRuntimeMixin:
                 else None,
             )
         )
-        context_path = layout.step_context_path(iter_id, step_order, step["id"])
+        context_path = layout.step_instruction_context_path(iter_id, step_order, step["id"])
         write_json(context_path, step_instruction_context)
         self.append_run_event(
             run["id"],
-            "step_context_prepared",
+            "step_instruction_context_prepared",
             {
                 "iter": iter_id,
                 "step_id": step["id"],
@@ -368,7 +368,7 @@ class ServiceRunnerStepRuntimeMixin:
                 "executor_kind": execution_settings["executor_kind"],
                 "executor_mode": execution_settings["executor_mode"],
                 "legacy_role": runtime_role,
-                **step_instruction_context_legacy_fields(step_instruction_context),
+                STEP_INSTRUCTION_CONTEXT_KEY: step_instruction_context,
                 "immediate_previous_step": step_instruction_context["upstream"]["immediate_previous_step"],
                 "previous_iteration_summary": previous_iteration_summary_for_step,
                 "current_outputs_by_step": runtime_request.current_outputs_by_step,
@@ -396,7 +396,7 @@ class ServiceRunnerStepRuntimeMixin:
         )
         self._record_role_request(run["id"], role_request)
         return {
-            **step_instruction_context_legacy_fields(step_instruction_context),
+            STEP_INSTRUCTION_CONTEXT_KEY: step_instruction_context,
             "role_request": role_request,
             "prompt": prompt_text,
             "output_path": output_path,

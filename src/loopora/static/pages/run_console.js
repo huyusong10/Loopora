@@ -233,12 +233,12 @@ document.addEventListener("DOMContentLoaded", () => {
         collapsed: true,
       })];
     }
-    if (event.event_type === "step_context_prepared") {
+    if (event.event_type === "step_instruction_context_prepared") {
       return [buildConsoleEntry(event, {
         tone: "system",
         channel: "context",
         filterKey: "actions",
-        summary: `${localeText("上下文已装配", "Context prepared")} · ${buildContextDetail(payload)}`,
+        summary: `${localeText("步骤指令上下文已装配", "StepInstruction context prepared")} · ${buildContextDetail(payload)}`,
         text: prettyJson(payload),
         collapsed: true,
       })];
@@ -713,7 +713,7 @@ document.addEventListener("DOMContentLoaded", () => {
     "run_started",
     "checks_resolved",
     "role_request_prepared",
-    "step_context_prepared",
+    "step_instruction_context_prepared",
     "role_started",
     "role_execution_summary",
     "step_handoff_written",

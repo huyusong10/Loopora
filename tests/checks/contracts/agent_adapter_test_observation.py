@@ -60,9 +60,10 @@ def _assert_agent_native_observation_current_step(current_step: dict) -> None:
     assert current_step["action_policy"]["workspace"] == "workspace_write"
     assert current_step["required_coverage"]["missing_check_count"] == 2
     assert current_step["required_coverage"]["top_gaps"][0]["target_id"] == "done_when.check_001"
-    assert current_step["context_path"].endswith("input.context.json")
+    assert current_step["context_path"].endswith("step_instruction_context.json")
     assert current_step["step_contract_path"].endswith("step_contract.json")
-    assert current_step["capsule_path"].endswith("capsule.json")
+    assert "capsule_path" not in current_step
+    assert "capsule_absolute_path" not in current_step
     assert current_step["submit_hint"]["result_template_path"].endswith(".result.template.json")
     assert current_step["submit_hint"]["result_file_path"].endswith(".result.json")
     assert current_step["submit_hint"]["result_outbox_dir"].endswith(".loopora/agent_outbox/codex")
@@ -79,15 +80,15 @@ def _assert_agent_native_observation_current_step(current_step: dict) -> None:
 
 def _assert_agent_native_observation_artifacts(service, current_step: dict, started: dict, sample_workdir: Path) -> None:
     step_contract_path = Path(current_step["step_contract_absolute_path"])
-    capsule_path = Path(current_step["capsule_absolute_path"])
+    agent_step_view_path = Path(started["next_step"]["agent_step_view_absolute_path"])
     template_path = Path(current_step["submit_hint"]["result_template_absolute_path"])
     assert step_contract_path.exists()
-    assert capsule_path.exists()
+    assert agent_step_view_path.exists()
     assert template_path.exists()
     step_contract = json.loads(step_contract_path.read_text(encoding="utf-8"))
-    capsule = json.loads(capsule_path.read_text(encoding="utf-8"))
-    assert capsule == step_contract
-    _assert_agent_native_observation_capsule(step_contract)
+    agent_step_view = json.loads(agent_step_view_path.read_text(encoding="utf-8"))
+    assert agent_step_view == step_contract
+    _assert_agent_native_observation_step_view(step_contract)
     template = json.loads(template_path.read_text(encoding="utf-8"))
     _assert_agent_native_observation_template(template, step_contract, started)
     with pytest.raises(
@@ -114,28 +115,28 @@ def _assert_agent_native_observation_artifacts(service, current_step: dict, star
     role_requests = read_jsonl(layout.role_requests_path)
     assert role_requests
     assert role_requests[-1]["step_id"] == "builder_step"
-    assert role_requests[-1]["context_path"].endswith("input.context.json")
+    assert role_requests[-1]["context_path"].endswith("step_instruction_context.json")
     claimed = [event for event in read_jsonl(layout.legacy_events_path) if event["event_type"] == "agent_native_step_claimed"][-1]
     assert claimed["payload"]["target_agent"] == "loopora-builder"
     assert claimed["payload"]["step_contract_path"].endswith("step_contract.json")
-    assert claimed["payload"]["capsule_path"].endswith("capsule.json")
+    assert "capsule_path" not in claimed["payload"]
     assert claimed["payload"]["result_template_path"].endswith(".result.template.json")
 
-def _assert_agent_native_observation_capsule(capsule: dict) -> None:
-    assert capsule["step_id"] == "builder_step"
-    assert capsule["entry_source"] == "codex_project_skill"
-    assert capsule["role_dispatch"]["target_agent"] == "loopora-builder"
-    assert capsule["role_dispatch"]["host_mechanism"] == "Codex spawn_agent with agent_type=<role_dispatch.target_agent>"
-    assert capsule["role_dispatch"]["accepted_native_tools"] == ["spawn_agent"]
-    assert capsule["known_evidence_count"] == 0
-    assert capsule["known_evidence_ids"] == []
-    assert capsule["role_dispatch"]["target_agent_config_absolute_path"].endswith(".codex/agents/loopora-builder.toml")
-    assert capsule["role_dispatch"]["target_agent_config_exists"] is False
-    _assert_capsule_submit_hint_uses_safe_filled_result_path(capsule["submit_hint"], step_stem="iter000__step00__builder_step")
-    assert "prompt" in capsule
-    assert "output_schema" in capsule
+def _assert_agent_native_observation_step_view(step_view: dict) -> None:
+    assert step_view["step_id"] == "builder_step"
+    assert step_view["entry_source"] == "codex_project_skill"
+    assert step_view["role_dispatch"]["target_agent"] == "loopora-builder"
+    assert step_view["role_dispatch"]["host_mechanism"] == "Codex spawn_agent with agent_type=<role_dispatch.target_agent>"
+    assert step_view["role_dispatch"]["accepted_native_tools"] == ["spawn_agent"]
+    assert step_view["known_evidence_count"] == 0
+    assert step_view["known_evidence_ids"] == []
+    assert step_view["role_dispatch"]["target_agent_config_absolute_path"].endswith(".codex/agents/loopora-builder.toml")
+    assert step_view["role_dispatch"]["target_agent_config_exists"] is False
+    _assert_step_view_submit_hint_uses_safe_filled_result_path(step_view["submit_hint"], step_stem="iter000__step00__builder_step")
+    assert "prompt" in step_view
+    assert "output_schema" in step_view
 
-def _assert_agent_native_observation_template(template: dict, capsule: dict, started: dict) -> None:
+def _assert_agent_native_observation_template(template: dict, step_view: dict, started: dict) -> None:
     _assert_result_template_dispatch(template, run_id=started["run"]["id"])
     assert template["loopora_result_contract"]["ignored_on_submit"] is True
     assert template["loopora_result_contract"]["result_must_match_output_schema"] is True
@@ -147,9 +148,9 @@ def _assert_agent_native_observation_template(template: dict, capsule: dict, sta
     assert template["loopora_result_contract"]["action_policy"]["workspace"] == "workspace_write"
     assert template["loopora_result_contract"]["required_coverage"]["missing_check_count"] == 2
     assert template["loopora_result_contract"]["required_coverage"]["top_gaps"][0]["target_id"] == "done_when.check_001"
-    assert template["loopora_result_contract"]["result_file_to_write"] == capsule["submit_hint"]["result_file_absolute_path"]
-    assert template["loopora_result_contract"]["submit_command"] == capsule["submit_hint"]["command"]
-    assert template["loopora_result_contract"]["result_template_path"] == capsule["submit_hint"]["result_template_absolute_path"]
+    assert template["loopora_result_contract"]["result_file_to_write"] == step_view["submit_hint"]["result_file_absolute_path"]
+    assert template["loopora_result_contract"]["submit_command"] == step_view["submit_hint"]["command"]
+    assert template["loopora_result_contract"]["result_template_path"] == step_view["submit_hint"]["result_template_absolute_path"]
     assert template["loopora_result_contract"]["role_dispatch"]["target_agent"] == "loopora-builder"
     assert template["loopora_result_contract"]["role_dispatch"]["host_mechanism"] == "Codex spawn_agent with agent_type=<role_dispatch.target_agent>"
     assert template["loopora_result_contract"]["role_dispatch"]["accepted_native_tools"] == ["spawn_agent"]
@@ -157,7 +158,7 @@ def _assert_agent_native_observation_template(template: dict, capsule: dict, sta
     _assert_result_template_contract_targets(template)
     assert "known_evidence_ids" in template["loopora_result_contract"]
     assert template["loopora_result_contract"]["evidence_ref_contract"]["must_copy_exact_ids"] is True
-    assert template["loopora_result_contract"]["output_schema"]["required"] == capsule["output_schema"]["required"]
+    assert template["loopora_result_contract"]["output_schema"]["required"] == step_view["output_schema"]["required"]
     abandoned_schema = template["loopora_result_contract"]["output_schema"]["properties"]["abandoned"]
     assert "deliberate scope limits" in abandoned_schema["description"]
     assert "prompt" not in template["loopora_result_contract"]
@@ -172,7 +173,7 @@ def _assert_agent_native_observation_template(template: dict, capsule: dict, sta
         "artifact_paths": [None],
     }
 
-def _assert_capsule_submit_hint_uses_safe_filled_result_path(submit_hint: dict, *, step_stem: str = "") -> None:
+def _assert_step_view_submit_hint_uses_safe_filled_result_path(submit_hint: dict, *, step_stem: str = "") -> None:
     assert submit_hint["result_file_path"].endswith(".result.json")
     assert submit_hint["result_file_absolute_path"].endswith(".result.json")
     if step_stem:
@@ -296,7 +297,7 @@ def _assert_agent_native_cli_output(
     assert "top_coverage_gaps:" in stdout
     assert "- done_when.check_001: Support admin can approve a refund." in stdout
     assert "next_context_path:" in stdout
-    assert "input.context.json" in stdout
+    assert "step_instruction_context.json" in stdout
     assert "known_evidence_count: 3" in stdout
     assert "known_evidence_ids:" not in stdout
     assert "result_template_contract: Write one wrapper JSON object with loopora_host_dispatch and a schema-shaped result; replace null placeholders before submit." in stdout
@@ -321,7 +322,7 @@ def _assert_agent_run_json_summary_reports_missing_dispatch(
     assert summary["next_target_agent_config"].endswith(".codex/agents/loopora-builder.toml")
     assert summary["next_target_agent_config_exists"] is False
     assert "dispatch_next" not in summary
-    assert summary["next_context_path"].endswith("input.context.json")
+    assert summary["next_context_path"].endswith("step_instruction_context.json")
     assert summary["next_step_contract_path"].endswith("step_contract.json")
     assert summary["next_result_template"].endswith("run_agent__builder_step.result.template.json")
     assert summary["next_submit_command"] == "loopora agent codex submit --run-id run_agent --step-id builder_step"
@@ -329,7 +330,7 @@ def _assert_agent_run_json_summary_reports_missing_dispatch(
     assert next_step_summary["step_id"] == "builder_step"
     assert next_step_summary["target_agent"] == "loopora-builder"
     assert "dispatch_next" not in next_step_summary
-    assert next_step_summary["context_path"].endswith("input.context.json")
+    assert next_step_summary["context_path"].endswith("step_instruction_context.json")
     assert next_step_summary["step_contract_path"].endswith("step_contract.json")
     assert next_step_summary["result_template"].endswith("run_agent__builder_step.result.template.json")
     assert next_step_summary["result_template_contract"].startswith("Write one wrapper JSON object")

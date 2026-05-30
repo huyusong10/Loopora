@@ -57,23 +57,23 @@
       return typeof stage === "string" && stage.startsWith("step:") ? stage.slice(5) : "";
     }
 
-    function getWorkflow(run) {
-      if (run?.workflow_json && typeof run.workflow_json === "object") {
-        return run.workflow_json;
+    function getStrategySource(run) {
+      if (run?.strategy_source && typeof run.strategy_source === "object") {
+        return run.strategy_source;
       }
       return {roles: [], steps: []};
     }
 
-    function getWorkflowRoleMap(run) {
+    function getStrategyRoleMap(run) {
       return new Map(
-        (getWorkflow(run).roles || [])
+        (getStrategySource(run).roles || [])
           .filter((role) => role && typeof role === "object")
           .map((role) => [String(role.id || "").trim(), role])
           .filter(([roleId]) => roleId)
       );
     }
 
-    function runtimeRoleForWorkflowRole(role) {
+    function runtimeRoleForStrategyRole(role) {
       const roleId = String(role?.id || "").trim();
       const archetype = String(role?.archetype || "").trim();
       if (roleId && archetype && roleId === archetype) {
@@ -109,7 +109,7 @@
       return resolvedRole ? translateRole(resolvedRole) : "-";
     }
 
-    function workflowStepDetail(role, step) {
+    function strategyStepDetail(role, step) {
       const archetype = String(role?.archetype || "").trim();
       const details = {
         builder: localeText(
@@ -146,8 +146,8 @@
     }
 
     function getProgressStages(run = getCurrentRun()) {
-      const workflow = getWorkflow(run);
-      const roleById = getWorkflowRoleMap(run);
+      const strategySource = getStrategySource(run);
+      const roleById = getStrategyRoleMap(run);
       const stages = [
         {
           key: "checks",
@@ -159,7 +159,7 @@
           ),
         },
       ];
-      (workflow.steps || []).forEach((step, index) => {
+      (strategySource.steps || []).forEach((step, index) => {
         const stepId = String(step?.id || "").trim();
         if (!stepId) {
           return;
@@ -167,16 +167,16 @@
         const role = roleById.get(String(step?.role_id || "").trim()) || {};
         stages.push({
           key: stageKeyForStep(stepId),
-          kind: "workflow_step",
+          kind: "strategy_step",
           stepId,
           stepOrder: index,
           step,
           role,
           roleId: String(step?.role_id || "").trim(),
-          runtimeRole: runtimeRoleForWorkflowRole(role),
+          runtimeRole: runtimeRoleForStrategyRole(role),
           archetype: String(role?.archetype || "").trim(),
           title: displayRoleSnapshotName(role),
-          detail: workflowStepDetail(role, step),
+          detail: strategyStepDetail(role, step),
         });
       });
       stages.push({
@@ -207,9 +207,9 @@
       };
     }
 
-    function workflowLoopSummary(run = getCurrentRun()) {
-      const workflowStages = getProgressStages(run).filter((stage) => stage.kind === "workflow_step");
-      if (!workflowStages.length) {
+    function strategyLoopSummary(run = getCurrentRun()) {
+      const strategyStages = getProgressStages(run).filter((stage) => stage.kind === "strategy_step");
+      if (!strategyStages.length) {
         return {
           eyebrow: localeText("Loop 步骤", "Loop steps"),
           title: localeText("还没有中间步骤", "No middle steps yet"),
@@ -219,12 +219,12 @@
           ),
         };
       }
-      const hasFinishGate = workflowStages.some((stage) => (
+      const hasFinishGate = strategyStages.some((stage) => (
         stage.archetype === "gatekeeper" && String(stage.step?.on_pass || "").trim() === "finish_run"
       ));
       return {
         eyebrow: localeText("Loop 步骤", "Loop steps"),
-        title: workflowStages.map((stage) => stage.title).join(" → "),
+        title: strategyStages.map((stage) => stage.title).join(" → "),
         detail: hasFinishGate
           ? localeText(
             "中间步骤按 Loop 计划循环推进，直到守门者放行或运行预算耗尽。",
@@ -274,10 +274,10 @@
       return Math.max(0, endedAt - startedAt);
     }
 
-    function workflowStepAttempts(run = getCurrentRun()) {
+    function strategyStepAttempts(run = getCurrentRun()) {
       const attemptsByStep = new Map(
         getProgressStages(run)
-          .filter((stage) => stage.kind === "workflow_step")
+          .filter((stage) => stage.kind === "strategy_step")
           .map((stage) => [stage.stepId, []])
       );
       getProgressEvents().forEach((event) => {
@@ -315,7 +315,7 @@
         attempt.role = attempt.role || event.role || payload.role || "";
         attempt.roleName = attempt.roleName || payload.role_name || "";
         attempt.archetype = attempt.archetype || payload.archetype || "";
-        if (["role_started", "role_request_prepared", "step_context_prepared"].includes(event.event_type)) {
+        if (["role_started", "role_request_prepared", "step_instruction_context_prepared"].includes(event.event_type)) {
           attempt.startedAt = attempt.startedAt || event.created_at;
         }
         if (event.event_type === "role_execution_summary") {
@@ -552,8 +552,8 @@
         };
       }
 
-      const attemptsByStep = workflowStepAttempts(run);
-      stages.filter((stage) => stage.kind === "workflow_step").forEach((stage) => {
+      const attemptsByStep = strategyStepAttempts(run);
+      stages.filter((stage) => stage.kind === "strategy_step").forEach((stage) => {
         const attempts = attemptsByStep.get(stage.stepId) || [];
         const latestAttempt = attempts[attempts.length - 1] || null;
         const totalMs = attempts.reduce((total, attempt) => total + attemptDurationMs(attempt), 0);
@@ -768,7 +768,7 @@
       stepIdFromStageKey,
       getProgressStages,
       getStageDefinition,
-      workflowLoopSummary,
+      strategyLoopSummary,
       stageOrderLabel,
       formatDurationMs,
       findLatestEvent,

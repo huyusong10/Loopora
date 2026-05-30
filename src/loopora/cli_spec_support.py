@@ -8,6 +8,7 @@ from loopora.strategy_source import (
     load_strategy_source_file,
     normalize_strategy_role_display_name,
     normalize_strategy_source,
+    strategy_source_from_record,
 )
 
 from loopora.cli_common import get_service
@@ -52,7 +53,7 @@ def resolve_spec_template_strategy_source(
         return normalize_strategy_source(strategy_source) if strategy_source else None
     if orchestration_id.strip():
         orchestration = get_service().get_orchestration(orchestration_id.strip())
-        strategy_source = orchestration.get("workflow_json") or None
+        strategy_source = strategy_source_from_record(orchestration)
         return normalize_strategy_source(strategy_source) if strategy_source else None
     if strategy_preset.strip():
         return normalize_strategy_source({"preset": strategy_preset.strip()})

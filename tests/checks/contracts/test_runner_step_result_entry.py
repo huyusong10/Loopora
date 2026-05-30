@@ -3,7 +3,7 @@ from __future__ import annotations
 from loopora.service_runner_step_artifacts import RunnerStepResultEntryRequest, ServiceRunnerStepArtifactsMixin
 
 
-def test_runner_step_result_entry_records_step_instruction_context_with_legacy_mirror() -> None:
+def test_runner_step_result_entry_records_step_instruction_context_without_legacy_mirror() -> None:
     step_context = {
         "iteration": {"iter_index": 1},
         "current_step": {"step_id": "builder_step"},
@@ -24,4 +24,4 @@ def test_runner_step_result_entry_records_step_instruction_context_with_legacy_m
     )
 
     assert entry["step_instruction_context"] == step_context
-    assert entry["context_packet"] == step_context
+    assert "context_packet" not in entry

@@ -470,7 +470,7 @@ def _assert_agent_native_official_tool_contract(started: dict) -> None:
     assert started["next_step"]["role_dispatch"]["native_trace_contract"]["field"] == "native_trace"
 
 
-def test_agent_native_step_capsule_projects_full_judgment_contract(
+def test_agent_native_step_view_projects_full_judgment_contract(
     service_factory,
     tmp_path: Path,
     sample_workdir: Path,
@@ -525,7 +525,7 @@ def test_agent_native_step_capsule_projects_full_judgment_contract(
 
     state_path = RunArtifactLayout(Path(started["run"]["runs_dir"])).run_dir / "agent_native" / "state.json"
     state = json.loads(state_path.read_text(encoding="utf-8"))
-    state["active_step"]["capsule"].pop("judgment_contract", None)
+    state["active_step"]["agent_step_view"].pop("judgment_contract", None)
     for field, replacement in {
         "judgment_tradeoffs": [],
         "execution_strategy": [],
@@ -535,7 +535,7 @@ def test_agent_native_step_capsule_projects_full_judgment_contract(
         "evidence_preferences": [],
         "residual_risk": "",
     }.items():
-        state["active_step"]["context_packet"]["contract"][field] = replacement
+        state["active_step"]["step_instruction_context"]["contract"][field] = replacement
     state_path.write_text(json.dumps(state, ensure_ascii=False), encoding="utf-8")
     claimed = service.claim_agent_native_step(
         AgentNativeStepClaimRequest(adapter="codex", workdir=sample_workdir, run_id=started["run"]["id"])
@@ -553,7 +553,7 @@ def test_agent_native_step_capsule_projects_full_judgment_contract(
         assert claimed["next_step"]["judgment_contract"][field] == started["judgment_contract"][field]
     assert claimed["next_step"]["judgment_contract"]["coverage_targets"] == context_contract["coverage_targets"]
     persisted_state = json.loads(state_path.read_text(encoding="utf-8"))
-    assert persisted_state["active_step"]["capsule"]["judgment_contract"] == claimed["next_step"]["judgment_contract"]
+    assert persisted_state["active_step"]["agent_step_view"]["judgment_contract"] == claimed["next_step"]["judgment_contract"]
 
 def test_agent_native_required_coverage_refs_stay_known_when_evidence_query_filters_items(
     service_factory,
@@ -635,10 +635,10 @@ def test_agent_native_required_coverage_refs_stay_known_when_evidence_query_filt
     assert evidence_step["required_coverage"]["target_count"] >= evidence_step["required_coverage"]["covered_check_count"]
     assert "blocked_target_count" in evidence_step["required_coverage"]
 
-    context_packet = json.loads(Path(evidence_step["context_absolute_path"]).read_text(encoding="utf-8"))
-    assert context_packet["iteration"]["target_count"] == evidence_step["required_coverage"]["target_count"]
-    assert blocking_evidence_id in context_packet["evidence"]["known_ids"]
-    assert any(item["id"] == blocking_evidence_id for item in context_packet["evidence"]["items"])
+    step_instruction_context = json.loads(Path(evidence_step["context_absolute_path"]).read_text(encoding="utf-8"))
+    assert step_instruction_context["iteration"]["target_count"] == evidence_step["required_coverage"]["target_count"]
+    assert blocking_evidence_id in step_instruction_context["evidence"]["known_ids"]
+    assert any(item["id"] == blocking_evidence_id for item in step_instruction_context["evidence"]["items"])
 
     template = json.loads(Path(evidence_step["submit_hint"]["result_template_absolute_path"]).read_text(encoding="utf-8"))
     assert blocking_evidence_id in template["loopora_result_contract"]["known_evidence_ids"]
@@ -804,14 +804,14 @@ def test_agent_native_known_evidence_ids_dedupe_duplicate_ledger_entries(
 
     known_ids = result["next_step"]["known_evidence_ids"]
     assert known_ids == list(dict.fromkeys(known_ids))
-    context_packet = json.loads(Path(result["next_step"]["context_absolute_path"]).read_text(encoding="utf-8"))
-    assert context_packet["evidence"]["known_ids"] == list(dict.fromkeys(context_packet["evidence"]["known_ids"]))
+    step_instruction_context = json.loads(Path(result["next_step"]["context_absolute_path"]).read_text(encoding="utf-8"))
+    assert step_instruction_context["evidence"]["known_ids"] == list(dict.fromkeys(step_instruction_context["evidence"]["known_ids"]))
     template = json.loads(Path(result["next_step"]["submit_hint"]["result_template_absolute_path"]).read_text(encoding="utf-8"))
     template_known_ids = template["loopora_result_contract"]["known_evidence_ids"]
     assert template_known_ids == list(dict.fromkeys(template_known_ids))
 
-def test_agent_native_capsule_judgment_contract_falls_back_when_context_is_trimmed(tmp_path: Path) -> None:
-    layout = RunArtifactLayout(tmp_path / "runs" / "run_capsule_fallback")
+def test_agent_native_step_view_judgment_contract_falls_back_when_context_is_trimmed(tmp_path: Path) -> None:
+    layout = RunArtifactLayout(tmp_path / "runs" / "run_step_view_fallback")
     layout.initialize()
     layout.run_contract_path.write_text(
         json.dumps(
@@ -927,7 +927,7 @@ def test_agent_loop_refreshes_ready_hash_after_valid_bundle_file_change(
     assert started["session"]["validation"]["bundle_sha256"] == expected_ready_sha
     assert started["session"]["validation"]["bundle_bytes"] == expected_ready_bytes
 
-def test_agent_native_claim_rejects_corrupted_active_capsule(
+def test_agent_native_claim_rejects_corrupted_active_step_view(
     service_factory,
     tmp_path: Path,
     sample_workdir: Path,
@@ -939,7 +939,7 @@ def test_agent_native_claim_rejects_corrupted_active_capsule(
         AgentBundleCandidateRequest(
             adapter="codex",
             workdir=sample_workdir,
-            message="Do not turn corrupted active capsules into partial execution contracts.",
+            message="Do not turn corrupted active step views into partial execution contracts.",
             bundle_file=bundle_file,
             entry_source="codex_project_skill",
         )
@@ -947,7 +947,7 @@ def test_agent_native_claim_rejects_corrupted_active_capsule(
     started = service.start_agent_loop("codex", workdir=sample_workdir, entry_source="codex_project_skill", execute_async=False)
     state_path = RunArtifactLayout(Path(started["run"]["runs_dir"])).run_dir / "agent_native" / "state.json"
     state = json.loads(state_path.read_text(encoding="utf-8"))
-    state["active_step"]["capsule"] = "not-a-capsule-object"
+    state["active_step"]["agent_step_view"] = "not-a-step-view-object"
     state_path.write_text(json.dumps(state, ensure_ascii=False), encoding="utf-8")
 
     with pytest.raises(LooporaError, match="active step contract is invalid"):

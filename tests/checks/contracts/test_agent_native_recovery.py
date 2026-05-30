@@ -618,7 +618,7 @@ def test_agent_native_role_dispatch_projects_target_agent_config_availability(
 
     state_path = Path(started["run"]["runs_dir"]) / "agent_native" / "state.json"
     state = json.loads(state_path.read_text(encoding="utf-8"))
-    state["active_step"]["capsule"]["submit_hint"]["command"] = "loopora agent codex submit --run-id stale --step-id builder_step"
+    state["active_step"]["agent_step_view"]["submit_hint"]["command"] = "loopora agent codex submit --run-id stale --step-id builder_step"
     stale_coverage = {
         "status": "weak",
         "covered_check_count": 1,
@@ -632,8 +632,9 @@ def test_agent_native_role_dispatch_projects_target_agent_config_availability(
         "blocked_target_count": 0,
         "top_gaps": [{"target_id": "done_when.check_002", "status": "missing"}],
     }
-    state["active_step"]["capsule"]["required_coverage"] = dict(stale_coverage)
-    state["active_step"]["context_packet"]["iteration"].update(
+    state["active_step"]["agent_step_view"]["required_coverage"] = dict(stale_coverage)
+    assert "context_packet" not in state["active_step"]
+    state["active_step"]["step_instruction_context"]["iteration"].update(
         {
             "coverage_status": stale_coverage["status"],
             "covered_check_count": stale_coverage["covered_check_count"],
@@ -827,9 +828,8 @@ def test_cli_agent_loop_does_not_spawn_nested_worker_for_agent_native(adapter: s
                         "next_focus": ["done_when.check_001: Support admin path still lacks direct proof."],
                     },
                     "known_evidence_count": 3,
-                    "context_absolute_path": str(run_dir / "iterations" / "iter_000" / "steps" / "00__builder_step" / "input.context.json"),
+                    "context_absolute_path": str(run_dir / "iterations" / "iter_000" / "steps" / "00__builder_step" / "step_instruction_context.json"),
                     "step_contract_absolute_path": str(layout.step_contract_path(0, 0, "builder_step")),
-                    "capsule_absolute_path": str(run_dir / "iterations" / "iter_000" / "steps" / "00__builder_step" / "capsule.json"),
                     "submit_hint": {
                         "command": "loopora agent codex submit --run-id run_agent --step-id builder_step",
                         "result_file_contract": "Write one wrapper JSON object with loopora_host_dispatch and a schema-shaped result; replace null placeholders before submit.",

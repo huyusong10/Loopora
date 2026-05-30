@@ -206,7 +206,7 @@ def test_run_contract_snapshot_request_uses_strategy_source_input() -> None:
     assert "_strategy_source_roles_with_prompt_files" in context_flow_source
     assert "_workflow_roles_with_prompt_files" not in context_flow_source
     assert 'strategy_snapshot = run_contract.get("workflow")' in context_flow_source
-    assert 'workflow_snapshot = run_contract.get("workflow")' not in context_flow_source
+    assert 'workflow_snapshot = run_contract.get("workflow")' not in context_flow_source and "StepContextPacket" not in context_flow_source
     assert "strategy_source=strategy_source" in context_flow_source
     assert "strategy_source=strategy_snapshot" in context_flow_source
     assert "workflow=strategy_source" not in context_flow_source
@@ -218,7 +218,7 @@ def test_run_contract_snapshot_request_uses_strategy_source_input() -> None:
     assert "workflow: dict\n\n\ndef _coerce_loop_create_request" not in registration_source
     assert "_validate_loop_completion_strategy_source" in registration_source
     assert "_validate_loop_completion_workflow" not in registration_source
-    assert 'strategy_source = loop.get("workflow_json")' in registration_source
+    assert "strategy_source = self._normalized_strategy_source_from_record(loop)" in registration_source
     assert 'workflow = loop.get("workflow_json")' not in registration_source
 
 
@@ -277,7 +277,9 @@ def test_runtime_uses_strategy_source_boundary_for_workflow_source_helpers() -> 
     assert "from loopora.workflows import" not in loop_records_source
     assert "from loopora.workflows import" not in runner_support_source
     assert "from loopora.workflows import" not in step_runtime_source
-    assert "_normalized_strategy_source_from_record" in loop_records_source
+    assert all(marker in loop_records_source for marker in ("_normalized_strategy_source_from_record", "_strategy_source_snapshot_from_record"))
+    assert "strategy_source_from_record(run)" in agent_native_context_source
+    assert "strategy_source = self._strategy_source_snapshot_from_record(run)" in runner_execution_source
     assert "_normalized_workflow_from_record" not in loop_records_source
 
 
@@ -344,7 +346,7 @@ def test_orchestration_asset_mutations_use_strategy_source_boundary_for_strategy
     assert "def _pop_strategy_source_field" in service_orchestration_source
     assert "payload_input.strategy_source" in asset_catalog_source
     assert "payload_input.workflow" not in asset_catalog_source
-    assert "strategy_source=request.strategy_source" in service_orchestration_source
+    assert all(marker in service_orchestration_source for marker in ("strategy_source=request.strategy_source", "strategy_source_from_record(previous_orchestration) or {}"))
     assert "workflow=request.workflow" not in service_orchestration_source
     assert "role_count, step_count = _strategy_source_counts(orchestration)" in service_orchestration_source
 
@@ -362,7 +364,7 @@ def test_compiler_sources_use_strategy_source_boundary_for_strategy_inputs() -> 
     )
 
     assert "def normalize_strategy_role_display_name" in strategy_source_source
-    assert "from loopora.strategy_source import" in loop_compiler_source
+    assert "from loopora.strategy_source import" in loop_compiler_source and "strategy_source_from_record(record)" in loop_compiler_source and 'record.get("workflow_json")' not in loop_compiler_source
     assert "from loopora.strategy_source import" in specs_source
     assert "from loopora.workflows import" not in loop_compiler_source
     assert "from loopora.workflows import" not in specs_source
@@ -418,8 +420,8 @@ def test_bundle_graph_preflight_uses_strategy_source_for_template_role_refs() ->
         encoding="utf-8"
     )
 
-    assert 'strategy_source = orchestration.get("workflow_json") or {}' in graph_preflight_source
-    assert 'workflow = orchestration.get("workflow_json") or {}' not in graph_preflight_source
+    assert "strategy_source_from_record(orchestration) or {}" in graph_preflight_source
+    assert 'orchestration.get("workflow_json") or {}' not in graph_preflight_source
     assert "_strategy_source_role_definition_ids" in graph_preflight_source
     assert "_workflow_role_definition_ids" not in graph_preflight_source
 
@@ -456,7 +458,7 @@ def test_web_input_projection_uses_strategy_source_boundary_for_strategy_forms()
     assert "def _workflow_for_spec_template" not in web_inputs_source
     assert "strategy_source = build_preset_strategy_source(preset_name)" in web_inputs_source
     assert "workflow = build_preset_strategy_source(preset_name)" not in web_inputs_source
-    assert "strategy_source = dict(orchestration.get(\"workflow_json\") or {})" in web_inputs_source
+    assert "strategy_source = strategy_source_from_record(orchestration) or {}" in web_inputs_source
     assert "workflow = dict(orchestration.get(\"workflow_json\") or {})" not in web_inputs_source
     assert "_strategy_source_for_spec_template" in web_loop_pages_source
     assert "_workflow_for_spec_template" not in web_loop_pages_source
@@ -467,22 +469,20 @@ def test_web_input_projection_uses_strategy_source_boundary_for_strategy_forms()
 def test_web_page_projections_use_strategy_source_boundary_for_strategy_display() -> None:
     strategy_source_source = (REPO_ROOT / "src" / "loopora" / "strategy_source.py").read_text(encoding="utf-8")
     web_overviews_source = (REPO_ROOT / "src" / "loopora" / "web_overviews.py").read_text(encoding="utf-8")
+    web_projection_source = (REPO_ROOT / "src" / "loopora" / "web_projection.py").read_text(encoding="utf-8")
     web_route_pages_source = (REPO_ROOT / "src" / "loopora" / "web_route_pages.py").read_text(encoding="utf-8")
     loop_pages_source = (REPO_ROOT / "src" / "loopora" / "web_route_context_loop_pages.py").read_text(
         encoding="utf-8"
     )
 
-    assert "def available_strategy_prompt_templates" in strategy_source_source
-    assert "from loopora.strategy_source import" in web_overviews_source
-    assert "from loopora.strategy_source import" in loop_pages_source
-    assert "from loopora.workflows import" not in web_overviews_source
-    assert "from loopora.workflows import" not in loop_pages_source
-    assert "def _strategy_role_executor_summary" in web_overviews_source
-    assert "def _workflow_role_executor_summary" not in web_overviews_source
-    assert 'strategy_source = loop.get("workflow_json") or {}' in web_overviews_source
-    assert 'workflow = loop.get("workflow_json") or {}' not in web_overviews_source
-    assert "_strategy_role_executor_summary" in web_route_pages_source
-    assert "_workflow_role_executor_summary" not in web_route_pages_source
+    assert "def available_strategy_prompt_templates" in strategy_source_source and "def strategy_source_from_record" in strategy_source_source
+    assert "from loopora.strategy_source import" in web_projection_source and "strategy_source_from_record" in web_projection_source and "from loopora.strategy_source import" in loop_pages_source
+    assert "from loopora.workflows import" not in "\n".join([web_overviews_source, web_projection_source, loop_pages_source])
+    assert all(marker in web_overviews_source for marker in ("def _strategy_role_executor_summary", "def _overview_strategy_source", "strategy_source_from_record"))
+    assert all(marker not in web_overviews_source for marker in ("def _workflow_role_executor_summary", 'strategy_source = loop.get("workflow_json") or {}', 'workflow = loop.get("workflow_json") or {}'))
+    assert "def web_run_detail_progress_stages" in web_projection_source
+    assert all(marker in web_route_pages_source for marker in ("_strategy_role_executor_summary", "web_projection = ctx.svc().app_services.projection.web_run_detail(run)", '"progress_stages": web_projection["progress_stages"]'))
+    assert all(marker not in web_route_pages_source for marker in ("_workflow_role_executor_summary", "_progress_stage_seed"))
 
 
 def test_web_editor_and_form_routes_use_strategy_source_boundary_for_strategy_validation() -> None:
@@ -709,12 +709,12 @@ def test_services_ask_run_engine_to_freeze_runner_step_instructions() -> None:
 
 def test_agent_native_treats_active_step_state_as_projection_checked_cache() -> None:
     agent_source = (REPO_ROOT / "src" / "loopora" / "service_agent_native.py").read_text(encoding="utf-8")
-    projection_cache_source = (REPO_ROOT / "src" / "loopora" / "events" / "projection_cache.py").read_text(
-        encoding="utf-8"
-    )
+    projection_cache_source = (REPO_ROOT / "src" / "loopora" / "events" / "projection_cache.py").read_text(encoding="utf-8")
     forbidden = (".current_step_projection(", "AgentNativeCapsuleRequest", "submit_context.context_packet")
+    legacy_capsule_paths = [REPO_ROOT / "src" / "loopora" / name for name in ("agent_native_capsule.py", "agent_native_capsule_context.py")]
     assert all(item in agent_source for item in ["agent_native_active_step_is_stale", "agent_native_step_view"])
     assert all(item not in agent_source for item in forbidden)
+    assert all(not path.exists() for path in legacy_capsule_paths)
     assert "refresh_agent_native_capsule_with" not in agent_source and "def _agent_native_capsule(" not in agent_source
     assert all(item in agent_source for item in ["current_step_projection_for_run", "AgentNativeStepViewRequest"])
     assert 'kind="event_replayed_current_step"' in projection_cache_source

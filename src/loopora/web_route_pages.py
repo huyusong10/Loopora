@@ -10,7 +10,7 @@ from loopora.web_overviews import (
     _build_run_summary_snapshot,
     _decorate_loop_overview,
     _decorate_run_overview,
-    _progress_stage_seed,
+    _overview_strategy_source,
     _strategy_role_executor_summary,
 )
 from loopora.web_route_context import WebRouteContext
@@ -147,7 +147,7 @@ def _register_loop_run_pages(app: FastAPI, ctx: WebRouteContext) -> None:
                     **loop,
                     "runs": runs,
                     "role_executor_summary": _strategy_role_executor_summary(
-                        loop.get("workflow_json") or {},
+                        _overview_strategy_source(loop),
                         fallback_executor_kind=loop.get("executor_kind", "codex"),
                     ),
                     "spec_rendered_html": render_safe_markdown_html(loop.get("spec_markdown", "")),
@@ -163,6 +163,7 @@ def _register_loop_run_pages(app: FastAPI, ctx: WebRouteContext) -> None:
     async def run_detail(request: Request, run_id: str) -> HTMLResponse:
         locale = _preferred_request_locale(request)
         run = ctx.svc().get_run(run_id)
+        web_projection = ctx.svc().app_services.projection.web_run_detail(run)
         export_bundle_url = f"/bundles/derive/export?{urlencode({'loop_id': run['loop_id']})}"
         agent_entry_start = ctx.svc().agent_entry_loop_start_projection(run["loop_id"])
         return ctx.templates.TemplateResponse(
@@ -171,10 +172,10 @@ def _register_loop_run_pages(app: FastAPI, ctx: WebRouteContext) -> None:
             {
                 "request": request,
                 "run": run,
-                "web_projection": ctx.svc().app_services.projection.web_run_detail(run),
+                "web_projection": web_projection,
                 "export_bundle_url": export_bundle_url,
                 "page_locale": locale,
-                "progress_stages": _progress_stage_seed(run),
+                "progress_stages": web_projection["progress_stages"],
                 "agent_entry_start": agent_entry_start,
                 "acceptance_state": ctx.svc().run_result_acceptance_state(run_id),
                 "access_state": ctx.access_state,

@@ -42,6 +42,7 @@
   {% if custom_orchestrations %}
   <div class="loop-grid role-card-grid role-card-grid--orchestrations role-card-grid--orchestrations-custom">
     {% for orchestration in custom_orchestrations %}
+    {% set strategy_source = orchestration.strategy_source or orchestration.workflow_json or {} %}
     <article class="loop-card is-clickable" data-open-card="/orchestrations/{{ orchestration.id }}/edit" tabindex="0">
       <a class="loop-card-link" href="/orchestrations/{{ orchestration.id }}/edit" tabindex="-1" aria-hidden="true"></a>
       <div class="loop-card-head">
@@ -55,9 +56,9 @@
       </div>
       <p>{{ orchestration.description or "-" }}</p>
       <p class="loop-card-meta">
-        <span data-lang="zh">步骤数</span><span data-lang="en">Steps</span> {{ orchestration.workflow_json.steps|length }}
+        <span data-lang="zh">步骤数</span><span data-lang="en">Steps</span> {{ strategy_source.steps|length }}
         ·
-        <span data-lang="zh">角色数</span><span data-lang="en">Roles</span> {{ orchestration.workflow_json.roles|length }}
+        <span data-lang="zh">角色数</span><span data-lang="en">Roles</span> {{ strategy_source.roles|length }}
         {% if orchestration.parallel_group_count %}
         ·
         <span data-testid="orchestration-parallel-badge">
@@ -68,7 +69,7 @@
       <div
         class="orchestration-loop-shell"
         data-testid="orchestration-loop-diagram"
-        data-workflow-diagram="{{ orchestration.workflow_json|tojson|forceescape }}"
+        data-strategy-diagram="{{ strategy_source|tojson|forceescape }}"
       ></div>
       {% if orchestration.deletable %}
       <div class="card-actions card-actions-compact">
@@ -105,6 +106,7 @@
   </header>
   <div class="loop-grid role-card-grid role-card-grid--orchestrations">
     {% for orchestration in builtin_orchestrations %}
+    {% set strategy_source = orchestration.strategy_source or orchestration.workflow_json or {} %}
     <article class="loop-card is-clickable" data-open-card="/orchestrations/{{ orchestration.id }}/edit" tabindex="0">
       <a class="loop-card-link" href="/orchestrations/{{ orchestration.id }}/edit" tabindex="-1" aria-hidden="true"></a>
       <div class="loop-card-head">
@@ -121,9 +123,9 @@
         <span data-lang="en">{{ orchestration.description_en or orchestration.description or "-" }}</span>
       </p>
       <p class="loop-card-meta">
-        <span data-lang="zh">步骤数</span><span data-lang="en">Steps</span> {{ orchestration.workflow_json.steps|length }}
+        <span data-lang="zh">步骤数</span><span data-lang="en">Steps</span> {{ strategy_source.steps|length }}
         ·
-        <span data-lang="zh">角色数</span><span data-lang="en">Roles</span> {{ orchestration.workflow_json.roles|length }}
+        <span data-lang="zh">角色数</span><span data-lang="en">Roles</span> {{ strategy_source.roles|length }}
         {% if orchestration.parallel_group_count %}
         ·
         <span data-testid="orchestration-parallel-badge">
@@ -134,7 +136,7 @@
       <div
         class="orchestration-loop-shell"
         data-testid="orchestration-loop-diagram"
-        data-workflow-diagram="{{ orchestration.workflow_json|tojson|forceescape }}"
+        data-strategy-diagram="{{ strategy_source|tojson|forceescape }}"
       ></div>
       <div class="loop-card-glance loop-card-glance--scenario" data-testid="builtin-orchestration-scenario">
         <strong><span data-lang="zh">适用场景</span><span data-lang="en">Best for</span></strong>

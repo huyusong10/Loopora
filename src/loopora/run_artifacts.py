@@ -135,7 +135,7 @@ RUN_ARTIFACT_SPECS = (
 )
 
 STEP_ARTIFACT_FILENAMES = {
-    "input.context.json",
+    "step_instruction_context.json",
     "prompt.md",
     "output.raw.json",
     "output.normalized.json",
@@ -338,14 +338,11 @@ class RunArtifactLayout:
     def step_metadata_path(self, iter_id: int, step_order: int, step_id: str) -> Path:
         return self.step_dir(iter_id, step_order, step_id) / "metadata.json"
 
-    def step_context_path(self, iter_id: int, step_order: int, step_id: str) -> Path:
-        return self.step_dir(iter_id, step_order, step_id) / "input.context.json"
+    def step_instruction_context_path(self, iter_id: int, step_order: int, step_id: str) -> Path:
+        return self.step_dir(iter_id, step_order, step_id) / "step_instruction_context.json"
 
     def step_agent_view_path(self, iter_id: int, step_order: int, step_id: str) -> Path:
         return self.step_dir(iter_id, step_order, step_id) / "agent_step_view.json"
-
-    def step_capsule_path(self, iter_id: int, step_order: int, step_id: str) -> Path:
-        return self.step_dir(iter_id, step_order, step_id) / "capsule.json"
 
     def step_contract_path(self, iter_id: int, step_order: int, step_id: str) -> Path:
         return self.step_dir(iter_id, step_order, step_id) / "step_contract.json"

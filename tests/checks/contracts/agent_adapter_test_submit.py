@@ -23,7 +23,7 @@ def _write_agent_submit_repair_fixture(tmp_path: Path) -> dict[str, Path | RunAr
     active_template.parent.mkdir(parents=True, exist_ok=True)
     active_template.write_text("{}", encoding="utf-8")
     (layout.run_dir / "agent_native" / "state.json").write_text(
-        json.dumps({"active_step": {"capsule": _agent_submit_repair_active_capsule(layout, active_template)}}, ensure_ascii=False),
+        json.dumps({"active_step": {"agent_step_view": _agent_submit_repair_active_step_view(layout, active_template)}}, ensure_ascii=False),
         encoding="utf-8",
     )
     stale_result_file = tmp_path / "builder-stale.result.json"
@@ -38,14 +38,14 @@ def _write_agent_submit_repair_fixture(tmp_path: Path) -> dict[str, Path | RunAr
         "bad_ref_file": bad_ref_file,
     }
 
-def _agent_submit_repair_active_capsule(layout: RunArtifactLayout, active_template: Path) -> dict:
+def _agent_submit_repair_active_step_view(layout: RunArtifactLayout, active_template: Path) -> dict:
     return {
         "iter": 0,
         "step_id": "contract_inspection_step",
         "step_order": 1,
         "role": {"name": "Contract Inspector", "id": "contract_inspector", "archetype": "inspector"},
         "role_dispatch": {"target_agent": "loopora-inspector"},
-        "context_absolute_path": str(layout.step_context_path(0, 1, "contract_inspection_step")),
+        "context_absolute_path": str(layout.step_instruction_context_path(0, 1, "contract_inspection_step")),
         "known_evidence_ids": ["ev_000_00_builder_step"],
         "known_evidence_refs": [
             {

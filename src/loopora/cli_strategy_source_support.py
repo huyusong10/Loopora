@@ -11,6 +11,7 @@ from loopora.strategy_source import (
     load_strategy_source_file,
     normalize_strategy_archetype,
     normalize_strategy_role_models,
+    strategy_source_from_record,
 )
 
 
@@ -33,7 +34,7 @@ def parse_role_models(values: list[str] | None) -> dict[str, str]:
 
 
 def strategy_source_bundle_from_entity(entity: dict[str, object]) -> tuple[dict | None, dict[str, str]]:
-    strategy_source = entity.get("workflow_json") or None
+    strategy_source = strategy_source_from_record(entity)
     prompt_files = entity.get("prompt_files_json") or entity.get("prompt_files") or {}
     if isinstance(prompt_files, dict):
         return strategy_source, dict(prompt_files)

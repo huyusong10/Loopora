@@ -21,11 +21,10 @@ def refresh_agent_native_step_view_with_judgment_contract(
     step_view: object,
     *,
     step_instruction_context: object = None,
-    context_packet: object = None,
 ) -> dict[str, Any]:
     if not isinstance(step_view, dict):
         raise LooporaError("agent-native active step contract is invalid")
-    step_context = step_instruction_context if step_instruction_context is not None else context_packet
+    step_context = step_instruction_context
     normalized = dict(step_view)
     normalized["judgment_contract"] = agent_native_step_view_judgment_contract(run, step_context)
     normalized["required_coverage"] = agent_native_required_coverage(step_context)

@@ -48,14 +48,14 @@ def test_agent_work_panel_distinguishes_terminal_unproven_and_proven_next_action
     assert proven["next_action"] == "Task verdict passed; no new evidence pass starts unless the task scope changes."
 
 
-def test_cli_agent_next_prints_run_contract_for_intermediate_capsule(monkeypatch, tmp_path: Path) -> None:
+def test_cli_agent_next_prints_run_contract_for_intermediate_step_view(monkeypatch, tmp_path: Path) -> None:
     workdir = _mkdir(tmp_path / "project")
     layout = RunArtifactLayout(tmp_path / "runs" / "run_next")
     layout.initialize()
     layout.run_contract_path.write_text(
         json.dumps(
             {
-                "collaboration_summary": "Keep intermediate capsules tied to frozen judgment.",
+                "collaboration_summary": "Keep intermediate step views tied to frozen judgment.",
                 "loop_fit_reasons": ["The next role needs the same proof bar as the first role."],
                 "judgment_tradeoffs": ["Do not trade evidence coverage for fast handoff."],
                 "execution_strategy": ["Claim the next proof gap before expanding scope."],
@@ -187,10 +187,9 @@ def test_cli_agent_next_prints_run_contract_for_intermediate_capsule(monkeypatch
                             }
                         ],
                     },
-                    "context_path": "iterations/iter_000/steps/01__inspector_step/input.context.json",
+                    "context_path": "iterations/iter_000/steps/01__inspector_step/step_instruction_context.json",
                     "agent_step_view_path": "iterations/iter_000/steps/01__inspector_step/agent_step_view.json",
                     "step_contract_path": "iterations/iter_000/steps/01__inspector_step/step_contract.json",
-                    "capsule_path": "iterations/iter_000/steps/01__inspector_step/capsule.json",
                     "submit_hint": {
                         "command": "loopora agent codex submit --run-id run_next",
                         "result_file_contract": "Write one wrapper JSON object with loopora_host_dispatch and a schema-shaped result; replace null placeholders before submit.",
@@ -241,7 +240,7 @@ def test_cli_agent_next_prints_run_contract_for_intermediate_capsule(monkeypatch
     assert "next_action_policy: read_only, can_block" in result.stdout
     assert "required_coverage: weak; required checks 1 covered / 1 missing" in result.stdout
     assert "- done_when.check_001: [weak] Authorization proof is still weak." in result.stdout
-    assert "next_context_path: iterations/iter_000/steps/01__inspector_step/input.context.json" in result.stdout
+    assert "next_context_path: iterations/iter_000/steps/01__inspector_step/step_instruction_context.json" in result.stdout
     assert "next_agent_step_view_path: iterations/iter_000/steps/01__inspector_step/agent_step_view.json" in result.stdout
     assert "known_evidence_count: 4" in result.stdout
     assert "known_evidence_scope: filtered by evidence_query archetypes=builder limit=12" in result.stdout
@@ -280,7 +279,7 @@ def test_cli_agent_next_prints_run_contract_for_intermediate_capsule(monkeypatch
 
 def _assert_agent_contract_strategy_output(stdout: str, layout: RunArtifactLayout) -> None:
     assert f"run_contract_path: {layout.run_contract_path}" in stdout
-    assert "judgment_contract_summary: Keep intermediate capsules tied to frozen judgment." in stdout
+    assert "judgment_contract_summary: Keep intermediate step views tied to frozen judgment." in stdout
     assert "check_mode: specified" in stdout
     assert "completion_mode: gatekeeper" in stdout
     assert "strategy_preset: quality_gate" in stdout

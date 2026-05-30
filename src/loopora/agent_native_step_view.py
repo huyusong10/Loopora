@@ -37,9 +37,8 @@ class AgentNativeStepViewRequest:
 
 
 def agent_native_step_view(request: AgentNativeStepViewRequest) -> dict[str, Any]:
-    context_path = request.layout.step_context_path(request.iter_id, request.step_order, request.step["id"])
+    context_path = request.layout.step_instruction_context_path(request.iter_id, request.step_order, request.step["id"])
     agent_step_view_path = request.layout.step_agent_view_path(request.iter_id, request.step_order, request.step["id"])
-    capsule_path = request.layout.step_capsule_path(request.iter_id, request.step_order, request.step["id"])
     step_contract_path = request.layout.step_contract_path(request.iter_id, request.step_order, request.step["id"])
     output_path = request.layout.step_output_raw_path(request.iter_id, request.step_order, request.step["id"])
     result_outbox_dir = request.layout.workdir_path / ".loopora" / "agent_outbox" / request.adapter
@@ -103,8 +102,6 @@ def agent_native_step_view(request: AgentNativeStepViewRequest) -> dict[str, Any
         "agent_step_view_absolute_path": str(agent_step_view_path.resolve()),
         "step_contract_path": request.layout.relative(step_contract_path),
         "step_contract_absolute_path": str(step_contract_path.resolve()),
-        "capsule_path": request.layout.relative(capsule_path),
-        "capsule_absolute_path": str(capsule_path.resolve()),
         "result_output_path": request.layout.relative(output_path),
         "submit_hint": {
             "command": agent_native_submit_command(

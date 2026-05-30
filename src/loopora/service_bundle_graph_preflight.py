@@ -5,6 +5,7 @@ from pathlib import Path
 
 from loopora.branding import state_dir_for_workdir
 from loopora.service_types import LooporaConflictError
+from loopora.strategy_source import strategy_source_from_record
 
 
 @dataclass(frozen=True)
@@ -129,7 +130,7 @@ def _assert_roles_belong_to_orchestration(
     role_definition_ids: list[str],
     orchestration: dict,
 ) -> None:
-    strategy_source = orchestration.get("workflow_json") or {}
+    strategy_source = strategy_source_from_record(orchestration) or {}
     referenced_role_ids = _strategy_source_role_definition_ids(strategy_source)
     unexpected = sorted(role_id for role_id in role_definition_ids if role_id not in referenced_role_ids)
     if referenced_role_ids and unexpected:
@@ -153,7 +154,7 @@ def _assert_roles_not_shared_by_external_orchestrations(
         candidate_id = str(candidate.get("id") or "").strip()
         if candidate_id == links.orchestration_id:
             continue
-        if role_ids & _strategy_source_role_definition_ids(candidate.get("workflow_json") or {}):
+        if role_ids & _strategy_source_role_definition_ids(strategy_source_from_record(candidate) or {}):
             external_orchestrations.append(candidate_id)
     if external_orchestrations:
         raise LooporaConflictError(

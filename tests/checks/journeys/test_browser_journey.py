@@ -112,10 +112,12 @@ class CalculatorPrototypeExecutor(FakeCodexExecutor):
                 "tester_observations": "The generated calculator is ready for browser verification.",
             }
         if request.role == "verifier":
-            context_packet = request.extra_context.get("context_packet") if isinstance(request.extra_context, dict) else {}
+            step_instruction_context = (
+                request.extra_context.get("step_instruction_context") if isinstance(request.extra_context, dict) else {}
+            )
             evidence_refs = [
                 str(item.get("id"))
-                for item in list((context_packet.get("evidence") or {}).get("items") or [])
+                for item in list((step_instruction_context.get("evidence") or {}).get("items") or [])
                 if isinstance(item, dict) and str(item.get("id") or "").strip()
             ][-3:]
             return {

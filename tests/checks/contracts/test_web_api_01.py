@@ -13,7 +13,8 @@ from loopora.run_takeaways import (
 from loopora.web_streaming import MAX_EVENT_CURSOR_ID, parse_sse_last_event_id, stream_error_payload
 from loopora.web_url_utils import safe_attachment_filename, safe_local_return_path, with_query_params
 from loopora.web import build_app
-from loopora.web_overviews import _build_run_summary_snapshot, _decorate_loop_overview, _format_timeline_event, _progress_stage_seed
+from loopora.web_overviews import _build_run_summary_snapshot, _decorate_loop_overview, _decorate_run_overview, _format_timeline_event
+from loopora.web_projection import web_run_detail_progress_stages
 
 from web_api_test_support import (
     _create_api_loop_run,
@@ -38,11 +39,24 @@ def test_streaming_cursor_helpers_require_strict_integer_boundaries() -> None:
     assert stream_error_payload(owner_key="run_id", owner_id="run_test", after_id=True)["after_id"] == 0
     assert stream_error_payload(owner_key="run_id", owner_id="run_test", after_id=MAX_EVENT_CURSOR_ID + 1)["after_id"] == 0
 
-def test_progress_stage_seed_keeps_run_closure_language_neutral() -> None:
-    stages = _progress_stage_seed({"workflow_json": {"roles": [], "steps": []}})
+def test_run_detail_progress_projection_keeps_run_closure_language_neutral() -> None:
+    stages = web_run_detail_progress_stages({"workflow_json": {"roles": [], "steps": []}})
 
     assert stages[-1] == {"key": "finished", "label": "Run closed", "kind": "finished", "sequence": 2}
     assert all(stage["label"] != "Done" for stage in stages)
+
+def test_run_detail_progress_projection_prefers_strategy_source() -> None:
+    stages = web_run_detail_progress_stages(
+        {
+            "strategy_source": {
+                "roles": [{"id": "builder", "archetype": "builder", "name": "Builder"}],
+                "steps": [{"id": "builder_step", "role_id": "builder"}],
+            },
+            "workflow_json": {"roles": [], "steps": []},
+        }
+    )
+
+    assert stages[1] == {"key": "step:builder_step", "label": "Builder", "kind": "strategy_step", "sequence": 2}
 
 def test_timeline_event_formatter_keeps_stable_observation_titles() -> None:
     role_summary = _format_timeline_event(
@@ -277,6 +291,20 @@ def test_loop_overview_preserves_residual_risk_task_verdict() -> None:
     assert "Loop verdict" in summary["status_note_en"]
     assert "任务是否通过" in summary["status_note_zh"]
 
+def test_web_overview_decorators_prefer_strategy_source_projection() -> None:
+    strategy_source = {
+        "roles": [{"id": "builder", "executor_kind": "codex"}],
+        "steps": [{"id": "builder_step", "role_id": "builder"}],
+    }
+    stale_storage_source = {"roles": [], "steps": []}
+
+    loop = _decorate_loop_overview({"id": "loop_strategy", "strategy_source": strategy_source, "workflow_json": stale_storage_source})
+    run = _decorate_run_overview({"id": "run_strategy", "strategy_source": strategy_source, "workflow_json": stale_storage_source})
+
+    assert loop["role_count"] == 1
+    assert loop["step_count"] == 1
+    assert run["role_executor_summary"] != "-"
+
 def test_loop_overview_surfaces_unproven_terminal_task_verdicts() -> None:
     insufficient = _decorate_loop_overview(
         {
@@ -362,6 +390,10 @@ def test_api_run_detail_includes_v4_web_projection(
 
     assert projection["schema_version"] == 4
     assert projection["kind"] == "web_run_detail"
+    assert projection["strategy_source"] == payload["workflow_json"]
+    assert projection["progress_stages"][0] == {"key": "checks", "label": "Checks", "kind": "checks", "sequence": 1}
+    assert projection["progress_stages"][-1]["kind"] == "finished"
+    assert {stage["kind"] for stage in projection["progress_stages"]} >= {"strategy_step"}
     assert projection["summary"]["run_id"] == run_id
     assert projection["summary"]["run_status"] == payload["status"]
     assert projection["lifecycle"]["run_id"] == run_id

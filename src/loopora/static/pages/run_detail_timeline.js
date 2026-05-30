@@ -72,9 +72,9 @@
           detail: resolvedPayloadRoleName(payload, role),
         };
       }
-      if (event.event_type === "step_context_prepared") {
+      if (event.event_type === "step_instruction_context_prepared") {
         return {
-          title: localeText("步骤上下文已装配", "Step context prepared"),
+          title: localeText("步骤指令上下文已装配", "StepInstruction context prepared"),
           detail: `${payload.step_id || "-"} · ${payload.context_path || "-"}`,
         };
       }

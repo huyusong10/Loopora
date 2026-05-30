@@ -11,7 +11,6 @@ from pathlib import Path
 
 from loopora.agent_native_projection_state import agent_native_active_step_view
 from loopora.agent_native_step_view_paths import (
-    agent_native_legacy_capsule_path_text,
     agent_native_step_contract_path_text,
     agent_native_step_view_path_text,
 )
@@ -189,15 +188,13 @@ def _current_agent_step_projection(run: dict) -> dict:
         "iteration_repair": _current_agent_step_iteration_repair_projection(step_view),
         "context_path": _text(step_view.get("context_path"), limit=1000),
         "context_absolute_path": _text(step_view.get("context_absolute_path"), limit=2000),
-        "agent_step_view_path": _text(agent_native_step_view_path_text(step_view, legacy_fallback=True), limit=1000),
+        "agent_step_view_path": _text(agent_native_step_view_path_text(step_view), limit=1000),
         "agent_step_view_absolute_path": _text(
-            agent_native_step_view_path_text(step_view, absolute=True, legacy_fallback=True),
+            agent_native_step_view_path_text(step_view, absolute=True),
             limit=2000,
         ),
         "step_contract_path": _text(agent_native_step_contract_path_text(step_view), limit=1000),
         "step_contract_absolute_path": _text(agent_native_step_contract_path_text(step_view, absolute=True), limit=2000),
-        "capsule_path": _text(agent_native_legacy_capsule_path_text(step_view), limit=1000),
-        "capsule_absolute_path": _text(agent_native_legacy_capsule_path_text(step_view, absolute=True), limit=2000),
         "submit_hint": {
             "command": _text(submit_hint.get("command"), limit=1000),
             "result_file_contract": _text(submit_hint.get("result_file_contract"), limit=1000),
@@ -241,7 +238,6 @@ def _acceptance_judgment_summary(judgment_contract: dict) -> str:
         "collaboration_summary",
         "goal",
         "strategy_collaboration_intent",
-        "workflow_collaboration_intent",
         "residual_risk",
     ):
         value = _acceptance_text(judgment_contract.get(field), limit=240)
@@ -527,10 +523,7 @@ class ServiceRunLifecycleMixin:
             "check_mode": _acceptance_text(judgment_contract.get("check_mode")),
             "check_count": structured_non_negative_int(judgment_contract.get("check_count")),
             "completion_mode": _acceptance_text(judgment_contract.get("completion_mode")),
-            "strategy_preset": _acceptance_text(
-                judgment_contract.get("strategy_preset") or judgment_contract.get("workflow_preset")
-            ),
-            "workflow_preset": _acceptance_text(judgment_contract.get("workflow_preset")),
+            "strategy_preset": _acceptance_text(judgment_contract.get("strategy_preset")),
             "coverage_targets": _acceptance_coverage_targets(judgment_contract),
             "loop_fit_reasons": _acceptance_string_list(judgment_contract, "loop_fit_reasons"),
             "execution_strategy": _acceptance_string_list(judgment_contract, "execution_strategy"),
@@ -563,7 +556,6 @@ class ServiceRunLifecycleMixin:
             "check_count": 0,
             "completion_mode": "",
             "strategy_preset": "",
-            "workflow_preset": "",
             "coverage_targets": [],
             "loop_fit_reasons": [],
             "execution_strategy": [],

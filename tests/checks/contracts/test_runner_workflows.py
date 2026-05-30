@@ -33,7 +33,7 @@ def test_inspect_first_workflow_runs_inspector_before_builder(
 
     run = service.rerun(loop["id"])
 
-    assert run["status"] == "succeeded"
+    assert run["status"] == "succeeded" and run["strategy_source"] == run["workflow_json"]
     assert run["workflow_json"]["preset"] == "inspect_first"
     iteration_log = [json.loads(line) for line in (Path(run["runs_dir"]) / "iteration_log.jsonl").read_text(encoding="utf-8").splitlines() if line.strip()]
     workflow_entry = next(entry for entry in iteration_log if entry["phase"] == "complete")
@@ -556,12 +556,8 @@ def test_round_mode_carries_gatekeeper_residual_risk_into_next_iteration_prompt(
                     "coverage_results": [],
                 }
             else:
-                context_packet = request.extra_context["step_instruction_context"]
-                evidence_refs = [
-                    item["id"]
-                    for item in context_packet["evidence"]["items"]
-                    if item.get("archetype") == "inspector"
-                ]
+                step_instruction_context = request.extra_context["step_instruction_context"]
+                evidence_refs = [item["id"] for item in step_instruction_context["evidence"]["items"] if item.get("archetype") == "inspector"]
                 payload = {
                     "passed": True,
                     "decision_summary": "GateKeeper passed with a managed residual risk in round mode.",
@@ -918,8 +914,12 @@ def test_parallel_inspection_group_fans_out_then_gatekeeper_sees_all_evidence(
                     "tester_observations": f"{request.step_id} completed its independent inspection.",
                 }
             else:
-                context_packet = request.extra_context["step_instruction_context"]
-                evidence_refs = [item["id"] for item in context_packet["evidence"]["items"] if item.get("archetype") == "inspector"]
+                step_instruction_context = request.extra_context["step_instruction_context"]
+                evidence_refs = [
+                    item["id"]
+                    for item in step_instruction_context["evidence"]["items"]
+                    if item.get("archetype") == "inspector"
+                ]
                 payload = {
                     "passed": True,
                     "decision_summary": "Both inspection branches passed.",
@@ -1353,9 +1353,9 @@ def test_step_input_policy_filters_handoffs_and_evidence_context(
                     "tester_observations": f"{request.step_id} evidence.",
                 }
             else:
-                context_packet = request.extra_context["step_instruction_context"]
-                recorded_gate_context.update(context_packet)
-                evidence_refs = [item["id"] for item in context_packet["evidence"]["items"]]
+                step_instruction_context = request.extra_context["step_instruction_context"]
+                recorded_gate_context.update(step_instruction_context)
+                evidence_refs = [item["id"] for item in step_instruction_context["evidence"]["items"]]
                 payload = {
                     "passed": True,
                     "decision_summary": "Filtered context was enough.",
@@ -1449,8 +1449,8 @@ def test_evidence_query_filters_canonical_ledger_before_recent_prompt_window(
                     "changed_files": [],
                 }
             else:
-                context_packet = request.extra_context["step_instruction_context"]
-                recorded_gate_context.update(context_packet)
+                step_instruction_context = request.extra_context["step_instruction_context"]
+                recorded_gate_context.update(step_instruction_context)
                 recorded_gate_prompt = request.prompt
                 payload = {
                     "passed": False,
@@ -1589,7 +1589,7 @@ def test_gatekeeper_validates_older_known_evidence_ref_from_canonical_ledger(
     run = service.rerun(loop["id"])
     run_dir = Path(run["runs_dir"])
     gatekeeper_output = _step_outputs_by_archetype(run_dir)["gatekeeper"][-1]["output"]
-    final_context = json.loads((run_dir / "iterations" / "iter_021" / "steps" / "01__gatekeeper_step" / "input.context.json").read_text(encoding="utf-8"))
+    final_context = json.loads((run_dir / "iterations" / "iter_021" / "steps" / "01__gatekeeper_step" / "step_instruction_context.json").read_text(encoding="utf-8"))
 
     assert target_ref in final_context["evidence"]["known_ids"]
     assert target_ref not in {item["id"] for item in final_context["evidence"]["items"]}

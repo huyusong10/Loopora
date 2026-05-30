@@ -27,29 +27,11 @@ def agent_native_step_view_judgment_contract(run: dict, step_instruction_context
             "loop_fit_reasons": _agent_native_string_list(contract.get("loop_fit_reasons")) or projection.get("loop_fit_reasons", []),
             "strategy_preset": str(
                 contract.get("strategy_preset")
-                or contract.get("workflow_preset")
                 or projection.get("strategy_preset")
-                or projection.get("workflow_preset")
                 or ""
             ).strip(),
             "strategy_collaboration_intent": str(
                 contract.get("strategy_collaboration_intent")
-                or contract.get("workflow_collaboration_intent")
-                or projection.get("strategy_collaboration_intent")
-                or projection.get("workflow_collaboration_intent")
-                or ""
-            ).strip(),
-            "workflow_preset": str(
-                contract.get("workflow_preset")
-                or contract.get("strategy_preset")
-                or projection.get("workflow_preset")
-                or projection.get("strategy_preset")
-                or ""
-            ).strip(),
-            "workflow_collaboration_intent": str(
-                contract.get("workflow_collaboration_intent")
-                or contract.get("strategy_collaboration_intent")
-                or projection.get("workflow_collaboration_intent")
                 or projection.get("strategy_collaboration_intent")
                 or ""
             ).strip(),

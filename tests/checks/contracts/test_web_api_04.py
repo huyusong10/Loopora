@@ -165,7 +165,7 @@ def test_run_accept_result_keeps_audit_shape_when_evidence_summary_is_unavailabl
     assert payload["check_mode"] == ""
     assert payload["check_count"] == 0
     assert payload["completion_mode"] == ""
-    assert payload["workflow_preset"] == ""
+    assert "workflow_preset" not in payload
     assert payload["coverage_targets"] == []
     assert payload["loop_fit_reasons"] == []
     assert payload["execution_strategy"] == []
@@ -457,7 +457,7 @@ def test_api_can_create_orchestration_and_use_it_for_loop(
         json={
             "name": "Custom Inspect First",
             "description": "Inspector before Builder.",
-            "workflow": {"preset": "inspect_first"},
+            "strategy_source": {"preset": "inspect_first"},
         },
     )
     assert orchestration_response.status_code == 201
@@ -474,7 +474,7 @@ def test_api_can_create_orchestration_and_use_it_for_loop(
         json={
             "name": "Custom Build First",
             "description": "Updated description.",
-            "workflow": {"preset": "build_first"},
+            "strategy_source": {"preset": "build_first"},
         },
     )
     assert update_response.status_code == 200
@@ -504,6 +504,7 @@ def test_api_can_create_orchestration_and_use_it_for_loop(
     loop = loop_response.json()["loop"]
     assert loop["orchestration"]["id"] == updated_orchestration["id"]
     assert loop["orchestration"]["name"] == "Custom Build First"
+    assert loop["strategy_source"] == loop["workflow_json"]
     assert loop["workflow_json"]["preset"] == "build_first"
 
 def test_api_orchestration_hydrates_role_snapshots_from_role_definition_id(service_factory) -> None:

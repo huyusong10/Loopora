@@ -290,19 +290,24 @@ document.addEventListener("DOMContentLoaded", () => {
     return orchestrations.find((item) => item.id === orchestrationInput.value) || orchestrations[0] || null;
   }
 
-  function workflowRoles(orchestration) {
-    const workflow = orchestration?.workflow_json || {};
-    return Array.isArray(workflow.roles) ? workflow.roles : [];
+  function strategySource(orchestration) {
+    const source = orchestration?.strategy_source || orchestration?.workflow_json || {};
+    return source && typeof source === "object" ? source : {};
   }
 
-  function workflowSteps(orchestration) {
-    const workflow = orchestration?.workflow_json || {};
-    return Array.isArray(workflow.steps) ? workflow.steps : [];
+  function strategyRoles(orchestration) {
+    const source = strategySource(orchestration);
+    return Array.isArray(source.roles) ? source.roles : [];
   }
 
-  function workflowParallelGroupCount(orchestration) {
+  function strategySteps(orchestration) {
+    const source = strategySource(orchestration);
+    return Array.isArray(source.steps) ? source.steps : [];
+  }
+
+  function strategyParallelGroupCount(orchestration) {
     const groups = new Map();
-    workflowSteps(orchestration).forEach((step) => {
+    strategySteps(orchestration).forEach((step) => {
       const group = String(step?.parallel_group || "").trim();
       if (!group) {
         return;
@@ -312,31 +317,31 @@ document.addEventListener("DOMContentLoaded", () => {
     return Array.from(groups.values()).filter((count) => count >= 2).length;
   }
 
-  function orchestrationHasRole(orchestration, archetype) {
-    return workflowRoles(orchestration).some((role) => String(role?.archetype || "") === archetype);
+  function strategyHasRole(orchestration, archetype) {
+    return strategyRoles(orchestration).some((role) => String(role?.archetype || "") === archetype);
   }
 
   function executorLabel(kind) {
     return executorProfiles.find((profile) => profile.key === kind)?.label || kind || "-";
   }
 
-  function orchestrationHasFinishGate(orchestration) {
-    const roleById = Object.fromEntries(workflowRoles(orchestration).map((role) => [role.id, role]));
-    return workflowSteps(orchestration).some((step) => {
+  function strategyHasFinishGate(orchestration) {
+    const roleById = Object.fromEntries(strategyRoles(orchestration).map((role) => [role.id, role]));
+    return strategySteps(orchestration).some((step) => {
       const role = roleById[step.role_id];
       return role?.archetype === "gatekeeper" && String(step.on_pass || "continue") === "finish_run";
     });
   }
 
-  function orchestrationPolicy(orchestration) {
+  function strategyPolicy(orchestration) {
     return {
-      hasGuide: orchestrationHasRole(orchestration, "guide"),
-      supportsGatekeeperCompletion: orchestrationHasFinishGate(orchestration),
+      hasGuide: strategyHasRole(orchestration, "guide"),
+      supportsGatekeeperCompletion: strategyHasFinishGate(orchestration),
     };
   }
 
   function roleRuntimeSummary(orchestration) {
-    const roles = workflowRoles(orchestration);
+    const roles = strategyRoles(orchestration);
     const counts = new Map();
     roles.forEach((role) => {
       const label = executorLabel(String(role.executor_kind || "codex"));
@@ -388,7 +393,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function applyOrchestrationPolicy() {
     const selected = currentOrchestration();
-    const policy = orchestrationPolicy(selected);
+    const policy = strategyPolicy(selected);
     syncCompletionModeLabels();
     syncCompletionModeState(policy);
     if (triggerWindowField) {
@@ -407,9 +412,9 @@ document.addEventListener("DOMContentLoaded", () => {
       showStatus(orchestrationSummary, localeText("还没有可用的编排方案，请先去“流程编排”里创建。", "No flow is available yet. Create one from Flows."), "error");
       return;
     }
-    const workflow = selected.workflow_json || {};
-    const roles = Array.isArray(workflow.roles) ? workflow.roles.length : 0;
-    const steps = Array.isArray(workflow.steps) ? workflow.steps.length : 0;
+    const selectedStrategySource = strategySource(selected);
+    const roles = Array.isArray(selectedStrategySource.roles) ? selectedStrategySource.roles.length : 0;
+    const steps = Array.isArray(selectedStrategySource.steps) ? selectedStrategySource.steps.length : 0;
     const policy = applyOrchestrationPolicy();
     const source = selected.source === "builtin"
       ? localeText("内置方案", "Built-in")
@@ -422,7 +427,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!policy.hasGuide) {
       notes.push(localeText("无引导者，已隐藏触发/回退窗口", "No Guide, trigger/regression windows hidden"));
     }
-    const parallelGroupCount = workflowParallelGroupCount(selected);
+    const parallelGroupCount = strategyParallelGroupCount(selected);
     if (parallelGroupCount) {
       notes.push(localeText(`并行检视 ${parallelGroupCount} 组`, `${parallelGroupCount} parallel review group${parallelGroupCount === 1 ? "" : "s"}`));
     }
@@ -539,13 +544,15 @@ document.addEventListener("DOMContentLoaded", () => {
       targetPath = selection.payload.path;
     }
 
+    const selected = currentOrchestration();
+    const selectedStrategySource = selected ? strategySource(selected) : null;
     const {response, payload, error} = await fetchJson("/api/specs/init", {
       method: "POST",
       headers: {"Content-Type": "application/json"},
       body: JSON.stringify({
         path: targetPath,
         locale: window.LooporaUI.currentLocale(),
-        workflow_json: currentOrchestration()?.workflow_json || null,
+        strategy_json: selectedStrategySource,
       }),
     });
     if (error || !response) {

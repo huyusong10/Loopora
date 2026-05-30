@@ -40,7 +40,7 @@ def _assert_agent_next_step_json_summary(next_summary: dict) -> None:
     assert next_summary["native_todo"]["not_evidence"] is True
     assert next_summary["native_todo"]["items"] == _expected_agent_next_todo_items()
     assert next_summary["action_policy"] == "read_only, can_block"
-    assert next_summary["context_path"] == "iterations/iter_000/steps/01__inspector_step/input.context.json"
+    assert next_summary["context_path"] == "iterations/iter_000/steps/01__inspector_step/step_instruction_context.json"
     assert next_summary["step_contract_path"] == "iterations/iter_000/steps/01__inspector_step/step_contract.json"
     assert next_summary["result_template"] == ".loopora/agent_outbox/codex/run_next__inspector_step.result.template.json"
     assert next_summary["result_template_contract"].startswith("Write one wrapper JSON object")
