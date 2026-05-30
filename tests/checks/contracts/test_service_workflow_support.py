@@ -13,12 +13,12 @@ from loopora.context_flow import (
     render_previous_iteration_summary,
 )
 from loopora.run_artifacts import RunArtifactLayout
-from loopora.service_workflow_support import ServiceWorkflowSupportMixin, WorkflowSummaryRequest
+from loopora.service_runner_support import ServiceRunnerSupportMixin
 from loopora.stagnation import StagnationUpdateRequest, update_stagnation
-
+from loopora.runner_support_requests import RunnerSummaryRequest
 
 def test_gatekeeper_output_rejects_unknown_evidence_refs() -> None:
-    output = ServiceWorkflowSupportMixin()._coerce_gatekeeper_output(
+    output = ServiceRunnerSupportMixin()._coerce_gatekeeper_output(
         {
             "passed": True,
             "decision_summary": "Looks good.",
@@ -257,7 +257,7 @@ def test_step_evidence_entry_deduplicates_related_and_coverage_refs(tmp_path: Pa
 
 
 def test_gatekeeper_output_rejects_unknown_coverage_result_evidence_refs() -> None:
-    output = ServiceWorkflowSupportMixin()._coerce_gatekeeper_output(
+    output = ServiceRunnerSupportMixin()._coerce_gatekeeper_output(
         {
             "passed": True,
             "decision_summary": "The top-level verdict cites real evidence, but target coverage cites an invented ref.",
@@ -293,7 +293,7 @@ def test_gatekeeper_output_rejects_unknown_coverage_result_evidence_refs() -> No
 
 
 def test_gatekeeper_output_allows_first_gate_measured_evidence_claim() -> None:
-    output = ServiceWorkflowSupportMixin()._coerce_gatekeeper_output(
+    output = ServiceRunnerSupportMixin()._coerce_gatekeeper_output(
         {
             "passed": True,
             "decision_summary": "",
@@ -313,7 +313,7 @@ def test_gatekeeper_output_allows_first_gate_measured_evidence_claim() -> None:
 
 
 def test_gatekeeper_output_requires_literal_boolean_pass() -> None:
-    output = ServiceWorkflowSupportMixin()._coerce_gatekeeper_output(
+    output = ServiceRunnerSupportMixin()._coerce_gatekeeper_output(
         {
             "passed": "true",
             "decision_summary": "Looks good.",
@@ -334,7 +334,7 @@ def test_gatekeeper_output_requires_literal_boolean_pass() -> None:
 
 
 def test_gatekeeper_output_default_composite_requires_literal_boolean_pass() -> None:
-    output = ServiceWorkflowSupportMixin()._coerce_gatekeeper_output(
+    output = ServiceRunnerSupportMixin()._coerce_gatekeeper_output(
         {
             "passed": "true",
             "decision_summary": "A string pass should not set the fallback score.",
@@ -350,12 +350,12 @@ def test_gatekeeper_output_default_composite_requires_literal_boolean_pass() -> 
 
 
 def test_workflow_summary_requires_literal_gatekeeper_passed_boolean(tmp_path: Path) -> None:
-    class WorkflowSupportHarness(ServiceWorkflowSupportMixin):
+    class RunnerSupportHarness(ServiceRunnerSupportMixin):
         @staticmethod
         def _truncate_text(value: str | None, max_length: int = 220) -> str:
             return str(value or "")[:max_length]
 
-    service = WorkflowSupportHarness()
+    service = RunnerSupportHarness()
     gatekeeper_step_result = {
         "step": {"id": "gatekeeper_step"},
         "step_order": 0,
@@ -369,16 +369,16 @@ def test_workflow_summary_requires_literal_gatekeeper_passed_boolean(tmp_path: P
         },
     }
 
-    entry = service._build_workflow_iteration_entry(
+    entry = service._build_runner_iteration_entry(
         0,
         [gatekeeper_step_result],
         {"stagnation_mode": "none"},
         previous_composite=None,
     )
-    summary = service._build_workflow_summary(
-        WorkflowSummaryRequest(
+    summary = service._build_runner_summary(
+        RunnerSummaryRequest(
             run={"workdir": str(tmp_path), "completion_mode": "gatekeeper", "iteration_interval_seconds": 0.0},
-            workflow={"preset": "custom"},
+            strategy_source={"preset": "custom"},
             compiled_spec={"checks": [], "check_mode": "specified"},
             iter_id=0,
             step_results=[gatekeeper_step_result],
@@ -416,9 +416,9 @@ def test_iteration_summaries_require_literal_score_numbers(tmp_path: Path) -> No
         "recent_deltas": ["0.1", 0.2, False],
         "consecutive_low_delta": "2",
     }
-    service = ServiceWorkflowSupportMixin()
+    service = ServiceRunnerSupportMixin()
 
-    legacy_entry = service._build_workflow_iteration_entry(
+    legacy_entry = service._build_runner_iteration_entry(
         0,
         [gatekeeper_step_result],
         stagnation,
@@ -469,7 +469,7 @@ def test_stagnation_update_requires_literal_score_history() -> None:
 
 
 def test_gatekeeper_output_normalizes_metric_row_booleans() -> None:
-    output = ServiceWorkflowSupportMixin()._coerce_gatekeeper_output(
+    output = ServiceRunnerSupportMixin()._coerce_gatekeeper_output(
         {
             "passed": False,
             "decision_summary": "The measured check did not pass.",
@@ -488,7 +488,7 @@ def test_gatekeeper_output_normalizes_metric_row_booleans() -> None:
 
 
 def test_gatekeeper_output_rejects_string_measured_evidence_as_supporting_ref() -> None:
-    output = ServiceWorkflowSupportMixin()._coerce_gatekeeper_output(
+    output = ServiceRunnerSupportMixin()._coerce_gatekeeper_output(
         {
             "passed": True,
             "decision_summary": "The Builder measured this.",
@@ -517,7 +517,7 @@ def test_gatekeeper_output_rejects_string_measured_evidence_as_supporting_ref() 
 
 
 def test_gatekeeper_output_rejects_blocked_upstream_refs_as_supporting_evidence() -> None:
-    output = ServiceWorkflowSupportMixin()._coerce_gatekeeper_output(
+    output = ServiceRunnerSupportMixin()._coerce_gatekeeper_output(
         {
             "passed": True,
             "decision_summary": "Looks good.",
@@ -539,7 +539,7 @@ def test_gatekeeper_output_rejects_blocked_upstream_refs_as_supporting_evidence(
 
 
 def test_gatekeeper_output_rejects_plain_builder_handoff_as_supporting_evidence() -> None:
-    output = ServiceWorkflowSupportMixin()._coerce_gatekeeper_output(
+    output = ServiceRunnerSupportMixin()._coerce_gatekeeper_output(
         {
             "passed": True,
             "decision_summary": "The Builder says the task is done.",
@@ -568,7 +568,7 @@ def test_gatekeeper_output_rejects_plain_builder_handoff_as_supporting_evidence(
 
 
 def test_gatekeeper_output_rejects_plain_inspector_observation_as_supporting_evidence() -> None:
-    output = ServiceWorkflowSupportMixin()._coerce_gatekeeper_output(
+    output = ServiceRunnerSupportMixin()._coerce_gatekeeper_output(
         {
             "passed": True,
             "decision_summary": "The Inspector says the task is done.",
@@ -598,7 +598,7 @@ def test_gatekeeper_output_rejects_plain_inspector_observation_as_supporting_evi
 
 
 def test_gatekeeper_output_allows_inspector_structured_check_as_supporting_evidence() -> None:
-    output = ServiceWorkflowSupportMixin()._coerce_gatekeeper_output(
+    output = ServiceRunnerSupportMixin()._coerce_gatekeeper_output(
         {
             "passed": True,
             "decision_summary": "The Inspector ran a structured proof check.",
@@ -627,7 +627,7 @@ def test_gatekeeper_output_allows_inspector_structured_check_as_supporting_evide
 
 
 def test_gatekeeper_output_rejects_unmanaged_residual_risk_on_pass() -> None:
-    output = ServiceWorkflowSupportMixin()._coerce_gatekeeper_output(
+    output = ServiceRunnerSupportMixin()._coerce_gatekeeper_output(
         {
             "passed": True,
             "decision_summary": "The proof is covered, with some residual risk.",
@@ -661,7 +661,7 @@ def test_gatekeeper_output_rejects_unmanaged_residual_risk_on_pass() -> None:
 
 
 def test_gatekeeper_output_rejects_manual_visible_residual_risk_without_management_on_pass() -> None:
-    output = ServiceWorkflowSupportMixin()._coerce_gatekeeper_output(
+    output = ServiceRunnerSupportMixin()._coerce_gatekeeper_output(
         {
             "passed": True,
             "decision_summary": "The proof is covered, but a manual risk remains visible.",
@@ -694,7 +694,7 @@ def test_gatekeeper_output_rejects_manual_visible_residual_risk_without_manageme
 
 
 def test_gatekeeper_output_rejects_residual_risk_when_contract_disallows_acceptance_on_pass() -> None:
-    output = ServiceWorkflowSupportMixin()._coerce_gatekeeper_output(
+    output = ServiceRunnerSupportMixin()._coerce_gatekeeper_output(
         {
             "passed": True,
             "decision_summary": "The proof is covered, with an accepted follow-up risk.",
@@ -728,7 +728,7 @@ def test_gatekeeper_output_rejects_residual_risk_when_contract_disallows_accepta
 
 
 def test_gatekeeper_output_rejects_negated_residual_risk_with_exception_on_pass() -> None:
-    output = ServiceWorkflowSupportMixin()._coerce_gatekeeper_output(
+    output = ServiceRunnerSupportMixin()._coerce_gatekeeper_output(
         {
             "passed": True,
             "decision_summary": "The proof is covered, with an exception hidden behind no blocking residual risk wording.",
@@ -760,7 +760,7 @@ def test_gatekeeper_output_rejects_negated_residual_risk_with_exception_on_pass(
 
 
 def test_gatekeeper_output_allows_measured_self_evidence_with_plain_builder_context() -> None:
-    output = ServiceWorkflowSupportMixin()._coerce_gatekeeper_output(
+    output = ServiceRunnerSupportMixin()._coerce_gatekeeper_output(
         {
             "passed": True,
             "decision_summary": "The Builder handoff is visible, but GateKeeper also measured the result.",
@@ -795,7 +795,7 @@ def test_gatekeeper_output_allows_builder_proof_artifact_as_supporting_evidence(
     proof_path.parent.mkdir(parents=True)
     proof_path.write_text('{"ok": true}\n', encoding="utf-8")
 
-    output = ServiceWorkflowSupportMixin()._coerce_gatekeeper_output(
+    output = ServiceRunnerSupportMixin()._coerce_gatekeeper_output(
         {
             "passed": True,
             "decision_summary": "The Builder left a proof artifact.",
@@ -833,7 +833,7 @@ def test_gatekeeper_output_allows_builder_proof_artifact_as_supporting_evidence(
 def test_gatekeeper_output_rejects_missing_builder_proof_artifact_as_supporting_evidence(tmp_path: Path) -> None:
     missing_proof_path = tmp_path / "project" / "tests" / "evidence" / "proof.json"
 
-    output = ServiceWorkflowSupportMixin()._coerce_gatekeeper_output(
+    output = ServiceRunnerSupportMixin()._coerce_gatekeeper_output(
         {
             "passed": True,
             "decision_summary": "The Builder cited a proof artifact that is no longer available.",

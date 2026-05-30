@@ -8,7 +8,7 @@ from loopora.diagnostics import get_logger, log_event
 from loopora.evidence_coverage import write_evidence_coverage_projection
 from loopora.evidence_manifest import write_evidence_manifest_projection
 from loopora.run_artifacts import append_jsonl_with_mirrors
-from loopora.service_workflow_support import StepOutputsWriteRequest
+from loopora.runner_support_requests import StepOutputsWriteRequest
 
 logger = get_logger(__name__)
 
@@ -57,7 +57,7 @@ class RunnerStepCompletionLogRequest:
 
 
 class ServiceRunnerStepArtifactsMixin:
-    def _write_runner_step_result_artifacts(
+    def write_runner_step_result_artifacts(
         self,
         request: RunnerStepWriteRequest,
     ) -> RunnerStepWriteResult:

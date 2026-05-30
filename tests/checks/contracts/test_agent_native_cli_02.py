@@ -219,12 +219,7 @@ def test_cli_agent_next_prints_run_contract_for_intermediate_capsule(monkeypatch
     assert result.exit_code == 0, result.stdout
     _assert_agent_next_plain_work_panel(result.stdout)
     assert "run_status: awaiting_agent" in result.stdout
-    assert f"run_contract_path: {layout.run_contract_path}" in result.stdout
-    assert "judgment_contract_summary: Keep intermediate capsules tied to frozen judgment." in result.stdout
-    assert "check_mode: specified" in result.stdout
-    assert "completion_mode: gatekeeper" in result.stdout
-    assert "workflow_preset: quality_gate" in result.stdout
-    assert "workflow_collaboration_intent: Inspector proof gaps must shape the release gate." in result.stdout
+    _assert_agent_contract_strategy_output(result.stdout, layout)
     assert "check_count: 1" in result.stdout
     _assert_cli_list(result.stdout, "coverage_targets", "done_when.check_001 (required)", "gatekeeper.finish (required)")
     _assert_cli_list(result.stdout, "loop_fit_reasons", "The next role needs the same proof bar as the first role.")
@@ -278,6 +273,17 @@ def test_cli_agent_next_prints_run_contract_for_intermediate_capsule(monkeypatch
 
     assert json_result.exit_code == 0, json_result.stdout
     _assert_agent_next_json_summary(json_result.stdout)
+
+
+def _assert_agent_contract_strategy_output(stdout: str, layout: RunArtifactLayout) -> None:
+    assert f"run_contract_path: {layout.run_contract_path}" in stdout
+    assert "judgment_contract_summary: Keep intermediate capsules tied to frozen judgment." in stdout
+    assert "check_mode: specified" in stdout
+    assert "completion_mode: gatekeeper" in stdout
+    assert "strategy_preset: quality_gate" in stdout
+    assert "strategy_collaboration_intent: Inspector proof gaps must shape the release gate." in stdout
+    assert "workflow_preset:" not in stdout
+    assert "workflow_collaboration_intent:" not in stdout
 
 
 def test_cli_agent_submit_prints_terminal_task_verdict(monkeypatch, tmp_path: Path) -> None:

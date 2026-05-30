@@ -12,8 +12,8 @@ from loopora.engine import (
     RunEngineCoverageRecomputedRequest,
     RunEngineIssueVerdictRequest,
     RunEngineStartIterationRequest,
-    WorkflowStepInstructionRequest,
-    workflow_step_instruction,
+    RunnerStepInstructionRequest,
+    runner_step_instruction,
 )
 from loopora.events import loop_stream_id, run_stream_id
 from loopora.events.projection_cache import (
@@ -239,8 +239,8 @@ def test_run_engine_replays_current_step_projection_from_claim_events(tmp_path: 
 
     engine.claim_step(
         RunEngineClaimStepRequest(
-            instruction=workflow_step_instruction(
-                WorkflowStepInstructionRequest(
+            instruction=runner_step_instruction(
+                RunnerStepInstructionRequest(
                     run_id=run["id"],
                     contract_ref="contract/run_contract.json",
                     compiled_spec={"coverage_targets": [{"id": "done_when.proof"}]},
@@ -318,8 +318,8 @@ def test_run_engine_current_step_projection_replays_when_cache_missing(tmp_path:
     run = _create_run(repository, tmp_path)
     actor = ActorRef(kind="runner", id="headless")
     engine = RepositoryRunEngine(repository)
-    instruction = workflow_step_instruction(
-        WorkflowStepInstructionRequest(
+    instruction = runner_step_instruction(
+        RunnerStepInstructionRequest(
             run_id=run["id"],
             contract_ref="contract/run_contract.json",
             compiled_spec={"coverage_targets": [{"id": "done_when.proof"}]},
@@ -350,8 +350,8 @@ def test_run_engine_current_step_projection_replays_when_cache_is_stale(tmp_path
     run = _create_run(repository, tmp_path)
     actor = ActorRef(kind="runner", id="headless")
     engine = RepositoryRunEngine(repository)
-    instruction = workflow_step_instruction(
-        WorkflowStepInstructionRequest(
+    instruction = runner_step_instruction(
+        RunnerStepInstructionRequest(
             run_id=run["id"],
             contract_ref="contract/run_contract.json",
             compiled_spec={"coverage_targets": [{"id": "done_when.proof"}]},

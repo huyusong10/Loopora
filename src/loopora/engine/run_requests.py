@@ -20,7 +20,7 @@ RunEngineClaimStepRequest = RunEngineIssueStepRequest
 
 
 @dataclass(frozen=True, slots=True)
-class RunEngineClaimWorkflowStepRequest:
+class RunEngineClaimRunnerStepRequest:
     run_id: str
     contract_ref: str
     compiled_spec: dict
@@ -33,7 +33,7 @@ class RunEngineClaimWorkflowStepRequest:
 
 
 @dataclass(frozen=True, slots=True)
-class RunEngineClaimWorkflowStepResult:
+class RunEngineClaimRunnerStepResult:
     instruction: StepInstruction
     event: object
 

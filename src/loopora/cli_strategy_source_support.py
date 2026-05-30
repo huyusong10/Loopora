@@ -3,13 +3,14 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from loopora.service import LooporaError, normalize_role_models
-from loopora.workflows import (
-    PROMPT_FILES,
-    builtin_prompt_markdown,
-    load_prompt_file,
-    load_workflow_file,
-    normalize_archetype,
+from loopora.service import LooporaError
+from loopora.strategy_source import (
+    STRATEGY_PROMPT_FILES,
+    builtin_strategy_prompt_markdown,
+    load_strategy_prompt_file,
+    load_strategy_source_file,
+    normalize_strategy_archetype,
+    normalize_strategy_role_models,
 )
 
 
@@ -28,15 +29,15 @@ def parse_role_models(values: list[str] | None) -> dict[str, str]:
             raise LooporaError(f"invalid --role-model value: {item}")
         role, model = item.split("=", 1)
         parsed[role.strip()] = model.strip()
-    return normalize_role_models(parsed)
+    return normalize_strategy_role_models(parsed)
 
 
-def workflow_bundle_from_entity(entity: dict[str, object]) -> tuple[dict | None, dict[str, str]]:
-    workflow = entity.get("workflow_json") or None
+def strategy_source_bundle_from_entity(entity: dict[str, object]) -> tuple[dict | None, dict[str, str]]:
+    strategy_source = entity.get("workflow_json") or None
     prompt_files = entity.get("prompt_files_json") or entity.get("prompt_files") or {}
     if isinstance(prompt_files, dict):
-        return workflow, dict(prompt_files)
-    return workflow, {}
+        return strategy_source, dict(prompt_files)
+    return strategy_source, {}
 
 
 @dataclass(frozen=True)
@@ -75,25 +76,25 @@ class LoopBuildRequest:
     name: str | None
     role_model: list[str] | None
     orchestration_id: str
-    workflow_preset: str
-    workflow_file: Path | None
+    strategy_preset: str
+    strategy_file: Path | None
 
 
-def resolve_workflow_bundle(
+def resolve_strategy_source_bundle(
     *,
-    workflow_file: Path | None,
-    workflow_preset: str,
-    fallback_workflow: dict | None = None,
+    strategy_file: Path | None,
+    strategy_preset: str,
+    fallback_strategy_source: dict | None = None,
     fallback_prompt_files: dict[str, str] | None = None,
 ) -> tuple[dict | None, dict[str, str]]:
-    workflow = fallback_workflow
+    strategy_source = fallback_strategy_source
     prompt_files = dict(fallback_prompt_files or {})
-    if workflow_file is not None:
-        loaded_workflow, loaded_prompt_files = load_workflow_file(workflow_file)
-        return loaded_workflow, dict(loaded_prompt_files or {})
-    if workflow_preset.strip():
-        return {"preset": workflow_preset.strip()}, {}
-    return workflow, prompt_files
+    if strategy_file is not None:
+        loaded_strategy_source, loaded_prompt_files = load_strategy_source_file(strategy_file)
+        return loaded_strategy_source, dict(loaded_prompt_files or {})
+    if strategy_preset.strip():
+        return {"preset": strategy_preset.strip()}, {}
+    return strategy_source, prompt_files
 
 
 def read_prompt_markdown(
@@ -105,20 +106,22 @@ def read_prompt_markdown(
     fallback: str = "",
 ) -> str:
     if prompt_file is not None:
-        return load_prompt_file(prompt_file)
+        return load_strategy_prompt_file(prompt_file)
     if prompt_template.strip():
-        return builtin_prompt_markdown(prompt_template.strip(), locale=locale)
+        return builtin_strategy_prompt_markdown(prompt_template.strip(), locale=locale)
     if fallback:
         return fallback
-    normalized_archetype = normalize_archetype(archetype)
-    return builtin_prompt_markdown(PROMPT_FILES[normalized_archetype], locale=locale)
+    normalized_archetype = normalize_strategy_archetype(archetype)
+    return builtin_strategy_prompt_markdown(STRATEGY_PROMPT_FILES[normalized_archetype], locale=locale)
 
 
 def build_role_definition_kwargs(
     request: RoleDefinitionBuildRequest,
 ) -> dict[str, str]:
     current = request.fallback or {}
-    normalized_archetype = normalize_archetype(request.archetype or str(current.get("archetype", "builder") or "builder"))
+    normalized_archetype = normalize_strategy_archetype(
+        request.archetype or str(current.get("archetype", "builder") or "builder")
+    )
     prompt_markdown = read_prompt_markdown(
         prompt_file=request.prompt_file,
         prompt_template=request.prompt_template,
@@ -144,12 +147,12 @@ def build_role_definition_kwargs(
 def build_loop_kwargs(
     request: LoopBuildRequest,
 ) -> dict[str, object]:
-    workflow: dict | None = None
+    strategy_source: dict | None = None
     prompt_files: dict[str, str] | None = None
-    if request.workflow_file is not None:
-        workflow, prompt_files = load_workflow_file(request.workflow_file)
-    elif request.workflow_preset and not request.orchestration_id.strip():
-        workflow = {"preset": request.workflow_preset}
+    if request.strategy_file is not None:
+        strategy_source, prompt_files = load_strategy_source_file(request.strategy_file)
+    elif request.strategy_preset and not request.orchestration_id.strip():
+        strategy_source = {"preset": request.strategy_preset}
     return {
         "name": request.name or request.workdir.resolve().name,
         "spec_path": request.spec,
@@ -168,7 +171,7 @@ def build_loop_kwargs(
         "delta_threshold": request.delta_threshold,
         "trigger_window": request.trigger_window,
         "regression_window": request.regression_window,
-        "workflow": workflow,
+        "workflow": strategy_source,
         "prompt_files": prompt_files,
         "role_models": parse_role_models(request.role_model),
     }

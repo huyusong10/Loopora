@@ -5,7 +5,7 @@ from typing import Annotated
 
 import typer
 
-from loopora.workflows import preset_names
+from loopora.strategy_source import strategy_source_preset_names
 
 SpecOption = Annotated[Path, typer.Option(..., exists=True, help="Path to the Markdown spec.")]
 WorkdirOption = Annotated[Path, typer.Option(..., exists=True, file_okay=False, dir_okay=True, help="Target workdir.")]
@@ -42,13 +42,15 @@ RoleModelOption = Annotated[
         help="Per-role model override like builder=gpt-5.4-mini. Legacy names like generator/verifier still work.",
     ),
 ]
-WorkflowPresetOption = Annotated[
+StrategyPresetOption = Annotated[
     str,
     typer.Option(
+        "--strategy-preset",
         "--workflow-preset",
-        help=f"Workflow preset: {', '.join(preset_names())}.",
+        help=f"Strategy preset: {', '.join(strategy_source_preset_names())}.",
     ),
 ]
+WorkflowPresetOption = StrategyPresetOption
 OrchestrationIdOption = Annotated[
     str,
     typer.Option(
@@ -56,16 +58,18 @@ OrchestrationIdOption = Annotated[
         help="Use a saved orchestration id, such as builtin:quality_gate or a custom orchestration id.",
     ),
 ]
-WorkflowFileOption = Annotated[
+StrategyFileOption = Annotated[
     Path | None,
     typer.Option(
+        "--strategy-file",
         "--workflow-file",
         exists=True,
         file_okay=True,
         dir_okay=False,
-        help="Path to a JSON or YAML workflow bundle. Supports {workflow, prompt_files} or a raw workflow object.",
+        help="Path to a JSON or YAML strategy source. Supports {workflow, prompt_files} or a raw strategy object.",
     ),
 ]
+WorkflowFileOption = StrategyFileOption
 BundleFileOption = Annotated[
     Path,
     typer.Argument(

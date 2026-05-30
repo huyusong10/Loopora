@@ -10,9 +10,9 @@ from fastapi.responses import JSONResponse, Response
 from loopora.diagnostics import log_event
 from loopora.service_types import LooporaError
 from loopora.specs import SpecError
+from loopora.strategy_source import StrategySourceError
 from loopora.system_dialogs import SystemDialogError
 from loopora.web_route_context import WebRouteContext
-from loopora.workflows import WorkflowError
 
 
 def register_error_handlers(app: FastAPI, ctx: WebRouteContext) -> None:
@@ -57,13 +57,13 @@ def register_error_handlers(app: FastAPI, ctx: WebRouteContext) -> None:
         )
         return ctx.json_error(str(exc), status_code=400)
 
-    @app.exception_handler(WorkflowError)
-    async def workflow_error_handler(request: Request, exc: WorkflowError) -> JSONResponse:
+    @app.exception_handler(StrategySourceError)
+    async def strategy_source_error_handler(request: Request, exc: StrategySourceError) -> JSONResponse:
         log_event(
             ctx.logger,
             logging.WARNING,
             "web.request.domain_error",
-            "Request failed with a workflow validation error",
+            "Request failed with a strategy source validation error",
             method=request.method,
             request_path=request.url.path,
             error_type=type(exc).__name__,

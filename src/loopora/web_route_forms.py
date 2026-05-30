@@ -22,7 +22,7 @@ from loopora.web_inputs import (
 )
 from loopora.web_route_context import WebRouteContext
 from loopora.web_url_utils import safe_local_return_path, with_query_params
-from loopora.workflows import WorkflowError
+from loopora.strategy_source import StrategySourceError
 
 
 def register_form_routes(app: FastAPI, ctx: WebRouteContext) -> None:
@@ -124,7 +124,7 @@ def _register_orchestration_form_routes(app: FastAPI, ctx: WebRouteContext) -> N
         try:
             orchestration = ctx.svc().create_orchestration(**_orchestration_payload_from_mapping(form, default_to_preset=False))
             return RedirectResponse(url=f"/orchestrations/{orchestration['id']}/edit?saved=1", status_code=303)
-        except (LooporaError, WorkflowError, FileExistsError, OSError, ValueError) as exc:
+        except (LooporaError, StrategySourceError, FileExistsError, OSError, ValueError) as exc:
             return ctx.render_new_orchestration(request, values=values, form_error=str(exc))
 
     @app.post("/orchestrations/{orchestration_id}/edit")
@@ -143,7 +143,7 @@ def _register_orchestration_form_routes(app: FastAPI, ctx: WebRouteContext) -> N
             if return_to:
                 return RedirectResponse(url=with_query_params(return_to, surface_updated="workflow"), status_code=303)
             return RedirectResponse(url=f"/orchestrations/{updated['id']}/edit?saved=1", status_code=303)
-        except (LooporaError, WorkflowError, FileExistsError, OSError, ValueError) as exc:
+        except (LooporaError, StrategySourceError, FileExistsError, OSError, ValueError) as exc:
             return ctx.render_new_orchestration(
                 request,
                 values=values,

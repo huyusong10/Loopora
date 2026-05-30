@@ -13,7 +13,7 @@ import typer
 from loopora.branding import RUN_SUMMARY_TITLE
 from loopora.cli_common import call_spawn_background_worker, get_service, logger
 from loopora.cli_runtime import set_worker_spawner
-from loopora.cli_workflow_support import LoopBuildRequest, build_loop_kwargs
+from loopora.cli_strategy_source_support import LoopBuildRequest, build_loop_kwargs
 from loopora.diagnostics import log_event, log_exception
 from loopora.run_takeaways import build_judgment_contract
 from loopora.service import LooporaError
@@ -106,7 +106,7 @@ def _print_run_contract_source_bundle(judgment_contract: dict) -> None:
 
 
 def _print_run_contract_execution_fields(judgment_contract: dict) -> None:
-    for key in ("check_mode", "completion_mode", "workflow_preset", "workflow_collaboration_intent"):
+    for key in ("check_mode", "completion_mode", "strategy_preset", "strategy_collaboration_intent"):
         value = _cli_judgment_contract_text(judgment_contract, key)
         if value:
             typer.echo(f"{key}: {value}")
@@ -131,6 +131,7 @@ def _cli_judgment_summary(run_contract: dict) -> str:
         run_contract.get("collaboration_summary"),
         run_contract.get("goal"),
         compiled_spec.get("goal"),
+        run_contract.get("strategy_collaboration_intent"),
         run_contract.get("workflow_collaboration_intent"),
         workflow.get("collaboration_intent"),
         run_contract.get("residual_risk"),

@@ -13,26 +13,13 @@ from loopora.evidence_coverage import summarize_evidence_coverage_projection
 from loopora.kernel import ActorRef
 from loopora.run_artifacts import append_jsonl_with_mirrors, write_json_with_mirrors
 from loopora.service_run_finalization import TerminalRunFinalizationRequest
-from loopora.service_workflow_support import IterationContextPersistRequest, WorkflowSummaryRequest
 from loopora.stagnation import StagnationUpdateRequest, update_stagnation
 from loopora.structured_numbers import structured_non_negative_int
 from loopora.utils import append_jsonl, read_json, utc_now
+from loopora.runner_run_requests import RunnerIterationCheckpointRequest
+from loopora.runner_support_requests import IterationContextPersistRequest, RunnerSummaryRequest
 
 logger = get_logger(__name__)
-
-
-@dataclass(frozen=True)
-class WorkflowIterationCheckpointRequest:
-    layout: object
-    iter_id: int
-    step_results: list[dict]
-    current_outputs_by_step: dict[str, dict]
-    current_outputs_by_role: dict[str, dict]
-    current_outputs_by_archetype: dict[str, dict]
-    current_session_refs_by_step: dict[str, dict]
-    stagnation: dict
-    previous_composite: float | None
-    run_id: str
 
 
 @dataclass(frozen=True)
@@ -47,11 +34,11 @@ class GatekeeperIterationRecordRequest:
 
 
 @dataclass(frozen=True)
-class WorkflowGatekeeperSuccessRequest:
+class RunnerGatekeeperSuccessRequest:
     run_id: str
     run: dict
     run_dir: Path
-    workflow: dict
+    strategy_source: dict
     compiled_spec: dict
     iter_id: int
     step: dict
@@ -67,10 +54,10 @@ class WorkflowGatekeeperSuccessRequest:
     current_session_refs_by_step: dict[str, dict]
 
 
-class ServiceWorkflowIterationStateMixin:
-    def _checkpoint_workflow_iteration_state(
+class ServiceRunnerIterationStateMixin:
+    def _checkpoint_runner_iteration_state(
         self,
-        request: WorkflowIterationCheckpointRequest,
+        request: RunnerIterationCheckpointRequest,
     ) -> tuple[dict[str, dict], dict[str, dict], dict[str, dict], dict[str, dict], dict[str, dict], dict[str, dict], dict | None]:
         previous_outputs_by_step = dict(request.current_outputs_by_step)
         previous_outputs_by_role = dict(request.current_outputs_by_role)
@@ -80,7 +67,7 @@ class ServiceWorkflowIterationStateMixin:
         previous_handoffs_by_archetype = {item["role"]["archetype"]: item["handoff"] for item in request.step_results}
         append_jsonl(
             request.layout.legacy_iterations_path,
-            self._build_workflow_iteration_entry(
+            self._build_runner_iteration_entry(
                 request.iter_id,
                 request.step_results,
                 request.stagnation,
@@ -206,12 +193,12 @@ class ServiceWorkflowIterationStateMixin:
             "evidence_progress_mode": evidence_progress_mode,
         }
 
-    def _finish_workflow_gatekeeper_success(
+    def _finish_runner_gatekeeper_success(
         self,
-        request: WorkflowGatekeeperSuccessRequest,
+        request: RunnerGatekeeperSuccessRequest,
     ) -> dict:
-        self._checkpoint_workflow_iteration_state(
-            WorkflowIterationCheckpointRequest(
+        self._checkpoint_runner_iteration_state(
+            RunnerIterationCheckpointRequest(
                 layout=request.layout,
                 iter_id=request.iter_id,
                 step_results=request.step_results,
@@ -224,10 +211,10 @@ class ServiceWorkflowIterationStateMixin:
                 run_id=request.run_id,
             )
         )
-        summary = self._build_workflow_summary(
-            WorkflowSummaryRequest(
+        summary = self._build_runner_summary(
+            RunnerSummaryRequest(
                 run=request.run,
-                workflow=request.workflow,
+                strategy_source=request.strategy_source,
                 compiled_spec=request.compiled_spec,
                 iter_id=request.iter_id,
                 step_results=request.step_results,

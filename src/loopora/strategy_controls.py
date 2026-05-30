@@ -3,13 +3,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from loopora.structured_numbers import structured_non_negative_int
 from loopora.structured_booleans import structured_bool_is_true
-from loopora.workflows import default_step_action_policy
+from loopora.structured_numbers import structured_non_negative_int
+from loopora.strategy_source import default_strategy_step_action_policy
 
 
 @dataclass(frozen=True)
-class WorkflowControlPayloadRequest:
+class StrategyControlPayloadRequest:
     control: dict
     iter_id: int
     signal: str
@@ -18,21 +18,21 @@ class WorkflowControlPayloadRequest:
 
 
 @dataclass(frozen=True)
-class WorkflowControlStepRequest:
+class StrategyControlStepRequest:
     control: dict
     payload: dict
     role: dict[str, Any]
-    workflow_step_count: int
+    strategy_step_count: int
     existing_control_count: int
 
 
 @dataclass(frozen=True)
-class WorkflowControlTrigger:
+class StrategyControlTrigger:
     signal: str
     trigger: dict[str, object]
 
 
-def workflow_control_after_seconds(value: object) -> float:
+def strategy_control_after_seconds(value: object) -> float:
     text = str(value or "0s").strip().lower() or "0s"
     multiplier = 1.0
     if text.endswith("ms"):
@@ -52,15 +52,15 @@ def workflow_control_after_seconds(value: object) -> float:
         return 0.0
 
 
-def matching_workflow_controls(controls: list[dict], signal: str) -> list[dict]:
+def matching_strategy_controls(controls: list[dict], signal: str) -> list[dict]:
     return [control for control in controls if str((control.get("when") or {}).get("signal") or "").strip() == signal]
 
 
-def workflow_iteration_control_triggers(gatekeeper_result: dict | None, stagnation: dict) -> list[WorkflowControlTrigger]:
-    triggers: list[WorkflowControlTrigger] = []
+def strategy_iteration_control_triggers(gatekeeper_result: dict | None, stagnation: dict) -> list[StrategyControlTrigger]:
+    triggers: list[StrategyControlTrigger] = []
     if gatekeeper_result and not structured_bool_is_true(gatekeeper_result.get("passed")):
         triggers.append(
-            WorkflowControlTrigger(
+            StrategyControlTrigger(
                 signal="gatekeeper_rejected",
                 trigger={
                     "reason": "GateKeeper rejected the current evidence.",
@@ -79,7 +79,7 @@ def workflow_iteration_control_triggers(gatekeeper_result: dict | None, stagnati
             else f"Stagnation mode is {stagnation.get('stagnation_mode')}."
         )
         triggers.append(
-            WorkflowControlTrigger(
+            StrategyControlTrigger(
                 signal="no_evidence_progress",
                 trigger={
                     "reason": reason,
@@ -92,7 +92,7 @@ def workflow_iteration_control_triggers(gatekeeper_result: dict | None, stagnati
     return triggers
 
 
-def build_workflow_control_payload(request: WorkflowControlPayloadRequest) -> dict[str, object]:
+def build_strategy_control_payload(request: StrategyControlPayloadRequest) -> dict[str, object]:
     control = request.control
     trigger = request.trigger
     after = str((control.get("when") or {}).get("after") or "0s").strip() or "0s"
@@ -109,10 +109,10 @@ def build_workflow_control_payload(request: WorkflowControlPayloadRequest) -> di
     }
 
 
-def build_workflow_control_step(request: WorkflowControlStepRequest) -> tuple[dict[str, object], int]:
+def build_strategy_control_step(request: StrategyControlStepRequest) -> tuple[dict[str, object], int]:
     control_id = str(request.control.get("id") or "").strip()
     role_id = str((request.control.get("call") or {}).get("role_id") or "").strip()
-    control_order = request.workflow_step_count + 100 + request.existing_control_count
+    control_order = request.strategy_step_count + 100 + request.existing_control_count
     return (
         {
             "id": f"control__{control_id}",
@@ -121,7 +121,7 @@ def build_workflow_control_step(request: WorkflowControlStepRequest) -> tuple[di
             "model": "",
             "inherit_session": False,
             "extra_cli_args": "",
-            "action_policy": default_step_action_policy(
+            "action_policy": default_strategy_step_action_policy(
                 archetype=request.role.get("archetype"),
                 on_pass="continue",
             ),

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from pathlib import Path
 
 from loopora.context_flow import (
@@ -10,54 +9,21 @@ from loopora.context_flow import (
     render_step_prompt,
 )
 from loopora.evidence_coverage import load_or_build_evidence_coverage_projection, summarize_evidence_coverage_projection
-from loopora.executor import CodexExecutor, RoleRequest, coerce_reasoning_effort, normalize_reasoning_effort, validate_command_args_text
+from loopora.executor import RoleRequest, coerce_reasoning_effort, normalize_reasoning_effort, validate_command_args_text
 from loopora.providers import executor_profile, normalize_executor_kind, normalize_executor_mode
-from loopora.recovery import RetryConfig
 from loopora.run_artifacts import RunArtifactLayout, read_jsonl
 from loopora.service_role_execution import RoleExecutionRequest
 from loopora.service_types import LooporaError
+from loopora.strategy_source import (
+    StrategySourceError,
+    normalize_strategy_step_evidence_limit,
+    strategy_role_uses_execution_snapshot,
+    validate_strategy_prompt_markdown,
+)
 from loopora.structured_booleans import structured_bool_is_true
 from loopora.structured_numbers import structured_non_negative_int
 from loopora.utils import read_json, write_json
-from loopora.workflows import (
-    WorkflowError,
-    normalize_step_evidence_limit,
-    role_uses_execution_snapshot,
-)
-
-
-@dataclass(frozen=True)
-class WorkflowStepRuntimeRequest:
-    executor: CodexExecutor
-    run: dict
-    compiled_spec: dict
-    layout: RunArtifactLayout
-    iter_id: int
-    step: dict
-    step_order: int
-    role: dict
-    prompt_files: dict[str, str]
-    execution_settings: dict[str, object]
-    run_contract: dict
-    current_outputs_by_step: dict[str, dict]
-    current_outputs_by_role: dict[str, dict]
-    current_outputs_by_archetype: dict[str, dict]
-    current_handoffs: list[dict]
-    previous_outputs_by_step: dict[str, dict]
-    previous_outputs_by_role: dict[str, dict]
-    previous_outputs_by_archetype: dict[str, dict]
-    previous_handoffs_by_step: dict[str, dict]
-    previous_handoffs_by_role: dict[str, dict]
-    previous_iteration_summary: dict | None
-    previous_session_refs_by_step: dict[str, dict]
-    previous_composite: float | None
-    stagnation_mode: str
-    evidence_progress_mode: str
-    covered_check_count: int
-    missing_check_count: int
-    consecutive_no_required_coverage_delta: int
-    retry_config: RetryConfig
-    evidence_items_snapshot: list[dict] | None = None
+from loopora.runner_step_runtime import RunnerStepRuntimeRequest
 
 
 def _manifest_prompt_context(layout: RunArtifactLayout, known_ids: list[str]) -> tuple[dict, list[dict]]:
@@ -126,7 +92,7 @@ def _safe_int(value: object) -> int:
     return structured_non_negative_int(value)
 
 
-class ServiceWorkflowRuntimeMixin:
+class ServiceRunnerStepRuntimeMixin:
     def _step_inputs(self, step: dict) -> dict:
         inputs = step.get("inputs")
         return dict(inputs) if isinstance(inputs, dict) else {}
@@ -186,7 +152,7 @@ class ServiceWorkflowRuntimeMixin:
                 if not any(needle in verify_text for needle in verifies):
                     continue
             filtered.append(item)
-        limit = normalize_step_evidence_limit(query.get("limit")) or 40
+        limit = normalize_strategy_step_evidence_limit(query.get("limit")) or 40
         return filtered[-limit:]
 
     def _step_declares_evidence_query(self, step: dict) -> bool:
@@ -244,16 +210,16 @@ class ServiceWorkflowRuntimeMixin:
         }
         merged_items = [item for item in evidence_items if isinstance(item, dict)]
         merged_ids = {str(item.get("id") or "").strip() for item in merged_items if str(item.get("id") or "").strip()}
-        for ref in ServiceWorkflowRuntimeMixin._coverage_gap_evidence_ids(coverage_summary):
+        for ref in ServiceRunnerStepRuntimeMixin._coverage_gap_evidence_ids(coverage_summary):
             if ref in merged_ids or ref not in evidence_by_id:
                 continue
             merged_items.append(evidence_by_id[ref])
             merged_ids.add(ref)
-        return merged_items, ServiceWorkflowRuntimeMixin._evidence_known_ids(merged_items)
+        return merged_items, ServiceRunnerStepRuntimeMixin._evidence_known_ids(merged_items)
 
-    def _prepare_workflow_step_request(
+    def prepare_runner_step_request(
         self,
-        request: WorkflowStepRuntimeRequest,
+        request: RunnerStepRuntimeRequest,
     ) -> dict[str, object]:
         runtime_request = request
         run = runtime_request.run
@@ -434,9 +400,9 @@ class ServiceWorkflowRuntimeMixin:
             "runtime_role": runtime_role,
         }
 
-    def _run_workflow_step(
+    def _run_runner_step(
         self,
-        request: WorkflowStepRuntimeRequest,
+        request: RunnerStepRuntimeRequest,
     ) -> tuple[dict, dict, dict]:
         runtime_request = request
         run = runtime_request.run
@@ -444,7 +410,7 @@ class ServiceWorkflowRuntimeMixin:
         step = runtime_request.step
         step_order = runtime_request.step_order
         role = runtime_request.role
-        prepared = self._prepare_workflow_step_request(request)
+        prepared = self.prepare_runner_step_request(request)
         context_packet = prepared["context_packet"]
         role_request = prepared["role_request"]
         runtime_role = str(prepared["runtime_role"])
@@ -501,7 +467,7 @@ class ServiceWorkflowRuntimeMixin:
         step_extra_cli_args = str(step.get("extra_cli_args") or "").strip()
         role_model = str(role.get("model") or "").strip()
 
-        if role_uses_execution_snapshot(role):
+        if strategy_role_uses_execution_snapshot(role):
             executor_kind = normalize_executor_kind(role.get("executor_kind", "codex"))
             executor_mode = normalize_executor_mode(role.get("executor_mode", "preset"))
             profile = executor_profile(executor_kind)
@@ -568,10 +534,8 @@ class ServiceWorkflowRuntimeMixin:
 
     def _parse_runtime_prompt(self, prompt_markdown: str, *, expected_archetype: str) -> tuple[dict, str]:
         try:
-            from loopora.workflows import validate_prompt_markdown
-
-            return validate_prompt_markdown(prompt_markdown, expected_archetype=expected_archetype)
-        except WorkflowError as exc:
+            return validate_strategy_prompt_markdown(prompt_markdown, expected_archetype=expected_archetype)
+        except StrategySourceError as exc:
             raise LooporaError(str(exc)) from exc
 
     def _sandbox_for_action_policy(self, action_policy: dict | None) -> str:

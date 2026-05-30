@@ -14,26 +14,27 @@ from loopora.branding import APP_AUTH_COOKIE, APP_AUTH_HEADER
 from loopora.markdown_tools import render_safe_markdown_html
 from loopora.numeric_inputs import coerce_integral_number
 from loopora.providers import executor_profile
-from loopora.service import LooporaError, normalize_role_models
+from loopora.service import LooporaError
 from loopora.specs import SpecError, compile_markdown_spec
-from loopora.workflows import (
-    ARCHETYPES,
-    DEFAULT_WORKFLOW_PRESET,
-    build_preset_workflow,
-    builtin_prompt_markdown,
-    builtin_prompt_markdown_by_locale,
-    default_role_execution_settings,
-    display_name_for_archetype,
-    normalize_prompt_locale,
-    normalize_workflow,
-    resolve_prompt_files,
+from loopora.strategy_source import (
+    DEFAULT_STRATEGY_SOURCE_PRESET,
+    STRATEGY_SOURCE_ARCHETYPES,
+    build_preset_strategy_source,
+    builtin_strategy_prompt_markdown,
+    builtin_strategy_prompt_markdown_by_locale,
+    default_strategy_role_execution_settings,
+    normalize_strategy_prompt_locale,
+    normalize_strategy_role_models,
+    normalize_strategy_source,
+    resolve_strategy_prompt_files,
+    strategy_archetype_display_name,
 )
 
 DEFAULT_LOOP_FORM = {
     "name": "",
     "workdir": "",
     "spec_path": "",
-    "orchestration_id": f"builtin:{DEFAULT_WORKFLOW_PRESET}",
+    "orchestration_id": f"builtin:{DEFAULT_STRATEGY_SOURCE_PRESET}",
     "completion_mode": "gatekeeper",
     "iteration_interval_seconds": 0,
     "max_iters": 8,
@@ -46,9 +47,9 @@ DEFAULT_LOOP_FORM = {
 
 
 @dataclass(frozen=True)
-class SpecTemplateWorkflowCandidate:
+class SpecTemplateStrategyCandidate:
     present: bool
-    workflow: dict | None
+    strategy_source: dict | None
 
 
 DEFAULT_ORCHESTRATION_FORM = {
@@ -65,8 +66,8 @@ DEFAULT_ROLE_DEFINITION_FORM = {
     "posture_notes": "",
     "archetype": "builder",
     "prompt_ref": "builder.md",
-    "prompt_markdown": builtin_prompt_markdown("builder.md", locale="en"),
-    **default_role_execution_settings(),
+    "prompt_markdown": builtin_strategy_prompt_markdown("builder.md", locale="en"),
+    **default_strategy_role_execution_settings(),
 }
 
 DEFAULT_BUNDLE_IMPORT_FORM = {
@@ -230,15 +231,18 @@ def _workflow_from_mapping(payload: Mapping[str, object], *, default_to_preset: 
         return workflow_json
     if not default_to_preset:
         return None
-    preset = str(payload.get("workflow_preset", DEFAULT_WORKFLOW_PRESET)).strip() or DEFAULT_WORKFLOW_PRESET
-    return build_preset_workflow(preset)
+    preset = (
+        str(payload.get("workflow_preset", DEFAULT_STRATEGY_SOURCE_PRESET)).strip()
+        or DEFAULT_STRATEGY_SOURCE_PRESET
+    )
+    return build_preset_strategy_source(preset)
 
 
 def _workflow_for_spec_template(payload: Mapping[str, object]) -> dict | None:
     result: dict | None = None
     workflow_candidate = _spec_template_mapping_candidate(payload.get("workflow"))
     if workflow_candidate.present:
-        result = _normalize_spec_template_workflow(workflow_candidate.workflow)
+        result = _normalize_spec_template_strategy_source(workflow_candidate.strategy_source)
     else:
         result = _workflow_for_spec_template_without_workflow_field(payload)
     return result
@@ -248,29 +252,33 @@ def _workflow_for_spec_template_without_workflow_field(payload: Mapping[str, obj
     result: dict | None = None
     workflow_json_candidate = _spec_template_mapping_candidate(payload.get("workflow_json"))
     if workflow_json_candidate.present:
-        result = _normalize_spec_template_workflow(workflow_json_candidate.workflow)
+        result = _normalize_spec_template_strategy_source(workflow_json_candidate.strategy_source)
     else:
         workflow_json = _mapping_from_json_field(payload.get("workflow_json"), field_name="workflow_json")
-        result = _normalize_spec_template_workflow(workflow_json) if workflow_json else _preset_workflow_for_spec_template(payload)
+        result = (
+            _normalize_spec_template_strategy_source(workflow_json)
+            if workflow_json
+            else _preset_strategy_source_for_spec_template(payload)
+        )
     return result
 
 
-def _spec_template_mapping_candidate(value: object) -> SpecTemplateWorkflowCandidate:
+def _spec_template_mapping_candidate(value: object) -> SpecTemplateStrategyCandidate:
     if not isinstance(value, Mapping):
-        return SpecTemplateWorkflowCandidate(present=False, workflow=None)
-    workflow = dict(value)
-    if not workflow.get("roles") and not workflow.get("steps"):
-        workflow = None
-    return SpecTemplateWorkflowCandidate(present=True, workflow=workflow)
+        return SpecTemplateStrategyCandidate(present=False, strategy_source=None)
+    strategy_source = dict(value)
+    if not strategy_source.get("roles") and not strategy_source.get("steps"):
+        strategy_source = None
+    return SpecTemplateStrategyCandidate(present=True, strategy_source=strategy_source)
 
 
-def _normalize_spec_template_workflow(workflow: dict | None) -> dict | None:
-    return normalize_workflow(workflow) if workflow else None
+def _normalize_spec_template_strategy_source(strategy_source: dict | None) -> dict | None:
+    return normalize_strategy_source(strategy_source) if strategy_source else None
 
 
-def _preset_workflow_for_spec_template(payload: Mapping[str, object]) -> dict | None:
+def _preset_strategy_source_for_spec_template(payload: Mapping[str, object]) -> dict | None:
     preset = str(payload.get("workflow_preset", "")).strip()
-    return build_preset_workflow(preset) if preset else None
+    return build_preset_strategy_source(preset) if preset else None
 
 
 def _prompt_files_from_mapping(payload: Mapping[str, object]) -> dict[str, str]:
@@ -284,13 +292,13 @@ def _prompt_files_from_mapping(payload: Mapping[str, object]) -> dict[str, str]:
 def _role_models_from_mapping(payload: Mapping[str, object]) -> dict[str, str]:
     role_models = payload.get("role_models")
     if isinstance(role_models, Mapping):
-        return normalize_role_models(dict(role_models))
+        return normalize_strategy_role_models(dict(role_models))
     extracted = {}
     for role in ("builder", "inspector", "gatekeeper", "guide", "generator", "tester", "verifier", "challenger"):
         value = str(payload.get(f"role_model_{role}", "")).strip()
         if value:
             extracted[role] = value
-    return normalize_role_models(extracted)
+    return normalize_strategy_role_models(extracted)
 
 
 def _normalize_loop_form(values: Mapping[str, object] | None) -> dict[str, object]:
@@ -352,9 +360,13 @@ def _normalize_orchestration_form(values: Mapping[str, object] | None) -> dict[s
     if not str(normalized.get("workflow_json", "")).strip():
         preset_name = str(normalized.get("workflow_preset", "")).strip()
         if preset_name:
-            workflow = build_preset_workflow(preset_name)
+            workflow = build_preset_strategy_source(preset_name)
             normalized["workflow_json"] = json.dumps(workflow, ensure_ascii=False, indent=2)
-            normalized["prompt_files_json"] = json.dumps(resolve_prompt_files(workflow), ensure_ascii=False, indent=2)
+            normalized["prompt_files_json"] = json.dumps(
+                resolve_strategy_prompt_files(workflow),
+                ensure_ascii=False,
+                indent=2,
+            )
         else:
             normalized["workflow_json"] = json.dumps({"version": 1, "preset": "", "roles": [], "steps": []}, ensure_ascii=False, indent=2)
             normalized["prompt_files_json"] = json.dumps({}, ensure_ascii=False, indent=2)
@@ -363,7 +375,7 @@ def _normalize_orchestration_form(values: Mapping[str, object] | None) -> dict[s
 
 def _normalize_role_definition_form(values: Mapping[str, object] | None, *, locale: str = "en") -> dict[str, object]:
     normalized = dict(DEFAULT_ROLE_DEFINITION_FORM)
-    normalized["prompt_markdown"] = builtin_prompt_markdown("builder.md", locale=locale)
+    normalized["prompt_markdown"] = builtin_strategy_prompt_markdown("builder.md", locale=locale)
     if not values:
         return normalized
     for key in normalized:
@@ -371,7 +383,10 @@ def _normalize_role_definition_form(values: Mapping[str, object] | None, *, loca
             normalized[key] = values[key]
     if "prompt_markdown" not in values:
         archetype = str(normalized.get("archetype", "builder") or "builder")
-        normalized["prompt_markdown"] = builtin_prompt_markdown(_builtin_prompt_ref_for_archetype(archetype), locale=locale)
+        normalized["prompt_markdown"] = builtin_strategy_prompt_markdown(
+            _builtin_prompt_ref_for_archetype(archetype),
+            locale=locale,
+        )
     try:
         profile = executor_profile(str(normalized.get("executor_kind", "codex")))
     except ValueError:
@@ -462,10 +477,12 @@ def _archetype_ui_copy() -> dict[str, dict[str, str]]:
 def _archetype_options() -> list[dict[str, str]]:
     labels = []
     copy = _archetype_ui_copy()
-    for archetype in ARCHETYPES:
+    for archetype in STRATEGY_SOURCE_ARCHETYPES:
         item = copy[archetype]
-        english_label = "Custom (Restricted)" if archetype == "custom" else display_name_for_archetype(archetype, locale="en")
-        chinese_label = display_name_for_archetype(archetype, locale="zh")
+        english_label = (
+            "Custom (Restricted)" if archetype == "custom" else strategy_archetype_display_name(archetype, locale="en")
+        )
+        chinese_label = strategy_archetype_display_name(archetype, locale="zh")
         labels.append(
             {
                 "id": archetype,
@@ -492,7 +509,7 @@ def _role_definition_form_values_from_record(role_definition: Mapping[str, objec
     prompt_ref = str(role_definition.get("prompt_ref", ""))
     prompt_markdown = str(role_definition.get("prompt_markdown", ""))
     if str(role_definition.get("source", "")).strip() == "builtin" and prompt_ref:
-        prompt_markdown = builtin_prompt_markdown(prompt_ref, locale=locale)
+        prompt_markdown = builtin_strategy_prompt_markdown(prompt_ref, locale=locale)
     return {
         "name": str(role_definition.get("name", "")),
         "description": str(role_definition.get("description", "")),
@@ -515,12 +532,12 @@ def _builtin_prompt_ref_for_archetype(archetype: str) -> str:
 
 def _builtin_role_templates(*, locale: str = "en") -> dict[str, dict[str, object]]:
     templates: dict[str, dict[str, object]] = {}
-    for archetype in ARCHETYPES:
+    for archetype in STRATEGY_SOURCE_ARCHETYPES:
         prompt_ref = _builtin_prompt_ref_for_archetype(archetype)
-        prompt_markdown_by_locale = builtin_prompt_markdown_by_locale(prompt_ref)
+        prompt_markdown_by_locale = builtin_strategy_prompt_markdown_by_locale(prompt_ref)
         templates[archetype] = {
             "prompt_ref": prompt_ref,
-            "prompt_markdown": prompt_markdown_by_locale[normalize_prompt_locale(locale)],
+            "prompt_markdown": prompt_markdown_by_locale[normalize_strategy_prompt_locale(locale)],
             "prompt_markdown_by_locale": prompt_markdown_by_locale,
         }
     return templates
@@ -623,7 +640,7 @@ def _spec_document_payload(spec_path: Path, markdown_text: str) -> dict[str, obj
 def _decorate_role_definition_overview(role_definition: Mapping[str, object]) -> dict[str, object]:
     executor_kind = str(role_definition.get("executor_kind", "codex") or "codex")
     archetype = str(role_definition.get("archetype", "builder") or "builder")
-    template_name = "Custom (Restricted)" if archetype.strip() == "custom" else display_name_for_archetype(
+    template_name = "Custom (Restricted)" if archetype.strip() == "custom" else strategy_archetype_display_name(
         archetype,
         locale="en",
     )

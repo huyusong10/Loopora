@@ -162,18 +162,18 @@
           class="alignment-starter-card"
           type="button"
           data-testid="alignment-starter-card"
-          data-goal-zh="实现退款自助流程，直到可以审查上线。"
-          data-goal-en="Ship a reviewable self-service refund flow."
-          data-fake-done-zh="页面能提交不算完成；模拟退款资格规则不算证明。"
-          data-fake-done-en="A clickable page is not enough; mocked refund eligibility is not proof."
-          data-evidence-zh="必须证明管理员权限、退款资格、支付失败接管和审计链路。"
-          data-evidence-en="Prove admin authorization, refund eligibility, payment-failure handoff, and auditability."
-          data-context-zh="越权退款或审计缺失必须阻断；少量罕见支付边界可以作为残余风险，但必须可见、有人接手。"
-          data-context-en="Unauthorized refunds or missing audit evidence must block closure; rare payment-provider edges can remain only as visible, owned residual risk."
+          data-goal-zh="把 React 组件库迁移成 Vue 版本，直到可以审查交付。"
+          data-goal-en="Port a React component library to Vue until it is reviewable for delivery."
+          data-fake-done-zh="Vue 项目能跑不算完成；只跑新写的干净 demo 不算等价证明。"
+          data-fake-done-en="A runnable Vue project is not enough; newly written clean demos are not equivalence proof."
+          data-evidence-zh="必须证明核心组件、props、事件、状态行为和原 demo 与 React 版本等价。"
+          data-evidence-en="Prove equivalence for core components, props, events, state behavior, and original demos."
+          data-context-zh="隐藏未迁移项、越界新增 API 或用弱证据包装完成必须阻断；低优先级组件可作为可见且有人接手的残余风险。"
+          data-context-en="Hidden unmigrated items, scope-expanding APIs, or weak evidence packaged as completion must block closure; low-priority components may remain only as visible, owned residual risk."
         >
-          <strong><span data-lang="zh">退款流程上线前证据</span><span data-lang="en">Refund launch evidence</span></strong>
-          <span data-lang="zh">权限、资格、失败接管、审计</span>
-          <span data-lang="en">Permission, eligibility, failure handoff, audit</span>
+          <strong><span data-lang="zh">组件迁移交付证据</span><span data-lang="en">Component migration evidence</span></strong>
+          <span data-lang="zh">等价、原 demo、未迁移项、越界新增</span>
+          <span data-lang="en">Equivalence, original demos, unmigrated items, scope creep</span>
         </button>
         <button
           class="alignment-starter-card"
@@ -370,7 +370,7 @@
               name="alignment_task_goal"
               rows="2"
               data-testid="alignment-task-goal-input"
-              placeholder="{{ '例如：实现退款自助流程，直到可以审查上线。' if page_locale == 'zh' else 'For example: ship a reviewable self-service refund flow.' }}"
+              placeholder="{{ '例如：把 React 组件库迁移成 Vue 版本，直到可以审查交付。' if page_locale == 'zh' else 'For example: port a React component library to Vue until it is reviewable for delivery.' }}"
             >{{ request.query_params.get('alignment_task_goal', '') }}</textarea>
           </label>
           <label class="alignment-judgment-field">

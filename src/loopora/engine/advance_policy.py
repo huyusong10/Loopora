@@ -5,46 +5,46 @@ from dataclasses import dataclass
 
 
 @dataclass(frozen=True, slots=True)
-class WorkflowStepSelectionRequest:
-    workflow_steps: Sequence[Mapping[str, object]]
+class RunnerStepSelectionRequest:
+    strategy_steps: Sequence[Mapping[str, object]]
     step_index: int
 
 
 @dataclass(frozen=True, slots=True)
-class WorkflowStepSelection:
+class RunnerStepSelection:
     step_order: int
     step: Mapping[str, object]
     parallel_group: str = ""
 
 
 @dataclass(frozen=True, slots=True)
-class WorkflowCursorFromEventsRequest:
-    workflow_steps: Sequence[Mapping[str, object]]
+class RunnerStepCursorFromEventsRequest:
+    strategy_steps: Sequence[Mapping[str, object]]
     events: Sequence[object]
     iteration: int
     fallback_step_index: int = 0
     current_step_projection: Mapping[str, object] | None = None
 
 
-def select_next_workflow_step(request: WorkflowStepSelectionRequest) -> WorkflowStepSelection | None:
+def select_next_runner_step(request: RunnerStepSelectionRequest) -> RunnerStepSelection | None:
     step_order = max(int(request.step_index or 0), 0)
-    if step_order >= len(request.workflow_steps):
+    if step_order >= len(request.strategy_steps):
         return None
-    step = request.workflow_steps[step_order]
-    return WorkflowStepSelection(
+    step = request.strategy_steps[step_order]
+    return RunnerStepSelection(
         step_order=step_order,
         step=step,
         parallel_group=str(step.get("parallel_group") or "").strip(),
     )
 
 
-def workflow_step_index_from_events(request: WorkflowCursorFromEventsRequest) -> int:
+def runner_step_index_from_events(request: RunnerStepCursorFromEventsRequest) -> int:
     projected_index = _projected_current_step_index(request)
     if projected_index is not None:
         return projected_index
 
     last_committed_index = -1
-    step_index_by_id = _step_index_by_id(request.workflow_steps)
+    step_index_by_id = _step_index_by_id(request.strategy_steps)
     for event in request.events:
         if _event_type(event) != "StepCommitted":
             continue
@@ -59,20 +59,20 @@ def workflow_step_index_from_events(request: WorkflowCursorFromEventsRequest) ->
     return max(int(request.fallback_step_index or 0), 0)
 
 
-def _projected_current_step_index(request: WorkflowCursorFromEventsRequest) -> int | None:
+def _projected_current_step_index(request: RunnerStepCursorFromEventsRequest) -> int | None:
     projection = request.current_step_projection or {}
     if not projection.get("claimable"):
         return None
     if _safe_int(projection.get("iteration"), default=-1) != request.iteration:
         return None
     step_id = str(projection.get("step_id") or "")
-    return _step_index_by_id(request.workflow_steps).get(step_id)
+    return _step_index_by_id(request.strategy_steps).get(step_id)
 
 
-def _step_index_by_id(workflow_steps: Sequence[Mapping[str, object]]) -> dict[str, int]:
+def _step_index_by_id(strategy_steps: Sequence[Mapping[str, object]]) -> dict[str, int]:
     return {
         str(step.get("id") or ""): index
-        for index, step in enumerate(workflow_steps)
+        for index, step in enumerate(strategy_steps)
         if str(step.get("id") or "").strip()
     }
 

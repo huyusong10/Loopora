@@ -224,7 +224,13 @@ def _acceptance_coverage_targets(judgment_contract: dict, *, limit: int = 40) ->
 
 
 def _acceptance_judgment_summary(judgment_contract: dict) -> str:
-    for field in ("collaboration_summary", "goal", "workflow_collaboration_intent", "residual_risk"):
+    for field in (
+        "collaboration_summary",
+        "goal",
+        "strategy_collaboration_intent",
+        "workflow_collaboration_intent",
+        "residual_risk",
+    ):
         value = _acceptance_text(judgment_contract.get(field), limit=240)
         if value:
             return value
@@ -508,6 +514,9 @@ class ServiceRunLifecycleMixin:
             "check_mode": _acceptance_text(judgment_contract.get("check_mode")),
             "check_count": structured_non_negative_int(judgment_contract.get("check_count")),
             "completion_mode": _acceptance_text(judgment_contract.get("completion_mode")),
+            "strategy_preset": _acceptance_text(
+                judgment_contract.get("strategy_preset") or judgment_contract.get("workflow_preset")
+            ),
             "workflow_preset": _acceptance_text(judgment_contract.get("workflow_preset")),
             "coverage_targets": _acceptance_coverage_targets(judgment_contract),
             "loop_fit_reasons": _acceptance_string_list(judgment_contract, "loop_fit_reasons"),
@@ -540,6 +549,7 @@ class ServiceRunLifecycleMixin:
             "check_mode": "",
             "check_count": 0,
             "completion_mode": "",
+            "strategy_preset": "",
             "workflow_preset": "",
             "coverage_targets": [],
             "loop_fit_reasons": [],

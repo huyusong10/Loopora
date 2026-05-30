@@ -11,7 +11,7 @@ from loopora.engine import (
     RunEngineAcceptEvidenceRequest,
     RunEngineAdvanceStatus,
     RunEngineClaimStepRequest,
-    RunEngineClaimWorkflowStepRequest,
+    RunEngineClaimRunnerStepRequest,
     RunEngineCommitStepRequest,
     RunEngineCoverageRecomputedRequest,
     RunEngineCompleteIterationRequest,
@@ -19,8 +19,8 @@ from loopora.engine import (
     RunEngineRecordStepEvidenceRequest,
     RunEngineStartIterationRequest,
     RunEngineSubmitStepRequest,
-    WorkflowStepInstructionRequest,
-    workflow_step_instruction,
+    RunnerStepInstructionRequest,
+    runner_step_instruction,
 )
 from loopora.events import loop_stream_id, replay_run_snapshot, run_stream_id
 from loopora.events.projection_cache import replay_run_projections
@@ -362,8 +362,8 @@ def test_run_engine_advance_preserves_awaiting_actor_state(tmp_path: Path) -> No
     run = _create_run(repository, tmp_path)
     engine = RepositoryRunEngine(repository)
     actor = ActorRef(kind="agent", id="codex", adapter="codex")
-    instruction = workflow_step_instruction(
-        WorkflowStepInstructionRequest(
+    instruction = runner_step_instruction(
+        RunnerStepInstructionRequest(
             run_id=run["id"],
             contract_ref="contract/run_contract.json",
             compiled_spec={"coverage_targets": [{"id": "done_when.proof"}]},
@@ -392,8 +392,8 @@ def test_terminal_run_event_clears_pending_current_step(tmp_path: Path) -> None:
 
     engine.claim_step(
         RunEngineClaimStepRequest(
-            instruction=workflow_step_instruction(
-                WorkflowStepInstructionRequest(
+            instruction=runner_step_instruction(
+                RunnerStepInstructionRequest(
                     run_id=run["id"],
                     contract_ref="contract/run_contract.json",
                     compiled_spec={"coverage_targets": [{"id": "done_when.proof"}]},
@@ -422,8 +422,8 @@ def test_run_engine_step_instruction_events_drive_current_step_replay(tmp_path: 
     run = _create_run(repository, tmp_path)
     engine = RepositoryRunEngine(repository)
     actor = ActorRef(kind="agent", id="codex", adapter="codex")
-    instruction = workflow_step_instruction(
-        WorkflowStepInstructionRequest(
+    instruction = runner_step_instruction(
+        RunnerStepInstructionRequest(
             run_id=run["id"],
             contract_ref="contract/run_contract.json",
             compiled_spec={"coverage_targets": [{"id": "done_when.proof"}]},
@@ -455,14 +455,14 @@ def test_run_engine_step_instruction_events_drive_current_step_replay(tmp_path: 
     assert committed.state.pending_actor is None
 
 
-def test_run_engine_claim_workflow_step_freezes_step_instruction(tmp_path: Path) -> None:
+def test_run_engine_claim_runner_step_freezes_step_instruction(tmp_path: Path) -> None:
     repository = LooporaRepository(tmp_path / "app.db")
     run = _create_run(repository, tmp_path)
     engine = RepositoryRunEngine(repository)
     actor = ActorRef(kind="runner", id="headless")
 
-    claimed = engine.claim_workflow_step(
-        RunEngineClaimWorkflowStepRequest(
+    claimed = engine.claim_runner_step(
+        RunEngineClaimRunnerStepRequest(
             run_id=run["id"],
             contract_ref="contract/run_contract.json",
             compiled_spec={"coverage_targets": [{"id": "done_when.proof"}]},
@@ -482,7 +482,7 @@ def test_run_engine_claim_workflow_step_freezes_step_instruction(tmp_path: Path)
     assert event.payload["pending_actor"] == actor.to_dict()
 
 
-def test_run_engine_derives_workflow_cursor_from_event_log(tmp_path: Path) -> None:
+def test_run_engine_derives_runner_strategy_cursor_from_event_log(tmp_path: Path) -> None:
     repository = LooporaRepository(tmp_path / "app.db")
     run = _create_run(repository, tmp_path)
     engine = RepositoryRunEngine(repository)
@@ -501,9 +501,9 @@ def test_run_engine_derives_workflow_cursor_from_event_log(tmp_path: Path) -> No
         )
     )
 
-    step_index = engine.workflow_step_index(
+    step_index = engine.runner_step_index(
         run["id"],
-        workflow_steps=[
+        strategy_steps=[
             {"id": "builder", "role_id": "builder"},
             {"id": "gatekeeper", "role_id": "gatekeeper"},
         ],

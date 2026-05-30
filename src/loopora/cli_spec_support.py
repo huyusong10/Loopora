@@ -4,7 +4,11 @@ from pathlib import Path
 
 from loopora.markdown_tools import render_safe_markdown_html
 from loopora.specs import SpecError, compile_markdown_spec
-from loopora.workflows import load_workflow_file, normalize_role_display_name, normalize_workflow
+from loopora.strategy_source import (
+    load_strategy_source_file,
+    normalize_strategy_role_display_name,
+    normalize_strategy_source,
+)
 
 from loopora.cli_common import get_service
 
@@ -37,33 +41,35 @@ def spec_document_payload(path: Path, markdown_text: str) -> dict[str, object]:
     }
 
 
-def resolve_spec_template_workflow(
+def resolve_spec_template_strategy_source(
     *,
     orchestration_id: str,
-    workflow_preset: str,
-    workflow_file: Path | None,
+    strategy_preset: str,
+    strategy_file: Path | None,
 ) -> dict | None:
-    if workflow_file is not None:
-        workflow, _ = load_workflow_file(workflow_file)
-        return normalize_workflow(workflow) if workflow else None
+    if strategy_file is not None:
+        strategy_source, _ = load_strategy_source_file(strategy_file)
+        return normalize_strategy_source(strategy_source) if strategy_source else None
     if orchestration_id.strip():
         orchestration = get_service().get_orchestration(orchestration_id.strip())
-        workflow = orchestration.get("workflow_json") or None
-        return normalize_workflow(workflow) if workflow else None
-    if workflow_preset.strip():
-        return normalize_workflow({"preset": workflow_preset.strip()})
+        strategy_source = orchestration.get("workflow_json") or None
+        return normalize_strategy_source(strategy_source) if strategy_source else None
+    if strategy_preset.strip():
+        return normalize_strategy_source({"preset": strategy_preset.strip()})
     return None
 
 
-def role_note_sections_for_workflow(workflow: dict | None) -> list[dict[str, str]]:
-    if not workflow:
+def role_note_sections_for_strategy_source(strategy_source: dict | None) -> list[dict[str, str]]:
+    if not strategy_source:
         return []
     sections: list[dict[str, str]] = []
     seen: set[str] = set()
-    for role in workflow.get("roles", []):
+    for role in strategy_source.get("roles", []):
         if not isinstance(role, dict):
             continue
-        label = normalize_role_display_name(role.get("name"), archetype=role.get("archetype")) or str(role.get("name", "")).strip()
+        label = normalize_strategy_role_display_name(role.get("name"), archetype=role.get("archetype")) or str(
+            role.get("name", "")
+        ).strip()
         normalized = label.lower()
         if not label or normalized in seen:
             continue

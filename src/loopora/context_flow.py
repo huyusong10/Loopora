@@ -26,7 +26,7 @@ from loopora.utils import utc_now
 class RunContractSnapshotRequest:
     run: dict
     compiled_spec: dict
-    workflow: dict
+    strategy_source: dict
     prompt_files: dict[str, str]
     workspace_baseline: dict
     layout: RunArtifactLayout
@@ -396,6 +396,8 @@ STEP_CONTEXT_PACKET_SCHEMA = {
                 "completion_mode",
                 "collaboration_summary",
                 "loop_fit_reasons",
+                "strategy_preset",
+                "strategy_collaboration_intent",
                 "workflow_preset",
                 "workflow_collaboration_intent",
                 "judgment_tradeoffs",
@@ -417,6 +419,8 @@ STEP_CONTEXT_PACKET_SCHEMA = {
                 "completion_mode": {"type": "string"},
                 "collaboration_summary": {"type": "string"},
                 "loop_fit_reasons": {"type": "array", "items": {"type": "string"}},
+                "strategy_preset": {"type": "string"},
+                "strategy_collaboration_intent": {"type": "string"},
                 "workflow_preset": {"type": "string"},
                 "workflow_collaboration_intent": {"type": "string"},
                 "judgment_tradeoffs": {"type": "array", "items": {"type": "string"}},
@@ -705,8 +709,9 @@ def build_run_contract_snapshot(request: RunContractSnapshotRequest) -> dict:
     run = request.run
     layout = request.layout
     compiled_spec = request.compiled_spec if isinstance(request.compiled_spec, dict) else {}
-    tradeoff_roles = _workflow_roles_with_prompt_files(request.workflow, request.prompt_files)
-    role_posture_roles = _workflow_roles_with_runtime_prompt_markdown(request.workflow, request.prompt_files)
+    strategy_source = request.strategy_source
+    tradeoff_roles = _workflow_roles_with_prompt_files(strategy_source, request.prompt_files)
+    role_posture_roles = _workflow_roles_with_runtime_prompt_markdown(strategy_source, request.prompt_files)
     source_bundle = _contract_source_bundle(request.source_bundle)
     return {
         "run_id": run["id"],
@@ -737,23 +742,23 @@ def build_run_contract_snapshot(request: RunContractSnapshotRequest) -> dict:
             collaboration_summary=request.collaboration_summary,
             raw_sections=compiled_spec.get("raw_sections"),
             roles=tradeoff_roles,
-            workflow=request.workflow,
+            workflow=strategy_source,
         ),
         "execution_strategy": build_execution_strategy_trace(
             collaboration_summary=request.collaboration_summary,
             raw_sections=compiled_spec.get("raw_sections"),
             roles=tradeoff_roles,
-            workflow=request.workflow,
+            workflow=strategy_source,
         ),
         "local_governance": build_runtime_local_governance_trace(
             raw_sections=compiled_spec.get("raw_sections"),
             roles=tradeoff_roles,
-            workflow=request.workflow,
+            workflow=strategy_source,
         ),
         "role_postures": _contract_role_postures(role_posture_roles),
         "workflow": {
-            "preset": str(request.workflow.get("preset") or "custom"),
-            "collaboration_intent": str(request.workflow.get("collaboration_intent") or "").strip(),
+            "preset": str(strategy_source.get("preset") or "custom"),
+            "collaboration_intent": str(strategy_source.get("collaboration_intent") or "").strip(),
             "roles": [
                 {
                     "id": str(role.get("id") or ""),
@@ -762,7 +767,7 @@ def build_run_contract_snapshot(request: RunContractSnapshotRequest) -> dict:
                     "prompt_ref": str(role.get("prompt_ref") or ""),
                     "posture_notes": str(role.get("posture_notes") or "").strip(),
                 }
-                for role in request.workflow.get("roles", [])
+                for role in strategy_source.get("roles", [])
             ],
             "steps": [
                 {
@@ -776,9 +781,9 @@ def build_run_contract_snapshot(request: RunContractSnapshotRequest) -> dict:
                     "inputs": dict(step.get("inputs") or {}),
                     "action_policy": dict(step.get("action_policy") or {}),
                 }
-                for step in request.workflow.get("steps", [])
+                for step in strategy_source.get("steps", [])
             ],
-            "controls": list(request.workflow.get("controls") or []),
+            "controls": list(strategy_source.get("controls") or []),
         },
         "prompt_refs": sorted(request.prompt_files.keys()),
         "workspace_baseline": {
@@ -1032,6 +1037,8 @@ def build_step_context_packet(request: StepContextPacketRequest) -> dict:
             "loop_fit_reasons": _contract_string_list(run_contract.get("loop_fit_reasons")) or build_loop_fit_trace(
                 run_contract.get("collaboration_summary")
             ),
+            "strategy_preset": str(workflow_snapshot.get("preset") or "custom"),
+            "strategy_collaboration_intent": str(workflow_snapshot.get("collaboration_intent") or "").strip(),
             "workflow_preset": str(workflow_snapshot.get("preset") or "custom"),
             "workflow_collaboration_intent": str(workflow_snapshot.get("collaboration_intent") or "").strip(),
             "judgment_tradeoffs": judgment_tradeoffs,
@@ -1740,7 +1747,11 @@ def render_run_contract_section(contract: dict, compiled_spec: dict) -> str:
     collaboration_summary = str(
         contract.get("collaboration_summary") or "No explicit bundle collaboration summary was provided."
     ).strip()
-    workflow_collaboration_intent = str(contract.get("workflow_collaboration_intent") or "No explicit workflow collaboration intent was provided.").strip()
+    strategy_collaboration_intent = str(
+        contract.get("strategy_collaboration_intent")
+        or contract.get("workflow_collaboration_intent")
+        or "No explicit strategy collaboration intent was provided."
+    ).strip()
     loop_fit_reasons = json.dumps(contract.get("loop_fit_reasons") or [], ensure_ascii=False, indent=2)
     judgment_tradeoffs = json.dumps(contract.get("judgment_tradeoffs") or [], ensure_ascii=False, indent=2)
     execution_strategy = json.dumps(contract.get("execution_strategy") or [], ensure_ascii=False, indent=2)
@@ -1756,8 +1767,8 @@ def render_run_contract_section(contract: dict, compiled_spec: dict) -> str:
         f"- Execution strategy: {execution_strategy}\n"
         f"- Local governance: {local_governance}\n"
         f"- Role postures: {role_postures}\n"
-        f"- Workflow preset: {contract.get('workflow_preset')}\n"
-        f"- Workflow collaboration intent: {workflow_collaboration_intent}\n"
+        f"- Strategy preset: {contract.get('strategy_preset') or contract.get('workflow_preset')}\n"
+        f"- Strategy collaboration intent: {strategy_collaboration_intent}\n"
         f"- Check mode: {contract.get('check_mode')}\n"
         f"- Check count: {contract.get('check_count')}\n\n"
         f"Goal:\n{contract.get('goal', '').strip()}\n\n"

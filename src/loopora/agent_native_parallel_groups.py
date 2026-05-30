@@ -62,7 +62,7 @@ def agent_native_parallel_group_snapshot(  # noqa: PLR0913 - snapshot inputs mir
     runtime_role_key: Callable[[dict], str],
 ) -> dict[str, Any]:
     group_start, group_end, group_step_ids = agent_native_parallel_group_bounds(
-        context.workflow_steps,
+        context.strategy_steps,
         step_order,
         parallel_group,
     )
@@ -77,7 +77,7 @@ def agent_native_parallel_group_snapshot(  # noqa: PLR0913 - snapshot inputs mir
         return existing
 
     group_step_id_set = set(group_step_ids)
-    group_roles = [context.role_by_id[step["role_id"]] for step in context.workflow_steps[group_start:group_end]]
+    group_roles = [context.role_by_id[step["role_id"]] for step in context.strategy_steps[group_start:group_end]]
     group_role_ids = {str(role["id"]) for role in group_roles}
     group_runtime_roles = {runtime_role_key(role) for role in group_roles}
     group_archetypes = {str(role["archetype"]) for role in group_roles}

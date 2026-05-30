@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 from loopora.engine.advance_policy import (
-    WorkflowCursorFromEventsRequest,
-    WorkflowStepSelection,
-    WorkflowStepSelectionRequest,
-    select_next_workflow_step,
-    workflow_step_index_from_events,
+    RunnerStepCursorFromEventsRequest,
+    RunnerStepSelection,
+    RunnerStepSelectionRequest,
+    select_next_runner_step,
+    runner_step_index_from_events,
 )
 from loopora.engine.evidence_engine import EvidenceEngine
 from loopora.engine.run_engine import RepositoryRunEngine
@@ -13,8 +13,8 @@ from loopora.engine.run_lifecycle import RunEngineAdvanceOutcome, RunEngineAdvan
 from loopora.engine.run_requests import (
     RunEngineAcceptEvidenceRequest,
     RunEngineClaimStepRequest,
-    RunEngineClaimWorkflowStepRequest,
-    RunEngineClaimWorkflowStepResult,
+    RunEngineClaimRunnerStepRequest,
+    RunEngineClaimRunnerStepResult,
     RunEngineCommitStepRequest,
     RunEngineCoverageRecomputedRequest,
     RunEngineIssueStepRequest,
@@ -26,8 +26,8 @@ from loopora.engine.run_requests import (
     RunEngineSubmitStepResult,
     RunEngineStartIterationRequest,
 )
-from loopora.engine.step_instruction import WorkflowStepInstructionRequest, workflow_step_instruction
-from loopora.engine.step_result import WorkflowStepResultRequest, workflow_step_result
+from loopora.engine.step_instruction import RunnerStepInstructionRequest, runner_step_instruction
+from loopora.engine.step_result import RunnerStepResultRequest, runner_step_result
 from loopora.engine.verdict_engine import VerdictEngine
 
 __all__ = [
@@ -36,9 +36,9 @@ __all__ = [
     "RunEngineAcceptEvidenceRequest",
     "RunEngineAdvanceOutcome",
     "RunEngineAdvanceStatus",
+    "RunEngineClaimRunnerStepRequest",
+    "RunEngineClaimRunnerStepResult",
     "RunEngineClaimStepRequest",
-    "RunEngineClaimWorkflowStepRequest",
-    "RunEngineClaimWorkflowStepResult",
     "RunEngineCommitStepRequest",
     "RunEngineCompleteIterationRequest",
     "RunEngineCoverageRecomputedRequest",
@@ -49,14 +49,14 @@ __all__ = [
     "RunEngineStartIterationRequest",
     "RunEngineSubmitStepRequest",
     "RunEngineSubmitStepResult",
+    "RunnerStepCursorFromEventsRequest",
+    "RunnerStepInstructionRequest",
+    "RunnerStepResultRequest",
+    "RunnerStepSelection",
+    "RunnerStepSelectionRequest",
     "VerdictEngine",
-    "WorkflowCursorFromEventsRequest",
-    "WorkflowStepInstructionRequest",
-    "WorkflowStepResultRequest",
-    "WorkflowStepSelection",
-    "WorkflowStepSelectionRequest",
-    "select_next_workflow_step",
-    "workflow_step_index_from_events",
-    "workflow_step_instruction",
-    "workflow_step_result",
+    "runner_step_index_from_events",
+    "runner_step_instruction",
+    "runner_step_result",
+    "select_next_runner_step",
 ]

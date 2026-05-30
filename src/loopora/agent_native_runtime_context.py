@@ -3,12 +3,12 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from loopora.engine.workflow_runtime import WorkflowIterationState, WorkflowRunContext
+from loopora.engine.runner_context import RunnerIterationState, RunnerRunContext
 from loopora.recovery import RetryConfig
 from loopora.run_artifacts import INITIAL_STAGNATION_STATE
 from loopora.service_types import normalize_completion_mode
+from loopora.strategy_source import normalize_strategy_source
 from loopora.utils import read_json
-from loopora.workflows import normalize_workflow
 
 
 def agent_native_run_context(
@@ -18,25 +18,25 @@ def agent_native_run_context(
     layout: object,
     executor: object,
     prompt_files: dict[str, str],
-) -> WorkflowRunContext:
-    workflow = run.get("workflow_json") or read_json(layout.contract_workflow_path)
-    workflow = normalize_workflow(workflow)
-    role_by_id = {role["id"]: role for role in workflow.get("roles", [])}
-    return WorkflowRunContext(
+) -> RunnerRunContext:
+    strategy_source = run.get("workflow_json") or read_json(layout.contract_workflow_path)
+    strategy_source = normalize_strategy_source(strategy_source)
+    role_by_id = {role["id"]: role for role in strategy_source.get("roles", [])}
+    return RunnerRunContext(
         run_id=run["id"],
         run=run,
         run_dir=Path(run["runs_dir"]),
-        workflow=workflow,
+        strategy_source=strategy_source,
         executor=executor,
         compiled_spec=run["compiled_spec_json"],
         retry_config=RetryConfig(max_retries=run["max_role_retries"]),
         prompt_files=prompt_files,
         layout=layout,
         run_contract=read_json(layout.run_contract_path),
-        workflow_steps=list(workflow.get("steps", [])),
-        workflow_controls=list(workflow.get("controls", [])),
+        strategy_steps=list(strategy_source.get("steps", [])),
+        strategy_controls=list(strategy_source.get("controls", [])),
         control_fire_counts=dict(state.get("control_fire_counts") or {}),
-        workflow_started_at=0.0,
+        runner_started_at=0.0,
         role_by_id=role_by_id,
         completion_mode=normalize_completion_mode(run.get("completion_mode", "gatekeeper")),
         last_gatekeeper_result=state.get("current_gatekeeper_result")
@@ -45,8 +45,8 @@ def agent_native_run_context(
     )
 
 
-def agent_native_iteration_state(state: dict[str, Any]) -> WorkflowIterationState:
-    return WorkflowIterationState(
+def agent_native_iteration_state(state: dict[str, Any]) -> RunnerIterationState:
+    return RunnerIterationState(
         iter_id=int(state.get("iter_id") or 0),
         previous_composite=state.get("previous_composite"),
         stagnation=dict(state.get("stagnation") or INITIAL_STAGNATION_STATE),
@@ -72,7 +72,7 @@ def agent_native_iteration_state(state: dict[str, Any]) -> WorkflowIterationStat
     )
 
 
-def agent_native_state_from_iteration(iteration: WorkflowIterationState) -> dict[str, Any]:
+def agent_native_state_from_iteration(iteration: RunnerIterationState) -> dict[str, Any]:
     return {
         "iter_id": iteration.iter_id,
         "previous_composite": iteration.previous_composite,

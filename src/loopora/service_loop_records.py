@@ -6,32 +6,32 @@ from loopora.branding import state_dir_for_workdir
 from loopora.run_artifacts import RunArtifactLayout
 from loopora.service_asset_common import _normalize_role_models
 from loopora.service_types import LooporaNotFoundError
-from loopora.task_verdicts import hydrate_run_status_and_task_verdict
-from loopora.workflows import (
-    DEFAULT_WORKFLOW_PRESET,
-    WorkflowError,
-    build_preset_workflow,
-    load_prompt_file,
-    normalize_workflow,
-    prompt_asset_path,
-    resolve_prompt_files,
-    workflow_warnings,
+from loopora.strategy_source import (
+    DEFAULT_STRATEGY_SOURCE_PRESET,
+    StrategySourceError,
+    build_preset_strategy_source,
+    load_strategy_prompt_file,
+    normalize_strategy_source,
+    resolve_strategy_prompt_files,
+    strategy_prompt_asset_path,
+    strategy_source_warnings,
 )
+from loopora.task_verdicts import hydrate_run_status_and_task_verdict
 
 
 class ServiceLoopRecordMixin:
-    def _legacy_workflow_from_loop(self, loop_or_run: dict) -> dict:
+    def _legacy_strategy_source_from_loop(self, loop_or_run: dict) -> dict:
         role_models = _normalize_role_models(
             loop_or_run.get("role_models_json") or loop_or_run.get("role_models") or {}
         )
-        return build_preset_workflow(DEFAULT_WORKFLOW_PRESET, role_models=role_models)
+        return build_preset_strategy_source(DEFAULT_STRATEGY_SOURCE_PRESET, role_models=role_models)
 
-    def _normalized_workflow_from_record(self, loop_or_run: dict) -> dict:
-        workflow = loop_or_run.get("workflow_json") or self._legacy_workflow_from_loop(loop_or_run)
+    def _normalized_strategy_source_from_record(self, loop_or_run: dict) -> dict:
+        strategy_source = loop_or_run.get("workflow_json") or self._legacy_strategy_source_from_loop(loop_or_run)
         try:
-            return normalize_workflow(workflow)
-        except WorkflowError:
-            return workflow
+            return normalize_strategy_source(strategy_source)
+        except StrategySourceError:
+            return strategy_source
 
     def _prompt_dir(self, base_dir: Path) -> Path:
         return base_dir / "prompts"
@@ -43,44 +43,44 @@ class ServiceLoopRecordMixin:
         prompt_dir = self._prompt_dir(base_dir)
         prompt_dir.mkdir(parents=True, exist_ok=True)
         for prompt_ref, markdown_text in sorted(prompt_files.items()):
-            path = prompt_asset_path(prompt_dir, prompt_ref)
+            path = strategy_prompt_asset_path(prompt_dir, prompt_ref)
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(str(markdown_text), encoding="utf-8")
 
-    def _read_prompt_files(self, base_dir: Path, workflow: dict) -> dict[str, str]:
+    def _read_prompt_files(self, base_dir: Path, strategy_source: dict) -> dict[str, str]:
         prompt_files: dict[str, str] = {}
-        for role in workflow.get("roles", []):
+        for role in strategy_source.get("roles", []):
             prompt_ref = str(role.get("prompt_ref", "")).strip()
             if not prompt_ref or prompt_ref in prompt_files:
                 continue
-            path = prompt_asset_path(self._prompt_dir(base_dir), prompt_ref)
+            path = strategy_prompt_asset_path(self._prompt_dir(base_dir), prompt_ref)
             try:
                 prompt_exists = path.exists()
                 if prompt_exists:
-                    prompt_files[prompt_ref] = load_prompt_file(path)
-            except WorkflowError as exc:
+                    prompt_files[prompt_ref] = load_strategy_prompt_file(path)
+            except StrategySourceError as exc:
                 if "could not be read" in str(exc):
-                    raise WorkflowError(f"prompt artifact {prompt_ref} could not be read") from exc
-                raise WorkflowError(f"prompt artifact {prompt_ref}: {exc}") from exc
+                    raise StrategySourceError(f"prompt artifact {prompt_ref} could not be read") from exc
+                raise StrategySourceError(f"prompt artifact {prompt_ref}: {exc}") from exc
             except OSError as exc:
-                raise WorkflowError(f"prompt artifact {prompt_ref} could not be read") from exc
-        return resolve_prompt_files(workflow, prompt_files)
+                raise StrategySourceError(f"prompt artifact {prompt_ref} could not be read") from exc
+        return resolve_strategy_prompt_files(strategy_source, prompt_files)
 
-    def _read_prompt_files_for_loop(self, workdir: str, loop_id: str, workflow: dict) -> dict[str, str]:
+    def _read_prompt_files_for_loop(self, workdir: str, loop_id: str, strategy_source: dict) -> dict[str, str]:
         loop_dir = state_dir_for_workdir(workdir) / "loops" / loop_id
-        return self._read_prompt_files(loop_dir, workflow)
+        return self._read_prompt_files(loop_dir, strategy_source)
 
     def _read_prompt_files_for_run(self, run: dict) -> dict[str, str]:
-        workflow = run.get("workflow_json") or self._legacy_workflow_from_loop(run)
+        strategy_source = run.get("workflow_json") or self._legacy_strategy_source_from_loop(run)
         layout = self._run_artifact_layout(Path(run["runs_dir"]))
-        return self._read_prompt_files(layout.contract_dir, workflow)
+        return self._read_prompt_files(layout.contract_dir, strategy_source)
 
     def _hydrate_loop_files(self, loop: dict) -> dict:
         if not loop:
             return loop
-        workflow = self._normalized_workflow_from_record(loop)
-        loop["workflow_json"] = workflow
-        loop["workflow_warnings"] = workflow_warnings(workflow)
+        strategy_source = self._normalized_strategy_source_from_record(loop)
+        loop["workflow_json"] = strategy_source
+        loop["workflow_warnings"] = strategy_source_warnings(strategy_source)
         if loop.get("orchestration_id"):
             loop["orchestration"] = {
                 "id": loop.get("orchestration_id"),
@@ -94,8 +94,8 @@ class ServiceLoopRecordMixin:
                     "name": bundle.get("name") or bundle["id"],
                 }
         try:
-            loop["prompt_files"] = self._read_prompt_files_for_loop(loop["workdir"], loop["id"], workflow)
-        except WorkflowError:
+            loop["prompt_files"] = self._read_prompt_files_for_loop(loop["workdir"], loop["id"], strategy_source)
+        except StrategySourceError:
             loop["prompt_files"] = {}
         return loop
 
@@ -104,9 +104,9 @@ class ServiceLoopRecordMixin:
             return run
         self._reap_terminal_thread_handle(run.get("id"), status=run.get("status"))
         hydrate_run_status_and_task_verdict(run)
-        workflow = self._normalized_workflow_from_record(run)
-        run["workflow_json"] = workflow
-        run["workflow_warnings"] = workflow_warnings(workflow)
+        strategy_source = self._normalized_strategy_source_from_record(run)
+        run["workflow_json"] = strategy_source
+        run["workflow_warnings"] = strategy_source_warnings(strategy_source)
         if run.get("orchestration_id"):
             run["orchestration"] = {
                 "id": run.get("orchestration_id"),
@@ -114,7 +114,7 @@ class ServiceLoopRecordMixin:
             }
         try:
             run["prompt_files"] = self._read_prompt_files_for_run(run)
-        except WorkflowError:
+        except StrategySourceError:
             run["prompt_files"] = {}
         return run
 

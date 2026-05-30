@@ -17,8 +17,7 @@ from loopora.agent_adapter_templates import managed_templates
 from loopora.branding import APP_HOME_ENV
 from loopora.run_artifacts import RunArtifactLayout
 from loopora.service import LooporaService
-from loopora.settings import AppSettings
-from loopora.settings import app_home
+from loopora.settings import AppSettings, app_home
 from loopora.utils import utc_now
 
 
@@ -573,10 +572,10 @@ def test_cli_run_result_prints_frozen_judgment_contract_summary(capsys, tmp_path
     assert "source_plan_digest: sha256:abcdef123456, 2048 bytes" in output
     assert 'source_plan: {"id":' not in output
     assert "judgment_contract_summary: Prefer proof before speed." in output
-    assert "check_mode: specified" in output
-    assert "completion_mode: gatekeeper" in output
-    assert "workflow_preset: quality_gate" in output
-    assert "workflow_collaboration_intent: Builder evidence feeds Inspector review before GateKeeper closure." in output
+    assert "check_mode: specified" in output and "completion_mode: gatekeeper" in output
+    assert "strategy_preset: quality_gate" in output
+    assert "strategy_collaboration_intent: Builder evidence feeds Inspector review before GateKeeper closure." in output
+    assert "workflow_preset:" not in output and "workflow_collaboration_intent:" not in output
     assert "check_count: 2" in output
     _assert_cli_list(output, "coverage_targets", "done_when.check_001 (required)", "gatekeeper.finish (required)")
     assert "evidence_preference.pref_003" in output
@@ -701,7 +700,8 @@ def test_cli_loop_creation_emits_structured_logs(monkeypatch, tmp_path: Path) ->
     assert created_record["context"]["start"] is False
 
 
-def test_cli_loop_create_accepts_parallel_workflow_file(monkeypatch, tmp_path: Path) -> None:
+@pytest.mark.parametrize("strategy_file_flag", ["--workflow-file", "--strategy-file"])
+def test_cli_loop_create_accepts_parallel_strategy_file(strategy_file_flag: str, monkeypatch, tmp_path: Path) -> None:
     spec_path = tmp_path / "spec.md"
     spec_path.write_text("# Task\n\nKeep going.\n", encoding="utf-8")
     workdir = tmp_path / "workdir"
@@ -782,7 +782,7 @@ controls:
             str(spec_path),
             "--workdir",
             str(workdir),
-            "--workflow-file",
+            strategy_file_flag,
             str(workflow_path),
         ],
     )

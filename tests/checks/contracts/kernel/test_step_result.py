@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from loopora.engine import WorkflowStepResultRequest, workflow_step_result
+from loopora.engine import RunnerStepResultRequest, runner_step_result
 from loopora.kernel import ActorRef, StepResultStatus
 
 
-def test_workflow_step_result_adapts_legacy_output_to_kernel_step_result() -> None:
-    result = workflow_step_result(
-        WorkflowStepResultRequest(
+def test_runner_step_result_adapts_legacy_output_to_kernel_step_result() -> None:
+    result = runner_step_result(
+        RunnerStepResultRequest(
             run_id="run_123",
             iteration=2,
             step={"id": "gatekeeper"},

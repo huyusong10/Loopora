@@ -17,8 +17,8 @@ from loopora.run_artifacts import INITIAL_STAGNATION_STATE, write_json_with_mirr
 from loopora.service_asset_common import _normalize_role_models, logger
 from loopora.service_cleanup_diagnostics import best_effort_rmtree
 from loopora.service_types import LooporaConflictError, LooporaError, LooporaNotFoundError, normalize_completion_mode
+from loopora.strategy_source import StrategySourceError, strategy_source_has_finish_gatekeeper_step
 from loopora.utils import make_id, write_json
-from loopora.workflows import WorkflowError, has_finish_gatekeeper_step
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -52,7 +52,7 @@ class LoopDefinitionFiles:
     spec_markdown: str
     compiled_spec: dict
     prompt_files: dict
-    workflow: dict
+    strategy_source: dict
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -62,7 +62,7 @@ class ResolvedLoopCreate:
     spec_markdown: str
     compiled_spec: dict
     resolved_orchestration: dict
-    workflow: dict
+    strategy_source: dict
 
 
 def _coerce_loop_create_request(
@@ -201,7 +201,7 @@ def _loop_create_payload(resolved: ResolvedLoopCreate) -> dict:
         "orchestration_id": resolved.resolved_orchestration["id"],
         "orchestration_name": resolved.resolved_orchestration["name"],
         "role_models": _normalize_role_models(request.role_models),
-        "workflow": resolved.workflow,
+        "workflow": resolved.strategy_source,
     }
 
 
@@ -215,10 +215,10 @@ class ServiceRunRegistrationMixin:
         self._log_loop_create_requested(loop_request)
         normalized_request = _normalize_loop_create_request(loop_request)
         resolved_orchestration = self._resolve_loop_orchestration(normalized_request)
-        normalized_workflow = resolved_orchestration["workflow"]
-        self._validate_loop_completion_workflow(
+        strategy_source = resolved_orchestration["workflow"]
+        self._validate_loop_completion_strategy_source(
             completion_mode=normalized_request.completion_mode,
-            workflow=normalized_workflow,
+            strategy_source=strategy_source,
         )
         spec_markdown, compiled_spec = self._read_loop_spec_with_coverage(
             normalized_request.spec_path,
@@ -232,7 +232,7 @@ class ServiceRunRegistrationMixin:
                 spec_markdown=spec_markdown,
                 compiled_spec=compiled_spec,
                 prompt_files=resolved_orchestration["prompt_files"],
-                workflow=normalized_workflow,
+                strategy_source=strategy_source,
             )
         )
 
@@ -244,7 +244,7 @@ class ServiceRunRegistrationMixin:
                     spec_markdown=spec_markdown,
                     compiled_spec=compiled_spec,
                     resolved_orchestration=resolved_orchestration,
-                    workflow=normalized_workflow,
+                    strategy_source=strategy_source,
                 )
             )
         )
@@ -288,8 +288,8 @@ class ServiceRunRegistrationMixin:
         )
 
     @staticmethod
-    def _validate_loop_completion_workflow(*, completion_mode: str, workflow: dict) -> None:
-        if completion_mode == "gatekeeper" and not has_finish_gatekeeper_step(workflow):
+    def _validate_loop_completion_strategy_source(*, completion_mode: str, strategy_source: dict) -> None:
+        if completion_mode == "gatekeeper" and not strategy_source_has_finish_gatekeeper_step(strategy_source):
             raise LooporaError("gatekeeper completion mode requires a GateKeeper step that can finish the run")
 
     def _read_loop_spec_with_coverage(self, spec_path: Path, *, completion_mode: str) -> tuple[str, dict]:
@@ -301,7 +301,7 @@ class ServiceRunRegistrationMixin:
         (loop_dir / "spec.md").write_text(snapshot.spec_markdown, encoding="utf-8")
         write_json(loop_dir / "compiled_spec.json", snapshot.compiled_spec)
         self._persist_prompt_files(loop_dir, snapshot.prompt_files)
-        write_json(loop_dir / "workflow.json", snapshot.workflow)
+        write_json(loop_dir / "workflow.json", snapshot.strategy_source)
 
     @staticmethod
     def _read_and_compile_spec(spec_path: Path) -> tuple[str, dict]:
@@ -323,10 +323,10 @@ class ServiceRunRegistrationMixin:
         if self.repository.has_active_run_for_workdir(loop["workdir"]):
             raise LooporaConflictError(f"another active run is already using {loop['workdir']}")
 
-        workflow = loop.get("workflow_json") or self._legacy_workflow_from_loop(loop)
+        strategy_source = loop.get("workflow_json") or self._legacy_strategy_source_from_loop(loop)
         try:
-            prompt_files = self._read_prompt_files_for_loop(loop["workdir"], loop["id"], workflow)
-        except WorkflowError as exc:
+            prompt_files = self._read_prompt_files_for_loop(loop["workdir"], loop["id"], strategy_source)
+        except StrategySourceError as exc:
             raise LooporaError(str(exc)) from exc
         run_id = make_id("run")
         run_dir = self._ensure_run_dir(Path(loop["workdir"]), run_id)
@@ -348,7 +348,7 @@ class ServiceRunRegistrationMixin:
         source_bundle = self._loop_source_bundle_snapshot(loop_id)
         write_json_with_mirrors(layout.contract_compiled_spec_path, compiled_spec)
         write_text_with_mirrors(layout.contract_spec_path, loop["spec_markdown"])
-        write_json_with_mirrors(layout.contract_workflow_path, workflow)
+        write_json_with_mirrors(layout.contract_workflow_path, strategy_source)
         self._persist_prompt_files(layout.contract_dir, prompt_files)
 
         run_contract = build_run_contract_snapshot(
@@ -373,7 +373,7 @@ class ServiceRunRegistrationMixin:
                     ),
                 },
                 compiled_spec=compiled_spec,
-                workflow=workflow,
+                strategy_source=strategy_source,
                 prompt_files=prompt_files,
                 workspace_baseline=workspace_baseline,
                 layout=layout,
@@ -412,7 +412,7 @@ class ServiceRunRegistrationMixin:
                     "orchestration_id": loop.get("orchestration_id", ""),
                     "orchestration_name": loop.get("orchestration_name", ""),
                     "role_models": loop["role_models_json"],
-                    "workflow": workflow,
+                    "workflow": strategy_source,
                     "status": "queued",
                     "runs_dir": str(run_dir),
                     "summary_md": queued_summary,

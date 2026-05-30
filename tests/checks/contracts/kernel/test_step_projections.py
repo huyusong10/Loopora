@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from loopora.engine import WorkflowStepInstructionRequest, workflow_step_instruction
+from loopora.engine import RunnerStepInstructionRequest, runner_step_instruction
 from loopora.events.envelope import EventEnvelope
 from loopora.kernel import ActorRef
 from loopora.projections import (
@@ -13,8 +13,8 @@ from loopora.projections import (
 
 
 def _instruction():
-    return workflow_step_instruction(
-        WorkflowStepInstructionRequest(
+    return runner_step_instruction(
+        RunnerStepInstructionRequest(
             run_id="run_projection",
             contract_ref="contract/run_contract.json",
             compiled_spec={"coverage_targets": [{"id": "done_when.proof"}]},

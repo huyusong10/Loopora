@@ -138,6 +138,8 @@ def test_takeaway_projection_normalization_does_not_promote_boolean_counts() -> 
     assert projection["judgment_contract"]["check_mode"] == ""
     assert projection["judgment_contract"]["check_count"] == 0
     assert projection["judgment_contract"]["completion_mode"] == ""
+    assert projection["judgment_contract"]["strategy_preset"] == ""
+    assert projection["judgment_contract"]["strategy_collaboration_intent"] == ""
     assert projection["judgment_contract"]["workflow_preset"] == ""
     assert projection["judgment_contract"]["workflow_collaboration_intent"] == ""
     assert projection["judgment_contract"]["execution_strategy"] == ["Prove the focused path first."]

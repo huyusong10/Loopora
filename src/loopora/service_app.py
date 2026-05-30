@@ -21,12 +21,12 @@ from loopora.service_role_requests import ServiceRoleRequestMixin
 from loopora.service_run_finalization import ServiceRunFinalizationMixin
 from loopora.service_run_lifecycle import ServiceRunLifecycleMixin
 from loopora.service_types import LooporaError, LooporaNotFoundError
-from loopora.service_workflow_execution import ServiceWorkflowExecutionMixin
-from loopora.service_workflow_runtime import ServiceWorkflowRuntimeMixin
-from loopora.service_workflow_support import ServiceWorkflowSupportMixin
+from loopora.service_runner_execution import ServiceRunnerExecutionMixin
+from loopora.service_runner_step_runtime import ServiceRunnerStepRuntimeMixin
+from loopora.service_runner_support import ServiceRunnerSupportMixin
 from loopora.service_workspace import ServiceWorkspaceMixin
 from loopora.settings import AppSettings
-from loopora.workflows import WorkflowError
+from loopora.strategy_source import StrategySourceError
 
 
 class _LooporaServiceRuntime(
@@ -35,9 +35,9 @@ class _LooporaServiceRuntime(
     ServiceAssetMixin,
     ServiceAlignmentMixin,
     ServiceRunPromptMixin,
-    ServiceWorkflowSupportMixin,
-    ServiceWorkflowRuntimeMixin,
-    ServiceWorkflowExecutionMixin,
+    ServiceRunnerSupportMixin,
+    ServiceRunnerStepRuntimeMixin,
+    ServiceRunnerExecutionMixin,
     ServiceRunFinalizationMixin,
     ServiceRoleRequestMixin,
     ServiceIterationReportingMixin,
@@ -86,7 +86,7 @@ class _LooporaServiceRuntime(
             raise LooporaNotFoundError(str(exc)) from exc
         except AssetCatalogError as exc:
             raise LooporaError(str(exc)) from exc
-        except (WorkflowError, ValueError) as exc:
+        except (StrategySourceError, ValueError) as exc:
             raise LooporaError(str(exc)) from exc
 
 

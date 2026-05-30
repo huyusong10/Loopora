@@ -43,7 +43,7 @@ To understand the philosophy behind this approach, read [Human-Shaped Loop](./HU
 If you would normally write:
 
 ```text
-/goal build the self-service refund flow until it is ready to ship
+/goal port this React component library to Vue until it is deliverable
 ```
 
 Loopora suggests splitting into two steps:
@@ -78,7 +78,7 @@ Loopora does not fit every task. Use cases, agile iteration, and automated tests
 | Result may look done while core risk remains unproven | Strong fit for Loopora |
 | You need to retain, review, reuse, or manage this judgment via Web | Strong fit for Loopora |
 
-Typical examples: self-service refunds, billing permission refactors, cross-service payment callback issues—these tasks' real feedback appears after launch, after incidents, after compliance review.
+Typical examples: React to Vue equivalent ports, billing permission refactors, cross-service payment callback issues, complex data migrations, and production infrastructure changes. High-risk business tasks such as self-service refunds also fit, but they are not required background for understanding Loopora.
 
 A simple test: if you expect to return in round 2, 3, or N asking "is evidence sufficient, is risk acceptable, where should next round focus, can this close now"—don't just run a bare goal; compile that judgment into a Loop.
 
@@ -153,11 +153,11 @@ Then return to Agent and use two-stage entries for the current task:
 For first use, invoke `/loopora-plan` inside your Agent and describe the task plus key judgments:
 
 ```text
-I need to build a refund request backend:
-- page submission is not completion
-- must prove admin permission and refund eligibility
-- payment failure must be traceable and handoff-ready
-- audit trail must reconstruct a refund
+I need to migrate a React component library to Vue:
+- a runnable Vue project is not completion
+- core components, props, events, and state behavior must match the React version
+- newly written clean demos are not strong evidence
+- unmigrated items, weak evidence, and scope-expanding APIs must be listed explicitly
 ```
 
 Loopora first uses the judgments already clear in the current Agent context. If key judgment is still missing, `/loopora-plan` asks one focused question or opens Web review to align instead of inventing it. Later, if you want to tighten evidence, repair the candidate plan, adjust role responsibilities, or improve the Loop from run results, continue using `/loopora-plan`. After the preview looks right, run `/loopora-run`; the current Agent enters multi-round execution under that Loop. Later intents such as "continue," "resume," or "patch evidence" also belong to the `/loopora-run` stage.

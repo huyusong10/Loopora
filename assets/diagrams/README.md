@@ -11,6 +11,7 @@ Current canonical diagrams:
 | `plan-judgment-structure.*.svg` | Shows the README plan-file overview: the surfaces that make task-local judgment runnable across rounds. |
 | `loopora-position.*.svg` | Places Loopora outside the Agent as the running structure that keeps human judgment active across rounds. |
 | `error-propagation.*.svg` | Shows how an unguided loop can turn an early proxy goal into a convincing but unsafe completion story. |
+| `migration-evidence-loop*.svg` | Uses the React to Vue migration case to show the public article's evidence loop: artifacts, evidence buckets, drift risks, narrowed next action, and closure decision. |
 | `refund-evidence-loop.*.svg` | Uses the refund case to show the stable run pattern: output, evidence accounting, decision, and narrowed next action. |
 | `judgment-surfaces.*.svg` | Shows how human wording becomes user-understandable running surfaces: task contract, execution strategy, evidence path, and decision rule. |
 

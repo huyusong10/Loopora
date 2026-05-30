@@ -14,13 +14,13 @@ from loopora.service_prompts import (
 )
 from loopora.service_types import LooporaError
 from loopora.settings import AppSettings, configure_logging, db_path, load_settings
-from loopora.workflows import (
-    ARCHETYPES,
-    WorkflowError,
-    normalize_role_models as workflow_normalize_role_models,
+from loopora.strategy_source import (
+    STRATEGY_SOURCE_ARCHETYPES,
+    StrategySourceError,
+    normalize_strategy_role_models,
 )
 
-LOOP_ROLE_NAMES = ARCHETYPES
+LOOP_ROLE_NAMES = STRATEGY_SOURCE_ARCHETYPES
 
 __all__ = [
     "CHALLENGER_SCHEMA",
@@ -38,8 +38,8 @@ __all__ = [
 
 def normalize_role_models(role_models: dict | None) -> dict[str, str]:
     try:
-        return workflow_normalize_role_models(role_models)
-    except WorkflowError as exc:
+        return normalize_strategy_role_models(role_models)
+    except StrategySourceError as exc:
         raise LooporaError(str(exc)) from exc
 
 

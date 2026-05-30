@@ -19,10 +19,15 @@ from loopora.specs import compile_markdown_spec, SpecError
 from loopora.service_asset_common import _normalize_role_models
 from loopora.service_types import LooporaConflictError, LooporaError, LooporaNotFoundError
 from loopora.service_local_asset_diagnostics import build_local_asset_diagnostics
+from loopora.strategy_source import (
+    STRATEGY_ROLE_EXECUTION_FIELDS,
+    STRATEGY_ROLE_POSTURE_FIELDS,
+    normalize_strategy_source,
+    strategy_source_has_finish_gatekeeper_step,
+)
 from loopora.structured_booleans import structured_bool_is_true
 from loopora.utils import make_id
 from loopora.utils import write_json
-from loopora.workflows import ROLE_EXECUTION_FIELDS, ROLE_POSTURE_FIELDS, has_finish_gatekeeper_step, normalize_workflow
 
 logger = get_logger(__name__)
 
@@ -317,7 +322,7 @@ class ServiceBundleAssetMixin:
         request = _derive_bundle_request_from_args(request, raw_request)
         loop_id = request.loop_id
         loop = self.get_loop(loop_id)
-        workflow = normalize_workflow(loop.get("workflow_json") or {})
+        workflow = normalize_strategy_source(loop.get("workflow_json") or {})
         prompt_files = dict(loop.get("prompt_files") or {})
         role_definition_by_id = {}
         for role in workflow.get("roles", []):
@@ -820,7 +825,9 @@ class ServiceBundleAssetMixin:
         role_models = _normalize_role_models(loop.get("role_models_json") or loop.get("role_models") or {})
         resolved_orchestration = self._resolve_bundle_orchestration_for_snapshot(bundle, role_models=role_models)
         normalized_workflow = resolved_orchestration["workflow"]
-        if loop.get("completion_mode") == "gatekeeper" and not has_finish_gatekeeper_step(normalized_workflow):
+        if loop.get("completion_mode") == "gatekeeper" and not strategy_source_has_finish_gatekeeper_step(
+            normalized_workflow
+        ):
             raise LooporaError(
                 "gatekeeper completion mode requires a GateKeeper step that can finish the run"
             )
@@ -930,7 +937,13 @@ class ServiceBundleAssetMixin:
             role_definition_id = str(role.get("role_definition_id", "") or "").strip()
             if role_definition_id in owned_role_ids:
                 definition = self.get_role_definition(role_definition_id)
-                for field in ("name", "archetype", "prompt_ref", *ROLE_EXECUTION_FIELDS, *ROLE_POSTURE_FIELDS):
+                for field in (
+                    "name",
+                    "archetype",
+                    "prompt_ref",
+                    *STRATEGY_ROLE_EXECUTION_FIELDS,
+                    *STRATEGY_ROLE_POSTURE_FIELDS,
+                ):
                     role[field] = definition.get(field, "")
                 prompt_ref = str(definition.get("prompt_ref", "") or "").strip()
                 if prompt_ref:

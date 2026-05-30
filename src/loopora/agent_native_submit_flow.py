@@ -54,10 +54,10 @@ def agent_native_advance_state_after_submit(
     if request.is_control_step:
         queue = [item for item in list(request.state.get("control_queue") or []) if isinstance(item, dict)]
         request.state["control_queue_index"] = agent_native_control_queue_index(request.state, queue=queue) + 1
-        request.state["step_index"] = len(request.context.workflow_steps)
+        request.state["step_index"] = len(request.context.strategy_steps)
         return
     parallel_finished = agent_native_parallel_group_finished_payload(
-        request.context.workflow_steps,
+        request.context.strategy_steps,
         request.iter_id,
         request.step,
         request.step_order,
@@ -67,7 +67,7 @@ def agent_native_advance_state_after_submit(
     request.state["step_index"] = request.step_order + 1
     update_agent_native_parallel_group_snapshot_after_submit(
         request.state,
-        workflow_steps=request.context.workflow_steps,
+        strategy_steps=request.context.strategy_steps,
         step=request.step,
         step_order=request.step_order,
     )

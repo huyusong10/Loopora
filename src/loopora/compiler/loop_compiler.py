@@ -11,7 +11,7 @@ from loopora.compiler.sources import LoopSource, LoopSourceKind
 from loopora.compiler.strategy_compiler import compile_loop_strategy
 from loopora.kernel.definition import LoopDefinition, LoopMetadata, RuntimeDefaults
 from loopora.specs import compile_markdown_spec
-from loopora.workflows import build_preset_workflow
+from loopora.strategy_source import build_preset_strategy_source
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -19,7 +19,7 @@ class _LoopDefinitionParts:
     loop_id: str
     name: str
     compiled_spec: Mapping[str, object]
-    workflow: Mapping[str, object]
+    strategy_source: Mapping[str, object]
     runtime_defaults: RuntimeDefaults
     metadata: LoopMetadata
 
@@ -60,7 +60,7 @@ def compile_agent_message_source(source: LoopSource) -> LoopDefinition:
                 payload,
                 fallback_task=text(payload.get("message") or payload.get("task") or payload.get("goal")),
             ),
-            workflow={},
+            strategy_source={},
             runtime_defaults=RuntimeDefaults(
                 executor_kind=text(payload.get("executor_kind"), fallback="codex"),
                 executor_mode=text(payload.get("executor_mode"), fallback="preset"),
@@ -83,7 +83,7 @@ def compile_agent_message_source(source: LoopSource) -> LoopDefinition:
 def compile_existing_loop_record(record: Mapping[str, object]) -> LoopDefinition:
     loop_id = text(record.get("id"), fallback="loop")
     compiled_spec = mapping(record.get("compiled_spec") or record.get("compiled_spec_json"))
-    workflow = mapping(record.get("workflow") or record.get("workflow_json"))
+    strategy_source = mapping(record.get("workflow") or record.get("workflow_json"))
     completion_mode = text(record.get("completion_mode"), fallback="gatekeeper")
     max_iterations = integer(record.get("max_iters"), fallback=1)
     max_step_retries = integer(record.get("max_role_retries"), fallback=1)
@@ -92,7 +92,7 @@ def compile_existing_loop_record(record: Mapping[str, object]) -> LoopDefinition
             loop_id=loop_id,
             name=text(record.get("name"), fallback=loop_id),
             compiled_spec=compiled_spec,
-            workflow=workflow,
+            strategy_source=strategy_source,
             runtime_defaults=RuntimeDefaults(
                 executor_kind=text(record.get("executor_kind"), fallback="codex"),
                 executor_mode=text(record.get("executor_mode"), fallback="preset"),
@@ -124,7 +124,7 @@ def _compile_loop_definition(parts: _LoopDefinitionParts) -> LoopDefinition:
         ),
         strategy=compile_loop_strategy(
             parts.loop_id,
-            parts.workflow,
+            parts.strategy_source,
             max_iterations=parts.runtime_defaults.max_iterations,
             max_step_retries=parts.runtime_defaults.max_step_retries,
             residual_risk_policy=residual_risk_policy,
@@ -146,7 +146,7 @@ def compile_markdown_contract_source(source: LoopSource) -> LoopDefinition:
             loop_id=loop_id,
             name=text(payload.get("name"), fallback=loop_id),
             compiled_spec=compiled_spec,
-            workflow={},
+            strategy_source={},
             runtime_defaults=RuntimeDefaults(
                 executor_kind=text(payload.get("executor_kind"), fallback="codex"),
                 executor_mode=text(payload.get("executor_mode"), fallback="preset"),
@@ -190,7 +190,7 @@ def _compile_bundle_source(source: LoopSource, *, source_kind: LoopSourceKind) -
             loop_id=loop_id,
             name=text(loop.get("name") or metadata.get("name"), fallback=loop_id),
             compiled_spec=compiled_spec,
-            workflow=_loopfile_strategy_workflow(bundle),
+            strategy_source=_loopfile_strategy_source(bundle),
             runtime_defaults=RuntimeDefaults(
                 executor_kind=text(loop.get("executor_kind"), fallback="codex"),
                 executor_mode=text(loop.get("executor_mode"), fallback="preset"),
@@ -222,7 +222,7 @@ def compile_strategy_template_source(source: LoopSource) -> LoopDefinition:
             loop_id=loop_id,
             name=text(payload.get("name"), fallback=loop_id),
             compiled_spec=_compiled_spec_from_payload(payload),
-            workflow=build_preset_workflow(preset),
+            strategy_source=build_preset_strategy_source(preset),
             runtime_defaults=RuntimeDefaults(
                 executor_kind=text(payload.get("executor_kind"), fallback="codex"),
                 executor_mode=text(payload.get("executor_mode"), fallback="preset"),
@@ -272,7 +272,7 @@ def _loopfile_bundle_from_source(source: LoopSource) -> dict:
     return normalize_bundle(payload)
 
 
-def _loopfile_strategy_workflow(bundle: Mapping[str, object]) -> dict[str, object]:
+def _loopfile_strategy_source(bundle: Mapping[str, object]) -> dict[str, object]:
     workflow = mapping(bundle.get("workflow"))
     role_definitions = {
         text(role_definition.get("key")): role_definition

@@ -51,7 +51,7 @@ def test_agent_native_submit_flow_records_control_completion_event() -> None:
 def test_agent_native_submit_flow_advances_control_queue_without_main_step_progression() -> None:
     events: list[tuple] = []
     state = {"control_queue": [{"step": {"id": "control_step"}}], "control_queue_index": 0, "step_index": 1}
-    context = SimpleNamespace(workflow_steps=[{"id": "builder_step"}, {"id": "gatekeeper_step"}])
+    context = SimpleNamespace(strategy_steps=[{"id": "builder_step"}, {"id": "gatekeeper_step"}])
 
     agent_native_advance_state_after_submit(
         AgentNativeStepAdvanceRequest(
@@ -79,7 +79,7 @@ def test_agent_native_submit_flow_records_parallel_group_finish() -> None:
         {"id": "builder_b", "parallel_group": "peer_review"},
         {"id": "gatekeeper_step"},
     ]
-    context = SimpleNamespace(workflow_steps=steps)
+    context = SimpleNamespace(strategy_steps=steps)
 
     agent_native_advance_state_after_submit(
         AgentNativeStepAdvanceRequest(

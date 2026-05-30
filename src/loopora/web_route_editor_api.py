@@ -18,11 +18,11 @@ from loopora.web_inputs import (
 )
 from loopora.web_route_context import WebRouteContext
 from loopora.web_url_utils import attachment_content_disposition
-from loopora.workflows import (
-    WorkflowError,
-    builtin_prompt_markdown,
-    normalize_role_display_name,
-    validate_prompt_markdown,
+from loopora.strategy_source import (
+    StrategySourceError,
+    builtin_strategy_prompt_markdown,
+    normalize_strategy_role_display_name,
+    validate_strategy_prompt_markdown,
 )
 
 SPEC_MARKDOWN_SUFFIXES = {".md", ".markdown"}
@@ -289,16 +289,16 @@ def _register_markdown_prompt_api_routes(app: FastAPI, ctx: WebRouteContext) -> 
         markdown_text = str(payload.get("markdown", ""))
         expected_archetype = str(payload.get("archetype", "")).strip() or None
         try:
-            metadata, body = validate_prompt_markdown(markdown_text, expected_archetype=expected_archetype)
-        except WorkflowError as exc:
+            metadata, body = validate_strategy_prompt_markdown(markdown_text, expected_archetype=expected_archetype)
+        except StrategySourceError as exc:
             return JSONResponse({"ok": False, "error": str(exc)})
         return JSONResponse({"ok": True, "metadata": metadata, "body": body})
 
     @app.get("/api/prompts/templates/{prompt_ref}")
     async def api_prompt_template(prompt_ref: str, locale: str | None = Query(default=None)) -> Response:
         try:
-            markdown_text = builtin_prompt_markdown(prompt_ref, locale=locale)
-        except WorkflowError as exc:
+            markdown_text = builtin_strategy_prompt_markdown(prompt_ref, locale=locale)
+        except StrategySourceError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
         return Response(
             content=markdown_text,
@@ -317,7 +317,7 @@ def _register_spec_template_api_routes(app: FastAPI, ctx: WebRouteContext) -> No
         locale = str(payload.get("locale", "zh"))
         try:
             workflow = _workflow_for_spec_template(payload)
-        except (LooporaError, WorkflowError) as exc:
+        except (LooporaError, StrategySourceError) as exc:
             return ctx.json_error_from_exception(exc)
         try:
             spec_path = _resolve_spec_markdown_path(path_text)
@@ -331,7 +331,7 @@ def _register_spec_template_api_routes(app: FastAPI, ctx: WebRouteContext) -> No
         payload = await ctx.read_json_mapping(request)
         try:
             workflow = _workflow_for_spec_template(payload)
-        except (LooporaError, WorkflowError) as exc:
+        except (LooporaError, StrategySourceError) as exc:
             return ctx.json_error_from_exception(exc)
         locale = str(payload.get("locale", "zh"))
         markdown_text = render_spec_template(locale=locale, workflow=workflow)
@@ -340,20 +340,20 @@ def _register_spec_template_api_routes(app: FastAPI, ctx: WebRouteContext) -> No
                 "ok": True,
                 "content": markdown_text,
                 "rendered_html": render_safe_markdown_html(markdown_text),
-                "role_note_sections": _role_note_sections_from_workflow(workflow),
+                "role_note_sections": _role_note_sections_from_strategy_source(workflow),
             }
         )
 
 
-def _role_note_sections_from_workflow(workflow: dict | None) -> list[dict[str, str]]:
-    if not workflow:
+def _role_note_sections_from_strategy_source(strategy_source: dict | None) -> list[dict[str, str]]:
+    if not strategy_source:
         return []
     sections: list[dict[str, str]] = []
     seen: set[str] = set()
-    for role in workflow.get("roles", []):
+    for role in strategy_source.get("roles", []):
         if not isinstance(role, dict):
             continue
-        label = normalize_role_display_name(role.get("name"), archetype=role.get("archetype")) or str(
+        label = normalize_strategy_role_display_name(role.get("name"), archetype=role.get("archetype")) or str(
             role.get("name", "")
         ).strip()
         normalized = label.lower()

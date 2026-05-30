@@ -1,30 +1,20 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 import logging
 from pathlib import Path
 
 from loopora.diagnostics import get_logger, log_event, log_exception
 from loopora.service_run_finalization import TerminalRunFinalizationRequest
 from loopora.service_types import RoleExecutionError, WorkspaceSafetyError
+from loopora.runner_run_requests import RunnerExhaustionRequest
 
 logger = get_logger(__name__)
 
 
-@dataclass(frozen=True)
-class WorkflowExhaustionRequest:
-    run_id: str
-    run: dict
-    run_dir: Path
-    completion_mode: str
-    last_iter_id: int
-    summary: str
-
-
-class ServiceWorkflowFailureHandlingMixin:
-    def _handle_workflow_exhaustion(
+class ServiceRunnerFailureHandlingMixin:
+    def _handle_runner_exhaustion(
         self,
-        request: WorkflowExhaustionRequest,
+        request: RunnerExhaustionRequest,
     ) -> dict:
         final_status = "succeeded" if request.completion_mode == "rounds" else "failed"
         final_reason = "rounds_completed" if request.completion_mode == "rounds" else "max_iters_exhausted"
@@ -62,7 +52,7 @@ class ServiceWorkflowFailureHandlingMixin:
         )
         return finished
 
-    def _handle_workflow_stop(self, run_id: str, run: dict, run_dir: Path) -> dict:
+    def _handle_runner_stop(self, run_id: str, run: dict, run_dir: Path) -> dict:
         summary = "# Loopora Run Summary\n\nStopped by user.\n"
         stopped = self._finalize_terminal_run(
             TerminalRunFinalizationRequest(
@@ -84,7 +74,7 @@ class ServiceWorkflowFailureHandlingMixin:
         )
         return stopped
 
-    def _handle_workflow_role_execution_error(
+    def _handle_runner_role_execution_error(
         self,
         run_id: str,
         run: dict,
@@ -158,7 +148,7 @@ class ServiceWorkflowFailureHandlingMixin:
         )
         return failed
 
-    def _handle_workflow_workspace_safety_error(
+    def _handle_runner_workspace_safety_error(
         self,
         run_id: str,
         run: dict,
@@ -234,7 +224,7 @@ class ServiceWorkflowFailureHandlingMixin:
         )
         return failed
 
-    def _handle_workflow_unexpected_error(
+    def _handle_runner_unexpected_error(
         self,
         run_id: str,
         run: dict,

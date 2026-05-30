@@ -7,7 +7,7 @@ from loopora.kernel import ActorRef, ArtifactRef, EvidenceClaim, EvidenceTargetR
 
 
 @dataclass(frozen=True, slots=True)
-class WorkflowStepResultRequest:
+class RunnerStepResultRequest:
     run_id: str
     iteration: int
     step: Mapping[str, object]
@@ -16,7 +16,7 @@ class WorkflowStepResultRequest:
     handoff: Mapping[str, object]
 
 
-def workflow_step_result(request: WorkflowStepResultRequest) -> StepResult:
+def runner_step_result(request: RunnerStepResultRequest) -> StepResult:
     artifact_refs = _artifact_refs(request.handoff.get("artifact_refs"))
     return StepResult(
         run_id=request.run_id,

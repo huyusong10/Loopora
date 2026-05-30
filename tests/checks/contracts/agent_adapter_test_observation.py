@@ -254,8 +254,10 @@ def _assert_agent_native_cli_output(
     assert "judgment_contract_summary: Prefer frozen judgment over lifecycle optimism." in stdout
     assert "check_mode: specified" in stdout
     assert "completion_mode: gatekeeper" in stdout
-    assert "workflow_preset: quality_gate" in stdout
-    assert "workflow_collaboration_intent: Linear review must feed GateKeeper before closure." in stdout
+    assert "strategy_preset: quality_gate" in stdout
+    assert "strategy_collaboration_intent: Linear review must feed GateKeeper before closure." in stdout
+    assert "workflow_preset:" not in stdout
+    assert "workflow_collaboration_intent:" not in stdout
     assert "check_count: 2" in stdout
     _assert_cli_list(stdout, "coverage_targets", "done_when.check_001 (required)", "gatekeeper.finish (required)")
     _assert_cli_list(stdout, "loop_fit_reasons", "Future Agent rounds keep the same proof bar active.")

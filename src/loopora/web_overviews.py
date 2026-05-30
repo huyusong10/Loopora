@@ -16,7 +16,7 @@ from loopora.run_takeaways import (
 )
 from loopora.structured_booleans import structured_bool_is_true
 from loopora.structured_numbers import structured_non_negative_int
-from loopora.workflows import display_name_for_archetype, normalize_role_display_name
+from loopora.strategy_source import normalize_strategy_role_display_name, strategy_archetype_display_name
 
 SIMPLE_TIMELINE_TITLES = {
     "run_started": "Run started",
@@ -405,8 +405,8 @@ def _progress_stage_seed(run: Mapping[str, object] | None) -> list[dict[str, str
             continue
         role = role_by_id.get(str(step.get("role_id") or "").strip(), {})
         archetype = str(role.get("archetype") or "").strip()
-        fallback_name = display_name_for_archetype(archetype, locale="en") if archetype else step_id
-        label = normalize_role_display_name(str(role.get("name") or "").strip(), archetype) or fallback_name
+        fallback_name = strategy_archetype_display_name(archetype, locale="en") if archetype else step_id
+        label = normalize_strategy_role_display_name(str(role.get("name") or "").strip(), archetype) or fallback_name
         stages.append(
             {
                 "key": f"step:{step_id}",

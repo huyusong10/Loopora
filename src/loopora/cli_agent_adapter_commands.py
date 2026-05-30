@@ -40,7 +40,7 @@ from loopora.service import LooporaError
 from loopora.service_agent_native import AgentNativeStepClaimRequest, AgentNativeStepSubmitRequest
 from loopora.service_agent_adapters import AgentBundleCandidateRequest
 from loopora.service_types import LooporaConflictError
-from loopora.workflows import WorkflowError
+from loopora.strategy_source import StrategySourceError
 
 AdapterWorkdirOption = Annotated[
     Path,
@@ -225,7 +225,7 @@ def _register_agent_runtime_for(agent_app: typer.Typer, *, adapter: str, help_te
             result = get_service().create_agent_bundle_candidate(request)
             _attach_web_url(result, path_key="preview_path", url_key="preview_url", no_web=no_web)
             _print_agent_gen_result(result, json_output=json_output)
-        except (LooporaError, WorkflowError) as exc:
+        except (LooporaError, StrategySourceError) as exc:
             _handle_agent_plan_error(
                 exc,
                 adapter=adapter,
@@ -260,7 +260,7 @@ def _register_agent_runtime_for(agent_app: typer.Typer, *, adapter: str, help_te
             _spawn_agent_loop_worker_if_needed(service, result)
             _attach_web_url(result, path_key="run_path", url_key="run_url", no_web=no_web)
             _print_agent_loop_result(result, json_output=json_output)
-        except (LooporaError, WorkflowError) as exc:
+        except (LooporaError, StrategySourceError) as exc:
             if _print_agent_loop_unready_guidance(
                 exc,
                 service=service,
@@ -337,7 +337,7 @@ def _register_agent_runtime_for(agent_app: typer.Typer, *, adapter: str, help_te
                 result["auto_repair_actions"] = auto_repair_actions
             _attach_web_url(result, path_key="run_path", url_key="run_url", no_web=no_web)
             _print_agent_step_result(result, json_output=json_output)
-        except (LooporaError, WorkflowError) as exc:
+        except (LooporaError, StrategySourceError) as exc:
             _handle_agent_submit_error(
                 exc,
                 service=service,
@@ -383,7 +383,7 @@ def _claim_agent_next_from_cli(
         )
         _attach_web_url(result, path_key="run_path", url_key="run_url", no_web=no_web)
         _print_agent_next_result(result, json_output=json_output)
-    except (LooporaError, WorkflowError) as exc:
+    except (LooporaError, StrategySourceError) as exc:
         if _print_agent_next_recovery_guidance(
             exc,
             service=service,
@@ -399,7 +399,7 @@ def _claim_agent_next_from_cli(
 
 
 def _handle_agent_submit_error(
-    exc: LooporaError | WorkflowError,
+    exc: LooporaError | StrategySourceError,
     *,
     service,
     adapter: str,
@@ -428,7 +428,7 @@ def _handle_agent_submit_error(
 
 
 def _handle_agent_plan_error(
-    exc: LooporaError | WorkflowError,
+    exc: LooporaError | StrategySourceError,
     *,
     adapter: str,
     workdir: Path,

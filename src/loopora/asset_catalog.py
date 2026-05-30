@@ -5,30 +5,30 @@ from dataclasses import dataclass, replace
 import re
 
 from loopora.db import LooporaRepository
-from loopora.utils import make_id
-from loopora.workflows import (
-    ARCHETYPES,
-    ROLE_EXECUTION_FIELDS,
-    ROLE_POSTURE_FIELDS,
-    WorkflowError,
-    build_preset_workflow,
-    builtin_prompt_markdown,
-    default_role_execution_settings,
-    display_name_for_archetype,
-    normalize_role_execution_settings,
-    normalize_archetype,
-    normalize_prompt_ref,
-    normalize_workflow,
-    preset_names,
-    resolve_prompt_files,
-    validate_prompt_markdown,
-    workflow_preset_copy,
-    workflow_warnings,
+from loopora.strategy_source import (
+    STRATEGY_ROLE_EXECUTION_FIELDS,
+    STRATEGY_ROLE_POSTURE_FIELDS,
+    STRATEGY_SOURCE_ARCHETYPES,
+    StrategySourceError,
+    build_preset_strategy_source,
+    builtin_strategy_prompt_markdown,
+    default_strategy_role_execution_settings,
+    normalize_strategy_archetype,
+    normalize_strategy_prompt_ref,
+    normalize_strategy_role_execution_settings,
+    normalize_strategy_source,
+    resolve_strategy_prompt_files,
+    strategy_archetype_display_name,
+    strategy_source_preset_copy,
+    strategy_source_preset_names,
+    strategy_source_warnings,
+    validate_strategy_prompt_markdown,
 )
+from loopora.utils import make_id
 
 
 class AssetCatalogError(ValueError):
-    """Base error for workflow asset catalog validation failures."""
+    """Base error for strategy asset catalog validation failures."""
 
 
 class AssetCatalogNotFoundError(AssetCatalogError):
@@ -143,11 +143,11 @@ def _orchestration_payload_input_from_args(
     return payload_input
 
 
-def _workflow_parallel_groups(workflow: dict | None) -> list[str]:
-    if not isinstance(workflow, dict):
+def _strategy_parallel_groups(strategy_source: dict | None) -> list[str]:
+    if not isinstance(strategy_source, dict):
         return []
     counts: dict[str, int] = {}
-    for step in list(workflow.get("steps") or []):
+    for step in list(strategy_source.get("steps") or []):
         if not isinstance(step, dict):
             continue
         group = str(step.get("parallel_group") or "").strip()
@@ -169,11 +169,11 @@ class WorkflowAssetCatalog:
 
     def _build_builtin_orchestration_records(self) -> list[dict]:
         records = []
-        for preset_name in preset_names(include_hidden=True):
-            workflow = build_preset_workflow(preset_name)
-            prompt_files = resolve_prompt_files(workflow)
-            copy = workflow_preset_copy(preset_name)
-            parallel_groups = _workflow_parallel_groups(workflow)
+        for preset_name in strategy_source_preset_names(include_hidden=True):
+            workflow = build_preset_strategy_source(preset_name)
+            prompt_files = resolve_strategy_prompt_files(workflow)
+            copy = strategy_source_preset_copy(preset_name)
+            parallel_groups = _strategy_parallel_groups(workflow)
             records.append(
                 {
                     "id": f"builtin:{preset_name}",
@@ -200,7 +200,7 @@ class WorkflowAssetCatalog:
                     "parallel_groups": parallel_groups,
                     "parallel_group_count": len(parallel_groups),
                     "prompt_files_json": prompt_files,
-                    "workflow_warnings": workflow_warnings(workflow),
+                    "workflow_warnings": strategy_source_warnings(workflow),
                 }
             )
         return records
@@ -214,11 +214,11 @@ class WorkflowAssetCatalog:
             "custom": "A low-permission custom support role that can read, analyze, and recommend, but cannot close the run.",
         }
         records = []
-        for archetype in ARCHETYPES:
+        for archetype in STRATEGY_SOURCE_ARCHETYPES:
             prompt_ref = {
                 "gatekeeper": "gatekeeper.md",
             }.get(archetype, f"{archetype}.md")
-            default_name = display_name_for_archetype(archetype, locale="en")
+            default_name = strategy_archetype_display_name(archetype, locale="en")
             if archetype == "custom":
                 default_name = "Custom (Restricted)"
             records.append(
@@ -228,9 +228,9 @@ class WorkflowAssetCatalog:
                     "description": descriptions.get(archetype, ""),
                     "archetype": archetype,
                     "prompt_ref": prompt_ref,
-                    "prompt_markdown": builtin_prompt_markdown(prompt_ref),
+                    "prompt_markdown": builtin_strategy_prompt_markdown(prompt_ref),
                     "posture_notes": "",
-                    **default_role_execution_settings(),
+                    **default_strategy_role_execution_settings(),
                     "source": "builtin",
                     "editable": False,
                     "deletable": False,
@@ -252,8 +252,8 @@ class WorkflowAssetCatalog:
         decorated["source"] = source
         decorated["editable"] = source == "custom"
         decorated["deletable"] = source == "custom"
-        decorated["workflow_warnings"] = workflow_warnings(decorated.get("workflow_json") or {})
-        decorated["parallel_groups"] = _workflow_parallel_groups(decorated.get("workflow_json"))
+        decorated["workflow_warnings"] = strategy_source_warnings(decorated.get("workflow_json") or {})
+        decorated["parallel_groups"] = _strategy_parallel_groups(decorated.get("workflow_json"))
         decorated["parallel_group_count"] = len(decorated["parallel_groups"])
         return decorated
 
@@ -267,10 +267,10 @@ class WorkflowAssetCatalog:
     @staticmethod
     def _canonical_role_snapshot_field(field: str, value: object) -> object:
         if field == "archetype":
-            return normalize_archetype(str(value or ""))
+            return normalize_strategy_archetype(str(value or ""))
         if field == "prompt_ref":
             raw_prompt_ref = str(value or "").strip()
-            return normalize_prompt_ref(raw_prompt_ref) if raw_prompt_ref else ""
+            return normalize_strategy_prompt_ref(raw_prompt_ref) if raw_prompt_ref else ""
         if field == "command_args_text":
             return str(value or "")
         return str(value or "").strip()
@@ -287,41 +287,40 @@ class WorkflowAssetCatalog:
             if not candidate:
                 continue
             try:
-                normalized_prompt_ref = normalize_prompt_ref(candidate)
-            except WorkflowError:
+                normalized_prompt_ref = normalize_strategy_prompt_ref(candidate)
+            except StrategySourceError:
                 continue
             sanitized[normalized_prompt_ref] = str(markdown_text or "")
         return sanitized
 
-    def _hydrate_workflow_role_snapshots(
+    def _hydrate_strategy_role_snapshots(
         self,
-        workflow: dict | None,
+        strategy_source: dict | None,
         prompt_files: dict | None,
     ) -> tuple[dict | None, dict[str, str] | None]:
-        if workflow is None:
+        if strategy_source is None:
             return None, dict(prompt_files or {}) if prompt_files is not None else None
 
-        hydrated_workflow = deepcopy(workflow)
-        raw_roles = hydrated_workflow.get("roles")
+        hydrated_strategy_source = deepcopy(strategy_source)
+        raw_roles = hydrated_strategy_source.get("roles")
         if not isinstance(raw_roles, list):
-            return hydrated_workflow, dict(prompt_files or {}) if prompt_files is not None else None
+            return hydrated_strategy_source, dict(prompt_files or {}) if prompt_files is not None else None
 
         hydrated_prompt_files = dict(prompt_files or {})
-        hydrated_workflow["roles"] = self._hydrate_workflow_roles(raw_roles, hydrated_prompt_files)
-        return hydrated_workflow, hydrated_prompt_files
+        hydrated_strategy_source["roles"] = self._hydrate_strategy_roles(raw_roles, hydrated_prompt_files)
+        return hydrated_strategy_source, hydrated_prompt_files
 
-
-    def _hydrate_workflow_roles(
+    def _hydrate_strategy_roles(
         self,
         raw_roles: list,
         hydrated_prompt_files: dict[str, str],
     ) -> list[object]:
         return [
-            self._hydrate_workflow_role_snapshot(raw_role, hydrated_prompt_files=hydrated_prompt_files)
+            self._hydrate_strategy_role_snapshot(raw_role, hydrated_prompt_files=hydrated_prompt_files)
             for raw_role in raw_roles
         ]
 
-    def _hydrate_workflow_role_snapshot(
+    def _hydrate_strategy_role_snapshot(
         self,
         raw_role: object,
         *,
@@ -348,11 +347,11 @@ class WorkflowAssetCatalog:
         )
 
     def _hydrate_role_snapshot_fields(self, snapshot: RoleSnapshotDefinition) -> None:
-        for field in ("archetype", "prompt_ref", *ROLE_EXECUTION_FIELDS):
+        for field in ("archetype", "prompt_ref", *STRATEGY_ROLE_EXECUTION_FIELDS):
             self._hydrate_role_snapshot_field(snapshot, field=field)
         if "name" not in snapshot.role:
             snapshot.role["name"] = snapshot.definition.get("name", "")
-        for field in ROLE_POSTURE_FIELDS:
+        for field in STRATEGY_ROLE_POSTURE_FIELDS:
             if field not in snapshot.role:
                 snapshot.role[field] = snapshot.definition.get(field, "")
 
@@ -361,7 +360,7 @@ class WorkflowAssetCatalog:
             provided_value = self._canonical_role_snapshot_field(field, snapshot.role.get(field))
             expected_value = self._canonical_role_snapshot_field(field, snapshot.definition.get(field))
             if provided_value != expected_value:
-                raise WorkflowError(
+                raise StrategySourceError(
                     f"workflow role {snapshot.role_label} conflicts with role_definition_id "
                     f"{snapshot.role_definition_id} on {field}"
                 )
@@ -383,8 +382,10 @@ class WorkflowAssetCatalog:
                 hydrated_prompt_files[prompt_ref] = prompt_markdown
             return
         provided_prompt_markdown = hydrated_prompt_files[prompt_ref]
-        if prompt_markdown and self._canonical_prompt_markdown(provided_prompt_markdown) != self._canonical_prompt_markdown(prompt_markdown):
-            raise WorkflowError(
+        if prompt_markdown and self._canonical_prompt_markdown(
+            provided_prompt_markdown
+        ) != self._canonical_prompt_markdown(prompt_markdown):
+            raise StrategySourceError(
                 f"workflow role {snapshot.role_label} conflicts with role_definition_id "
                 f"{snapshot.role_definition_id} on prompt_markdown"
             )
@@ -398,7 +399,7 @@ class WorkflowAssetCatalog:
         }
         if not normalized["name"]:
             raise ValueError("name is required")
-        normalized["archetype"] = normalize_archetype(payload_input.archetype)
+        normalized["archetype"] = normalize_strategy_archetype(payload_input.archetype)
         resolved_prompt_ref = (
             str(payload_input.prompt_ref).strip()
             or str(payload_input.existing_prompt_ref).strip()
@@ -408,10 +409,10 @@ class WorkflowAssetCatalog:
                 role_definition_id=payload_input.role_definition_id,
             )
         )
-        normalized["prompt_ref"] = normalize_prompt_ref(resolved_prompt_ref)
-        validate_prompt_markdown(normalized["prompt_markdown"], expected_archetype=normalized["archetype"])
+        normalized["prompt_ref"] = normalize_strategy_prompt_ref(resolved_prompt_ref)
+        validate_strategy_prompt_markdown(normalized["prompt_markdown"], expected_archetype=normalized["archetype"])
         normalized.update(
-            normalize_role_execution_settings(
+            normalize_strategy_role_execution_settings(
                 {
                     "executor_kind": payload_input.executor_kind,
                     "executor_mode": payload_input.executor_mode,
@@ -431,8 +432,8 @@ class WorkflowAssetCatalog:
         exclude_role_definition_id: str = "",
     ) -> None:
         try:
-            normalized_prompt_ref = normalize_prompt_ref(prompt_ref)
-        except WorkflowError as exc:
+            normalized_prompt_ref = normalize_strategy_prompt_ref(prompt_ref)
+        except StrategySourceError as exc:
             raise ValueError(str(exc)) from exc
         excluded_id = str(exclude_role_definition_id or "").strip()
         for record in self._builtin_role_definitions:
@@ -500,7 +501,7 @@ class WorkflowAssetCatalog:
             role_definition_id=role_definition_id,
             existing_prompt_ref=existing_prompt_ref,
         )
-        normalized_archetype = normalize_archetype(payload_input.archetype)
+        normalized_archetype = normalize_strategy_archetype(payload_input.archetype)
         if normalized_archetype != str(existing.get("archetype", "")).strip():
             raise ValueError("saved role definitions cannot change archetype")
         normalized_prompt_ref = str(payload_input.prompt_ref).strip() or existing_prompt_ref
@@ -566,12 +567,12 @@ class WorkflowAssetCatalog:
     ) -> dict:
         if orchestration_id and workflow is None and not prompt_files:
             orchestration = self.get_orchestration(orchestration_id)
-            hydrated_workflow, hydrated_prompt_files = self._hydrate_workflow_role_snapshots(
+            hydrated_workflow, hydrated_prompt_files = self._hydrate_strategy_role_snapshots(
                 orchestration["workflow_json"],
                 orchestration.get("prompt_files_json") or {},
             )
-            normalized_workflow = normalize_workflow(hydrated_workflow, role_models=role_models)
-            resolved_prompt_files = resolve_prompt_files(
+            normalized_workflow = normalize_strategy_source(hydrated_workflow, role_models=role_models)
+            resolved_prompt_files = resolve_strategy_prompt_files(
                 normalized_workflow,
                 hydrated_prompt_files,
             )
@@ -582,9 +583,9 @@ class WorkflowAssetCatalog:
                 "prompt_files": resolved_prompt_files,
             }
 
-        hydrated_workflow, hydrated_prompt_files = self._hydrate_workflow_role_snapshots(workflow, prompt_files)
-        normalized_workflow = normalize_workflow(hydrated_workflow, role_models=role_models)
-        resolved_prompt_files = resolve_prompt_files(normalized_workflow, hydrated_prompt_files)
+        hydrated_workflow, hydrated_prompt_files = self._hydrate_strategy_role_snapshots(workflow, prompt_files)
+        normalized_workflow = normalize_strategy_source(hydrated_workflow, role_models=role_models)
+        resolved_prompt_files = resolve_strategy_prompt_files(normalized_workflow, hydrated_prompt_files)
         derived_id = str(orchestration_id or "").strip()
         derived_name = ""
         if derived_id:

@@ -82,9 +82,33 @@ def agent_native_capsule_judgment_contract(run: dict, context_packet: object) ->
             "completion_mode": str(contract.get("completion_mode") or projection.get("completion_mode") or "").strip(),
             "collaboration_summary": str(contract.get("collaboration_summary") or projection.get("collaboration_summary") or "").strip(),
             "loop_fit_reasons": _agent_native_string_list(contract.get("loop_fit_reasons")) or projection.get("loop_fit_reasons", []),
-            "workflow_preset": str(contract.get("workflow_preset") or projection.get("workflow_preset") or "").strip(),
+            "strategy_preset": str(
+                contract.get("strategy_preset")
+                or contract.get("workflow_preset")
+                or projection.get("strategy_preset")
+                or projection.get("workflow_preset")
+                or ""
+            ).strip(),
+            "strategy_collaboration_intent": str(
+                contract.get("strategy_collaboration_intent")
+                or contract.get("workflow_collaboration_intent")
+                or projection.get("strategy_collaboration_intent")
+                or projection.get("workflow_collaboration_intent")
+                or ""
+            ).strip(),
+            "workflow_preset": str(
+                contract.get("workflow_preset")
+                or contract.get("strategy_preset")
+                or projection.get("workflow_preset")
+                or projection.get("strategy_preset")
+                or ""
+            ).strip(),
             "workflow_collaboration_intent": str(
-                contract.get("workflow_collaboration_intent") or projection.get("workflow_collaboration_intent") or ""
+                contract.get("workflow_collaboration_intent")
+                or contract.get("strategy_collaboration_intent")
+                or projection.get("workflow_collaboration_intent")
+                or projection.get("strategy_collaboration_intent")
+                or ""
             ).strip(),
             "judgment_tradeoffs": _agent_native_string_list(contract.get("judgment_tradeoffs")) or projection.get("judgment_tradeoffs", []),
             "execution_strategy": _agent_native_string_list(contract.get("execution_strategy")) or projection.get("execution_strategy", []),

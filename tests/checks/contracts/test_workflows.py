@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from loopora.service_workflow_controls import workflow_control_after_seconds, workflow_iteration_control_triggers
+from loopora.strategy_controls import strategy_control_after_seconds, strategy_iteration_control_triggers
 from loopora.workflows import (
     WorkflowError,
     build_preset_workflow,
@@ -18,16 +18,16 @@ from loopora.workflows import (
 )
 
 
-def test_workflow_control_after_seconds_parses_supported_units() -> None:
-    assert workflow_control_after_seconds("500ms") == 0.5
-    assert workflow_control_after_seconds("2s") == 2.0
-    assert workflow_control_after_seconds("3m") == 180.0
-    assert workflow_control_after_seconds("1h") == 3600.0
-    assert workflow_control_after_seconds("not-a-duration") == 0.0
+def test_strategy_control_after_seconds_parses_supported_units() -> None:
+    assert strategy_control_after_seconds("500ms") == 0.5
+    assert strategy_control_after_seconds("2s") == 2.0
+    assert strategy_control_after_seconds("3m") == 180.0
+    assert strategy_control_after_seconds("1h") == 3600.0
+    assert strategy_control_after_seconds("not-a-duration") == 0.0
 
 
-def test_workflow_iteration_control_triggers_cover_rejection_and_required_coverage_stall() -> None:
-    triggers = workflow_iteration_control_triggers(
+def test_strategy_iteration_control_triggers_cover_rejection_and_required_coverage_stall() -> None:
+    triggers = strategy_iteration_control_triggers(
         {"passed": False, "evidence_refs": ["ev_001"]},
         {
             "stagnation_mode": "none",
@@ -43,8 +43,8 @@ def test_workflow_iteration_control_triggers_cover_rejection_and_required_covera
 
 
 @pytest.mark.parametrize("missing_check_count", [True, "2", 1.5])
-def test_workflow_iteration_control_triggers_do_not_promote_corrupt_missing_counts(missing_check_count) -> None:
-    triggers = workflow_iteration_control_triggers(
+def test_strategy_iteration_control_triggers_do_not_promote_corrupt_missing_counts(missing_check_count) -> None:
+    triggers = strategy_iteration_control_triggers(
         None,
         {
             "stagnation_mode": "none",
@@ -57,8 +57,8 @@ def test_workflow_iteration_control_triggers_do_not_promote_corrupt_missing_coun
     assert triggers[0].trigger["reason"] == "Required coverage did not improve; missing checks: 0."
 
 
-def test_workflow_iteration_control_triggers_skip_clean_iteration() -> None:
-    assert workflow_iteration_control_triggers({"passed": True, "evidence_refs": ["ev_001"]}, {"stagnation_mode": "none"}) == []
+def test_strategy_iteration_control_triggers_skip_clean_iteration() -> None:
+    assert strategy_iteration_control_triggers({"passed": True, "evidence_refs": ["ev_001"]}, {"stagnation_mode": "none"}) == []
 
 
 def test_normalize_workflow_rejects_duplicate_step_ids() -> None:

@@ -22,7 +22,7 @@ from loopora.run_artifacts import RunArtifactLayout
 from loopora.run_takeaways import build_judgment_contract, normalize_run_takeaway_projection_shape
 from loopora.service import LooporaError
 from loopora.service_types import LooporaConflictError
-from loopora.service_workflow_runtime import _manifest_prompt_context
+from loopora.service_runner_step_runtime import _manifest_prompt_context
 from loopora.settings import app_home, configure_logging
 
 from runner_helpers import (
@@ -500,7 +500,7 @@ def test_run_contract_tradeoffs_include_role_prompt_files(tmp_path: Path) -> Non
                 "reasoning_effort": "medium",
             },
             compiled_spec={"checks": [], "raw_sections": {}},
-            workflow={
+            strategy_source={
                 "preset": "custom",
                 "collaboration_intent": "First route evidence before GateKeeper closure, then expand only after proof is strong.",
                 "roles": [
@@ -567,7 +567,7 @@ def test_run_contract_role_postures_can_fall_back_to_role_prompt_body(tmp_path: 
                 "reasoning_effort": "medium",
             },
             compiled_spec={"checks": [], "raw_sections": {}},
-            workflow={
+            strategy_source={
                 "preset": "custom",
                 "collaboration_intent": "Keep role-specific evidence visible.",
                 "roles": [
@@ -624,7 +624,7 @@ def test_run_contract_does_not_freeze_summary_only_local_governance(tmp_path: Pa
                 "reasoning_effort": "medium",
             },
             compiled_spec={"checks": [], "raw_sections": {}},
-            workflow={
+            strategy_source={
                 "preset": "custom",
                 "collaboration_intent": "Use the handoff and evidence flow before GateKeeper closure.",
                 "roles": [
@@ -688,7 +688,7 @@ def test_judgment_contract_preserves_empty_runtime_local_governance(tmp_path: Pa
     assert judgment_contract["check_mode"] == "specified"
     assert judgment_contract["check_count"] == 1
     assert judgment_contract["completion_mode"] == "gatekeeper"
-    assert judgment_contract["workflow_preset"] == "custom"
+    assert judgment_contract["strategy_preset"] == judgment_contract["workflow_preset"] == "custom"
     assert judgment_contract["coverage_targets"] == [{"id": "done_when.check_001", "required": True}]
     assert judgment_contract["role_postures"] == [
         "Builder: Treat project-local rules as part of the task evidence."

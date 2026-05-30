@@ -14,8 +14,8 @@ from loopora.engine.run_lifecycle_commands import advance_run, start_run
 from loopora.engine.run_requests import (
     RunEngineAcceptEvidenceRequest,
     RunEngineClaimStepRequest,
-    RunEngineClaimWorkflowStepRequest,
-    RunEngineClaimWorkflowStepResult,
+    RunEngineClaimRunnerStepRequest,
+    RunEngineClaimRunnerStepResult,
     RunEngineCommitStepRequest,
     RunEngineCompleteIterationRequest,
     RunEngineCoverageRecomputedRequest,
@@ -32,10 +32,10 @@ from loopora.engine.run_step_commands import (
     append_step_commit_and_rebuild_projection_cache,
     append_step_instruction_and_rebuild_projection_cache,
     append_step_submission_and_rebuild_projection_cache,
-    append_workflow_step_instruction_and_rebuild_projection_cache,
+    append_runner_step_instruction_and_rebuild_projection_cache,
 )
 from loopora.engine.run_verdict_commands import append_verdict_issue_and_rebuild_projection_cache
-from loopora.engine.run_workflow_cursor import workflow_step_index_for_run
+from loopora.engine.run_step_cursor import runner_step_index_for_run
 from loopora.events.replay import RunSnapshot
 
 
@@ -54,24 +54,24 @@ class RepositoryRunEngine:
             request,
         )
 
-    def claim_workflow_step(self, request: RunEngineClaimWorkflowStepRequest) -> RunEngineClaimWorkflowStepResult:
-        return append_workflow_step_instruction_and_rebuild_projection_cache(
+    def claim_runner_step(self, request: RunEngineClaimRunnerStepRequest) -> RunEngineClaimRunnerStepResult:
+        return append_runner_step_instruction_and_rebuild_projection_cache(
             self.repository,
             request,
         )
 
-    def workflow_step_index(
+    def runner_step_index(
         self,
         run_id: str,
         *,
-        workflow_steps: list[dict],
+        strategy_steps: list[dict],
         iteration: int,
         fallback_step_index: int = 0,
     ) -> int:
-        return workflow_step_index_for_run(
+        return runner_step_index_for_run(
             self.repository,
             run_id,
-            workflow_steps=workflow_steps,
+            strategy_steps=strategy_steps,
             iteration=iteration,
             fallback_step_index=fallback_step_index,
         )

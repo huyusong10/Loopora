@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from loopora.engine import WorkflowStepInstructionRequest, workflow_step_instruction
+from loopora.engine import RunnerStepInstructionRequest, runner_step_instruction
 
 
-def test_workflow_step_instruction_is_core_next_step_not_surface_capsule() -> None:
-    instruction = workflow_step_instruction(
-        WorkflowStepInstructionRequest(
+def test_runner_step_instruction_is_core_next_step_not_surface_capsule() -> None:
+    instruction = runner_step_instruction(
+        RunnerStepInstructionRequest(
             run_id="run_kernel",
             contract_ref="contract/run_contract.json",
             compiled_spec={

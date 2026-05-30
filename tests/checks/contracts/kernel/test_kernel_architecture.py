@@ -165,8 +165,8 @@ def test_run_engine_delegates_single_event_projection_refreshes() -> None:
     assert "def _iteration_event" not in engine_source
     assert "run_event_payloads" not in engine_source
     assert "from loopora.engine.step_instruction" not in engine_source
-    assert "WorkflowStepInstructionRequest(" not in engine_source
-    assert "workflow_step_instruction(" not in engine_source
+    assert "RunnerStepInstructionRequest(" not in engine_source
+    assert "runner_step_instruction(" not in engine_source
     assert "RunEventAppend" not in engine_source
     assert "append_run_event_and_rebuild_projection_cache" not in engine_source
     assert "append_step_instruction_and_rebuild_projection_cache" in engine_source
@@ -176,7 +176,7 @@ def test_run_engine_delegates_single_event_projection_refreshes() -> None:
     assert "append_verdict_issue_and_rebuild_projection_cache" in engine_source
     assert "append_iteration_start_if_absent_and_rebuild_projection_cache" in engine_source
     assert "append_iteration_completion_if_absent_and_rebuild_projection_cache" in engine_source
-    assert "append_workflow_step_instruction_and_rebuild_projection_cache" in engine_source
+    assert "append_runner_step_instruction_and_rebuild_projection_cache" in engine_source
     assert "find_iteration_event" not in event_commands_source
     assert "append_iteration_start_and_rebuild_projection_cache" not in event_commands_source
     assert "append_iteration_completion_and_rebuild_projection_cache" not in event_commands_source
@@ -190,10 +190,10 @@ def test_run_engine_delegates_single_event_projection_refreshes() -> None:
     assert "coverage_recomputed_payload" in evidence_commands_source
     assert "verdict_issued_payload" not in event_commands_source
     assert "verdict_issued_payload" in verdict_commands_source
-    assert "WorkflowStepInstructionRequest" not in event_commands_source
-    assert "workflow_step_instruction" not in event_commands_source
-    assert "WorkflowStepInstructionRequest" in step_commands_source
-    assert "workflow_step_instruction" in step_commands_source
+    assert "RunnerStepInstructionRequest" not in event_commands_source
+    assert "runner_step_instruction" not in event_commands_source
+    assert "RunnerStepInstructionRequest" in step_commands_source
+    assert "runner_step_instruction" in step_commands_source
     assert "RunEventAppend" in event_commands_source
     assert "append_run_event(" in event_commands_source
     assert "rebuild_run_projection_cache" in event_commands_source

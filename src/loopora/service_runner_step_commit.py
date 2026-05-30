@@ -4,8 +4,8 @@ from loopora.engine import (
     RepositoryRunEngine,
     RunEngineRecordStepEvidenceRequest,
     RunEngineSubmitStepRequest,
-    WorkflowStepResultRequest,
-    workflow_step_result,
+    RunnerStepResultRequest,
+    runner_step_result,
 )
 from loopora.kernel import ActorRef
 from loopora.service_runner_step_artifacts import (
@@ -13,14 +13,14 @@ from loopora.service_runner_step_artifacts import (
     RunnerStepResultEntryRequest,
     RunnerStepWriteRequest,
 )
-from loopora.service_workflow_iteration_state import (
+from loopora.service_runner_iteration_state import (
     GatekeeperIterationRecordRequest,
-    WorkflowGatekeeperSuccessRequest,
+    RunnerGatekeeperSuccessRequest,
 )
 
 
 class ServiceRunnerStepCommitMixin:
-    def _commit_runner_step_result(
+    def commit_runner_step_result(
         self,
         context,
         iteration,
@@ -34,7 +34,7 @@ class ServiceRunnerStepCommitMixin:
         role = result["role"]
         runtime_role = result["runtime_role"]
         normalized_output = result["normalized_output"]
-        step_write = self._write_runner_step_result_artifacts(
+        step_write = self.write_runner_step_result_artifacts(
             RunnerStepWriteRequest(
                 run_id=context.run_id,
                 layout=context.layout,
@@ -51,8 +51,8 @@ class ServiceRunnerStepCommitMixin:
         run_engine = RepositoryRunEngine(self.repository)
         submit_result = run_engine.submit_step(
             RunEngineSubmitStepRequest(
-                result=workflow_step_result(
-                    WorkflowStepResultRequest(
+                result=runner_step_result(
+                    RunnerStepResultRequest(
                         run_id=context.run_id,
                         iteration=iteration.iter_id,
                         step=step,
@@ -127,12 +127,12 @@ class ServiceRunnerStepCommitMixin:
                 )
             )
             if context.completion_mode == "gatekeeper" and normalized_output["passed"] and bool((step.get("action_policy") or {}).get("can_finish_run")):
-                return self._finish_workflow_gatekeeper_success(
-                    WorkflowGatekeeperSuccessRequest(
+                return self._finish_runner_gatekeeper_success(
+                    RunnerGatekeeperSuccessRequest(
                         run_id=context.run_id,
                         run=context.run,
                         run_dir=context.run_dir,
-                        workflow=context.workflow,
+                        strategy_source=context.strategy_source,
                         compiled_spec=context.compiled_spec,
                         iter_id=iteration.iter_id,
                         step=step,

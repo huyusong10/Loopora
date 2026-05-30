@@ -17,8 +17,12 @@ from loopora.service_bundle_control_summary import (
     build_runtime_local_governance_trace,
 )
 from loopora.structured_numbers import structured_non_negative_int
+from loopora.strategy_source import (
+    STRATEGY_SOURCE_ARCHETYPES,
+    normalize_strategy_role_display_name,
+    strategy_archetype_display_name,
+)
 from loopora.task_verdicts import BUCKET_KEYS, normalize_task_verdict
-from loopora.workflows import ARCHETYPES, display_name_for_archetype, normalize_role_display_name
 
 LEGACY_RUNTIME_ROLE_TO_ARCHETYPE = {
     "generator": "builder",
@@ -129,11 +133,11 @@ def display_role_name(name: object, *, archetype: object = "", runtime_role: obj
     cleaned_name = _string_value(name)
     cleaned_runtime = _string_value(runtime_role).lower()
     cleaned_archetype = _string_value(archetype).lower() or LEGACY_RUNTIME_ROLE_TO_ARCHETYPE.get(cleaned_runtime, "")
-    normalized_name = normalize_role_display_name(cleaned_name, cleaned_archetype)
+    normalized_name = normalize_strategy_role_display_name(cleaned_name, cleaned_archetype)
     if normalized_name:
         return normalized_name
-    if cleaned_archetype in ARCHETYPES:
-        return display_name_for_archetype(cleaned_archetype, locale="en")
+    if cleaned_archetype in STRATEGY_SOURCE_ARCHETYPES:
+        return strategy_archetype_display_name(cleaned_archetype, locale="en")
     return cleaned_name or cleaned_runtime or "-"
 
 
@@ -604,6 +608,8 @@ def empty_judgment_contract() -> dict[str, Any]:
         "check_mode": "",
         "check_count": 0,
         "completion_mode": "",
+        "strategy_preset": "",
+        "strategy_collaboration_intent": "",
         "workflow_preset": "",
         "workflow_collaboration_intent": "",
         "judgment_tradeoffs": [],
@@ -847,11 +853,20 @@ def _normalize_judgment_contract_payload(value: object, *, default_contract_path
     normalized["check_mode"] = clean_takeaway_text(raw.get("check_mode") or compiled_spec.get("check_mode"), max_length=80)
     normalized["check_count"] = structured_non_negative_int(raw.get("check_count"), default=len(list(compiled_spec.get("checks") or [])))
     normalized["completion_mode"] = clean_takeaway_text(raw.get("completion_mode"), max_length=80)
-    normalized["workflow_preset"] = clean_takeaway_text(raw.get("workflow_preset") or workflow.get("preset"), max_length=120)
-    normalized["workflow_collaboration_intent"] = clean_takeaway_text(
-        raw.get("workflow_collaboration_intent") or workflow.get("collaboration_intent"),
+    strategy_preset = clean_takeaway_text(
+        raw.get("strategy_preset") or raw.get("workflow_preset") or workflow.get("preset"),
+        max_length=120,
+    )
+    strategy_collaboration_intent = clean_takeaway_text(
+        raw.get("strategy_collaboration_intent")
+        or raw.get("workflow_collaboration_intent")
+        or workflow.get("collaboration_intent"),
         max_length=600,
     )
+    normalized["strategy_preset"] = strategy_preset
+    normalized["strategy_collaboration_intent"] = strategy_collaboration_intent
+    normalized["workflow_preset"] = strategy_preset
+    normalized["workflow_collaboration_intent"] = strategy_collaboration_intent
     normalized["judgment_tradeoffs"] = _takeaway_text_list(
         raw.get("judgment_tradeoffs")
         or build_judgment_tradeoff_trace(

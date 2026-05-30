@@ -6,7 +6,7 @@ import pytest
 
 from loopora.asset_catalog import AssetCatalogNotFoundError, WorkflowAssetCatalog
 from loopora.db import LooporaRepository
-from loopora.workflows import WorkflowError, default_role_execution_settings
+from loopora.strategy_source import StrategySourceError, default_strategy_role_execution_settings
 
 
 def _prompt_markdown(archetype: str, body: str) -> str:
@@ -181,7 +181,7 @@ def test_asset_catalog_persists_role_execution_defaults_for_model_only_snapshots
     )
 
     builder_role = orchestration["workflow_json"]["roles"][0]
-    defaults = default_role_execution_settings()
+    defaults = default_strategy_role_execution_settings()
 
     assert builder_role["model"] == "gpt-5.4-mini"
     assert builder_role["executor_kind"] == defaults["executor_kind"]
@@ -363,7 +363,7 @@ def test_asset_catalog_rejects_conflicting_role_snapshot_fields_for_role_definit
     )
 
     with pytest.raises(
-        WorkflowError,
+        StrategySourceError,
         match=f"workflow role builder conflicts with role_definition_id {role_definition['id']} on model",
     ):
         catalog.resolve_orchestration_input(
@@ -401,7 +401,7 @@ def test_asset_catalog_rejects_conflicting_prompt_files_for_role_definition_id(t
     )
 
     with pytest.raises(
-        WorkflowError,
+        StrategySourceError,
         match=f"workflow role builder conflicts with role_definition_id {role_definition['id']} on prompt_markdown",
     ):
         catalog.resolve_orchestration_input(
@@ -506,7 +506,7 @@ def test_asset_catalog_rejects_invalid_prompt_file_keys(tmp_path: Path) -> None:
     repository = LooporaRepository(tmp_path / "app.db")
     catalog = WorkflowAssetCatalog(repository)
 
-    with pytest.raises(WorkflowError, match="prompt_ref must be a safe relative path"):
+    with pytest.raises(StrategySourceError, match="prompt_ref must be a safe relative path"):
         catalog.create_orchestration(
             name="Unsafe Prompt Files",
             description="Should reject invalid prompt_files keys instead of ignoring them.",

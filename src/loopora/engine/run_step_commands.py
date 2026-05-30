@@ -5,14 +5,14 @@ from loopora.engine.run_event_payloads import step_committed_payload, step_instr
 from loopora.engine.run_event_transactions import append_step_submission_events
 from loopora.engine.run_requests import (
     RunEngineClaimStepRequest,
-    RunEngineClaimWorkflowStepRequest,
-    RunEngineClaimWorkflowStepResult,
+    RunEngineClaimRunnerStepRequest,
+    RunEngineClaimRunnerStepResult,
     RunEngineCommitStepRequest,
     RunEngineSubmitStepRequest,
     RunEngineSubmitStepResult,
 )
 from loopora.engine.run_snapshot_source import run_snapshot_from_repository
-from loopora.engine.step_instruction import WorkflowStepInstructionRequest, workflow_step_instruction
+from loopora.engine.step_instruction import RunnerStepInstructionRequest, runner_step_instruction
 from loopora.events.append_requests import RunEventAppend, run_event_append_request
 from loopora.events.envelope import EventEnvelope
 from loopora.events.projection_cache import rebuild_run_projection_cache
@@ -39,12 +39,12 @@ def append_step_instruction_and_rebuild_projection_cache(
     )
 
 
-def append_workflow_step_instruction_and_rebuild_projection_cache(
+def append_runner_step_instruction_and_rebuild_projection_cache(
     repository,
-    request: RunEngineClaimWorkflowStepRequest,
-) -> RunEngineClaimWorkflowStepResult:
-    instruction = workflow_step_instruction(
-        WorkflowStepInstructionRequest(
+    request: RunEngineClaimRunnerStepRequest,
+) -> RunEngineClaimRunnerStepResult:
+    instruction = runner_step_instruction(
+        RunnerStepInstructionRequest(
             run_id=request.run_id,
             contract_ref=request.contract_ref,
             compiled_spec=request.compiled_spec,
@@ -62,7 +62,7 @@ def append_workflow_step_instruction_and_rebuild_projection_cache(
             causation_id=request.causation_id,
         ),
     )
-    return RunEngineClaimWorkflowStepResult(instruction=instruction, event=event)
+    return RunEngineClaimRunnerStepResult(instruction=instruction, event=event)
 
 
 def append_step_submission_and_rebuild_projection_cache(

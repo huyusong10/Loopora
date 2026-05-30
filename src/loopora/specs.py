@@ -5,7 +5,12 @@ from pathlib import Path
 from typing import Any
 
 from loopora.evidence_coverage import with_coverage_targets
-from loopora.workflows import build_preset_workflow, display_name_for_archetype, normalize_role_display_name, normalize_workflow
+from loopora.strategy_source import (
+    build_preset_strategy_source,
+    normalize_strategy_role_display_name,
+    normalize_strategy_source,
+    strategy_archetype_display_name,
+)
 
 REQUIRED_SECTIONS = ["Task"]
 HTML_COMMENT_PATTERN = re.compile(r"<!--.*?-->", re.DOTALL)
@@ -60,16 +65,16 @@ def spec_template(locale: str = "zh", workflow: dict[str, Any] | None = None) ->
 
 def render_spec_template(locale: str = "zh", workflow: dict[str, Any] | None = None) -> str:
     use_zh = locale.lower().startswith("zh")
-    normalized_workflow = {"version": 1, "preset": "", "roles": [], "steps": []}
+    normalized_strategy_source = {"version": 1, "preset": "", "roles": [], "steps": []}
     if workflow:
         roles = workflow.get("roles") if isinstance(workflow, dict) else None
         steps = workflow.get("steps") if isinstance(workflow, dict) else None
         preset_name = str(workflow.get("preset", "")).strip() if isinstance(workflow, dict) else ""
         if isinstance(roles, list) and isinstance(steps, list) and (roles or steps):
-            normalized_workflow = normalize_workflow(workflow)
+            normalized_strategy_source = normalize_strategy_source(workflow)
         elif preset_name:
-            normalized_workflow = build_preset_workflow(preset_name)
-    role_note_sections = _render_role_note_sections(normalized_workflow, locale="zh" if use_zh else "en")
+            normalized_strategy_source = build_preset_strategy_source(preset_name)
+    role_note_sections = _render_role_note_sections(normalized_strategy_source, locale="zh" if use_zh else "en")
     if use_zh:
         return (
             "<!--\n"
@@ -226,13 +231,13 @@ def resolve_role_note(compiled_spec: dict[str, Any], *, role_name: str, archetyp
     role_notes = compiled_spec.get("role_notes")
     if not isinstance(role_notes, dict):
         return ""
-    normalized_name = normalize_role_display_name(role_name, archetype=archetype) or str(role_name or "").strip()
+    normalized_name = normalize_strategy_role_display_name(role_name, archetype=archetype) or str(role_name or "").strip()
     exact_candidates = [candidate.lower() for candidate in (normalized_name, str(role_name or "").strip()) if candidate]
     for candidate in exact_candidates:
         if candidate in role_notes:
             return str(role_notes[candidate]).strip()
     if archetype:
-        archetype_label = display_name_for_archetype(archetype, locale="en").lower()
+        archetype_label = strategy_archetype_display_name(archetype, locale="en").lower()
         if archetype_label in role_notes:
             return str(role_notes[archetype_label]).strip()
     return ""
@@ -335,17 +340,19 @@ def _reject_legacy_sections(sections: dict[str, str]) -> None:
         )
 
 
-def _render_role_note_sections(workflow: dict[str, Any], *, locale: str) -> str:
+def _render_role_note_sections(strategy_source: dict[str, Any], *, locale: str) -> str:
     sections: list[str] = []
     seen: set[str] = set()
-    roles = workflow.get("roles") if isinstance(workflow, dict) else []
+    roles = strategy_source.get("roles") if isinstance(strategy_source, dict) else []
     if not isinstance(roles, list):
         roles = []
     for role in roles:
         if not isinstance(role, dict):
             continue
         archetype = str(role.get("archetype") or "").strip()
-        title = normalize_role_display_name(role.get("name"), archetype=archetype) or str(role.get("name") or "").strip()
+        title = normalize_strategy_role_display_name(role.get("name"), archetype=archetype) or str(
+            role.get("name") or ""
+        ).strip()
         if not title or title.lower() in seen:
             continue
         seen.add(title.lower())

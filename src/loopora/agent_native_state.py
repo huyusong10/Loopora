@@ -89,7 +89,7 @@ def agent_native_step_already_submitted(layout: Any, *, iter_id: int, step_order
 def update_agent_native_parallel_group_snapshot_after_submit(
     state: dict[str, Any],
     *,
-    workflow_steps: list[dict[str, Any]],
+    strategy_steps: list[dict[str, Any]],
     step: dict[str, Any],
     step_order: int,
 ) -> None:
@@ -98,6 +98,9 @@ def update_agent_native_parallel_group_snapshot_after_submit(
         state["parallel_group_snapshot"] = {}
         return
     next_step_order = step_order + 1
-    if next_step_order < len(workflow_steps) and str(workflow_steps[next_step_order].get("parallel_group") or "").strip() == parallel_group:
+    if (
+        next_step_order < len(strategy_steps)
+        and str(strategy_steps[next_step_order].get("parallel_group") or "").strip() == parallel_group
+    ):
         return
     state["parallel_group_snapshot"] = {}

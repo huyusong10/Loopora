@@ -10,18 +10,18 @@ from loopora.cli_shared import (
     JsonOutputOption,
     LocaleOption,
     OrchestrationIdOption,
-    WorkflowFileOption,
-    WorkflowPresetOption,
+    StrategyFileOption,
+    StrategyPresetOption,
     echo_json,
     handle_error,
-    role_note_sections_for_workflow,
-    resolve_spec_template_workflow,
+    role_note_sections_for_strategy_source,
+    resolve_spec_template_strategy_source,
     spec_document_payload,
 )
 from loopora.markdown_tools import normalize_markdown_text
 from loopora.service import LooporaError
 from loopora.specs import SpecError, init_spec_file_for_workflow, load_spec_file, read_and_compile, render_spec_template
-from loopora.workflows import WorkflowError
+from loopora.strategy_source import StrategySourceError
 
 
 def register_spec_commands(spec_app: typer.Typer) -> None:
@@ -37,11 +37,12 @@ def _register_spec_init_command(spec_app: typer.Typer) -> None:
     def spec_init(
         path: Annotated[Path, typer.Argument(..., help="Where to create the Markdown template.")],
         locale: LocaleOption = "zh",
-        workflow_preset: WorkflowPresetOption = "",
+        strategy_preset: StrategyPresetOption = "",
     ) -> None:
         """Create a starter Markdown spec."""
         try:
-            workflow = {"preset": workflow_preset} if workflow_preset else None
+            strategy_source = {"preset": strategy_preset} if strategy_preset else None
+            workflow = strategy_source
             created = init_spec_file_for_workflow(path, locale=locale, workflow=workflow)
             typer.echo(f"created: {created}")
         except (FileExistsError, OSError) as exc:
@@ -73,16 +74,16 @@ def _register_spec_template_command(spec_app: typer.Typer) -> None:
     def spec_template(
         locale: LocaleOption = "zh",
         orchestration_id: OrchestrationIdOption = "",
-        workflow_preset: WorkflowPresetOption = "",
-        workflow_file: WorkflowFileOption = None,
+        strategy_preset: StrategyPresetOption = "",
+        strategy_file: StrategyFileOption = None,
         json_output: JsonOutputOption = False,
     ) -> None:
         """Render a spec template without writing it to disk."""
         try:
-            workflow = resolve_spec_template_workflow(
+            workflow = resolve_spec_template_strategy_source(
                 orchestration_id=orchestration_id,
-                workflow_preset=workflow_preset,
-                workflow_file=workflow_file,
+                strategy_preset=strategy_preset,
+                strategy_file=strategy_file,
             )
             markdown_text = render_spec_template(locale=locale, workflow=workflow)
             if json_output:
@@ -91,12 +92,12 @@ def _register_spec_template_command(spec_app: typer.Typer) -> None:
                         "ok": True,
                         "locale": locale,
                         "markdown": markdown_text,
-                        "role_note_sections": role_note_sections_for_workflow(workflow),
+                        "role_note_sections": role_note_sections_for_strategy_source(workflow),
                     }
                 )
                 return
             typer.echo(markdown_text)
-        except (LooporaError, WorkflowError, OSError) as exc:
+        except (LooporaError, StrategySourceError, OSError) as exc:
             handle_error(exc)
 
 

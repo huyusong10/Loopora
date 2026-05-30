@@ -21,7 +21,7 @@ from loopora.cli_shared import (
     handle_error,
 )
 from loopora.service import LooporaError
-from loopora.workflows import WorkflowError
+from loopora.strategy_source import StrategySourceError
 
 
 def register_role_commands(roles_app: typer.Typer) -> None:
@@ -98,7 +98,7 @@ def _register_role_create_command(roles_app: typer.Typer) -> None:
                 **payload,
             )
             echo_json(role_definition)
-        except (LooporaError, WorkflowError, OSError, ValueError) as exc:
+        except (LooporaError, StrategySourceError, OSError, ValueError) as exc:
             handle_error(exc)
 
 
@@ -145,7 +145,7 @@ def _register_role_derive_command(roles_app: typer.Typer) -> None:
                 **payload,
             )
             echo_json(role_definition)
-        except (LooporaError, WorkflowError, OSError, ValueError) as exc:
+        except (LooporaError, StrategySourceError, OSError, ValueError) as exc:
             handle_error(exc)
 
 
@@ -194,7 +194,7 @@ def _register_role_update_command(roles_app: typer.Typer) -> None:
                 **payload,
             )
             echo_json(role_definition)
-        except (LooporaError, WorkflowError, OSError, ValueError) as exc:
+        except (LooporaError, StrategySourceError, OSError, ValueError) as exc:
             handle_error(exc)
 
 

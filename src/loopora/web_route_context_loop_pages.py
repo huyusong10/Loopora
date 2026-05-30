@@ -22,13 +22,13 @@ from loopora.web_inputs import (
     _workflow_for_spec_template,
 )
 from loopora.web_url_utils import safe_local_return_path
-from loopora.workflows import (
-    available_prompt_templates,
-    build_preset_workflow,
-    preset_names,
-    resolve_prompt_files,
-    WorkflowError,
-    workflow_preset_copy,
+from loopora.strategy_source import (
+    StrategySourceError,
+    available_strategy_prompt_templates,
+    build_preset_strategy_source,
+    resolve_strategy_prompt_files,
+    strategy_source_preset_copy,
+    strategy_source_preset_names,
 )
 
 
@@ -161,7 +161,7 @@ class WebRouteLoopPagesMixin:
             page_copy["action"] = f"{page_copy['action']}?{urlencode({'return_to': return_to})}"
         try:
             spec_template_workflow = _workflow_for_spec_template(form_values)
-        except (LooporaError, WorkflowError, ValueError):
+        except (LooporaError, StrategySourceError, ValueError):
             spec_template_workflow = None
         generated_spec_template = render_spec_template(locale=page_locale, workflow=spec_template_workflow)
         spec_practice_markdown = ""
@@ -177,15 +177,17 @@ class WebRouteLoopPagesMixin:
             spec_practice_summary_en = str(current_orchestration.get("spec_practice_summary_en", ""))
             spec_practice_markdown = spec_practice_markdown_zh if page_locale == "zh" else spec_practice_markdown_en
             spec_practice_summary = spec_practice_summary_zh if page_locale == "zh" else spec_practice_summary_en
-        workflow_preset_option_names = list(preset_names())
+        workflow_preset_option_names = list(strategy_source_preset_names())
         selected_workflow_preset = str(form_values.get("workflow_preset", "")).strip()
         if (
             selected_workflow_preset
             and selected_workflow_preset not in workflow_preset_option_names
-            and selected_workflow_preset in preset_names(include_hidden=True)
+            and selected_workflow_preset in strategy_source_preset_names(include_hidden=True)
         ):
             workflow_preset_option_names.append(selected_workflow_preset)
-        workflow_preset_option_values = [workflow_preset_copy(preset_name) for preset_name in workflow_preset_option_names]
+        workflow_preset_option_values = [
+            strategy_source_preset_copy(preset_name) for preset_name in workflow_preset_option_names
+        ]
         return self.templates.TemplateResponse(
             request,
             "new_orchestration.html",
@@ -203,12 +205,12 @@ class WebRouteLoopPagesMixin:
                 "workflow_preset_bundles": {
                     preset_name: {
                         "copy": copy,
-                        "workflow": build_preset_workflow(preset_name),
-                        "prompt_files": resolve_prompt_files(build_preset_workflow(preset_name)),
+                        "workflow": build_preset_strategy_source(preset_name),
+                        "prompt_files": resolve_strategy_prompt_files(build_preset_strategy_source(preset_name)),
                     }
                     for preset_name, copy in zip(workflow_preset_option_names, workflow_preset_option_values, strict=False)
                 },
-                "prompt_templates": available_prompt_templates(),
+                "prompt_templates": available_strategy_prompt_templates(),
                 "role_definitions": self.svc().list_role_definitions(),
                 "page_copy": page_copy,
                 "current_orchestration": current_orchestration,

@@ -10,12 +10,18 @@ from loopora.evidence_support import (
     evidence_item_is_supporting_gatekeeper_ref,
 )
 from loopora.residual_risk_support import residual_risk_is_unmanaged, residual_risk_policy_disallows_acceptance
-from loopora.run_artifacts import RunArtifactLayout, append_jsonl_with_mirrors
+from loopora.run_artifacts import append_jsonl_with_mirrors
 from loopora.service_prompts import BUILDER_SCHEMA, CUSTOM_SCHEMA, GATEKEEPER_SCHEMA, GUIDE_SCHEMA, INSPECTOR_SCHEMA
 from loopora.structured_booleans import structured_bool_is_true
 from loopora.structured_numbers import structured_finite_number, structured_non_negative_int, structured_optional_finite_number
 from loopora.utils import read_json, utc_now, write_json
-from loopora.workflows import LEGACY_ROLE_BY_ARCHETYPE
+from loopora.runner_support_requests import (
+    IterationContextPersistRequest,
+    RunnerSummaryRequest,
+    StepOutputNormalizationRequest,
+    StepOutputsWriteRequest,
+)
+from loopora.strategy_source import LEGACY_STRATEGY_ROLE_BY_ARCHETYPE
 
 
 def _safe_read_json_object(path) -> dict:
@@ -59,50 +65,6 @@ class GatekeeperResultFields:
     composite_score: object
     evidence_refs: list[str]
     evidence_claims: list[str]
-
-
-@dataclass(frozen=True)
-class StepOutputNormalizationRequest:
-    archetype: str
-    output: dict
-    compiled_spec: dict
-    inspector_output: dict | None
-    evidence_context: dict | None = None
-    current_evidence_id: str = ""
-
-
-@dataclass(frozen=True)
-class StepOutputsWriteRequest:
-    layout: RunArtifactLayout
-    iter_id: int
-    step: dict
-    step_order: int
-    role: dict
-    runtime_role: str
-    output: dict
-    handoff: dict
-
-
-@dataclass(frozen=True)
-class IterationContextPersistRequest:
-    layout: RunArtifactLayout
-    run_id: str
-    iter_id: int
-    step_results: list[dict]
-    stagnation: dict
-    previous_composite: float | None
-
-
-@dataclass(frozen=True)
-class WorkflowSummaryRequest:
-    run: dict
-    workflow: dict
-    compiled_spec: dict
-    iter_id: int
-    step_results: list[dict]
-    stagnation: dict
-    exhausted: bool
-    previous_composite: float | None
 
 
 def _gatekeeper_evidence_context(evidence_context: dict | None, current_evidence_id: str) -> GatekeeperEvidenceContext:
@@ -314,7 +276,7 @@ def _populate_gatekeeper_result(result: dict, fields: GatekeeperResultFields) ->
     return result
 
 
-class ServiceWorkflowSupportMixin:
+class ServiceRunnerSupportMixin:
     def _output_schema_for_archetype(self, archetype: str) -> dict:
         if archetype == "builder":
             return BUILDER_SCHEMA
@@ -480,7 +442,7 @@ class ServiceWorkflowSupportMixin:
         )
         return iteration_summary
 
-    def _build_workflow_iteration_entry(
+    def _build_runner_iteration_entry(
         self,
         iter_id: int,
         step_results: list[dict],
@@ -541,9 +503,9 @@ class ServiceWorkflowSupportMixin:
             entry["challenger"] = entry["guide"]
         return entry
 
-    def _build_workflow_summary(
+    def _build_runner_summary(
         self,
-        request: WorkflowSummaryRequest,
+        request: RunnerSummaryRequest,
     ) -> str:
         gatekeeper_output = next(
             (item["output"] for item in reversed(request.step_results) if item["role"]["archetype"] == "gatekeeper"),
@@ -574,7 +536,7 @@ class ServiceWorkflowSupportMixin:
             "",
             f"- Workdir: `{request.run['workdir']}`",
             f"- Iteration: `{request.iter_id + 1 if request.iter_id >= 0 else 0}`",
-            f"- Workflow preset: `{request.workflow.get('preset') or 'custom'}`",
+            f"- Workflow preset: `{request.strategy_source.get('preset') or 'custom'}`",
             f"- Check mode: `{request.compiled_spec.get('check_mode', 'specified')}`",
             f"- Check count: `{len(request.compiled_spec.get('checks', []))}`",
             f"- Completion mode: `{completion_mode}`",
@@ -628,5 +590,5 @@ class ServiceWorkflowSupportMixin:
 
     def _runtime_role_key(self, role: dict) -> str:
         if role.get("id") == role.get("archetype"):
-            return LEGACY_ROLE_BY_ARCHETYPE.get(role["archetype"], role["id"])
+            return LEGACY_STRATEGY_ROLE_BY_ARCHETYPE.get(role["archetype"], role["id"])
         return role["id"]

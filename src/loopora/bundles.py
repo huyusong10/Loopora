@@ -20,20 +20,22 @@ from loopora.providers import executor_profile, normalize_executor_kind, normali
 from loopora.residual_risk_support import residual_risk_is_unmanaged
 from loopora.service_types import LooporaError, normalize_completion_mode
 from loopora.specs import SpecError, compile_markdown_spec
-from loopora.workflows import (
-    WorkflowError,
-    default_step_execution_settings,
-    normalize_prompt_ref,
-    normalize_role_execution_settings,
-    normalize_step_inherit_session,
-    normalize_step_action_policy,
-    normalize_step_inputs,
-    normalize_step_on_pass,
-    normalize_step_parallel_group,
-    normalize_workflow_identifier,
-    normalize_workflow_version,
-    normalize_workflow_controls,
-    validate_workflow_parallel_groups,
+from loopora.strategy_source import (
+    StrategySourceError,
+    default_strategy_step_execution_settings,
+    normalize_strategy_archetype,
+    normalize_strategy_prompt_ref,
+    normalize_strategy_role_execution_settings,
+    normalize_strategy_source_controls,
+    normalize_strategy_source_identifier,
+    normalize_strategy_source_version,
+    normalize_strategy_step_action_policy,
+    normalize_strategy_step_inherit_session,
+    normalize_strategy_step_inputs,
+    normalize_strategy_step_on_pass,
+    normalize_strategy_step_parallel_group,
+    validate_strategy_prompt_markdown,
+    validate_strategy_source_parallel_groups,
 )
 
 BUNDLE_VERSION = 1
@@ -135,8 +137,8 @@ def normalize_bundle_identifier(value: object, *, field_name: str = "bundle id",
             return ""
         raise BundleError(f"{field_name} is required")
     try:
-        return normalize_workflow_identifier(value, field_name=field_name)
-    except WorkflowError as exc:
+        return normalize_strategy_source_identifier(value, field_name=field_name)
+    except StrategySourceError as exc:
         raise BundleError(str(exc)) from exc
 
 
@@ -335,7 +337,7 @@ def _normalize_bundle_role_definition(
     try:
         normalized_archetype = _normalize_bundle_role_archetype(archetype, prompt_markdown=prompt_markdown)
         execution = _normalize_bundle_role_execution(entry, default_execution=default_execution)
-    except (WorkflowError, ValueError) as exc:
+    except (StrategySourceError, ValueError) as exc:
         raise BundleError(str(exc)) from exc
     return {
         "key": key,
@@ -382,16 +384,14 @@ def _normalize_bundle_role_prompt_ref(value: object, *, key: str) -> str:
     if not prompt_ref:
         return f"{key}.md"
     try:
-        return normalize_prompt_ref(prompt_ref)
-    except WorkflowError as exc:
+        return normalize_strategy_prompt_ref(prompt_ref)
+    except StrategySourceError as exc:
         raise BundleError(str(exc)) from exc
 
 
 def _normalize_bundle_role_archetype(archetype: str, *, prompt_markdown: str) -> str:
-    from loopora.workflows import normalize_archetype, validate_prompt_markdown
-
-    normalized_archetype = normalize_archetype(archetype)
-    validate_prompt_markdown(prompt_markdown, expected_archetype=normalized_archetype)
+    normalized_archetype = normalize_strategy_archetype(archetype)
+    validate_strategy_prompt_markdown(prompt_markdown, expected_archetype=normalized_archetype)
     return normalized_archetype
 
 
@@ -419,7 +419,7 @@ def _normalize_bundle_role_execution(entry: Mapping[str, Any], *, default_execut
         for field in BUNDLE_EXECUTION_FIELDS:
             if field in entry:
                 settings[field] = entry.get(field)
-    return normalize_role_execution_settings(
+    return normalize_strategy_role_execution_settings(
         settings,
         default_executor_kind=str(default_execution.get("executor_kind") or "codex"),
     )
@@ -442,8 +442,8 @@ def _normalize_bundle_workflow(raw_workflow: object, *, role_definitions: list[d
     workflow_role_by_id = _bundle_workflow_role_archetypes(archetype_lookup)
     controls = _normalize_bundle_workflow_controls(payload.get("controls"), steps=steps, role_by_id=workflow_role_by_id)
     try:
-        version = normalize_workflow_version(payload.get("version"), field_name="bundle workflow version")
-    except WorkflowError as exc:
+        version = normalize_strategy_source_version(payload.get("version"), field_name="bundle workflow version")
+    except StrategySourceError as exc:
         raise BundleError(str(exc)) from exc
     workflow = {
         "version": version,
@@ -560,20 +560,20 @@ def _normalize_bundle_workflow_step_payload(
     role_id: str,
     archetype: str,
 ) -> dict[str, Any]:
-    defaults = default_step_execution_settings(archetype=archetype)
+    defaults = default_strategy_step_execution_settings(archetype=archetype)
     try:
-        on_pass = normalize_step_on_pass(entry.get("on_pass"), archetype=archetype, default=defaults["on_pass"])
-        inherit_session = normalize_step_inherit_session(entry.get("inherit_session"), archetype=archetype)
-        action_policy = normalize_step_action_policy(
+        on_pass = normalize_strategy_step_on_pass(entry.get("on_pass"), archetype=archetype, default=defaults["on_pass"])
+        inherit_session = normalize_strategy_step_inherit_session(entry.get("inherit_session"), archetype=archetype)
+        action_policy = normalize_strategy_step_action_policy(
             entry.get("action_policy"),
             archetype=archetype,
             on_pass=on_pass,
         )
         extra_cli_args = str(entry.get("extra_cli_args", "") or "").strip()
         validate_extra_cli_args_text(extra_cli_args)
-        parallel_group = normalize_step_parallel_group(entry.get("parallel_group"))
-        inputs = normalize_step_inputs(entry.get("inputs"))
-    except (WorkflowError, ValueError) as exc:
+        parallel_group = normalize_strategy_step_parallel_group(entry.get("parallel_group"))
+        inputs = normalize_strategy_step_inputs(entry.get("inputs"))
+    except (StrategySourceError, ValueError) as exc:
         raise BundleError(str(exc)) from exc
     step_payload = {
         "id": step_id,
@@ -602,16 +602,16 @@ def _normalize_bundle_workflow_controls(
     role_by_id: Mapping[str, Mapping[str, Any]],
 ) -> list[dict[str, Any]]:
     try:
-        validate_workflow_parallel_groups(steps, role_by_id)
-        return normalize_workflow_controls(raw_controls, role_by_id=role_by_id)
-    except WorkflowError as exc:
+        validate_strategy_source_parallel_groups(steps, role_by_id)
+        return normalize_strategy_source_controls(raw_controls, role_by_id=role_by_id)
+    except StrategySourceError as exc:
         raise BundleError(str(exc)) from exc
 
 
 def _bundle_workflow_identifier(value: object, *, field_name: str) -> str:
     try:
-        return normalize_workflow_identifier(value, field_name=field_name)
-    except WorkflowError as exc:
+        return normalize_strategy_source_identifier(value, field_name=field_name)
+    except StrategySourceError as exc:
         raise BundleError(str(exc)) from exc
 
 

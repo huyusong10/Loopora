@@ -7,7 +7,7 @@ from loopora.kernel import ActionPolicy, EvidenceScope, RoleSpec, StepInstructio
 
 
 @dataclass(frozen=True, slots=True)
-class WorkflowStepInstructionRequest:
+class RunnerStepInstructionRequest:
     run_id: str
     contract_ref: str
     compiled_spec: Mapping[str, object]
@@ -16,7 +16,7 @@ class WorkflowStepInstructionRequest:
     role: Mapping[str, object]
 
 
-def workflow_step_instruction(request: WorkflowStepInstructionRequest) -> StepInstruction:
+def runner_step_instruction(request: RunnerStepInstructionRequest) -> StepInstruction:
     step_id = _text(request.step.get("id"), fallback="step")
     role_id = _text(request.role.get("id") or request.step.get("role_id"), fallback="role")
     action_policy = _mapping(request.step.get("action_policy"))
