@@ -14,6 +14,10 @@ class ActorRef:
     def system(cls) -> ActorRef:
         return cls(kind="system", id="loopora", display_name="Loopora")
 
+    @classmethod
+    def verdict_engine(cls) -> ActorRef:
+        return cls(kind="system", id="verdict-engine", display_name="Verdict Engine")
+
     def to_dict(self) -> dict[str, str]:
         return {
             "kind": self.kind,

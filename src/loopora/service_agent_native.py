@@ -76,6 +76,7 @@ from loopora.engine import (
     select_next_workflow_step,
 )
 from loopora.engine.workflow_runtime import WorkflowIterationState, WorkflowRunContext, evidence_context_with_canonical_items
+from loopora.events.projection_cache import current_step_projection_for_run
 from loopora.runners import agent_runner_actor
 from loopora.run_artifacts import RunArtifactLayout
 from loopora.service_agent_native_contracts import (
@@ -916,7 +917,7 @@ class ServiceAgentNativeMixin:
         return agent_native_state(layout, adapter=adapter, run=run)
 
     def _agent_native_current_step_projection(self, run_id: str) -> dict[str, Any]:
-        return RepositoryRunEngine(self.repository).current_step_projection(run_id)
+        return current_step_projection_for_run(self.repository, run_id)
 
     @staticmethod
     def _agent_native_update_parallel_group_snapshot_after_submit(

@@ -170,11 +170,15 @@ def test_services_ask_run_engine_to_freeze_workflow_step_instructions() -> None:
 
 def test_agent_native_treats_active_step_state_as_projection_checked_cache() -> None:
     agent_source = (REPO_ROOT / "src" / "loopora" / "service_agent_native.py").read_text(encoding="utf-8")
-    engine_source = (REPO_ROOT / "src" / "loopora" / "engine" / "run_engine.py").read_text(encoding="utf-8")
+    projection_cache_source = (REPO_ROOT / "src" / "loopora" / "events" / "projection_cache.py").read_text(
+        encoding="utf-8"
+    )
 
     assert "agent_native_active_step_is_stale" in agent_source
-    assert ".current_step_projection(" in agent_source
-    assert 'get_projection_record("current_step"' in engine_source
+    assert ".current_step_projection(" not in agent_source
+    assert "current_step_projection_for_run" in agent_source
+    assert 'kind="event_replayed_current_step"' in projection_cache_source
+    assert "get_projection_record(projection_name, run_id)" in projection_cache_source
 
 
 def test_agent_native_writes_active_step_cache_after_run_engine_claim() -> None:
@@ -207,6 +211,16 @@ def test_workflow_execution_submits_step_before_recording_step_evidence() -> Non
     assert ".recompute_coverage(" not in commit_source
     assert "RunEngineRecordStepEvidenceRequest" not in iteration_source
     assert ".record_step_evidence(" not in iteration_source
+
+
+def test_run_finalization_uses_stable_verdict_engine_actor_factory() -> None:
+    finalization_source = (REPO_ROOT / "src" / "loopora" / "service_run_finalization.py").read_text(encoding="utf-8")
+    actors_source = (REPO_ROOT / "src" / "loopora" / "kernel" / "actors.py").read_text(encoding="utf-8")
+
+    assert "ActorRef.verdict_engine()" in finalization_source
+    assert 'ActorRef(kind="system", id="verdict-engine"' not in finalization_source
+    assert "def verdict_engine" in actors_source
+    assert 'id="verdict-engine"' in actors_source
 
 
 def test_agent_and_headless_share_runner_step_commit_boundary() -> None:

@@ -86,3 +86,13 @@ CORE_EVENT_AGGREGATE_TYPES = {
         )
     },
 }
+
+
+def require_core_event_family(event_type: str, aggregate_type: str) -> None:
+    expected_aggregate_type = CORE_EVENT_AGGREGATE_TYPES.get(event_type)
+    if expected_aggregate_type is None:
+        raise ValueError(f"unsupported core domain event type: {event_type}")
+    if expected_aggregate_type != aggregate_type:
+        raise ValueError(
+            f"core domain event {event_type} requires aggregate_type {expected_aggregate_type}, got {aggregate_type}"
+        )

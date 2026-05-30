@@ -129,7 +129,7 @@ class ServiceRunFinalizationMixin:
             RunEngineIssueVerdictRequest(
                 run_id=request.run_id,
                 verdict=task_verdict,
-                actor=ActorRef(kind="system", id="verdict-engine", display_name="Verdict Engine"),
+                actor=ActorRef.verdict_engine(),
             )
         )
         return self._hydrate_run_files(result) if request.hydrate else result
@@ -164,7 +164,7 @@ class ServiceRunFinalizationMixin:
                 RunEngineIssueVerdictRequest(
                     run_id=run_id,
                     verdict=task_verdict,
-                    actor=ActorRef(kind="system", id="verdict-engine", display_name="Verdict Engine"),
+                    actor=ActorRef.verdict_engine(),
                 )
             )
         except Exception:  # noqa: BLE001 - crash finalization must fall back to an in-memory failed state.

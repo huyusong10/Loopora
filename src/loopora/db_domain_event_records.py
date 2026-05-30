@@ -2,13 +2,17 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from collections.abc import Callable
+from typing import TypeVar
 
 from loopora.events.envelope import EventEnvelope
-from loopora.events.schemas import CORE_EVENT_AGGREGATE_TYPES, CORE_EVENT_TYPES
-from loopora.events.store import DomainEventAppendRequest
+from loopora.events.schemas import require_core_event_family
+from loopora.events.store import DomainEventAppendRequest, DomainEventTransaction
 from loopora.kernel.actors import ActorRef
 from loopora.structured_numbers import structured_non_negative_int
 from loopora.utils import make_id, utc_now
+
+T = TypeVar("T")
 
 
 class RepositoryDomainEventRecordsMixin:
@@ -24,18 +28,19 @@ class RepositoryDomainEventRecordsMixin:
                 append_request,
             )
 
+    def append_domain_event_transaction(self, handler: Callable[[DomainEventTransaction], T]) -> T:
+        with self.transaction() as connection:
+            return handler(self.domain_event_transaction_for_connection(connection))
+
+    def domain_event_transaction_for_connection(self, connection: sqlite3.Connection) -> DomainEventTransaction:
+        return _RepositoryDomainEventTransaction(self, connection)
+
     def _append_domain_event_for_connection(
         self,
         connection: sqlite3.Connection,
         request: DomainEventAppendRequest,
     ) -> EventEnvelope:
-        if request.event_type not in CORE_EVENT_TYPES:
-            raise ValueError(f"unsupported core domain event type: {request.event_type}")
-        expected_aggregate_type = CORE_EVENT_AGGREGATE_TYPES.get(request.event_type)
-        if expected_aggregate_type and request.aggregate_type != expected_aggregate_type:
-            raise ValueError(
-                f"core domain event {request.event_type} requires aggregate_type {expected_aggregate_type}, got {request.aggregate_type}"
-            )
+        require_core_event_family(request.event_type, request.aggregate_type)
         event_id = make_id("event")
         normalized_actor = request.actor or ActorRef.system()
         row = connection.execute(
@@ -83,20 +88,46 @@ class RepositoryDomainEventRecordsMixin:
         return envelope
 
     def list_domain_events(self, stream_id: str, *, after_sequence: int = 0, limit: int = 5000) -> list[EventEnvelope]:
+        with self._connect() as connection:
+            return self.list_domain_events_for_connection(
+                connection,
+                stream_id,
+                after_sequence=after_sequence,
+                limit=limit,
+            )
+
+    def latest_domain_event_sequence(self, stream_id: str) -> int:
+        with self._connect() as connection:
+            return self.latest_domain_event_sequence_for_connection(connection, stream_id)
+
+    def latest_domain_event_sequence_for_connection(self, connection: sqlite3.Connection, stream_id: str) -> int:
+        row = connection.execute(
+            "SELECT COALESCE(MAX(sequence), 0) AS latest_sequence FROM event_store WHERE stream_id = ?",
+            (stream_id,),
+        ).fetchone()
+        return int(row["latest_sequence"] or 0)
+
+    def list_domain_events_for_connection(
+        self,
+        connection: sqlite3.Connection,
+        stream_id: str,
+        *,
+        after_sequence: int = 0,
+        limit: int = 5000,
+    ) -> list[EventEnvelope]:
         normalized_after = structured_non_negative_int(after_sequence)
         normalized_limit = min(structured_non_negative_int(limit), 5000)
         if normalized_limit <= 0:
             return []
-        with self._connect() as connection:
-            rows = connection.execute(
-                """
-                SELECT * FROM event_store
-                WHERE stream_id = ? AND sequence > ?
-                ORDER BY sequence ASC
-                LIMIT ?
-                """,
-                (stream_id, normalized_after, normalized_limit),
-            ).fetchall()
+        rows = connection.execute(
+            """
+            SELECT * FROM event_store
+            WHERE stream_id = ? AND sequence > ?
+            ORDER BY sequence ASC
+            LIMIT ?
+            """,
+            (stream_id, normalized_after, normalized_limit),
+        ).fetchall()
         return [self._domain_event_from_row(row) for row in rows]
 
     def get_projection_record(self, projection_name: str, projection_key: str) -> dict:
@@ -120,7 +151,7 @@ class RepositoryDomainEventRecordsMixin:
 
     def put_projection_record(self, projection_name: str, projection_key: str, *, source_sequence: int, payload: dict) -> dict:
         with self.transaction() as connection:
-            self._put_projection_record_for_connection(
+            self.put_projection_record_for_connection(
                 connection,
                 projection_name,
                 projection_key,
@@ -129,7 +160,7 @@ class RepositoryDomainEventRecordsMixin:
             )
         return self.get_projection_record(projection_name, projection_key)
 
-    def _put_projection_record_for_connection(
+    def put_projection_record_for_connection(
         self,
         connection: sqlite3.Connection,
         projection_name: str,
@@ -158,26 +189,29 @@ class RepositoryDomainEventRecordsMixin:
         )
 
     def record_artifact_index(self, payload: dict) -> dict:
+        with self.transaction() as connection:
+            return self._record_artifact_index_for_connection(connection, payload)
+
+    def _record_artifact_index_for_connection(self, connection: sqlite3.Connection, payload: dict) -> dict:
         artifact_id = str(payload.get("artifact_id") or payload.get("id") or make_id("artifact"))
         created_at = utc_now()
-        with self.transaction() as connection:
-            connection.execute(
-                """
-                INSERT OR REPLACE INTO artifact_index (
-                    artifact_id, run_id, loop_id, kind, uri, content_hash, created_by_event_id, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    artifact_id,
-                    str(payload.get("run_id") or ""),
-                    str(payload.get("loop_id") or ""),
-                    str(payload.get("kind") or "artifact"),
-                    str(payload.get("uri") or ""),
-                    str(payload.get("content_hash") or ""),
-                    str(payload.get("created_by_event_id") or ""),
-                    created_at,
-                ),
-            )
+        connection.execute(
+            """
+            INSERT OR REPLACE INTO artifact_index (
+                artifact_id, run_id, loop_id, kind, uri, content_hash, created_by_event_id, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                artifact_id,
+                str(payload.get("run_id") or ""),
+                str(payload.get("loop_id") or ""),
+                str(payload.get("kind") or "artifact"),
+                str(payload.get("uri") or ""),
+                str(payload.get("content_hash") or ""),
+                str(payload.get("created_by_event_id") or ""),
+                created_at,
+            ),
+        )
         return {"artifact_id": artifact_id, "created_at": created_at}
 
     def list_artifact_index(
@@ -241,6 +275,18 @@ class RepositoryDomainEventRecordsMixin:
             causation_id=row["causation_id"],
             payload=_json_dict(row["payload_json"]),
         )
+
+
+class _RepositoryDomainEventTransaction:
+    def __init__(self, repository: RepositoryDomainEventRecordsMixin, connection: sqlite3.Connection) -> None:
+        self._repository = repository
+        self._connection = connection
+
+    def append_domain_event(self, request: DomainEventAppendRequest) -> EventEnvelope:
+        return self._repository._append_domain_event_for_connection(self._connection, request)
+
+    def record_artifact_index(self, payload: dict) -> dict:
+        return self._repository._record_artifact_index_for_connection(self._connection, payload)
 
 
 def _json_dict(raw_value: object) -> dict:

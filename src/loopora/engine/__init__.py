@@ -8,11 +8,10 @@ from loopora.engine.advance_policy import (
     workflow_step_index_from_events,
 )
 from loopora.engine.evidence_engine import EvidenceEngine
-from loopora.engine.run_engine import (
-    RepositoryRunEngine,
+from loopora.engine.run_engine import RepositoryRunEngine
+from loopora.engine.run_lifecycle import RunEngineAdvanceOutcome, RunEngineAdvanceStatus
+from loopora.engine.run_requests import (
     RunEngineAcceptEvidenceRequest,
-    RunEngineAdvanceOutcome,
-    RunEngineAdvanceStatus,
     RunEngineClaimStepRequest,
     RunEngineClaimWorkflowStepRequest,
     RunEngineClaimWorkflowStepResult,

@@ -11,6 +11,7 @@ from loopora.engine import (
     RunEngineSubmitStepRequest,
 )
 from loopora.events import run_stream_id
+from loopora.events.projection_cache import replay_run_projections
 from loopora.kernel import ActorRef, StepResult, StepResultStatus
 from loopora.runners import agent_runner_actor, headless_runner_actor
 
@@ -128,7 +129,7 @@ def _run_submission_flow(tmp_path: Path, *, actor: ActorRef, run_id: str, loop_i
             actor=actor,
         )
     )
-    projections = engine.replay_projections(run_id)
+    projections = replay_run_projections(repository, run_id)
     events = repository.list_domain_events(run_stream_id(run_id))
     return {
         "events": [_stable_event(event) for event in events if event.event_type != "RunCreated"],

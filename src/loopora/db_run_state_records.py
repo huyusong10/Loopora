@@ -8,9 +8,8 @@ from typing import Any
 
 from loopora.db_shared import logger
 from loopora.diagnostics import log_event
-from loopora.events.streams import run_stream_id
-from loopora.events.store import DomainEventAppendRequest
-from loopora.projections import replay_run_projection_bundle
+from loopora.events.projection_cache import rebuild_run_projection_cache_for_connection
+from loopora.events.run_record_events import append_run_lifecycle_event_for_connection
 from loopora.utils import utc_now
 
 
@@ -58,67 +57,22 @@ class RepositoryRunStateRecordsMixin:
                     (utc_now(), row["loop_id"]),
                 )
                 previous_status = str(previous_row["status"] or "") if previous_row is not None else ""
-                if self._append_run_lifecycle_domain_event_for_connection(connection, row, updates, previous_status=previous_status):
+                if append_run_lifecycle_event_for_connection(
+                    self,
+                    connection,
+                    row,
+                    updates,
+                    previous_status=previous_status,
+                ):
                     self._refresh_run_projections_for_connection(connection, row["id"])
         return row
-
-    def _append_run_lifecycle_domain_event_for_connection(
-        self,
-        connection,
-        row,
-        updates: dict[str, object],
-        *,
-        previous_status: str,
-    ) -> bool:
-        if "status" not in updates:
-            return False
-        next_status = str(updates.get("status") or "")
-        if next_status == previous_status:
-            return False
-        event_type = _domain_event_type_for_transition(previous_status=previous_status, next_status=next_status)
-        if not event_type:
-            return False
-        self._append_domain_event_for_connection(
-            connection,
-            DomainEventAppendRequest(
-                stream_id=run_stream_id(row["id"]),
-                aggregate_type="run",
-                aggregate_id=row["id"],
-                event_type=event_type,
-                payload={
-                    "run_id": row["id"],
-                    "loop_id": row["loop_id"],
-                    "status": next_status,
-                    "current_iter": int(row["current_iter"] or 0),
-                    "active_role": row["active_role"] or "",
-                },
-            ),
-        )
-        return True
 
     def refresh_run_projection_cache(self, run_id: str) -> dict:
         with self.transaction() as connection:
             return self._refresh_run_projections_for_connection(connection, run_id)
 
     def _refresh_run_projections_for_connection(self, connection, run_id: str) -> dict:
-        rows = connection.execute(
-            """
-            SELECT * FROM event_store
-            WHERE stream_id = ?
-            ORDER BY sequence ASC
-            """,
-            (run_stream_id(run_id),),
-        ).fetchall()
-        projections = replay_run_projection_bundle([self._domain_event_from_row(row) for row in rows])
-        for name, payload in projections.items():
-            self._put_projection_record_for_connection(
-                connection,
-                name,
-                run_id,
-                source_sequence=int(payload.get("source_sequence") or 0) if isinstance(payload, dict) else 0,
-                payload=payload,
-            )
-        return projections
+        return rebuild_run_projection_cache_for_connection(self, connection, run_id)
 
     def _log_run_update(self, run_id: str, *, decoded: dict, updates: dict[str, object]) -> None:
         interesting_fields = _interesting_run_update_fields(updates)
@@ -218,15 +172,3 @@ def _interesting_run_update_fields(updates: Mapping[str, object]) -> dict[str, o
         )
         if key in updates
     }
-
-
-def _domain_event_type_for_transition(*, previous_status: str, next_status: str) -> str:
-    if previous_status == "awaiting_agent" and next_status == "running":
-        return "RunResumed"
-    return {
-        "running": "RunStarted",
-        "awaiting_agent": "RunPausedForActor",
-        "succeeded": "RunClosed",
-        "stopped": "RunStopped",
-        "failed": "RunFailed",
-    }.get(next_status, "")

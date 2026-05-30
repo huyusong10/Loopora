@@ -5,8 +5,7 @@ import logging
 
 from loopora.db_shared import logger
 from loopora.diagnostics import log_event
-from loopora.events.streams import run_stream_id
-from loopora.events.store import DomainEventAppendRequest
+from loopora.events.run_record_events import append_run_created_event_for_connection
 from loopora.service_types import ACTIVE_RUN_STATUSES, LooporaConflictError
 from loopora.utils import utc_now
 
@@ -104,21 +103,7 @@ class RepositoryRunRecordsMixin:
                     now,
                 ),
             )
-            self._append_domain_event_for_connection(
-                connection,
-                DomainEventAppendRequest(
-                    stream_id=run_stream_id(payload["id"]),
-                    aggregate_type="run",
-                    aggregate_id=payload["id"],
-                    event_type="RunCreated",
-                    payload={
-                        "run_id": payload["id"],
-                        "loop_id": payload["loop_id"],
-                        "status": payload["status"],
-                        "workdir": payload["workdir"],
-                    },
-                ),
-            )
+            append_run_created_event_for_connection(self, connection, payload)
             self._refresh_run_projections_for_connection(connection, payload["id"])
         run = self.get_run(payload["id"])
         log_event(

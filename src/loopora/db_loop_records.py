@@ -5,10 +5,11 @@ import logging
 
 from loopora.db_shared import logger
 from loopora.diagnostics import log_event
-from loopora.compiler import compile_existing_loop_record
-from loopora.events.store import DomainEventAppendRequest
-from loopora.events.streams import loop_stream_id
-from loopora.projections import replay_loop_definition_projection
+from loopora.compiler.loop_events import (
+    append_loop_archived_event_for_connection,
+    append_loop_definition_events_for_connection,
+)
+from loopora.events.projection_cache import rebuild_loop_projection_cache_for_connection
 from loopora.utils import utc_now
 
 
@@ -55,13 +56,14 @@ class RepositoryLoopRecordsMixin:
                     now,
                 ),
             )
-            self._append_loop_definition_events_for_connection(
+            append_loop_definition_events_for_connection(
+                self,
                 connection,
                 payload,
                 reason="created",
                 activate=True,
             )
-            self._refresh_loop_definition_projection_for_connection(connection, payload["id"])
+            self._refresh_loop_projection_cache_for_connection(connection, payload["id"])
         loop = self.get_loop(payload["id"])
         log_event(
             logger,
@@ -105,7 +107,8 @@ class RepositoryLoopRecordsMixin:
                     loop_id,
                 ),
             )
-            self._append_loop_definition_events_for_connection(
+            append_loop_definition_events_for_connection(
+                self,
                 connection,
                 {
                     **payload,
@@ -119,7 +122,7 @@ class RepositoryLoopRecordsMixin:
                 reason="updated",
                 activate=False,
             )
-            self._refresh_loop_definition_projection_for_connection(connection, loop_id)
+            self._refresh_loop_projection_cache_for_connection(connection, loop_id)
         loop = self.get_loop(loop_id)
         log_event(
             logger,
@@ -156,8 +159,8 @@ class RepositoryLoopRecordsMixin:
             row = connection.execute("SELECT 1 FROM loop_definitions WHERE id = ?", (loop_id,)).fetchone()
             if row is None:
                 return False
-            self._append_loop_archived_event_for_connection(connection, loop_id, reason="deleted")
-            self._refresh_loop_definition_projection_for_connection(connection, loop_id)
+            append_loop_archived_event_for_connection(self, connection, loop_id, reason="deleted")
+            self._refresh_loop_projection_cache_for_connection(connection, loop_id)
             connection.execute(
                 "DELETE FROM run_events WHERE run_id IN (SELECT id FROM loop_runs WHERE loop_id = ?)",
                 (loop_id,),
@@ -177,110 +180,5 @@ class RepositoryLoopRecordsMixin:
         )
         return True
 
-    def _append_loop_definition_events_for_connection(
-        self,
-        connection,
-        payload: dict,
-        *,
-        reason: str,
-        activate: bool,
-    ) -> None:
-        loop_id = str(payload.get("id") or "")
-        definition = compile_existing_loop_record(payload)
-        contract_event = self._append_domain_event_for_connection(
-            connection,
-            DomainEventAppendRequest(
-                stream_id=loop_stream_id(loop_id),
-                aggregate_type="loop",
-                aggregate_id=loop_id,
-                event_type="LoopContractCompiled",
-                payload=_loop_contract_compiled_payload(definition, reason=reason),
-            ),
-        )
-        strategy_event = self._append_domain_event_for_connection(
-            connection,
-            DomainEventAppendRequest(
-                stream_id=loop_stream_id(loop_id),
-                aggregate_type="loop",
-                aggregate_id=loop_id,
-                event_type="LoopStrategyCompiled",
-                payload=_loop_strategy_compiled_payload(definition, reason=reason),
-                correlation_id=contract_event.correlation_id,
-                causation_id=contract_event.event_id,
-            ),
-        )
-        if activate:
-            self._append_domain_event_for_connection(
-                connection,
-                DomainEventAppendRequest(
-                    stream_id=loop_stream_id(loop_id),
-                    aggregate_type="loop",
-                    aggregate_id=loop_id,
-                    event_type="LoopActivated",
-                    payload={
-                        "loop_id": loop_id,
-                        "workdir": str(payload.get("workdir") or ""),
-                        "completion_mode": str(payload.get("completion_mode") or "gatekeeper"),
-                        "reason": reason,
-                    },
-                    correlation_id=contract_event.correlation_id,
-                    causation_id=strategy_event.event_id,
-                ),
-            )
-
-    def _append_loop_archived_event_for_connection(self, connection, loop_id: str, *, reason: str) -> None:
-        self._append_domain_event_for_connection(
-            connection,
-            DomainEventAppendRequest(
-                stream_id=loop_stream_id(loop_id),
-                aggregate_type="loop",
-                aggregate_id=loop_id,
-                event_type="LoopArchived",
-                payload={
-                    "loop_id": loop_id,
-                    "reason": reason,
-                },
-            ),
-        )
-
-    def _refresh_loop_definition_projection_for_connection(self, connection, loop_id: str) -> None:
-        rows = connection.execute(
-            """
-            SELECT * FROM event_store
-            WHERE stream_id = ?
-            ORDER BY sequence ASC
-            """,
-            (loop_stream_id(loop_id),),
-        ).fetchall()
-        projection = replay_loop_definition_projection([self._domain_event_from_row(row) for row in rows])
-        self._put_projection_record_for_connection(
-            connection,
-            "loop_definition",
-            loop_id,
-            source_sequence=int(projection.get("source_sequence") or 0),
-            payload=projection,
-        )
-
-
-def _loop_contract_compiled_payload(definition, *, reason: str) -> dict:
-    return {
-        "loop_id": definition.id,
-        "name": definition.name,
-        "task": definition.contract.task,
-        "completion_mode": definition.runtime_defaults.completion_mode,
-        "check_count": len(definition.contract.done_when),
-        "coverage_target_count": len(definition.contract.evidence_targets),
-        "reason": reason,
-    }
-
-
-def _loop_strategy_compiled_payload(definition, *, reason: str) -> dict:
-    return {
-        "loop_id": definition.id,
-        "role_count": len(definition.strategy.roles),
-        "step_count": len(definition.strategy.steps),
-        "finish_step_ids": [step.id for step in definition.strategy.steps if step.can_finish_run],
-        "max_iterations": definition.strategy.iteration_policy.max_iterations,
-        "max_step_retries": definition.strategy.iteration_policy.max_step_retries,
-        "reason": reason,
-    }
+    def _refresh_loop_projection_cache_for_connection(self, connection, loop_id: str) -> dict:
+        return rebuild_loop_projection_cache_for_connection(self, connection, loop_id)

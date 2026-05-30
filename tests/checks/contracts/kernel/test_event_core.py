@@ -23,7 +23,7 @@ from loopora.engine import (
     workflow_step_instruction,
 )
 from loopora.events import loop_stream_id, replay_run_snapshot, run_stream_id
-from loopora.events.store import DomainEventAppendRequest
+from loopora.events.projection_cache import replay_run_projections
 from loopora.kernel import ActorRef, ArtifactRef, RunLifecycleStatus, StepResult, StepResultStatus, VerdictStatus
 
 
@@ -318,51 +318,6 @@ def test_loop_delete_archives_loop_stream_before_removing_legacy_record(tmp_path
     assert cached["payload"]["status"] == "archived"
 
 
-def test_domain_event_store_rejects_surface_event_types(tmp_path: Path) -> None:
-    repository = LooporaRepository(tmp_path / "app.db")
-
-    with pytest.raises(ValueError, match="unsupported core domain event type"):
-        repository.append_domain_event(
-            DomainEventAppendRequest(
-                stream_id=run_stream_id("run_surface"),
-                aggregate_type="run",
-                aggregate_id="run_surface",
-                event_type="HostTraceObserved",
-                payload={"trace": "diagnostic only"},
-            )
-        )
-
-    assert repository.list_domain_events(run_stream_id("run_surface")) == []
-
-
-def test_domain_event_store_rejects_aggregate_type_mismatches(tmp_path: Path) -> None:
-    repository = LooporaRepository(tmp_path / "app.db")
-
-    with pytest.raises(ValueError, match="requires aggregate_type loop"):
-        repository.append_domain_event(
-            DomainEventAppendRequest(
-                stream_id=run_stream_id("run_wrong_loop_event"),
-                aggregate_type="run",
-                aggregate_id="run_wrong_loop_event",
-                event_type="LoopArchived",
-                payload={"loop_id": "loop_wrong"},
-            )
-        )
-    with pytest.raises(ValueError, match="requires aggregate_type run"):
-        repository.append_domain_event(
-            DomainEventAppendRequest(
-                stream_id=loop_stream_id("loop_wrong_run_event"),
-                aggregate_type="loop",
-                aggregate_id="loop_wrong_run_event",
-                event_type="RunStarted",
-                payload={"run_id": "run_wrong"},
-            )
-        )
-
-    assert repository.list_domain_events(run_stream_id("run_wrong_loop_event")) == []
-    assert repository.list_domain_events(loop_stream_id("loop_wrong_run_event")) == []
-
-
 def test_run_engine_start_moves_created_run_to_ready_for_step(tmp_path: Path) -> None:
     repository = LooporaRepository(tmp_path / "app.db")
     run = _create_run(repository, tmp_path)
@@ -453,7 +408,7 @@ def test_terminal_run_event_clears_pending_current_step(tmp_path: Path) -> None:
     repository.update_run(run["id"], RunUpdate(status="failed", finished_at="2026-01-01T00:01:00+00:00"))
 
     snapshot = replay_run_snapshot(repository.list_domain_events(run_stream_id(run["id"])))
-    current_step = engine.replay_projections(run["id"])["current_step"]
+    current_step = replay_run_projections(repository, run["id"])["current_step"]
 
     assert snapshot.state.lifecycle_status == RunLifecycleStatus.FAILED
     assert snapshot.state.current_step_id is None

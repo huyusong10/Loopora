@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Protocol
+from collections.abc import Callable
+from typing import Protocol, TypeVar
 
 from loopora.events.envelope import EventEnvelope
 from loopora.kernel.actors import ActorRef
+
+T = TypeVar("T")
 
 
 @dataclass(frozen=True, slots=True)
@@ -24,5 +27,19 @@ class DomainEventStore(Protocol):
     def append_domain_event(self, request: DomainEventAppendRequest) -> EventEnvelope:
         ...
 
+    def append_domain_event_transaction(self, handler: Callable[[DomainEventTransaction], T]) -> T:
+        ...
+
     def list_domain_events(self, stream_id: str, *, after_sequence: int = 0, limit: int = 5000) -> list[EventEnvelope]:
+        ...
+
+    def latest_domain_event_sequence(self, stream_id: str) -> int:
+        ...
+
+
+class DomainEventTransaction(Protocol):
+    def append_domain_event(self, request: DomainEventAppendRequest) -> EventEnvelope:
+        ...
+
+    def record_artifact_index(self, payload: dict) -> dict:
         ...
