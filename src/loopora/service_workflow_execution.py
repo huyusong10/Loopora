@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass, field
 import itertools
 import logging
 import os
@@ -10,10 +9,26 @@ from pathlib import Path
 
 from loopora.context_flow import evidence_entry_id
 from loopora.diagnostics import get_logger, log_event
+from loopora.engine import (
+    RepositoryRunEngine,
+    RunEngineStartIterationRequest,
+    RunEngineClaimWorkflowStepRequest,
+    WorkflowStepSelectionRequest,
+    select_next_workflow_step,
+)
+from loopora.engine.workflow_runtime import (
+    WorkflowIterationState as _WorkflowIterationState,
+    WorkflowRunContext as _WorkflowRunContext,
+    WorkflowRunProgress as _WorkflowRunProgress,
+    WorkflowStepRunRequest as _WorkflowStepRunRequest,
+    evidence_context_with_canonical_items as _evidence_context_with_canonical_items,
+)
 from loopora.executor import ExecutionStopped
 from loopora.recovery import RetryConfig
-from loopora.run_artifacts import read_jsonl, read_stagnation_state
+from loopora.runners import headless_runner_actor
+from loopora.run_artifacts import read_stagnation_state
 from loopora.service_types import (
+    LooporaConflictError,
     LooporaNotFoundError,
     RoleExecutionError,
     StopRequested,
@@ -23,14 +38,12 @@ from loopora.service_types import (
 from loopora.structured_booleans import structured_bool_is_true
 from loopora.service_workflow_failure_handling import ServiceWorkflowFailureHandlingMixin, WorkflowExhaustionRequest
 from loopora.service_workflow_iteration_state import (
-    GatekeeperIterationRecordRequest,
     ServiceWorkflowIterationStateMixin,
-    WorkflowGatekeeperSuccessRequest,
     WorkflowIterationCheckpointRequest,
-    WorkflowStepCompletionLogRequest,
-    WorkflowStepResultEntryRequest,
-    WorkflowStepWriteRequest,
 )
+from loopora.service_runner_step_artifacts import ServiceRunnerStepArtifactsMixin
+from loopora.service_runner_step_commit import ServiceRunnerStepCommitMixin
+from loopora.service_run_finalization import TerminalRunFinalizationRequest
 from loopora.service_workflow_runtime import WorkflowStepRuntimeRequest
 from loopora.service_workflow_controls import (
     WorkflowControlPayloadRequest,
@@ -49,100 +62,95 @@ from loopora.structured_numbers import structured_non_negative_int
 logger = get_logger(__name__)
 
 
-def _evidence_context_with_canonical_items(context_packet: dict, layout: object) -> dict:
-    evidence_context = context_packet.get("evidence") if isinstance(context_packet.get("evidence"), dict) else {}
-    known_ids = {str(item).strip() for item in list(evidence_context.get("known_ids") or []) if str(item).strip()}
-    current_items = [item for item in list(evidence_context.get("items") or []) if isinstance(item, dict)]
-    current_ids = {str(item.get("id") or "").strip() for item in current_items if str(item.get("id") or "").strip()}
-    if not known_ids or known_ids.issubset(current_ids):
-        return dict(evidence_context)
-    canonical_items = [item for item in read_jsonl(layout.evidence_ledger_path) if isinstance(item, dict) and str(item.get("id") or "").strip() in known_ids]
-    return {**dict(evidence_context), "items": canonical_items}
-
-
-@dataclass
-class _WorkflowRunContext:
-    run_id: str
-    run: dict
-    run_dir: Path
-    workflow: dict
-    executor: object
-    compiled_spec: dict
-    retry_config: RetryConfig
-    prompt_files: dict[str, str]
-    layout: object
-    run_contract: dict
-    workflow_steps: list[dict]
-    workflow_controls: list[dict]
-    control_fire_counts: dict[str, int]
-    workflow_started_at: float
-    role_by_id: dict[str, dict]
-    completion_mode: str
-    last_gatekeeper_result: dict | None = None
-
-
-@dataclass
-class _WorkflowIterationState:
-    iter_id: int
-    previous_composite: object
-    stagnation: dict
-    previous_outputs_by_step: dict[str, dict]
-    previous_outputs_by_role: dict[str, dict]
-    previous_outputs_by_archetype: dict[str, dict]
-    previous_handoffs_by_step: dict[str, dict]
-    previous_handoffs_by_role: dict[str, dict]
-    previous_iteration_summary: dict | None
-    previous_session_refs_by_step: dict[str, dict]
-    step_results: list[dict] = field(default_factory=list)
-    current_outputs_by_step: dict[str, dict] = field(default_factory=dict)
-    current_outputs_by_role: dict[str, dict] = field(default_factory=dict)
-    current_outputs_by_archetype: dict[str, dict] = field(default_factory=dict)
-    current_handoffs: list[dict] = field(default_factory=list)
-    current_session_refs_by_step: dict[str, dict] = field(default_factory=dict)
-    current_gatekeeper_result: dict | None = None
-    current_guide_result: dict | None = None
-
-    def snapshot(self) -> dict[str, object]:
-        return {
-            "current_outputs_by_step": dict(self.current_outputs_by_step),
-            "current_outputs_by_role": dict(self.current_outputs_by_role),
-            "current_outputs_by_archetype": dict(self.current_outputs_by_archetype),
-            "current_handoffs": list(self.current_handoffs),
-        }
-
-
-@dataclass
-class _WorkflowRunProgress:
-    stagnation: dict
-    last_iter_id: int = -1
-    last_step_results: list[dict] = field(default_factory=list)
-    previous_outputs_by_step: dict[str, dict] = field(default_factory=dict)
-    previous_outputs_by_role: dict[str, dict] = field(default_factory=dict)
-    previous_outputs_by_archetype: dict[str, dict] = field(default_factory=dict)
-    previous_handoffs_by_step: dict[str, dict] = field(default_factory=dict)
-    previous_handoffs_by_role: dict[str, dict] = field(default_factory=dict)
-    previous_iteration_summary: dict | None = None
-    previous_session_refs_by_step: dict[str, dict] = field(default_factory=dict)
-
-
-@dataclass(frozen=True)
-class _WorkflowStepRunRequest:
-    context: _WorkflowRunContext
-    iteration: _WorkflowIterationState
-    step_order: int
-    step: dict
-    state_snapshot: dict[str, object]
-    is_control: bool = False
-
-
 def _workflow_role_error_signal(exc: Exception) -> str:
     return "role_timeout" if "timeout" in str(exc).lower() else "step_failed"
 
 
 class ServiceWorkflowExecutionMixin(
     ServiceWorkflowIterationStateMixin,
+    ServiceRunnerStepArtifactsMixin,
     ServiceWorkflowFailureHandlingMixin,
+    ServiceRunnerStepCommitMixin,
 ):
+    def _execute_preclaimed_run(self, run_id: str) -> dict:
+        try:
+            return self.execute_run(run_id, _active_already_claimed=True)
+        except Exception:
+            self._mark_run_inactive(run_id)
+            self._threads.pop(run_id, None)
+            raise
+
+    def execute_run(self, run_id: str, *, _active_already_claimed: bool = False) -> dict:
+        run = self.repository.get_run(run_id)
+        if not run:
+            raise LooporaNotFoundError(f"unknown run: {run_id}")
+
+        if not _active_already_claimed and not self._try_mark_run_active(run_id):
+            raise LooporaConflictError(f"run {run_id} is already executing in this process")
+
+        log_event(
+            logger,
+            logging.INFO,
+            "service.run.execution.started",
+            "Starting workflow run execution",
+            **self._run_log_context(
+                run,
+                completion_mode=run.get("completion_mode"),
+                max_iters=run.get("max_iters"),
+            ),
+        )
+        run_dir = Path(run["runs_dir"])
+        try:
+            workflow = self._normalized_workflow_from_record(run) if run.get("workflow_json") else {}
+        except Exception:
+            self._mark_run_inactive(run_id)
+            self._threads.pop(run_id, None)
+            raise
+
+        if not workflow:
+            return self._fail_run_without_workflow_snapshot(run_id, run, run_dir)
+
+        result = self._execute_workflow_run(run_id, run, run_dir, workflow)
+        return self._execution_result_after_cleanup(run_id, result)
+
+    def _execution_result_after_cleanup(self, run_id: str, result: dict) -> dict:
+        if str(result.get("status") or "") not in {"succeeded", "failed", "stopped"}:
+            return result
+        try:
+            return self.get_run(run_id)
+        except Exception:  # noqa: BLE001 - execution already produced a terminal result; preserve it if refresh fails.
+            return result
+
+    def _fail_run_without_workflow_snapshot(self, run_id: str, run: dict, run_dir: Path) -> dict:
+        error_text = "Run has no workflow snapshot; legacy execution runtime has been removed."
+        summary = f"# Loopora Run Summary\n\nExecution failed before starting.\n\nReason: `{error_text}`.\n"
+        try:
+            failed = self._finalize_terminal_run(
+                TerminalRunFinalizationRequest(
+                    run_id=run_id,
+                    run_dir=run_dir,
+                    status="failed",
+                    summary=summary,
+                    error_message=error_text,
+                    final_reason="missing_workflow_snapshot",
+                )
+            )
+            self._append_run_aborted_event(
+                run_id,
+                role=None,
+                attempts=0,
+                degraded=False,
+                error_text=error_text,
+            )
+            self.append_run_event(
+                run_id,
+                "run_finished",
+                self._run_finished_event_payload(failed, status="failed", reason="missing_workflow_snapshot"),
+            )
+            return failed
+        finally:
+            self._cleanup_run_execution(run_id, run, phase="workflow")
+
     def _run_workflow_step_once(
         self,
         request: _WorkflowStepRunRequest,
@@ -156,6 +164,18 @@ class ServiceWorkflowExecutionMixin(
         runtime_role = self._runtime_role_key(role)
 
         execution_settings = self._resolve_role_execution_settings(context.run, step, role)
+        actor = headless_runner_actor()
+        RepositoryRunEngine(self.repository).claim_workflow_step(
+            RunEngineClaimWorkflowStepRequest(
+                run_id=context.run_id,
+                contract_ref=str(context.layout.run_contract_path),
+                compiled_spec=context.compiled_spec,
+                iteration=iteration.iter_id,
+                step=step,
+                role=role,
+                pending_actor=actor,
+            )
+        )
         log_event(
             logger,
             logging.INFO,
@@ -229,124 +249,9 @@ class ServiceWorkflowExecutionMixin(
             "normalized_output": normalized_output,
             "context_packet": context_packet,
             "session_ref": session_ref,
+            "actor_ref": actor.to_dict(),
             "duration_ms": int((time.perf_counter() - step_started_at) * 1000),
         }
-
-    def _commit_workflow_step_result(
-        self,
-        context: _WorkflowRunContext,
-        iteration: _WorkflowIterationState,
-        result: dict,
-    ) -> dict | None:
-        if result.get("skipped"):
-            return None
-        step = result["step"]
-        is_control_step = bool(step.get("control_id"))
-        step_order = int(result["step_order"])
-        role = result["role"]
-        runtime_role = result["runtime_role"]
-        normalized_output = result["normalized_output"]
-        handoff = self._write_workflow_step_result(
-            WorkflowStepWriteRequest(
-                run_id=context.run_id,
-                layout=context.layout,
-                iter_id=iteration.iter_id,
-                step=step,
-                step_order=step_order,
-                role=role,
-                runtime_role=runtime_role,
-                normalized_output=normalized_output,
-            )
-        )
-        iteration.current_outputs_by_step[step["id"]] = normalized_output
-        iteration.current_outputs_by_role[role["id"]] = normalized_output
-        if runtime_role != role["id"]:
-            iteration.current_outputs_by_role[runtime_role] = normalized_output
-        iteration.current_outputs_by_archetype[role["archetype"]] = normalized_output
-        iteration.current_handoffs.append(handoff)
-        session_ref = result.get("session_ref")
-        if isinstance(session_ref, dict) and session_ref:
-            iteration.current_session_refs_by_step[step["id"]] = dict(session_ref)
-        iteration.step_results.append(
-            self._build_workflow_step_result_entry(
-                WorkflowStepResultEntryRequest(
-                    step=step,
-                    step_order=step_order,
-                    role=role,
-                    runtime_role=runtime_role,
-                    execution_settings=result["execution_settings"],
-                    normalized_output=normalized_output,
-                    handoff=handoff,
-                    context_packet=result["context_packet"],
-                )
-            )
-        )
-        self._log_workflow_step_completion(
-            WorkflowStepCompletionLogRequest(
-                run=context.run,
-                iter_id=iteration.iter_id,
-                step=step,
-                runtime_role=runtime_role,
-                role=role,
-                duration_ms=int(result["duration_ms"]),
-                normalized_output=normalized_output,
-            )
-        )
-
-        if role["archetype"] in {"builder", "inspector"}:
-            self._enforce_workspace_safety(context.run, context.run_dir, iteration.iter_id, role=runtime_role)
-
-        if role["archetype"] == "gatekeeper" and not is_control_step:
-            iteration.current_gatekeeper_result = normalized_output
-            context.last_gatekeeper_result = normalized_output
-            iteration.stagnation = self._record_gatekeeper_iteration_result(
-                GatekeeperIterationRecordRequest(
-                    layout=context.layout,
-                    stagnation=iteration.stagnation,
-                    normalized_output=normalized_output,
-                    iter_id=iteration.iter_id,
-                    previous_composite=iteration.previous_composite,
-                    run=context.run,
-                    run_id=context.run_id,
-                )
-            )
-            if context.completion_mode == "gatekeeper" and normalized_output["passed"] and bool((step.get("action_policy") or {}).get("can_finish_run")):
-                return self._finish_workflow_gatekeeper_success(
-                    WorkflowGatekeeperSuccessRequest(
-                        run_id=context.run_id,
-                        run=context.run,
-                        run_dir=context.run_dir,
-                        workflow=context.workflow,
-                        compiled_spec=context.compiled_spec,
-                        iter_id=iteration.iter_id,
-                        step=step,
-                        runtime_role=runtime_role,
-                        normalized_output=normalized_output,
-                        stagnation=iteration.stagnation,
-                        previous_composite=iteration.previous_composite,
-                        layout=context.layout,
-                        step_results=iteration.step_results,
-                        current_outputs_by_step=iteration.current_outputs_by_step,
-                        current_outputs_by_role=iteration.current_outputs_by_role,
-                        current_outputs_by_archetype=iteration.current_outputs_by_archetype,
-                        current_session_refs_by_step=iteration.current_session_refs_by_step,
-                    )
-                )
-        elif role["archetype"] == "guide":
-            iteration.current_guide_result = normalized_output
-            self.append_run_event(
-                context.run_id,
-                "challenger_done",
-                {
-                    "iter": iteration.iter_id,
-                    "mode": normalized_output.get("mode"),
-                    "step_id": step["id"],
-                    "role_name": role["name"],
-                    "archetype": role["archetype"],
-                },
-                role=runtime_role,
-            )
-        return None
 
     def _run_workflow_controls_for_signal(
         self,
@@ -419,7 +324,7 @@ class ServiceWorkflowExecutionMixin(
                         is_control=True,
                     )
                 )
-                finish_result = self._commit_workflow_step_result(context, iteration, result)
+                finish_result = self._commit_runner_step_result(context, iteration, result)
                 evidence_id = evidence_entry_id(iteration.iter_id, control_order, control_step["id"])
                 self.append_run_event(
                     context.run_id,
@@ -479,7 +384,7 @@ class ServiceWorkflowExecutionMixin(
                 iteration.snapshot(),
             )
             raise
-        return self._commit_workflow_step_result(context, iteration, step_result)
+        return self._commit_runner_step_result(context, iteration, step_result)
 
     def _collect_workflow_parallel_group(
         self,
@@ -559,7 +464,7 @@ class ServiceWorkflowExecutionMixin(
                     )
                     raise
         for result in sorted(parallel_results, key=lambda item: int(item["step_order"])):
-            finish_result = self._commit_workflow_step_result(context, iteration, result)
+            finish_result = self._commit_runner_step_result(context, iteration, result)
             if finish_result is not None:
                 return finish_result
         self.append_run_event(
@@ -581,16 +486,19 @@ class ServiceWorkflowExecutionMixin(
     ) -> dict | None:
         step_index = 0
         while step_index < len(context.workflow_steps):
-            step = context.workflow_steps[step_index]
-            parallel_group = str(step.get("parallel_group") or "").strip()
+            selection = select_next_workflow_step(WorkflowStepSelectionRequest(context.workflow_steps, step_index))
+            if selection is None:
+                return None
+            step = dict(selection.step)
+            parallel_group = selection.parallel_group
             if not parallel_group:
-                finish_result = self._run_workflow_linear_step(context, iteration, step_index, step)
+                finish_result = self._run_workflow_linear_step(context, iteration, selection.step_order, step)
                 if finish_result is not None:
                     return finish_result
-                step_index += 1
+                step_index = selection.step_order + 1
                 continue
 
-            group_start = step_index
+            group_start = selection.step_order
             step_index, group_items = self._collect_workflow_parallel_group(context, group_start, parallel_group)
             finish_result = self._run_workflow_parallel_group(
                 context,
@@ -783,6 +691,14 @@ class ServiceWorkflowExecutionMixin(
         progress.last_iter_id = iter_id
         self._ensure_not_stopped(context.run_id)
         self.repository.update_run(context.run_id, current_iter=iter_id)
+        RepositoryRunEngine(self.repository).start_iteration(
+            RunEngineStartIterationRequest(
+                run_id=context.run_id,
+                iteration=iter_id,
+                actor=headless_runner_actor(),
+                step_count=len(context.workflow_steps),
+            )
+        )
         iteration = self._build_workflow_iteration_state(context, progress, iter_id)
         self._log_workflow_iteration_started(context, iteration)
         finish_result = self._run_workflow_iteration_steps(context, iteration)

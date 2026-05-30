@@ -25,9 +25,6 @@ SERVICE_PRIVATE_IMPORT_ALLOWLIST = {
     ("src/loopora/service_agent_native.py", "loopora.service_agent_native_contracts", "_agent_native_actionable_repair_next_action"),
     ("src/loopora/service_agent_native.py", "loopora.service_agent_native_contracts", "_agent_native_submit_command"),
     ("src/loopora/service_agent_native.py", "loopora.service_agent_native_contracts", "_agent_native_unknown_evidence_refs"),
-    ("src/loopora/service_agent_native.py", "loopora.service_workflow_execution", "_WorkflowIterationState"),
-    ("src/loopora/service_agent_native.py", "loopora.service_workflow_execution", "_WorkflowRunContext"),
-    ("src/loopora/service_agent_native.py", "loopora.service_workflow_execution", "_evidence_context_with_canonical_items"),
     ("src/loopora/service_bundle_assets.py", "loopora.service_asset_common", "_normalize_role_models"),
     ("src/loopora/service_loop_records.py", "loopora.service_asset_common", "_normalize_role_models"),
     ("src/loopora/service_run_registration.py", "loopora.service_asset_common", "_normalize_role_models"),
@@ -55,10 +52,13 @@ def test_loopora_service_is_composition_facade(tmp_path: Path) -> None:
 
 def test_public_service_module_does_not_import_legacy_mixins() -> None:
     source = Path(service_module.__file__).read_text(encoding="utf-8")
+    service_app_source = (REPO_ROOT / "src" / "loopora" / "service_app.py").read_text(encoding="utf-8")
 
     assert "ServiceAlignmentMixin" not in source
     assert "ServiceLegacyExecutionMixin" not in source
     assert "ServiceWorkflowExecutionMixin" not in source
+    assert "ServiceLegacyExecutionMixin" not in service_app_source
+    assert "service_legacy_execution" not in service_app_source
 
 
 def test_component_services_expose_explicit_boundary_methods() -> None:
@@ -121,3 +121,105 @@ def test_service_boundary_inventory_documents_transitional_private_imports() -> 
     assert "ProjectionService" in inventory
     assert "AlignmentService" in inventory
     assert "service_alignment.py" in inventory
+
+
+def test_agent_native_uses_engine_runtime_context_not_workflow_private_types() -> None:
+    source = (REPO_ROOT / "src" / "loopora" / "service_agent_native.py").read_text(encoding="utf-8")
+
+    assert "loopora.service_workflow_execution" not in source
+    assert "WorkflowRunContext" in source
+    assert "WorkflowIterationState" in source
+
+
+def test_workflow_execution_submits_steps_through_run_engine() -> None:
+    source = (REPO_ROOT / "src" / "loopora" / "service_runner_step_commit.py").read_text(encoding="utf-8")
+
+    assert "RunEngineSubmitStepRequest" in source
+    assert ".submit_step(" in source
+    assert "RunEngineCommitStepRequest" not in source
+    assert ".commit_step(" not in source
+
+
+def test_services_use_runner_actor_factories_for_run_engine_boundaries() -> None:
+    workflow_source = (REPO_ROOT / "src" / "loopora" / "service_workflow_execution.py").read_text(encoding="utf-8")
+    agent_source = (REPO_ROOT / "src" / "loopora" / "service_agent_native.py").read_text(encoding="utf-8")
+
+    assert "headless_runner_actor" in workflow_source
+    assert "agent_runner_actor" in agent_source
+    assert 'ActorRef(kind="runner"' not in workflow_source
+    assert 'ActorRef(kind="agent"' not in agent_source
+
+
+def test_services_use_engine_advance_policy_for_workflow_step_selection() -> None:
+    workflow_source = (REPO_ROOT / "src" / "loopora" / "service_workflow_execution.py").read_text(encoding="utf-8")
+    agent_source = (REPO_ROOT / "src" / "loopora" / "service_agent_native.py").read_text(encoding="utf-8")
+
+    assert "select_next_workflow_step" in workflow_source
+    assert "select_next_workflow_step" in agent_source
+
+
+def test_services_ask_run_engine_to_freeze_workflow_step_instructions() -> None:
+    workflow_source = (REPO_ROOT / "src" / "loopora" / "service_workflow_execution.py").read_text(encoding="utf-8")
+    agent_source = (REPO_ROOT / "src" / "loopora" / "service_agent_native.py").read_text(encoding="utf-8")
+
+    assert "RunEngineClaimWorkflowStepRequest" in workflow_source
+    assert "RunEngineClaimWorkflowStepRequest" in agent_source
+    assert "workflow_step_instruction" not in workflow_source
+    assert "workflow_step_instruction" not in agent_source
+
+
+def test_agent_native_treats_active_step_state_as_projection_checked_cache() -> None:
+    agent_source = (REPO_ROOT / "src" / "loopora" / "service_agent_native.py").read_text(encoding="utf-8")
+    engine_source = (REPO_ROOT / "src" / "loopora" / "engine" / "run_engine.py").read_text(encoding="utf-8")
+
+    assert "agent_native_active_step_is_stale" in agent_source
+    assert ".current_step_projection(" in agent_source
+    assert 'get_projection_record("current_step"' in engine_source
+
+
+def test_agent_native_writes_active_step_cache_after_run_engine_claim() -> None:
+    agent_source = (REPO_ROOT / "src" / "loopora" / "service_agent_native.py").read_text(encoding="utf-8")
+    claim_runtime_step = agent_source[
+        agent_source.index("def _agent_native_claim_runtime_step")
+        : agent_source.index("def submit_agent_native_step")
+    ]
+
+    assert claim_runtime_step.index(".claim_workflow_step(") < claim_runtime_step.index('state["active_step"] = {')
+
+
+def test_agent_native_uses_run_engine_workflow_cursor_before_state_step_index() -> None:
+    agent_source = (REPO_ROOT / "src" / "loopora" / "service_agent_native.py").read_text(encoding="utf-8")
+
+    assert ".workflow_step_index(" in agent_source
+    assert "fallback_step_index=int(state.get(\"step_index\") or 0)" in agent_source
+
+
+def test_workflow_execution_submits_step_before_recording_step_evidence() -> None:
+    commit_source = (REPO_ROOT / "src" / "loopora" / "service_runner_step_commit.py").read_text(encoding="utf-8")
+    iteration_source = (REPO_ROOT / "src" / "loopora" / "service_workflow_iteration_state.py").read_text(encoding="utf-8")
+
+    assert "RunEngineRecordStepEvidenceRequest" in commit_source
+    assert ".record_step_evidence(" in commit_source
+    assert commit_source.index(".submit_step(") < commit_source.index(".record_step_evidence(")
+    assert "RunEngineAcceptEvidenceRequest" not in commit_source
+    assert "RunEngineCoverageRecomputedRequest" not in commit_source
+    assert ".accept_evidence(" not in commit_source
+    assert ".recompute_coverage(" not in commit_source
+    assert "RunEngineRecordStepEvidenceRequest" not in iteration_source
+    assert ".record_step_evidence(" not in iteration_source
+
+
+def test_agent_and_headless_share_runner_step_commit_boundary() -> None:
+    agent_source = (REPO_ROOT / "src" / "loopora" / "service_agent_native.py").read_text(encoding="utf-8")
+    workflow_source = (REPO_ROOT / "src" / "loopora" / "service_workflow_execution.py").read_text(encoding="utf-8")
+    commit_source = (REPO_ROOT / "src" / "loopora" / "service_runner_step_commit.py").read_text(encoding="utf-8")
+    artifacts_source = (REPO_ROOT / "src" / "loopora" / "service_runner_step_artifacts.py").read_text(encoding="utf-8")
+
+    assert "_commit_runner_step_result" in agent_source
+    assert "_commit_runner_step_result" in workflow_source
+    assert "class ServiceRunnerStepCommitMixin" in commit_source
+    assert "class ServiceRunnerStepArtifactsMixin" in artifacts_source
+    assert "_write_runner_step_result_artifacts" in commit_source
+    assert "_commit_workflow_step_result" not in agent_source
+    assert "_commit_workflow_step_result" not in workflow_source
+    assert "_write_workflow_step_result" not in commit_source

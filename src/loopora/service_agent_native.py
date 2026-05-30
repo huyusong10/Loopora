@@ -34,6 +34,7 @@ from loopora.agent_native_parallel_groups import (
     agent_native_claim_input_snapshot,
     agent_native_parallel_group_started_payload,
 )
+from loopora.agent_native_projection_state import agent_native_active_step_is_stale
 from loopora.agent_native_result_template import (
     agent_native_result_template,
     write_agent_native_step_contract_files,
@@ -67,6 +68,15 @@ from loopora.agent_native_submitted_step import (
 )
 from loopora.agent_native_task_proof import agent_native_task_next_action, with_agent_native_judgment_contract
 from loopora.context_flow import evidence_entry_id
+from loopora.engine import (
+    RepositoryRunEngine,
+    RunEngineStartIterationRequest,
+    RunEngineClaimWorkflowStepRequest,
+    WorkflowStepSelectionRequest,
+    select_next_workflow_step,
+)
+from loopora.engine.workflow_runtime import WorkflowIterationState, WorkflowRunContext, evidence_context_with_canonical_items
+from loopora.runners import agent_runner_actor
 from loopora.run_artifacts import RunArtifactLayout
 from loopora.service_agent_native_contracts import (
     _agent_native_actionable_blocking_item as _agent_native_actionable_blocking_item,
@@ -75,11 +85,6 @@ from loopora.service_agent_native_contracts import (
     _agent_native_unknown_evidence_refs,
 )
 from loopora.service_types import ACTIVE_RUN_STATUSES, LooporaConflictError, LooporaError, LooporaNotFoundError, TERMINAL_RUN_STATUSES, normalize_completion_mode
-from loopora.service_workflow_execution import (
-    _WorkflowIterationState,
-    _WorkflowRunContext,
-    _evidence_context_with_canonical_items,
-)
 from loopora.service_workflow_failure_handling import WorkflowExhaustionRequest
 from loopora.service_workflow_iteration_state import WorkflowIterationCheckpointRequest
 from loopora.service_workflow_runtime import WorkflowStepRuntimeRequest
@@ -115,8 +120,8 @@ class _AgentNativeRuntimeClaimRequest:
     kind: str
     run: dict
     state: dict[str, Any]
-    context: _WorkflowRunContext
-    iteration: _WorkflowIterationState
+    context: WorkflowRunContext
+    iteration: WorkflowIterationState
     step: dict
     step_order: int
     entry_source: str = ""
@@ -144,8 +149,8 @@ class _AgentNativeSubmitContext:
     step_id: str
     iter_id: int
     step_order: int
-    context: _WorkflowRunContext
-    iteration: _WorkflowIterationState
+    context: WorkflowRunContext
+    iteration: WorkflowIterationState
     role: dict[str, Any]
     runtime_role: str
     context_packet: dict[str, Any]
@@ -243,6 +248,11 @@ class ServiceAgentNativeMixin:
             state["entry_source"] = entry_source
             self._write_agent_native_state(layout, state)
         active = state.get("active_step") if isinstance(state.get("active_step"), dict) else {}
+        current_step_projection = self._agent_native_current_step_projection(run["id"])
+        if active and active.get("capsule") and agent_native_active_step_is_stale(active, current_step_projection):
+            active = {}
+            state["active_step"] = {}
+            self._write_agent_native_state(layout, state)
         if active and active.get("capsule"):
             refreshed_context_packet = self._agent_native_context_packet_with_latest_coverage(
                 layout,
@@ -271,12 +281,18 @@ class ServiceAgentNativeMixin:
             )
 
         context = self._agent_native_run_context(run, state)
-        step_index = int(state.get("step_index") or 0)
-        if step_index >= len(context.workflow_steps):
+        iteration = self._agent_native_iteration_state(state)
+        step_index = RepositoryRunEngine(self.repository).workflow_step_index(
+            run["id"],
+            workflow_steps=context.workflow_steps,
+            iteration=iteration.iter_id,
+            fallback_step_index=int(state.get("step_index") or 0),
+        )
+        selection = select_next_workflow_step(WorkflowStepSelectionRequest(context.workflow_steps, step_index))
+        if selection is None:
             return self._agent_native_finish_iteration_or_advance(kind, run, state, context)
 
-        step = context.workflow_steps[step_index]
-        iteration = self._agent_native_iteration_state(state)
+        step = dict(selection.step)
         return self._agent_native_claim_runtime_step(
             _AgentNativeRuntimeClaimRequest(
                 kind=kind,
@@ -285,7 +301,7 @@ class ServiceAgentNativeMixin:
                 context=context,
                 iteration=iteration,
                 step=step,
-                step_order=step_index,
+                step_order=selection.step_order,
                 entry_source=entry_source,
             )
         )
@@ -302,6 +318,14 @@ class ServiceAgentNativeMixin:
         step = request.step
         step_order = request.step_order
         role = context.role_by_id[step["role_id"]]
+        RepositoryRunEngine(self.repository).start_iteration(
+            RunEngineStartIterationRequest(
+                run_id=run["id"],
+                iteration=iteration.iter_id,
+                actor=agent_runner_actor(kind),
+                step_count=len(context.workflow_steps),
+            )
+        )
         execution_settings = self._resolve_role_execution_settings(run, step, role)
         claim_snapshot = agent_native_claim_input_snapshot(
             state,
@@ -368,6 +392,18 @@ class ServiceAgentNativeMixin:
             context_packet=context_packet,
             entry_source=request.entry_source,
         )
+        run = self.repository.update_run(run["id"], status="awaiting_agent", current_iter=iteration.iter_id, active_role=runtime_role)
+        RepositoryRunEngine(self.repository).claim_workflow_step(
+            RunEngineClaimWorkflowStepRequest(
+                run_id=run["id"],
+                contract_ref=str(context.layout.run_contract_path),
+                compiled_spec=context.compiled_spec,
+                iteration=iteration.iter_id,
+                step=step,
+                role=role,
+                pending_actor=agent_runner_actor(kind),
+            )
+        )
         self._write_agent_native_step_contract_files(capsule)
         state["active_step"] = {
             "claimed_at": utc_now(),
@@ -381,7 +417,6 @@ class ServiceAgentNativeMixin:
             "iter_id": iteration.iter_id,
         }
         self._write_agent_native_state(context.layout, state)
-        run = self.repository.update_run(run["id"], status="awaiting_agent", current_iter=iteration.iter_id, active_role=runtime_role)
         self.append_run_event(
             run["id"],
             "agent_native_step_claimed",
@@ -469,12 +504,15 @@ class ServiceAgentNativeMixin:
         if not step_id or step_id != str(step.get("id") or "").strip():
             raise LooporaConflictError("submitted step_id does not match the claimed agent-native step")
 
-        iter_id = int(active.get("iter_id") or state.get("iter_id") or 0)
-        step_order = int(active.get("step_order") or state.get("step_index") or 0)
+        iter_id = _agent_native_first_present_int(active.get("iter_id"), state.get("iter_id"))
+        step_order = _agent_native_first_present_int(active.get("step_order"), state.get("step_index"))
         if self._agent_native_step_already_submitted(layout, iter_id=iter_id, step_order=step_order, step_id=step_id):
             raise LooporaConflictError(
                 "agent-native step was already submitted; rerun agent next --json if the run advanced or this result file is stale"
             )
+        current_step_projection = self._agent_native_current_step_projection(run["id"])
+        if agent_native_active_step_is_stale(active, current_step_projection):
+            raise LooporaConflictError("claimed agent-native step is stale; rerun agent next before submitting")
 
         context = self._agent_native_run_context(run, state)
         iteration = self._agent_native_iteration_state(state)
@@ -545,7 +583,7 @@ class ServiceAgentNativeMixin:
                 output=output,
                 compiled_spec=context.compiled_spec,
                 inspector_output=dict(iteration.current_outputs_by_archetype).get("inspector"),
-                evidence_context=_evidence_context_with_canonical_items(context_packet, context.layout),
+                evidence_context=evidence_context_with_canonical_items(context_packet, context.layout),
                 current_evidence_id=evidence_entry_id(iter_id, step_order, step_id),
             )
         )
@@ -562,10 +600,11 @@ class ServiceAgentNativeMixin:
             "normalized_output": normalized_output,
             "context_packet": context_packet,
             "session_ref": submitted_session_ref,
+            "actor_ref": agent_runner_actor(submit_context.kind).to_dict(),
             "duration_ms": 0,
             "iter_id": iter_id,
         }
-        finish_result = self._commit_workflow_step_result(context, iteration, result)
+        finish_result = self._commit_runner_step_result(context, iteration, result)
         submitted_step = self._agent_native_submitted_step_result(
             AgentNativeSubmittedStepResultRequest(
                 layout=layout,
@@ -690,7 +729,7 @@ class ServiceAgentNativeMixin:
         adapter: str,
         run: dict,
         state: dict[str, Any],
-        context: _WorkflowRunContext,
+        context: WorkflowRunContext,
     ) -> dict[str, Any]:
         layout = context.layout
         iteration = self._agent_native_iteration_state(state)
@@ -793,8 +832,8 @@ class ServiceAgentNativeMixin:
         adapter: str,
         run: dict,
         state: dict[str, Any],
-        context: _WorkflowRunContext,
-        iteration: _WorkflowIterationState,
+        context: WorkflowRunContext,
+        iteration: WorkflowIterationState,
     ) -> dict[str, Any] | None:
         if not context.workflow_controls:
             return None
@@ -857,7 +896,7 @@ class ServiceAgentNativeMixin:
         except LooporaNotFoundError:
             raise
 
-    def _agent_native_run_context(self, run: dict, state: dict[str, Any]) -> _WorkflowRunContext:
+    def _agent_native_run_context(self, run: dict, state: dict[str, Any]) -> WorkflowRunContext:
         layout = self._run_artifact_layout(Path(run["runs_dir"]))
         return agent_native_run_context(
             run,
@@ -867,19 +906,22 @@ class ServiceAgentNativeMixin:
             prompt_files=self._read_prompt_files_for_run(run),
         )
 
-    def _agent_native_iteration_state(self, state: dict[str, Any]) -> _WorkflowIterationState:
+    def _agent_native_iteration_state(self, state: dict[str, Any]) -> WorkflowIterationState:
         return agent_native_iteration_state(state)
 
-    def _state_from_iteration(self, iteration: _WorkflowIterationState) -> dict[str, Any]:
+    def _state_from_iteration(self, iteration: WorkflowIterationState) -> dict[str, Any]:
         return agent_native_state_from_iteration(iteration)
 
     def _agent_native_state(self, layout, *, adapter: str, run: dict) -> dict[str, Any]:
         return agent_native_state(layout, adapter=adapter, run=run)
 
+    def _agent_native_current_step_projection(self, run_id: str) -> dict[str, Any]:
+        return RepositoryRunEngine(self.repository).current_step_projection(run_id)
+
     @staticmethod
     def _agent_native_update_parallel_group_snapshot_after_submit(
         state: dict[str, Any],
-        context: _WorkflowRunContext,
+        context: WorkflowRunContext,
         step: dict,
         step_order: int,
     ) -> None:
@@ -1003,3 +1045,11 @@ class ServiceAgentNativeMixin:
     @staticmethod
     def _agent_native_evidence_rules(archetype: str) -> list[dict[str, str]]:
         return agent_native_evidence_rules(archetype)
+
+
+def _agent_native_first_present_int(*values: object, default: int = 0) -> int:
+    for value in values:
+        if value is None or value == "":
+            continue
+        return int(value)
+    return default

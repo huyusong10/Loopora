@@ -132,7 +132,7 @@ loopora agent codex check --workdir "$PWD"
 
 `--check` only diagnoses: it does not install, repair, or overwrite. Before install, a failing check means "not installed yet" and prints the install command; after install, failed checks mean the managed entry needs attention.
 
-The Agent-native capability contract is intentionally small:
+The Agent Runner capability contract is intentionally small:
 
 - Execution stays with the current host Agent in its current workdir. Loopora owns managed project entries plus `.loopora/` state, and it does not change model/provider routing, permissions, approval mode, global config, skills/plugins, MCP setup, credentials, or environment secrets.
 - Activation stays explicit through `/loopora-plan`, `/loopora-run`, or Loopora CLI commands. Host hooks, session-start events, status lines, remote controls, and task trackers are observation or control surfaces, not Loopora phase entries.

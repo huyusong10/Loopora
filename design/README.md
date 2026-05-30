@@ -12,6 +12,7 @@ Loopora's stable workflow is:
 | Document | Stable boundary |
 | --- | --- |
 | `contracts.md` | Product, compiler, bundle, runtime, workflow, Web composer, and Agent Native contracts |
+| `loopora_loop_kernel_refactor.md` | Proposal for the pre-launch Loop Kernel / Event Core reset |
 | `decisions/agent-native-execution-plane.md` | Accepted execution-plane split between Agent Native and headless worker paths |
 
 ## Maintenance Rules

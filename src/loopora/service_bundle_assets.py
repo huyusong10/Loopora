@@ -3,14 +3,13 @@ from __future__ import annotations
 from copy import deepcopy
 from dataclasses import dataclass, field
 from pathlib import Path
-import re
 import shutil
 
 from loopora.bundles import BundleError, bundle_to_yaml, load_bundle_file, load_bundle_text, normalize_bundle, normalize_bundle_identifier
 from loopora.diagnostics import get_logger
 from loopora.evidence_coverage import with_coverage_targets
 from loopora.markdown_tools import render_safe_markdown_html
-from loopora.numeric_inputs import coerce_integral_number
+from loopora.projections import LoopfileExportProjectionInput, build_loopfile_export_projection
 from loopora.residual_risk_support import residual_risk_is_unmanaged
 from loopora.service_bundle_control_summary import build_bundle_control_summary, preview_list_items
 from loopora.service_bundle_graph_preflight import BundleGraphLinks, bundle_graph_links, preflight_bundle_graph_delete
@@ -60,15 +59,6 @@ class BundleDeriveRequest:
     revision: int = 1
 
 
-def _bundle_role_definition_key(value: object) -> str:
-    normalized = re.sub(r"[^A-Za-z0-9]+", "-", str(value or "").strip().lower()).strip("-")
-    return normalized or "role"
-
-
-def _role_snapshot_value(role: dict, role_definition: dict | None, field: str) -> object:
-    return role.get(field, "") if field in role else (role_definition or {}).get(field, "")
-
-
 def _derive_bundle_request_from_args(
     request: BundleDeriveRequest | str,
     raw_request: dict[str, object],
@@ -92,16 +82,6 @@ def _derive_bundle_request_from_args(
         unexpected_fields = ", ".join(sorted(fields))
         raise TypeError(f"unexpected bundle derive request fields: {unexpected_fields}")
     return derive_request
-
-
-def _loop_runtime_number(loop: dict, key: str, default: int | float, *, integer_only: bool) -> int | float:
-    value = loop.get(key, default)
-    if value is None or value == "":
-        value = default
-    try:
-        return coerce_integral_number(value, field_name=f"loop.{key}") if integer_only else float(value)
-    except ValueError as exc:
-        raise LooporaError(str(exc)) from exc
 
 
 class ServiceBundleAssetMixin:
@@ -339,112 +319,32 @@ class ServiceBundleAssetMixin:
         loop = self.get_loop(loop_id)
         workflow = normalize_workflow(loop.get("workflow_json") or {})
         prompt_files = dict(loop.get("prompt_files") or {})
-        spec_markdown = loop.get("spec_markdown", "")
-        role_definitions = []
+        role_definition_by_id = {}
         for role in workflow.get("roles", []):
-            role_definition = None
             role_definition_id = str(role.get("role_definition_id", "") or "").strip()
-            if role_definition_id:
-                try:
-                    role_definition = self.get_role_definition(role_definition_id)
-                except LooporaError:
-                    role_definition = None
-            prompt_ref = str(role.get("prompt_ref", "") or (role_definition or {}).get("prompt_ref", "") or "").strip()
-            prompt_markdown = str(prompt_files.get(prompt_ref, "") or "") if prompt_ref else ""
-            if not prompt_markdown:
-                prompt_markdown = str(role.get("prompt_markdown", "") or "")
-            if not prompt_markdown and role_definition is not None:
-                prompt_markdown = str(role_definition.get("prompt_markdown", "") or "")
-
-            role_definitions.append(
-                {
-                    "key": _bundle_role_definition_key(role.get("id", "")),
-                    "name": str(_role_snapshot_value(role, role_definition, "name") or "").strip(),
-                    "description": str((role_definition or {}).get("description", "") or role.get("description", "") or "").strip(),
-                    "archetype": str(_role_snapshot_value(role, role_definition, "archetype") or "").strip(),
-                    "prompt_ref": prompt_ref,
-                    "prompt_markdown": str(prompt_markdown or ""),
-                    "posture_notes": str(_role_snapshot_value(role, role_definition, "posture_notes") or "").strip(),
-                    "executor_kind": str(_role_snapshot_value(role, role_definition, "executor_kind") or "").strip(),
-                    "executor_mode": str(_role_snapshot_value(role, role_definition, "executor_mode") or "").strip(),
-                    "command_cli": str(_role_snapshot_value(role, role_definition, "command_cli") or "").strip(),
-                    "command_args_text": str(_role_snapshot_value(role, role_definition, "command_args_text") or ""),
-                    "model": str(_role_snapshot_value(role, role_definition, "model") or "").strip(),
-                    "reasoning_effort": str(_role_snapshot_value(role, role_definition, "reasoning_effort") or "").strip(),
-                }
-            )
-
-        workflow_bundle = {
-            "version": int(workflow.get("version", 1) or 1),
-            "preset": str(workflow.get("preset", "") or "").strip(),
-            "collaboration_intent": str(workflow.get("collaboration_intent", "") or "").strip(),
-            "roles": [
-                {
-                    "id": str(role.get("id", "") or "").strip(),
-                    "role_definition_key": _bundle_role_definition_key(role.get("id", "")),
-                }
-                for role in workflow.get("roles", [])
-            ],
-            "steps": [
-                {
-                    "id": str(step.get("id", "") or "").strip(),
-                    "role_id": str(step.get("role_id", "") or "").strip(),
-                    "on_pass": str(step.get("on_pass", "continue") or "continue").strip(),
-                    "model": str(step.get("model", "") or "").strip(),
-                    "inherit_session": bool(step.get("inherit_session")),
-                    "extra_cli_args": str(step.get("extra_cli_args", "") or "").strip(),
-                    "action_policy": deepcopy(step.get("action_policy") or {}),
-                    **(
-                        {"parallel_group": str(step.get("parallel_group", "") or "").strip()}
-                        if str(step.get("parallel_group", "") or "").strip()
-                        else {}
-                    ),
-                    **({"inputs": deepcopy(step.get("inputs"))} if isinstance(step.get("inputs"), dict) and step.get("inputs") else {}),
-                }
-                for step in workflow.get("steps", [])
-            ],
-        }
-        if workflow.get("controls"):
-            workflow_bundle["controls"] = deepcopy(workflow.get("controls") or [])
-        bundle = {
-            "version": 1,
-            "metadata": {
-                "bundle_id": request.bundle_id,
-                "name": request.name or str(loop.get("name", "") or "").strip() or loop_id,
-                "description": request.description,
-            },
-            "collaboration_summary": (
-                request.collaboration_summary or request.description or str(loop.get("name", "") or "").strip()
-            ),
-            "loop": {
-                "name": str(loop.get("name", "") or "").strip(),
-                "workdir": str(loop.get("workdir", "") or ""),
-                "completion_mode": str(loop.get("completion_mode", "gatekeeper") or "gatekeeper").strip(),
-                "executor_kind": str(loop.get("executor_kind", "codex") or "codex").strip(),
-                "executor_mode": str(loop.get("executor_mode", "preset") or "preset").strip(),
-                "command_cli": str(loop.get("command_cli", "") or "").strip(),
-                "command_args_text": str(loop.get("command_args_text", "") or ""),
-                "model": str(loop.get("model", "") or "").strip(),
-                "reasoning_effort": str(loop.get("reasoning_effort", "") or "").strip(),
-                "iteration_interval_seconds": _loop_runtime_number(
-                    loop,
-                    "iteration_interval_seconds",
-                    0.0,
-                    integer_only=False,
-                ),
-                "max_iters": _loop_runtime_number(loop, "max_iters", 8, integer_only=True),
-                "max_role_retries": _loop_runtime_number(loop, "max_role_retries", 2, integer_only=True),
-                "delta_threshold": _loop_runtime_number(loop, "delta_threshold", 0.005, integer_only=False),
-                "trigger_window": _loop_runtime_number(loop, "trigger_window", 4, integer_only=True),
-                "regression_window": _loop_runtime_number(loop, "regression_window", 2, integer_only=True),
-            },
-            "spec": {"markdown": str(spec_markdown or "").strip()},
-            "role_definitions": role_definitions,
-            "workflow": workflow_bundle,
-        }
+            if not role_definition_id or role_definition_id in role_definition_by_id:
+                continue
+            try:
+                role_definition_by_id[role_definition_id] = self.get_role_definition(role_definition_id)
+            except LooporaError:
+                role_definition_by_id[role_definition_id] = None
         try:
-            return normalize_bundle(bundle)
-        except BundleError as exc:
+            return normalize_bundle(
+                build_loopfile_export_projection(
+                    LoopfileExportProjectionInput(
+                        loop=loop,
+                        loop_id=loop_id,
+                        workflow=workflow,
+                        prompt_files=prompt_files,
+                        role_definition_by_id=role_definition_by_id,
+                        bundle_id=request.bundle_id,
+                        name=request.name,
+                        description=request.description,
+                        collaboration_summary=request.collaboration_summary,
+                    )
+                )
+            )
+        except (BundleError, ValueError) as exc:
             raise LooporaError(str(exc)) from exc
 
     def write_bundle_file(self, bundle_id: str, path: Path) -> Path:

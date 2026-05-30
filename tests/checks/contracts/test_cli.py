@@ -71,7 +71,7 @@ def _assert_public_anchor_default_language(
 
 def _assert_alignment_language_assets(design_docs: dict[str, str], governance_scenario: str) -> None:
     contracts = design_docs["contracts"]
-    assert "Web composer and Agent Native are peer entry surfaces" in contracts
+    assert "Web composer and Agent Runner are peer entry surfaces" in contracts
     assert "`contracts.md`" in design_docs["readme"]
     assert "Web is full-function" in contracts
     assert "same Core" in contracts
@@ -412,8 +412,8 @@ def test_design_tree_stays_small_and_current() -> None:
 
     assert "design/core-ideas/product-principle.md" not in design_files
     assert "design/detailed-design/09-web-bundle-alignment.md" not in design_files
-    assert "design/contracts.md" in design_files
-    assert len(design_files) <= 3
+    assert {"design/contracts.md", "design/loopora_loop_kernel_refactor.md"} <= set(design_files)
+    assert len(design_files) <= 4
 
 
 def test_workflow_design_default_is_linear_with_advanced_compatibility() -> None:

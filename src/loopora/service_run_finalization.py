@@ -4,6 +4,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from loopora.diagnostics import get_logger, log_exception
+from loopora.engine import RepositoryRunEngine, RunEngineIssueVerdictRequest
+from loopora.kernel import ActorRef
 from loopora.run_artifacts import RunArtifactLayout
 from loopora.task_verdicts import build_task_verdict
 from loopora.utils import utc_now, write_json
@@ -123,6 +125,13 @@ class ServiceRunFinalizationMixin:
             task_verdict=task_verdict,
             summary_md=request.summary,
         )
+        RepositoryRunEngine(self.repository).issue_verdict(
+            RunEngineIssueVerdictRequest(
+                run_id=request.run_id,
+                verdict=task_verdict,
+                actor=ActorRef(kind="system", id="verdict-engine", display_name="Verdict Engine"),
+            )
+        )
         return self._hydrate_run_files(result) if request.hydrate else result
 
     def _finalize_crashed_run(
@@ -150,6 +159,13 @@ class ServiceRunFinalizationMixin:
                 error_message=error_text,
                 task_verdict=task_verdict,
                 summary_md=summary,
+            )
+            RepositoryRunEngine(self.repository).issue_verdict(
+                RunEngineIssueVerdictRequest(
+                    run_id=run_id,
+                    verdict=task_verdict,
+                    actor=ActorRef(kind="system", id="verdict-engine", display_name="Verdict Engine"),
+                )
             )
         except Exception:  # noqa: BLE001 - crash finalization must fall back to an in-memory failed state.
             log_exception(

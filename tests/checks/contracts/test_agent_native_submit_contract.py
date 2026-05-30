@@ -174,7 +174,6 @@ def test_agent_native_submit_rejects_read_only_workspace_claims_and_schema_misma
             )
         )
     assert not raw_output_path.exists()
-
 def test_agent_native_submit_requires_matching_host_dispatch_proof(
     service_factory,
     tmp_path: Path,

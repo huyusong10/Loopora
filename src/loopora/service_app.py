@@ -15,7 +15,6 @@ from loopora.service_agent_native import ServiceAgentNativeMixin
 from loopora.service_alignment import ServiceAlignmentMixin
 from loopora.service_assets import ServiceAssetMixin
 from loopora.service_iteration_reporting import ServiceIterationReportingMixin
-from loopora.service_legacy_execution import ServiceLegacyExecutionMixin
 from loopora.service_prompts import ServiceRunPromptMixin
 from loopora.service_role_execution import ServiceRoleExecutionMixin
 from loopora.service_role_requests import ServiceRoleRequestMixin
@@ -35,7 +34,6 @@ class _LooporaServiceRuntime(
     ServiceAgentNativeMixin,
     ServiceAssetMixin,
     ServiceAlignmentMixin,
-    ServiceLegacyExecutionMixin,
     ServiceRunPromptMixin,
     ServiceWorkflowSupportMixin,
     ServiceWorkflowRuntimeMixin,

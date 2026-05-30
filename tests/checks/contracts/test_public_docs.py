@@ -41,14 +41,14 @@ def test_chinese_public_reader_docs_use_reader_level_runtime_language() -> None:
         assert not internal_terms, f"{doc.relative_to(ROOT)} exposes internal runtime terms: {internal_terms[:5]}"
 
 
-def test_public_reader_docs_keep_agent_native_contract_readable() -> None:
+def test_public_reader_docs_keep_agent_runner_contract_readable() -> None:
     for doc in PUBLIC_READER_DOCS:
         long_lines = [(index, len(line)) for index, line in enumerate(doc.read_text(encoding="utf-8").splitlines(), start=1) if len(line) > PUBLIC_DOC_MAX_LINE_LENGTH]
 
         assert not long_lines, f"{doc.relative_to(ROOT)} has oversized public-reader lines: {long_lines[:3]}"
 
 
-def test_public_reader_docs_explain_agent_native_capability_contract_semantics() -> None:
+def test_public_reader_docs_explain_agent_runner_capability_contract_semantics() -> None:
     english_docs = {
         "README.md": (ROOT / "README.md").read_text(encoding="utf-8"),
         "HUMAN-SHAPED-LOOP.md": (ROOT / "HUMAN-SHAPED-LOOP.md").read_text(encoding="utf-8"),
@@ -95,4 +95,4 @@ def _assert_semantic_groups(text: str, groups: tuple[tuple[str, ...], ...], *, l
     normalized = text.casefold()
     missing = [group for group in groups if not all(term.casefold() in normalized for term in group)]
 
-    assert not missing, f"{label} is missing public-reader Agent Native semantics: {missing[:3]}"
+    assert not missing, f"{label} is missing public-reader Agent Runner semantics: {missing[:3]}"

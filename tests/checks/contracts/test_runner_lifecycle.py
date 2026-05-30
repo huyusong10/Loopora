@@ -15,7 +15,7 @@ from loopora.service import LooporaError, LooporaService
 
 from runner_helpers import (
     _create_loop,
-    _force_run_into_legacy_mode,
+    _force_run_missing_workflow_snapshot,
     _join_async_run,
     _wait_for_terminal_run,
 )
@@ -533,74 +533,29 @@ def test_unexpected_run_error_marks_run_failed(service_factory, sample_spec_file
     )
 
 
-def test_legacy_gatekeeper_run_exhausts_without_crashing(
+def test_empty_workflow_snapshot_fails_closed_without_legacy_runtime(
     service_factory,
     sample_spec_file: Path,
     sample_workdir: Path,
 ) -> None:
-    service = service_factory(scenario="plateau")
-    loop = _create_loop(service, sample_spec_file, sample_workdir, name="Legacy Plateau Loop")
+    service = service_factory(scenario="success")
+    loop = _create_loop(service, sample_spec_file, sample_workdir, name="Missing Workflow Loop")
     run = service.start_run(loop["id"])
-    _force_run_into_legacy_mode(service, run["id"])
+    _force_run_missing_workflow_snapshot(service, run["id"])
 
     failed = service.execute_run(run["id"])
 
     assert failed["status"] == "failed"
-    assert failed["error_message"] in {None, ""}
+    assert failed["error_message"] == "Run has no workflow snapshot; legacy execution runtime has been removed."
+    assert not hasattr(service, "_execute_legacy_run")
     events = service.repository.list_events(run["id"], after_id=0, limit=1000)
-    assert any(event["event_type"] == "run_finished" and event["payload"].get("reason") == "max_iters_exhausted" for event in events)
-    assert all(event["event_type"] != "run_aborted" for event in events)
-
-
-def test_empty_workflow_snapshot_dispatches_to_legacy_execution(
-    service_factory,
-    sample_spec_file: Path,
-    sample_workdir: Path,
-    monkeypatch,
-) -> None:
-    service = service_factory(scenario="success")
-    loop = _create_loop(service, sample_spec_file, sample_workdir, name="Legacy Dispatch Loop")
-    run = service.start_run(loop["id"])
-    _force_run_into_legacy_mode(service, run["id"])
-    original_legacy_run = service._execute_legacy_run
-    dispatched = {"legacy": False}
-
-    def record_legacy_dispatch(run_id: str, run: dict, run_dir: Path) -> dict:
-        dispatched["legacy"] = True
-        return original_legacy_run(run_id, run, run_dir)
-
-    monkeypatch.setattr(service, "_execute_legacy_run", record_legacy_dispatch)
-
-    finished = service.execute_run(run["id"])
-
-    assert dispatched["legacy"] is True
-    assert finished["status"] == "succeeded"
-
-
-def test_legacy_rounds_run_finishes_after_planned_iterations(
-    service_factory,
-    sample_spec_file: Path,
-    sample_workdir: Path,
-) -> None:
-    service = service_factory(scenario="plateau")
-    loop = _create_loop(
-        service,
-        sample_spec_file,
-        sample_workdir,
-        name="Legacy Planned Rounds Loop",
-        completion_mode="rounds",
-        max_iters=2,
+    assert any(event["event_type"] == "run_aborted" for event in events)
+    assert any(
+        event["event_type"] == "run_finished"
+        and event["payload"]["status"] == "failed"
+        and event["payload"].get("reason") == "missing_workflow_snapshot"
+        for event in events
     )
-    run = service.start_run(loop["id"])
-    _force_run_into_legacy_mode(service, run["id"])
-
-    finished = service.execute_run(run["id"])
-
-    assert finished["status"] == "succeeded"
-    assert finished["error_message"] in {None, ""}
-    events = service.repository.list_events(run["id"], after_id=0, limit=1000)
-    assert any(event["event_type"] == "run_finished" and event["payload"].get("reason") == "rounds_completed" for event in events)
-    assert all(event["event_type"] != "run_aborted" for event in events)
 
 
 def test_get_run_recovers_local_orphaned_active_run(service_factory, sample_spec_file: Path, sample_workdir: Path) -> None:

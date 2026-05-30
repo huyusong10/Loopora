@@ -95,6 +95,42 @@ class RepositorySchemaMixin:
                     payload_json TEXT NOT NULL
                 );
 
+                CREATE TABLE IF NOT EXISTS event_store (
+                    event_id TEXT PRIMARY KEY,
+                    stream_id TEXT NOT NULL,
+                    aggregate_type TEXT NOT NULL,
+                    aggregate_id TEXT NOT NULL,
+                    sequence INTEGER NOT NULL,
+                    event_type TEXT NOT NULL,
+                    schema_version INTEGER NOT NULL,
+                    occurred_at TEXT NOT NULL,
+                    actor_json TEXT NOT NULL,
+                    correlation_id TEXT NOT NULL,
+                    causation_id TEXT,
+                    payload_json TEXT NOT NULL,
+                    UNIQUE(stream_id, sequence)
+                );
+
+                CREATE TABLE IF NOT EXISTS projection_store (
+                    projection_name TEXT NOT NULL,
+                    projection_key TEXT NOT NULL,
+                    source_sequence INTEGER NOT NULL,
+                    payload_json TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    PRIMARY KEY(projection_name, projection_key)
+                );
+
+                CREATE TABLE IF NOT EXISTS artifact_index (
+                    artifact_id TEXT PRIMARY KEY,
+                    run_id TEXT,
+                    loop_id TEXT,
+                    kind TEXT NOT NULL,
+                    uri TEXT NOT NULL,
+                    content_hash TEXT,
+                    created_by_event_id TEXT,
+                    created_at TEXT NOT NULL
+                );
+
                 CREATE TABLE IF NOT EXISTS run_takeaway_projections (
                     run_id TEXT NOT NULL REFERENCES loop_runs(id) ON DELETE CASCADE,
                     source_event_id INTEGER NOT NULL REFERENCES run_events(id) ON DELETE CASCADE,
@@ -211,6 +247,8 @@ class RepositorySchemaMixin:
 
                 CREATE INDEX IF NOT EXISTS idx_run_takeaway_projections_cutoff
                     ON run_takeaway_projections(run_id, source_event_id DESC);
+                CREATE INDEX IF NOT EXISTS idx_event_store_aggregate
+                    ON event_store(aggregate_type, aggregate_id, sequence);
                 CREATE INDEX IF NOT EXISTS idx_bundle_asset_ownership_bundle
                     ON bundle_asset_ownership(bundle_id);
                 CREATE INDEX IF NOT EXISTS idx_local_asset_roots_lookup
@@ -264,6 +302,9 @@ class RepositorySchemaMixin:
         required_columns = {
             "loop_definitions": {"id", "orchestration_id", "executor_kind", "workflow_json", "completion_mode"},
             "loop_runs": {"id", "orchestration_id", "executor_kind", "workflow_json", "task_verdict_json", "completion_mode"},
+            "event_store": {"event_id", "stream_id", "sequence", "event_type", "payload_json"},
+            "projection_store": {"projection_name", "projection_key", "source_sequence", "payload_json"},
+            "artifact_index": {"artifact_id", "kind", "uri"},
             "alignment_sessions": {"id", "alignment_stage", "working_agreement_json", "executor_session_ref_json", "linked_run_id"},
             "local_asset_roots": {"resource_type", "resource_id", "path", "state"},
             "bundle_asset_ownership": {"bundle_id", "asset_type", "asset_id"},

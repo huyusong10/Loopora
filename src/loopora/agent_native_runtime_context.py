@@ -3,10 +3,10 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from loopora.engine.workflow_runtime import WorkflowIterationState, WorkflowRunContext
 from loopora.recovery import RetryConfig
 from loopora.run_artifacts import INITIAL_STAGNATION_STATE
 from loopora.service_types import normalize_completion_mode
-from loopora.service_workflow_execution import _WorkflowIterationState, _WorkflowRunContext
 from loopora.utils import read_json
 from loopora.workflows import normalize_workflow
 
@@ -18,11 +18,11 @@ def agent_native_run_context(
     layout: object,
     executor: object,
     prompt_files: dict[str, str],
-) -> _WorkflowRunContext:
+) -> WorkflowRunContext:
     workflow = run.get("workflow_json") or read_json(layout.contract_workflow_path)
     workflow = normalize_workflow(workflow)
     role_by_id = {role["id"]: role for role in workflow.get("roles", [])}
-    return _WorkflowRunContext(
+    return WorkflowRunContext(
         run_id=run["id"],
         run=run,
         run_dir=Path(run["runs_dir"]),
@@ -45,8 +45,8 @@ def agent_native_run_context(
     )
 
 
-def agent_native_iteration_state(state: dict[str, Any]) -> _WorkflowIterationState:
-    return _WorkflowIterationState(
+def agent_native_iteration_state(state: dict[str, Any]) -> WorkflowIterationState:
+    return WorkflowIterationState(
         iter_id=int(state.get("iter_id") or 0),
         previous_composite=state.get("previous_composite"),
         stagnation=dict(state.get("stagnation") or INITIAL_STAGNATION_STATE),
@@ -72,7 +72,7 @@ def agent_native_iteration_state(state: dict[str, Any]) -> _WorkflowIterationSta
     )
 
 
-def agent_native_state_from_iteration(iteration: _WorkflowIterationState) -> dict[str, Any]:
+def agent_native_state_from_iteration(iteration: WorkflowIterationState) -> dict[str, Any]:
     return {
         "iter_id": iteration.iter_id,
         "previous_composite": iteration.previous_composite,

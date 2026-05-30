@@ -78,7 +78,7 @@ def _create_loop(
     return service.create_loop(**payload)
 
 
-def _force_run_into_legacy_mode(service: LooporaService, run_id: str) -> dict:
+def _force_run_missing_workflow_snapshot(service: LooporaService, run_id: str) -> dict:
     with service.repository.transaction() as connection:
         connection.execute(
             "UPDATE loop_runs SET workflow_json = ? WHERE id = ?",
