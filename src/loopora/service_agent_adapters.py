@@ -49,6 +49,9 @@ from loopora.agent_entry_run_projection import (
 )
 from loopora.alignment_semantics import text_mentions_loop_fit_contradiction
 from loopora.bundles import BundleError, read_bundle_file_text
+from loopora.service_alignment_context import alignment_same_workdir
+from loopora.service_alignment_run_recovery import agent_recovery_agent_entry_candidate_event, agent_run_context_choices
+from loopora.service_alignment_transcript import localized_alignment_system_message_appender
 from loopora.service_types import LooporaConflictError, LooporaError, LooporaNotFoundError, TERMINAL_RUN_STATUSES
 from loopora.utils import write_json
 
@@ -149,7 +152,8 @@ class ServiceAgentAdapterMixin:
             preview = self.sync_alignment_bundle_from_file(session["id"])
             session = preview["session"]
         elif loopora_fit_contradiction:
-            session = self._append_alignment_system_message(
+            append_system_message = localized_alignment_system_message_appender(self._alignment_transcript_context())
+            session = append_system_message(
                 session["id"],
                 zh=(
                     "Loopora 已把这次 /loopora-plan 打开为 Web review：宿主 Agent 没有提交候选方案文件，"
@@ -167,7 +171,8 @@ class ServiceAgentAdapterMixin:
                 ),
             )
         else:
-            session = self._append_alignment_system_message(
+            append_system_message = localized_alignment_system_message_appender(self._alignment_transcript_context())
+            session = append_system_message(
                 session["id"],
                 zh=(
                     "Loopora 已把这次 /loopora-plan 打开为 Web review：宿主 Agent 没有提交候选方案文件，"
@@ -476,7 +481,17 @@ class ServiceAgentAdapterMixin:
         entry_source: str,
         source_option_id: str,
     ) -> dict[str, Any]:
-        choices = [choice for choice in self._agent_run_context_choices(root, adapter=adapter) if isinstance(choice, dict)]
+        choices = [
+            choice
+            for choice in agent_run_context_choices(
+                self.repository,
+                root=root,
+                adapter=adapter,
+                same_workdir=alignment_same_workdir,
+                get_run=self.get_run,
+            )
+            if isinstance(choice, dict)
+        ]
         selected = next((choice for choice in choices if str(choice.get("option_id") or "") == source_option_id), None)
         if not selected:
             raise LooporaConflictError(
@@ -547,7 +562,7 @@ class ServiceAgentAdapterMixin:
             return {}
         loop = self.get_loop(normalized_loop_id)
         for session in self._agent_entry_sessions_for_loop(normalized_loop_id):
-            candidate_event = self._alignment_session_agent_entry_candidate_event(str(session.get("id") or ""))
+            candidate_event = agent_recovery_agent_entry_candidate_event(self.repository, str(session.get("id") or ""))
             if not candidate_event:
                 continue
             payload = candidate_event.get("payload") if isinstance(candidate_event.get("payload"), dict) else {}

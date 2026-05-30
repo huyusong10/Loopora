@@ -6,8 +6,10 @@ import pytest
 
 from loopora.bundles import load_bundle_text
 from loopora.executor_fake_payloads import alignment_bundle_yaml
+from loopora.alignment_readiness_rules import readiness_evidence_issues
+from loopora.alignment_traceability_rules import alignment_bundle_agreement_traceability_issues
+from loopora.service_alignment_context import alignment_workdir_snapshot, alignment_workdir_snapshot_has_governance_markers
 from loopora.service_bundle_control_summary import build_bundle_control_summary
-import loopora.service_alignment as alignment_module
 
 from alignment_test_support import (
     _wait_for_status,
@@ -106,7 +108,6 @@ def test_alignment_service_blocks_placeholder_judgment_readiness_evidence(
     )
 
 def test_alignment_readiness_evidence_rejects_placeholder_judgment_surfaces() -> None:
-    service = alignment_module.ServiceAlignmentMixin
     readiness_evidence = {
         "loop_fit": "Loopora is needed because roles must gather proof, compare findings, and keep judgment alive across iterations.",
         "task_scope": "The task scope is the requested starter workflow and its evidence-bearing bundle surfaces.",
@@ -121,7 +122,7 @@ def test_alignment_readiness_evidence_rejects_placeholder_judgment_surfaces() ->
         "workflow_shape": "Builder, Inspector, and GateKeeper exchange explicit handoffs before any finish decision.",
         "workdir_facts": "Snapshot assumptions remain unknown until observed in the workdir.",
     }
-    valid_issues = service._readiness_evidence_issues({"readiness_evidence": readiness_evidence})
+    valid_issues = readiness_evidence_issues({"readiness_evidence": readiness_evidence})
     assert not {
         "success_surface",
         "fake_done_risks",
@@ -138,15 +139,15 @@ def test_alignment_readiness_evidence_rejects_placeholder_judgment_surfaces() ->
     for key, value in placeholders.items():
         candidate = dict(readiness_evidence)
         candidate[key] = value
-        issues = service._readiness_evidence_issues({"readiness_evidence": candidate})
+        issues = readiness_evidence_issues({"readiness_evidence": candidate})
         assert key in issues
 
     no_gatekeeper = dict(readiness_evidence)
     no_gatekeeper["role_posture"] = "Builder leaves evidence and Inspector reviews the handoff carefully."
-    assert "role_posture" in service._readiness_evidence_issues({"readiness_evidence": no_gatekeeper})
+    assert "role_posture" in readiness_evidence_issues({"readiness_evidence": no_gatekeeper})
     chinese_no_gatekeeper = dict(readiness_evidence)
     chinese_no_gatekeeper["role_posture"] = "Builder 负责构建，Inspector 验证证据。"
-    assert "role_posture" in service._readiness_evidence_issues({"readiness_evidence": chinese_no_gatekeeper})
+    assert "role_posture" in readiness_evidence_issues({"readiness_evidence": chinese_no_gatekeeper})
 
 def test_alignment_readiness_evidence_rejects_unmanaged_residual_risk_policy() -> None:
     readiness_evidence = {
@@ -166,26 +167,25 @@ def test_alignment_readiness_evidence_rejects_unmanaged_residual_risk_policy() -
         "workflow_shape": "Builder, Inspector, and GateKeeper exchange explicit handoffs before any finish decision.",
         "workdir_facts": "Snapshot assumptions remain unknown until observed in the workdir.",
     }
-    valid_issues = alignment_module.ServiceAlignmentMixin._readiness_evidence_issues({"readiness_evidence": readiness_evidence})
+    valid_issues = readiness_evidence_issues({"readiness_evidence": readiness_evidence})
     assert "residual_risk_policy" not in valid_issues
 
     readiness_evidence["residual_risk_policy"] = "Some risk is fine."
-    issues = alignment_module.ServiceAlignmentMixin._readiness_evidence_issues({"readiness_evidence": readiness_evidence})
+    issues = readiness_evidence_issues({"readiness_evidence": readiness_evidence})
 
     assert "residual_risk_policy" in issues
 
     readiness_evidence["residual_risk_policy"] = "有些风险可以接受。"
-    issues = alignment_module.ServiceAlignmentMixin._readiness_evidence_issues({"readiness_evidence": readiness_evidence})
+    issues = readiness_evidence_issues({"readiness_evidence": readiness_evidence})
 
     assert "residual_risk_policy" in issues
 
     readiness_evidence["residual_risk_policy"] = "有些风险可以接受，但必须由客服负责人跟进工单。"
-    issues = alignment_module.ServiceAlignmentMixin._readiness_evidence_issues({"readiness_evidence": readiness_evidence})
+    issues = readiness_evidence_issues({"readiness_evidence": readiness_evidence})
 
     assert "residual_risk_policy" not in issues
 
 def test_alignment_readiness_evidence_rejects_local_governance_marker_lists_without_responsibility() -> None:
-    service = alignment_module.ServiceAlignmentMixin
     readiness_evidence = {
         "loop_fit": "Loopora is needed because roles must gather proof, compare findings, and keep judgment alive across iterations.",
         "task_scope": "The task scope is the requested starter workflow and its evidence-bearing bundle surfaces.",
@@ -201,7 +201,7 @@ def test_alignment_readiness_evidence_rejects_local_governance_marker_lists_with
         "workdir_facts": "Snapshot assumptions remain unknown until observed in the workdir.",
     }
 
-    issues = service._readiness_evidence_issues({"readiness_evidence": readiness_evidence})
+    issues = readiness_evidence_issues({"readiness_evidence": readiness_evidence})
     assert "local_governance" in issues
 
     readiness_evidence["local_governance"] = (
@@ -209,11 +209,10 @@ def test_alignment_readiness_evidence_rejects_local_governance_marker_lists_with
         "obligations against the result; GateKeeper treats skipped AGENTS.md or tests/ validation as Weak, "
         "Unproven, or Blocking."
     )
-    issues = service._readiness_evidence_issues({"readiness_evidence": readiness_evidence})
+    issues = readiness_evidence_issues({"readiness_evidence": readiness_evidence})
     assert "local_governance" not in issues
 
 def test_alignment_readiness_evidence_uses_workdir_snapshot_for_local_governance() -> None:
-    service = alignment_module.ServiceAlignmentMixin
     readiness_evidence = {
         "loop_fit": "Loopora is needed because roles must gather proof, compare findings, and keep judgment alive across iterations.",
         "task_scope": "The task scope is the requested starter workflow and its evidence-bearing bundle surfaces.",
@@ -237,7 +236,7 @@ def test_alignment_readiness_evidence_uses_workdir_snapshot_for_local_governance
         ]
     )
 
-    issues = service._readiness_evidence_issues({"readiness_evidence": readiness_evidence}, workdir_snapshot=snapshot)
+    issues = readiness_evidence_issues({"readiness_evidence": readiness_evidence}, workdir_snapshot=snapshot)
     assert "local_governance" in issues
 
     readiness_evidence["local_governance"] = (
@@ -245,14 +244,12 @@ def test_alignment_readiness_evidence_uses_workdir_snapshot_for_local_governance
         "obligations against the result; GateKeeper treats skipped AGENTS.md or tests/ validation as Weak, "
         "Unproven, or Blocking."
     )
-    issues = service._readiness_evidence_issues({"readiness_evidence": readiness_evidence}, workdir_snapshot=snapshot)
+    issues = readiness_evidence_issues({"readiness_evidence": readiness_evidence}, workdir_snapshot=snapshot)
     assert "local_governance" not in issues
 
 def test_alignment_traceability_uses_workdir_snapshot_for_local_governance(
-    service_factory,
     sample_workdir: Path,
 ) -> None:
-    service = service_factory(scenario="success")
     bundle = load_bundle_text(alignment_bundle_yaml(str(sample_workdir)))
     (sample_workdir / "AGENTS.md").write_text("Project rules.\n", encoding="utf-8")
     (sample_workdir / "design").mkdir()
@@ -270,30 +267,27 @@ def test_alignment_traceability_uses_workdir_snapshot_for_local_governance(
         },
     }
 
-    issues = service._alignment_bundle_agreement_traceability_issues(session, bundle)
+    issues = alignment_bundle_agreement_traceability_issues(session, bundle)
 
     assert any("project-local governance markers" in issue for issue in issues)
 
 def test_alignment_workdir_snapshot_detects_applicable_parent_agents_file(tmp_path: Path) -> None:
-    service = alignment_module.ServiceAlignmentMixin
     project = tmp_path / "project"
     workdir = project / "packages" / "app"
     workdir.mkdir(parents=True)
     (project / ".git").mkdir()
     (project / "AGENTS.md").write_text("Project rules.\n", encoding="utf-8")
 
-    snapshot = service._alignment_workdir_snapshot(workdir)
+    snapshot = alignment_workdir_snapshot(workdir)
 
     assert "AGENTS.md exists: no" in snapshot
     assert "Applicable AGENTS.md exists: yes" in snapshot
     assert "Applicable AGENTS.md paths: ../../AGENTS.md" in snapshot
-    assert service._workdir_snapshot_has_governance_markers(snapshot)
+    assert alignment_workdir_snapshot_has_governance_markers(snapshot)
 
 def test_alignment_traceability_uses_parent_agents_snapshot_for_local_governance(
-    service_factory,
     tmp_path: Path,
 ) -> None:
-    service = service_factory(scenario="success")
     project = tmp_path / "project"
     workdir = project / "packages" / "app"
     workdir.mkdir(parents=True)
@@ -309,7 +303,7 @@ def test_alignment_traceability_uses_parent_agents_snapshot_for_local_governance
         },
     }
 
-    issues = service._alignment_bundle_agreement_traceability_issues(session, bundle)
+    issues = alignment_bundle_agreement_traceability_issues(session, bundle)
 
     assert any("project-local governance markers" in issue for issue in issues)
 
@@ -392,10 +386,8 @@ def test_alignment_service_blocks_governance_markers_without_bundle_responsibili
     )
 
 def test_alignment_traceability_checks_governance_markers_across_readiness_evidence(
-    service_factory,
     sample_workdir: Path,
 ) -> None:
-    service = service_factory(scenario="success")
     bundle = load_bundle_text(
         alignment_bundle_yaml(str(sample_workdir)).replace(
             "Ship the focused starter experience in the target workdir with small, maintainable changes that preserve the primary user flow.",
@@ -410,15 +402,13 @@ def test_alignment_traceability_checks_governance_markers_across_readiness_evide
         }
     }
 
-    issues = service._alignment_bundle_agreement_traceability_issues(session, bundle)
+    issues = alignment_bundle_agreement_traceability_issues(session, bundle)
 
     assert any("project-local governance markers" in issue for issue in issues)
 
 def test_alignment_traceability_checks_loop_fit_task_terms(
-    service_factory,
     sample_workdir: Path,
 ) -> None:
-    service = service_factory(scenario="success")
     bundle = load_bundle_text(alignment_bundle_yaml(str(sample_workdir)))
     session = {
         "working_agreement": {
@@ -431,15 +421,13 @@ def test_alignment_traceability_checks_loop_fit_task_terms(
         }
     }
 
-    issues = service._alignment_bundle_agreement_traceability_issues(session, bundle)
+    issues = alignment_bundle_agreement_traceability_issues(session, bundle)
 
     assert any("loop_fit missing browsertrace" in issue for issue in issues)
 
 def test_alignment_traceability_checks_agreement_success_categories(
-    service_factory,
     sample_workdir: Path,
 ) -> None:
-    service = service_factory(scenario="success")
     bundle = load_bundle_text(alignment_bundle_yaml(str(sample_workdir)))
     bundle["spec"]["markdown"] = bundle["spec"]["markdown"].replace(
         "Ship the focused starter experience in the target workdir with small, maintainable changes that preserve the primary user flow.",
@@ -456,15 +444,13 @@ def test_alignment_traceability_checks_agreement_success_categories(
         }
     }
 
-    issues = service._alignment_bundle_agreement_traceability_issues(session, bundle)
+    issues = alignment_bundle_agreement_traceability_issues(session, bundle)
 
     assert any("success surface" in issue and "notification/message" in issue for issue in issues)
 
 def test_alignment_traceability_checks_agreement_evidence_preference_categories(
-    service_factory,
     sample_workdir: Path,
 ) -> None:
-    service = service_factory(scenario="success")
     bundle = load_bundle_text(alignment_bundle_yaml(str(sample_workdir)))
     bundle["spec"]["markdown"] = bundle["spec"]["markdown"].replace(
         "Prefer project-owned checks, direct run output, and concrete artifacts before screenshots or claims.",
@@ -480,15 +466,13 @@ def test_alignment_traceability_checks_agreement_evidence_preference_categories(
         }
     }
 
-    issues = service._alignment_bundle_agreement_traceability_issues(session, bundle)
+    issues = alignment_bundle_agreement_traceability_issues(session, bundle)
 
     assert any("evidence preferences" in issue and "audit/log" in issue for issue in issues)
 
 def test_alignment_traceability_checks_agreement_accessibility_and_locale_categories(
-    service_factory,
     sample_workdir: Path,
 ) -> None:
-    service = service_factory(scenario="success")
     bundle = load_bundle_text(alignment_bundle_yaml(str(sample_workdir)))
     session = {
         "working_agreement": {
@@ -504,7 +488,7 @@ def test_alignment_traceability_checks_agreement_accessibility_and_locale_catego
         }
     }
 
-    issues = service._alignment_bundle_agreement_traceability_issues(session, bundle)
+    issues = alignment_bundle_agreement_traceability_issues(session, bundle)
 
     assert any("success surface" in issue and "accessibility/a11y" in issue for issue in issues)
     assert any("success surface" in issue and "locale/i18n" in issue for issue in issues)
@@ -512,10 +496,8 @@ def test_alignment_traceability_checks_agreement_accessibility_and_locale_catego
     assert any("evidence preferences" in issue and "locale/i18n" in issue for issue in issues)
 
 def test_alignment_traceability_rejects_disconnected_governance_marker_responsibilities(
-    service_factory,
     sample_workdir: Path,
 ) -> None:
-    service = service_factory(scenario="success")
     bundle = load_bundle_text(alignment_bundle_yaml(str(sample_workdir)))
     bundle["spec"]["markdown"] += (
         "\nWorkdir Snapshot detected AGENTS.md, design/README.md, design/, and tests/.\n"
@@ -532,15 +514,13 @@ def test_alignment_traceability_rejects_disconnected_governance_marker_responsib
         }
     }
 
-    issues = service._alignment_bundle_agreement_traceability_issues(session, bundle)
+    issues = alignment_bundle_agreement_traceability_issues(session, bundle)
 
     assert any("project-local governance markers" in issue for issue in issues)
 
 def test_alignment_traceability_accepts_marker_specific_role_responsibilities(
-    service_factory,
     sample_workdir: Path,
 ) -> None:
-    service = service_factory(scenario="success")
     bundle = load_bundle_text(alignment_bundle_yaml(str(sample_workdir)))
     role_by_key = {role["key"]: role for role in bundle["role_definitions"]}
     role_by_key["builder"]["prompt_markdown"] += (
@@ -560,15 +540,13 @@ def test_alignment_traceability_accepts_marker_specific_role_responsibilities(
         }
     }
 
-    issues = service._alignment_bundle_agreement_traceability_issues(session, bundle)
+    issues = alignment_bundle_agreement_traceability_issues(session, bundle)
 
     assert not any("project-local governance markers" in issue for issue in issues)
 
 def test_alignment_traceability_accepts_role_notes_governance_responsibilities(
-    service_factory,
     sample_workdir: Path,
 ) -> None:
-    service = service_factory(scenario="success")
     bundle = load_bundle_text(alignment_bundle_yaml(str(sample_workdir)))
     spec_without_role_notes = bundle["spec"]["markdown"].split("\n# Role Notes\n", 1)[0]
     bundle["spec"]["markdown"] = (
@@ -586,15 +564,13 @@ def test_alignment_traceability_accepts_role_notes_governance_responsibilities(
         }
     }
 
-    issues = service._alignment_bundle_agreement_traceability_issues(session, bundle)
+    issues = alignment_bundle_agreement_traceability_issues(session, bundle)
 
     assert not any("project-local governance markers" in issue for issue in issues)
 
 def test_alignment_traceability_rejects_summary_only_governance_responsibilities(
-    service_factory,
     sample_workdir: Path,
 ) -> None:
-    service = service_factory(scenario="success")
     bundle = load_bundle_text(alignment_bundle_yaml(str(sample_workdir)))
     bundle["collaboration_summary"] += (
         "\nBuilder reads AGENTS.md, design/README.md, design/, and tests/ before editing. "
@@ -609,15 +585,13 @@ def test_alignment_traceability_rejects_summary_only_governance_responsibilities
         }
     }
 
-    issues = service._alignment_bundle_agreement_traceability_issues(session, bundle)
+    issues = alignment_bundle_agreement_traceability_issues(session, bundle)
 
     assert any("project-local governance markers" in issue for issue in issues)
 
 def test_alignment_traceability_ignores_metadata_and_loop_names(
-    service_factory,
     sample_workdir: Path,
 ) -> None:
-    service = service_factory(scenario="success")
     bundle = load_bundle_text(alignment_bundle_yaml(str(sample_workdir)))
     bundle["metadata"]["name"] = "browsertrace"
     bundle["metadata"]["description"] = "browsertrace"
@@ -630,15 +604,13 @@ def test_alignment_traceability_ignores_metadata_and_loop_names(
         }
     }
 
-    issues = service._alignment_bundle_agreement_traceability_issues(session, bundle)
+    issues = alignment_bundle_agreement_traceability_issues(session, bundle)
 
     assert any("evidence_preferences missing browsertrace" in issue for issue in issues)
 
 def test_alignment_traceability_counts_workflow_step_inputs_as_runtime_surface(
-    service_factory,
     sample_workdir: Path,
 ) -> None:
-    service = service_factory(scenario="success")
     bundle = load_bundle_text(alignment_bundle_yaml(str(sample_workdir)))
     bundle["workflow"]["steps"][0]["inputs"] = {"evidence_query": {"target_ids": ["browsertrace"]}}
     session = {
@@ -649,7 +621,7 @@ def test_alignment_traceability_counts_workflow_step_inputs_as_runtime_surface(
         }
     }
 
-    issues = service._alignment_bundle_agreement_traceability_issues(session, bundle)
+    issues = alignment_bundle_agreement_traceability_issues(session, bundle)
 
     assert not any("evidence_preferences" in issue for issue in issues)
 

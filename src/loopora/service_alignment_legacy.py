@@ -5,13 +5,42 @@ import shutil
 from pathlib import Path
 
 from loopora.diagnostics import get_logger
+from loopora.service_alignment_artifacts import (
+    alignment_artifact_paths_from_root,
+    alignment_artifact_root_from_bundle_path,
+    alignment_invocation_dir,
+    alignment_latest_invocation_dir,
+    alignment_next_invocation_dir,
+    alignment_output_debug_payload,
+    write_alignment_manifest,
+)
 from loopora.service_cleanup_diagnostics import cleanup_diagnostic_payload, log_cleanup_diagnostic
-from loopora.structured_numbers import structured_non_negative_int
 
 logger = get_logger("loopora.service_alignment")
 
 
 class ServiceAlignmentLegacyMixin:
+    def _ensure_alignment_session_layout(self, session: dict) -> dict:
+        bundle_path = Path(session["bundle_path"])
+        root = alignment_artifact_root_from_bundle_path(bundle_path)
+        paths = alignment_artifact_paths_from_root(root)
+        self._ensure_alignment_artifact_dirs(root)
+        if bundle_path == paths["bundle"]:
+            write_alignment_manifest(session)
+            return session
+
+        legacy_dir = paths["legacy_dir"]
+        legacy_dir.mkdir(parents=True, exist_ok=True)
+        self._copy_alignment_legacy_file_aliases(root, paths)
+        self._copy_alignment_legacy_prompts(root)
+        self._copy_alignment_legacy_outputs(root, paths["bundle"])
+        self._copy_alignment_legacy_schema(root)
+        self._copy_alignment_legacy_validations(root)
+        self._move_alignment_legacy_remainders(session, root, legacy_dir)
+        updated = self.repository.update_alignment_session(session["id"], bundle_path=str(paths["bundle"]))
+        write_alignment_manifest(updated)
+        return updated
+
     @staticmethod
     def _copy_alignment_legacy_file(source: Path, target: Path) -> None:
         if source.exists() and not target.exists():
@@ -52,7 +81,7 @@ class ServiceAlignmentLegacyMixin:
             shutil.copy2(output_path, target)
             return
         target.write_text(
-            json.dumps(self._alignment_output_debug_payload(payload, bundle_path), ensure_ascii=False, indent=2) + "\n",
+            json.dumps(alignment_output_debug_payload(payload, bundle_path), ensure_ascii=False, indent=2) + "\n",
             encoding="utf-8",
         )
 
@@ -107,27 +136,12 @@ class ServiceAlignmentLegacyMixin:
 
     @staticmethod
     def _alignment_invocation_dir(root: Path, attempt: int, *, repair: bool) -> Path:
-        suffix = "-repair" if repair else ""
-        attempt_index = structured_non_negative_int(attempt)
-        return root / "invocations" / f"{attempt_index + 1:04d}{suffix}"
+        return alignment_invocation_dir(root, attempt, repair=repair)
 
     @staticmethod
     def _alignment_next_invocation_dir(root: Path, attempt: int, *, repair: bool) -> Path:
-        suffix = "-repair" if repair else ""
-        invocations_dir = root / "invocations"
-        index = structured_non_negative_int(attempt) + 1
-        while True:
-            candidate = invocations_dir / f"{index:04d}{suffix}"
-            if not candidate.exists():
-                return candidate
-            index += 1
+        return alignment_next_invocation_dir(root, attempt, repair=repair)
 
     @staticmethod
     def _alignment_latest_invocation_dir(root: Path) -> Path | None:
-        invocations_dir = root / "invocations"
-        if not invocations_dir.is_dir():
-            return None
-        candidates = [path for path in invocations_dir.iterdir() if path.is_dir()]
-        if not candidates:
-            return None
-        return max(candidates, key=lambda path: path.stat().st_mtime_ns)
+        return alignment_latest_invocation_dir(root)

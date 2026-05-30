@@ -6,6 +6,7 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
+from loopora.service_alignment_prompting import AlignmentPromptBuildContext, build_alignment_prompt
 from loopora.web import build_app
 import loopora.service_alignment as alignment_module
 import loopora.service_alignment_legacy as alignment_legacy_module
@@ -15,6 +16,11 @@ from alignment_test_support import (
     _wait_for_status,
     _create_alignment_improvement_source_bundle,
 )
+
+
+def alignment_prompt(session: dict, *, mode: str = "normal") -> str:
+    return build_alignment_prompt(AlignmentPromptBuildContext(), session, mode=mode)
+
 
 def test_alignment_workdir_context_run_option_exposes_artifact_refs_and_rehydrates_source(
     service_factory,
@@ -73,7 +79,7 @@ def test_alignment_workdir_context_run_option_exposes_artifact_refs_and_rehydrat
     assert agreement["source"]["task_verdict"]["status"]
     assert agreement["source"]["gatekeeper_verdict"]["decision_summary"]
     assert any(item["artifact_refs"] for item in agreement["source"]["evidence_summary"])
-    prompt = service._build_alignment_prompt(session, mode="normal")
+    prompt = alignment_prompt(session)
     assert "Recent evidence summary:" in prompt
     assert "Frozen judgment contract:" in prompt
     assert "artifact_refs" in prompt

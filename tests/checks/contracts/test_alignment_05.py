@@ -8,8 +8,16 @@ import pytest
 
 from loopora.bundles import bundle_to_yaml, load_bundle_text
 from loopora.executor_fake_payloads import alignment_bundle_yaml
+from loopora.service_alignment_context import alignment_source_option_id
+from loopora.service_alignment_prompting import (
+    AlignmentPromptBuildContext,
+    alignment_improvement_context_text,
+    build_alignment_prompt,
+)
+from loopora.service_alignment_requests import RevisionAlignmentSessionRequest, default_alignment_executor_settings
+from loopora.service_alignment_revision import create_revision_alignment_session
+from loopora.service_types import LooporaConflictError
 from loopora.web import build_app
-import loopora.service_alignment as alignment_module
 
 from alignment_test_support import (
     _wait_for_status,
@@ -19,6 +27,11 @@ from alignment_test_support import (
     _assert_run_revision_coverage_agreement,
     _assert_run_revision_context_text,
 )
+
+
+def alignment_prompt(session: dict, *, mode: str = "normal") -> str:
+    return build_alignment_prompt(AlignmentPromptBuildContext(), session, mode=mode)
+
 
 def test_alignment_improvement_session_validates_feedback_driven_bundle_delta(
     service_factory,
@@ -143,7 +156,7 @@ def test_alignment_improvement_session_can_start_from_run_evidence(
     assert agreement["source"]["judgment_contract"]["execution_strategy"] == ["Repair evidence gaps before broad polishing."]
     assert agreement["source"]["judgment_contract"]["local_governance"] == ["GateKeeper treats skipped AGENTS.md evidence as Blocking."]
     _assert_run_revision_coverage_agreement(agreement)
-    context_text = alignment_module.ServiceAlignmentMixin._alignment_improvement_context_text(session)
+    context_text = alignment_improvement_context_text(session)
     _assert_run_revision_context_text(context_text, run, agreement)
     preview = service.get_alignment_bundle(session["id"])
     assert preview["ok"] is True
@@ -365,7 +378,7 @@ def test_alignment_workdir_context_discovers_spec_and_requires_explicit_selectio
     assert fresh_session["working_agreement"] == {}
     assert not fresh_session.get("linked_bundle_id")
     assert not fresh_session.get("linked_run_id")
-    fresh_prompt = service._build_alignment_prompt(fresh_session, mode="normal")
+    fresh_prompt = alignment_prompt(fresh_session)
     assert "Selected Loopora Source Context" not in fresh_prompt
     assert "secret execution log" not in fresh_prompt
 
@@ -380,15 +393,13 @@ def test_alignment_workdir_context_discovers_spec_and_requires_explicit_selectio
     assert agreement["mode"] == "selected_source"
     assert agreement["source"]["source_type"] == "spec_file"
     assert "英语学习网站" in agreement["source"]["spec_markdown"]
-    prompt = service._build_alignment_prompt(session, mode="normal")
+    prompt = alignment_prompt(session)
     assert "Selected Loopora Source Context" in prompt
     assert "英语学习网站" in prompt
     assert "secret execution log" not in prompt
 
-    continue_option = {
-        "option_id": alignment_module.ServiceAlignmentMixin._alignment_source_option_id("continue_session", session["id"])
-    }
-    with pytest.raises(alignment_module.LooporaConflictError):
+    continue_option = {"option_id": alignment_source_option_id("continue_session", session["id"])}
+    with pytest.raises(LooporaConflictError):
         service.create_alignment_session(
             workdir=sample_workdir,
             message="不要新建，继续旧对话。",
@@ -550,7 +561,7 @@ def test_alignment_source_context_redacts_sensitive_transcript_and_spec_material
         source_option_id=session_option["option_id"],
         start_immediately=False,
     )
-    prompt = service._build_alignment_prompt(session, mode="normal")
+    prompt = alignment_prompt(session)
     source_text = json.dumps(session["working_agreement"], ensure_ascii=False)
 
     assert "TRANSCRIPT_TOKEN_SECRET_MARKER" not in source_text
@@ -568,10 +579,9 @@ def test_alignment_source_context_redacts_sensitive_transcript_and_spec_material
     )
 
     assert "SPEC_SECRET_MARKER" not in spec_session["working_agreement"]["source"]["spec_markdown"]
-    assert "<secret omitted>" in service._build_alignment_prompt(spec_session, mode="normal")
+    assert "<secret omitted>" in alignment_prompt(spec_session)
 
-def test_alignment_improvement_context_redacts_sensitive_run_source_values(service_factory) -> None:
-    service = service_factory(scenario="success")
+def test_alignment_improvement_context_redacts_sensitive_run_source_values() -> None:
     session = {
         "working_agreement": {
             "mode": "improvement",
@@ -586,7 +596,7 @@ def test_alignment_improvement_context_redacts_sensitive_run_source_values(servi
         }
     }
 
-    context = service._alignment_improvement_context_text(session)
+    context = alignment_improvement_context_text(session)
 
     assert "RUN_EVIDENCE_SECRET_MARKER" not in context
     assert "RUN_API_KEY_SECRET_MARKER" not in context
@@ -601,8 +611,9 @@ def test_alignment_improvement_session_redacts_persisted_source_context(
     service = service_factory(scenario="success")
     seed_bundle = load_bundle_text(alignment_bundle_yaml(str(sample_workdir.resolve())))
 
-    session = service._create_revision_alignment_session(
-        alignment_module.RevisionAlignmentSessionRequest(
+    session = create_revision_alignment_session(
+        service._alignment_revision_context(),
+        RevisionAlignmentSessionRequest(
             seed_bundle=seed_bundle,
             message="Use sensitive source context.",
             start_immediately=False,
@@ -617,7 +628,7 @@ def test_alignment_improvement_session_redacts_persisted_source_context(
             },
             linked_bundle_id="",
             linked_run_id="run_secret",
-            executor_settings=alignment_module._default_alignment_executor_settings(),
+            executor_settings=default_alignment_executor_settings(),
         )
     )
 
@@ -655,6 +666,6 @@ def test_alignment_workdir_context_seeds_selected_existing_bundle(
     preview = service.get_alignment_bundle(session["id"])
     assert preview["ok"] is True
     assert preview["bundle"]["metadata"]["source_bundle_id"] == ""
-    prompt = service._build_alignment_prompt(session, mode="normal")
+    prompt = alignment_prompt(session)
     assert "Selected Loopora Source Context" in prompt
     assert "Current Bundle" in prompt

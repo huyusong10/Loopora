@@ -7,6 +7,19 @@ from pathlib import Path
 from loopora.bundles import bundle_to_yaml, load_bundle_text
 from loopora.executor import FakeCodexExecutor
 from loopora.executor_fake_payloads import alignment_bundle_yaml
+from loopora.service_alignment_artifacts import (
+    alignment_repair_attempts,
+    finalize_alignment_invocation_files,
+    write_alignment_manifest,
+)
+from loopora.service_alignment_decision_options import (
+    agreement_confirmation_decision_options,
+    default_alignment_decision_options,
+    normalize_alignment_missing_items,
+    not_fit_alignment_decision_options,
+    visible_alignment_decision_options,
+)
+from loopora.service_alignment_stage import alignment_clarifying_question_issues
 import loopora.service_alignment as alignment_module
 
 from alignment_test_support import (
@@ -145,7 +158,7 @@ def test_alignment_manifest_redacts_error_message_preview_secrets(
         status="failed",
         error_message="provider failed with Authorization: Bearer MANIFEST_ERROR_SECRET_MARKER",
     )
-    service._write_alignment_manifest(service.get_alignment_session(session["id"]))
+    write_alignment_manifest(service.get_alignment_session(session["id"]))
 
     manifest = json.loads((Path(session["artifact_dir"]) / "manifest.json").read_text(encoding="utf-8"))
     assert "MANIFEST_ERROR_SECRET_MARKER" not in json.dumps(manifest, ensure_ascii=False)
@@ -157,7 +170,7 @@ def test_alignment_invocation_output_debug_artifact_redacts_sensitive_values(tmp
     bundle_path = tmp_path / "artifacts" / "bundle.yml"
     bundle_yaml = "version: 1\nmetadata:\n  name: OUTPUT_BUNDLE_SECRET_MARKER\n"
 
-    alignment_module.ServiceAlignmentMixin._finalize_alignment_invocation_files(
+    finalize_alignment_invocation_files(
         invocation_dir,
         {
             "assistant_message": "Use --x-loopora-token OUTPUT_ARG_SECRET_MARKER",
@@ -368,8 +381,8 @@ def test_alignment_repair_attempts_require_integer_sequence(service_factory, sam
     updated = service.repository.update_alignment_session(session["id"], repair_attempts="2")
 
     assert updated["repair_attempts"] == 0
-    assert alignment_module.ServiceAlignmentMixin._alignment_repair_attempts({"repair_attempts": None}) == 0
-    assert alignment_module.ServiceAlignmentMixin._alignment_repair_attempts({"repair_attempts": "1"}, invalid_default=1) == 1
+    assert alignment_repair_attempts({"repair_attempts": None}) == 0
+    assert alignment_repair_attempts({"repair_attempts": "1"}, invalid_default=1) == 1
     assert alignment_module.ServiceAlignmentMixin._alignment_invocation_dir(sample_workdir, "2", repair=False).name == "0001"
 
 def test_alignment_session_start_immediately_string_false_does_not_start(
@@ -496,9 +509,7 @@ def test_alignment_service_reframes_clarifying_questionnaires(
     )
 
 def test_alignment_visible_decision_options_require_choice_set_and_recommendation() -> None:
-    session = {"transcript": [{"role": "user", "content": "Build a governed starter experience."}]}
-    non_boolean_needs_user_input = alignment_module.ServiceAlignmentMixin._visible_alignment_decision_options(
-        session,
+    non_boolean_needs_user_input = visible_alignment_decision_options(
         {
             "needs_user_input": "false",
             "alignment_phase": "clarifying",
@@ -520,9 +531,9 @@ def test_alignment_visible_decision_options_require_choice_set_and_recommendatio
             ],
         },
         has_bundle=False,
+        prefers_chinese=False,
     )
-    single_option = alignment_module.ServiceAlignmentMixin._visible_alignment_decision_options(
-        session,
+    single_option = visible_alignment_decision_options(
         {
             "needs_user_input": True,
             "alignment_phase": "clarifying",
@@ -537,9 +548,9 @@ def test_alignment_visible_decision_options_require_choice_set_and_recommendatio
             ],
         },
         has_bundle=False,
+        prefers_chinese=False,
     )
-    no_recommendation = alignment_module.ServiceAlignmentMixin._visible_alignment_decision_options(
-        session,
+    no_recommendation = visible_alignment_decision_options(
         {
             "needs_user_input": True,
             "alignment_phase": "clarifying",
@@ -549,9 +560,9 @@ def test_alignment_visible_decision_options_require_choice_set_and_recommendatio
             ],
         },
         has_bundle=False,
+        prefers_chinese=False,
     )
-    missing_description = alignment_module.ServiceAlignmentMixin._visible_alignment_decision_options(
-        session,
+    missing_description = visible_alignment_decision_options(
         {
             "needs_user_input": True,
             "alignment_phase": "clarifying",
@@ -572,9 +583,9 @@ def test_alignment_visible_decision_options_require_choice_set_and_recommendatio
             ],
         },
         has_bundle=False,
+        prefers_chinese=False,
     )
-    string_recommendation = alignment_module.ServiceAlignmentMixin._visible_alignment_decision_options(
-        session,
+    string_recommendation = visible_alignment_decision_options(
         {
             "needs_user_input": True,
             "alignment_phase": "clarifying",
@@ -596,9 +607,9 @@ def test_alignment_visible_decision_options_require_choice_set_and_recommendatio
             ],
         },
         has_bundle=False,
+        prefers_chinese=False,
     )
-    valid_options = alignment_module.ServiceAlignmentMixin._visible_alignment_decision_options(
-        session,
+    valid_options = visible_alignment_decision_options(
         {
             "needs_user_input": True,
             "alignment_phase": "clarifying",
@@ -620,6 +631,17 @@ def test_alignment_visible_decision_options_require_choice_set_and_recommendatio
             ],
         },
         has_bundle=False,
+        prefers_chinese=False,
+    )
+    blocked_options = visible_alignment_decision_options(
+        {"alignment_phase": "blocked", "assistant_message": "Not a fit."},
+        has_bundle=False,
+        prefers_chinese=True,
+    )
+    agreement_options = visible_alignment_decision_options(
+        {"needs_user_input": True, "alignment_phase": "agreement"},
+        has_bundle=False,
+        prefers_chinese=True,
     )
 
     assert non_boolean_needs_user_input == []
@@ -628,29 +650,48 @@ def test_alignment_visible_decision_options_require_choice_set_and_recommendatio
     assert [option["id"] for option in missing_description] == ["evidence_first", "speed_first", "add_judgment"]
     assert [option["id"] for option in string_recommendation] == ["evidence_first", "speed_first", "add_judgment"]
     assert [option["id"] for option in valid_options] == ["evidence_path", "speed_path"]
+    assert [option["id"] for option in blocked_options] == ["skip_loop", "still_compile"]
+    assert [option["id"] for option in agreement_options] == ["confirm_agreement", "adjust_agreement"]
 
 def test_alignment_missing_items_are_stable_ids_only() -> None:
-    missing = alignment_module.ServiceAlignmentMixin._normalize_alignment_missing_items(
+    missing = normalize_alignment_missing_items(
         [
             "success_surface",
             "success_surface",
             "role_posture",
             "raw model prose should not become a chip",
             {"bad": "shape"},
-        ]
+        ],
+        allowed_item_ids=alignment_module.ALIGNMENT_MISSING_ITEM_IDS,
     )
 
     assert missing == ["success_surface", "role_posture"]
 
+def test_alignment_decision_option_sets_keep_stable_ids_and_recommendations() -> None:
+    assert [option["id"] for option in default_alignment_decision_options(prefers_chinese=False)] == [
+        "evidence_first",
+        "speed_first",
+        "add_judgment",
+    ]
+    assert default_alignment_decision_options(prefers_chinese=True)[0]["recommended"] is True
+    assert [option["id"] for option in agreement_confirmation_decision_options(prefers_chinese=False)] == [
+        "confirm_agreement",
+        "adjust_agreement",
+    ]
+    assert [option["id"] for option in not_fit_alignment_decision_options(prefers_chinese=True)] == [
+        "skip_loop",
+        "still_compile",
+    ]
+
 def test_alignment_clarifying_question_rewrite_requires_boolean_need() -> None:
-    non_boolean_issues = alignment_module.ServiceAlignmentMixin._alignment_clarifying_question_issues(
+    non_boolean_issues = alignment_clarifying_question_issues(
         {
             "needs_user_input": "true",
             "assistant_message": "What roles do you want?",
             "decision_options": [],
         }
     )
-    boolean_issues = alignment_module.ServiceAlignmentMixin._alignment_clarifying_question_issues(
+    boolean_issues = alignment_clarifying_question_issues(
         {
             "needs_user_input": True,
             "assistant_message": "What roles do you want?",

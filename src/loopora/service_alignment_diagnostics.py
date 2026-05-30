@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 
+from loopora.service_alignment_artifacts import alignment_artifact_paths
 from loopora.service_cleanup_diagnostics import cleanup_diagnostic_payload, log_cleanup_diagnostic
 from loopora.utils import utc_now
 
@@ -22,7 +23,7 @@ def append_alignment_diagnostic_event(service, logger, session_id: str, event_ty
 
 def append_alignment_local_diagnostic_event(service, logger, session: dict, event_type: str, payload: dict) -> None:
     try:
-        paths = service._alignment_artifact_paths(session)
+        paths = alignment_artifact_paths(session)
         service._ensure_alignment_artifact_dirs(paths["root"])
         event = {
             "id": None,

@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from loopora.branding import state_dir_for_workdir
+from loopora.service_alignment_artifacts import alignment_session_root
 from loopora.settings import app_home, load_recent_workdirs
 
 
@@ -211,9 +212,9 @@ def _records_without_dirs(context: LocalAssetDiagnosticsContext) -> list[dict]:
     return record_without_dir
 
 
-def _alignment_session_root(service, session: dict, session_id: str) -> Path:
-    if hasattr(service, "_alignment_session_root"):
-        return service._alignment_session_root(session)
+def _alignment_session_root(_service, session: dict, session_id: str) -> Path:
+    if session.get("bundle_path"):
+        return alignment_session_root(session)
     return state_dir_for_workdir(session.get("workdir", "")) / "alignment_sessions" / session_id
 
 

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from loopora.service_alignment_context import alignment_context_title_from_session
+
 from agent_adapter_test_support import (
     AgentBundleCandidateRequest,
     Path,
@@ -14,10 +16,8 @@ from agent_adapter_test_support import (
     shlex,
 )
 
-def test_agent_run_recovery_context_title_truncates_with_ellipsis(service_factory) -> None:
-    service = service_factory(scenario="success")
-
-    title = service._alignment_context_title_from_session(
+def test_agent_run_recovery_context_title_truncates_with_ellipsis() -> None:
+    title = alignment_context_title_from_session(
         {"transcript": [{"role": "user", "content": "Build a refund-admin safety audit flow that prevents unauthorized refunds, records provider failures, and preserves audit evidence."}]}
     )
 

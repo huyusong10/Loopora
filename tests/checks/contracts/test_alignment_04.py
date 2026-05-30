@@ -7,8 +7,10 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 import pytest
 
+from loopora.alignment_readiness_rules import alignment_improvement_readiness_issues
 from loopora.bundles import load_bundle_text
 from loopora.executor_fake_payloads import alignment_bundle_yaml
+from loopora.service_alignment_stage import alignment_improvement_bundle_issues
 from loopora.web import build_app
 from loopora.web_streaming import MAX_EVENT_CURSOR_ID
 
@@ -597,10 +599,8 @@ def test_alignment_improvement_session_requires_completion_mode_delta_for_rounds
     )
 
 def test_alignment_improvement_bundle_requires_completion_mode_delta_for_rounds_source(
-    service_factory,
     sample_workdir: Path,
 ) -> None:
-    service = service_factory(scenario="success")
     bundle = load_bundle_text(alignment_bundle_yaml(str(sample_workdir.resolve())))
     bundle["collaboration_summary"] = (
         "Preserve the source Loop stable intent, source workdir, and useful source posture while applying "
@@ -616,14 +616,12 @@ def test_alignment_improvement_bundle_requires_completion_mode_delta_for_rounds_
         },
     }
 
-    issues = service._alignment_improvement_bundle_issues(session, bundle)
+    issues = alignment_improvement_bundle_issues(session["working_agreement"], bundle)
 
     assert "improvement bundle must state the source completion-mode governance delta" in issues
 
 def test_alignment_improvement_bundle_accepts_loop_verdict_marker_for_completion_mode_delta(
-    service_factory,
 ) -> None:
-    service = service_factory(scenario="success")
     bundle = {
         "metadata": {},
         "collaboration_summary": (
@@ -644,14 +642,11 @@ def test_alignment_improvement_bundle_accepts_loop_verdict_marker_for_completion
         },
     }
 
-    issues = service._alignment_improvement_bundle_issues(session, bundle)
+    issues = alignment_improvement_bundle_issues(session["working_agreement"], bundle)
 
     assert "improvement bundle must state the source completion-mode governance delta" not in issues
 
-def test_alignment_improvement_readiness_accepts_loop_verdict_marker_for_completion_mode_delta(
-    service_factory,
-) -> None:
-    service = service_factory(scenario="success")
+def test_alignment_improvement_readiness_accepts_loop_verdict_marker_for_completion_mode_delta() -> None:
     session = {
         "working_agreement": {
             "mode": "improvement",
@@ -668,15 +663,13 @@ def test_alignment_improvement_readiness_accepts_loop_verdict_marker_for_complet
         "readiness_evidence": {},
     }
 
-    issues = service._alignment_improvement_readiness_issues(session, output)
+    issues = alignment_improvement_readiness_issues(session, output)
 
     assert "improvement_completion_mode_delta" not in issues
 
 def test_alignment_improvement_bundle_rejects_reusing_source_bundle_id(
-    service_factory,
     sample_workdir: Path,
 ) -> None:
-    service = service_factory(scenario="success")
     source_bundle_id = "bundle_source"
     bundle = load_bundle_text(alignment_bundle_yaml(str(sample_workdir.resolve())))
     bundle["metadata"]["bundle_id"] = source_bundle_id
@@ -695,7 +688,7 @@ def test_alignment_improvement_bundle_rejects_reusing_source_bundle_id(
         },
     }
 
-    issues = service._alignment_improvement_bundle_issues(session, bundle)
+    issues = alignment_improvement_bundle_issues(session["working_agreement"], bundle)
 
     assert (
         "improvement bundle must not reuse the source bundle id as metadata.bundle_id; leave bundle_id empty or choose a new standalone candidate id"
