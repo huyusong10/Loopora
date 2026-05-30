@@ -45,7 +45,7 @@ def test_run_detail_projection_normalizer_can_render_projection_only_payload() -
     if not node:
         pytest.skip("node is required for JS projection normalizer coverage")
     projection = {
-        "schema_version": 3,
+        "schema_version": 4,
         "kind": "web_run_detail",
         "status": "succeeded",
         "summary": {
@@ -75,7 +75,7 @@ def test_run_detail_projection_normalizer_can_render_projection_only_payload() -
             "created_at": "2026-05-28T00:00:00Z",
         },
         "technical_handoff": {"run_url": "/runs/run_projection_only"},
-        "diagnostics": {"raw_shape": "run_record"},
+        "diagnostics": {"source_shape": "run_record"},
     }
     script = f"""
 const fs = require("fs");

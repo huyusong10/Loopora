@@ -19,7 +19,7 @@ def agent_native_run_context(
     executor: object,
     prompt_files: dict[str, str],
 ) -> RunnerRunContext:
-    strategy_source = run.get("workflow_json") or read_json(layout.contract_workflow_path)
+    strategy_source = run.get("workflow_json") or read_json(layout.contract_strategy_source_path) or read_json(layout.contract_workflow_path)
     strategy_source = normalize_strategy_source(strategy_source)
     role_by_id = {role["id"]: role for role in strategy_source.get("roles", [])}
     return RunnerRunContext(

@@ -9,6 +9,12 @@ from collections.abc import Iterable
 from datetime import datetime
 from pathlib import Path
 
+from loopora.agent_native_projection_state import agent_native_active_step_view
+from loopora.agent_native_step_view_paths import (
+    agent_native_legacy_capsule_path_text,
+    agent_native_step_contract_path_text,
+    agent_native_step_view_path_text,
+)
 from loopora.branding import state_dir_for_workdir
 from loopora.db_event_records import RunObservationSnapshotRowsRequest
 from loopora.diagnostics import get_logger, log_event, log_exception
@@ -64,8 +70,8 @@ def _list_of_strings(value: object, *, limit: int = 8) -> list[str]:
     return [item.strip() for item in value if isinstance(item, str) and item.strip()][:limit]
 
 
-def _current_agent_step_continuation_projection(capsule: dict) -> dict:
-    continuation = _dict(capsule.get("continuation"))
+def _current_agent_step_continuation_projection(step_view: dict) -> dict:
+    continuation = _dict(step_view.get("continuation"))
     if continuation.get("active") is not True:
         return {}
     verdict = _dict(continuation.get("previous_task_verdict"))
@@ -100,8 +106,8 @@ def _current_agent_step_continuation_projection(capsule: dict) -> dict:
     }
 
 
-def _current_agent_step_iteration_repair_projection(capsule: dict) -> dict:
-    repair = _dict(capsule.get("iteration_repair"))
+def _current_agent_step_iteration_repair_projection(step_view: dict) -> dict:
+    repair = _dict(step_view.get("iteration_repair"))
     if repair.get("active") is not True:
         return {}
     return {
@@ -130,20 +136,20 @@ def _current_agent_step_projection(run: dict) -> dict:
     except (OSError, UnicodeDecodeError, json.JSONDecodeError):
         return {}
     active = _dict(state.get("active_step"))
-    capsule = _dict(active.get("capsule"))
-    if not capsule:
+    step_view = agent_native_active_step_view(active)
+    if not step_view:
         return {}
-    role = _dict(capsule.get("role"))
-    dispatch = _dict(capsule.get("role_dispatch"))
-    coverage = _dict(capsule.get("required_coverage"))
-    submit_hint = _dict(capsule.get("submit_hint"))
-    known_evidence_ids = capsule.get("known_evidence_ids")
+    role = _dict(step_view.get("role"))
+    dispatch = _dict(step_view.get("role_dispatch"))
+    coverage = _dict(step_view.get("required_coverage"))
+    submit_hint = _dict(step_view.get("submit_hint"))
+    known_evidence_ids = step_view.get("known_evidence_ids")
     top_gaps = _list_of_dicts(coverage.get("top_gaps"))
     return {
-        "step_id": _text(capsule.get("step_id")),
-        "iter": structured_non_negative_int(capsule.get("iter")),
-        "step_order": structured_non_negative_int(capsule.get("step_order")),
-        "parallel_group": _text(capsule.get("parallel_group")),
+        "step_id": _text(step_view.get("step_id")),
+        "iter": structured_non_negative_int(step_view.get("iter")),
+        "step_order": structured_non_negative_int(step_view.get("step_order")),
+        "parallel_group": _text(step_view.get("parallel_group")),
         "claimed_at": _text(active.get("claimed_at")),
         "role": {
             "id": _text(role.get("id")),
@@ -164,8 +170,8 @@ def _current_agent_step_projection(run: dict) -> dict:
             "inline_allowed": dispatch.get("inline_allowed") is True,
             "dispatch_contract": _text(dispatch.get("dispatch_contract")),
         },
-        "inputs": _dict(capsule.get("inputs")),
-        "action_policy": _dict(capsule.get("action_policy")),
+        "inputs": _dict(step_view.get("inputs")),
+        "action_policy": _dict(step_view.get("action_policy")),
         "required_coverage": {
             "status": _text(coverage.get("status")),
             "evidence_progress_mode": _text(coverage.get("evidence_progress_mode")),
@@ -179,17 +185,19 @@ def _current_agent_step_projection(run: dict) -> dict:
             else [],
             "top_gaps": top_gaps,
         },
-        "continuation": _current_agent_step_continuation_projection(capsule),
-        "iteration_repair": _current_agent_step_iteration_repair_projection(capsule),
-        "context_path": _text(capsule.get("context_path"), limit=1000),
-        "context_absolute_path": _text(capsule.get("context_absolute_path"), limit=2000),
-        "step_contract_path": _text(capsule.get("step_contract_path") or capsule.get("capsule_path"), limit=1000),
-        "step_contract_absolute_path": _text(
-            capsule.get("step_contract_absolute_path") or capsule.get("capsule_absolute_path"),
+        "continuation": _current_agent_step_continuation_projection(step_view),
+        "iteration_repair": _current_agent_step_iteration_repair_projection(step_view),
+        "context_path": _text(step_view.get("context_path"), limit=1000),
+        "context_absolute_path": _text(step_view.get("context_absolute_path"), limit=2000),
+        "agent_step_view_path": _text(agent_native_step_view_path_text(step_view, legacy_fallback=True), limit=1000),
+        "agent_step_view_absolute_path": _text(
+            agent_native_step_view_path_text(step_view, absolute=True, legacy_fallback=True),
             limit=2000,
         ),
-        "capsule_path": _text(capsule.get("capsule_path"), limit=1000),
-        "capsule_absolute_path": _text(capsule.get("capsule_absolute_path"), limit=2000),
+        "step_contract_path": _text(agent_native_step_contract_path_text(step_view), limit=1000),
+        "step_contract_absolute_path": _text(agent_native_step_contract_path_text(step_view, absolute=True), limit=2000),
+        "capsule_path": _text(agent_native_legacy_capsule_path_text(step_view), limit=1000),
+        "capsule_absolute_path": _text(agent_native_legacy_capsule_path_text(step_view, absolute=True), limit=2000),
         "submit_hint": {
             "command": _text(submit_hint.get("command"), limit=1000),
             "result_file_contract": _text(submit_hint.get("result_file_contract"), limit=1000),

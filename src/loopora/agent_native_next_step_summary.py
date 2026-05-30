@@ -10,6 +10,7 @@ from loopora.agent_native_coverage_summary import (
     required_coverage_summary,
 )
 from loopora.agent_native_evidence_refs import agent_known_evidence_ref_summaries
+from loopora.agent_native_step_view_paths import agent_native_step_contract_path_text
 from loopora.cli_agent_submitted_step_output import _actionable_blocking_item, _actionable_next_action
 from loopora.cli_summary_helpers import (
     clip_inline,
@@ -165,11 +166,13 @@ def _attach_agent_next_step_submit_summary(summary: dict[str, object], next_step
     set_summary_text(summary, "context_path", next_step.get("context_absolute_path") or next_step.get("context_path"))
     set_summary_text(
         summary,
+        "agent_step_view_path",
+        next_step.get("agent_step_view_absolute_path") or next_step.get("agent_step_view_path"),
+    )
+    set_summary_text(
+        summary,
         "step_contract_path",
-        next_step.get("step_contract_absolute_path")
-        or next_step.get("step_contract_path")
-        or next_step.get("capsule_absolute_path")
-        or next_step.get("capsule_path"),
+        agent_native_step_contract_path_text(next_step, absolute=True),
     )
     set_summary_text(summary, "result_template", submit_hint.get("result_template_absolute_path") or submit_hint.get("result_template_path"))
     set_summary_text(summary, "result_file_to_write", submit_hint.get("result_file_absolute_path") or submit_hint.get("result_file_path"))

@@ -37,12 +37,20 @@ RUN_ARTIFACT_SPECS = (
         "description_en": "The Task, checks, Guardrails, workflow intent, role posture, Success Surface, Fake Done, Evidence Preferences, Execution Strategy, Judgment Tradeoffs, Local Governance, and Residual Risk used by this run.",
     },
     {
+        "id": "strategy-source",
+        "relative_path": "contract/strategy_source.json",
+        "label_zh": "策略源",
+        "label_en": "Strategy source",
+        "description_zh": "这次运行冻结下来的策略源定义。",
+        "description_en": "The strategy source definition frozen for this run.",
+    },
+    {
         "id": "workflow-manifest",
         "relative_path": "contract/workflow.json",
         "label_zh": "流程清单",
         "label_en": "Workflow manifest",
-        "description_zh": "这次运行冻结下来的流程定义。",
-        "description_en": "The workflow definition frozen for this run.",
+        "description_zh": "兼容旧读取方的策略源镜像。",
+        "description_en": "A strategy source mirror kept for legacy readers.",
     },
     {
         "id": "run-contract",
@@ -196,6 +204,10 @@ class RunArtifactLayout:
         return self.contract_dir / "compiled_spec.json"
 
     @property
+    def contract_strategy_source_path(self) -> Path:
+        return self.contract_dir / "strategy_source.json"
+
+    @property
     def contract_workflow_path(self) -> Path:
         return self.contract_dir / "workflow.json"
 
@@ -328,6 +340,9 @@ class RunArtifactLayout:
 
     def step_context_path(self, iter_id: int, step_order: int, step_id: str) -> Path:
         return self.step_dir(iter_id, step_order, step_id) / "input.context.json"
+
+    def step_agent_view_path(self, iter_id: int, step_order: int, step_id: str) -> Path:
+        return self.step_dir(iter_id, step_order, step_id) / "agent_step_view.json"
 
     def step_capsule_path(self, iter_id: int, step_order: int, step_id: str) -> Path:
         return self.step_dir(iter_id, step_order, step_id) / "capsule.json"

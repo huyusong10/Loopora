@@ -9,6 +9,7 @@ from loopora.evidence_coverage import write_evidence_coverage_projection
 from loopora.evidence_manifest import write_evidence_manifest_projection
 from loopora.run_artifacts import append_jsonl_with_mirrors
 from loopora.runner_support_requests import StepOutputsWriteRequest
+from loopora.step_instruction_context import step_instruction_context_legacy_fields
 
 logger = get_logger(__name__)
 
@@ -42,7 +43,7 @@ class RunnerStepResultEntryRequest:
     execution_settings: dict
     normalized_output: dict
     handoff: dict
-    context_packet: dict
+    step_instruction_context: dict
 
 
 @dataclass(frozen=True)
@@ -131,7 +132,7 @@ class ServiceRunnerStepArtifactsMixin:
             "resolved_executor_kind": request.execution_settings["executor_kind"],
             "output": request.normalized_output,
             "handoff": request.handoff,
-            "context_packet": request.context_packet,
+            **step_instruction_context_legacy_fields(request.step_instruction_context),
         }
 
     def _log_runner_step_completion(

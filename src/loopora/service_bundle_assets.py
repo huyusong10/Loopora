@@ -11,6 +11,7 @@ from loopora.evidence_coverage import with_coverage_targets
 from loopora.markdown_tools import render_safe_markdown_html
 from loopora.projections import LoopfileExportProjectionInput, build_loopfile_export_projection
 from loopora.residual_risk_support import residual_risk_is_unmanaged
+from loopora.run_artifacts import write_json_with_mirrors
 from loopora.service_bundle_control_summary import build_bundle_control_summary, preview_list_items
 from loopora.service_bundle_graph_preflight import BundleGraphLinks, bundle_graph_links, preflight_bundle_graph_delete
 from loopora.service_cleanup_diagnostics import best_effort_rmtree, cleanup_diagnostic_payload, log_cleanup_diagnostic
@@ -856,7 +857,7 @@ class ServiceBundleAssetMixin:
         (loop_dir / "spec.md").write_text(spec_markdown, encoding="utf-8")
         write_json(loop_dir / "compiled_spec.json", compiled_spec)
         self._persist_prompt_files(loop_dir, resolved_orchestration["prompt_files"])
-        write_json(loop_dir / "workflow.json", resolved_orchestration["workflow"])
+        write_json_with_mirrors(loop_dir / "strategy_source.json", resolved_orchestration["workflow"], mirror_paths=[loop_dir / "workflow.json"])
 
         updated = self.repository.update_loop_contract(
             loop_id,

@@ -1,11 +1,11 @@
 from __future__ import annotations
 
+from loopora.agent_native_step_view_context import agent_native_step_view_iteration_repair_context
 from agent_adapter_test_support import (
     AgentBundleCandidateRequest,
     AgentNativeStepSubmitRequest,
     Path,
     RunArtifactLayout,
-    ServiceAgentNativeMixin,
     TestClient,
     WorkflowError,
     _agent_native_host_dispatch,
@@ -163,7 +163,7 @@ def test_agent_continuation_focus_reads_bucket_labels_and_reasons(service_factor
     assert "done_when.audit: Audit command has no output." in focus
 
 def test_agent_native_iteration_repair_context_projects_blocked_previous_iteration() -> None:
-    repair = ServiceAgentNativeMixin._agent_native_capsule_iteration_repair_context(
+    repair = agent_native_step_view_iteration_repair_context(
         {
             "iteration": {
                 "iter_index": 1,
@@ -206,7 +206,7 @@ def test_agent_native_iteration_repair_context_projects_blocked_previous_iterati
     assert repair["top_gaps"][0]["target_id"] == "gatekeeper.finish"
 
 def test_agent_native_iteration_repair_explains_non_supporting_gatekeeper_refs() -> None:
-    repair = ServiceAgentNativeMixin._agent_native_capsule_iteration_repair_context(
+    repair = agent_native_step_view_iteration_repair_context(
         {
             "iteration": {
                 "iter_index": 1,
@@ -241,7 +241,7 @@ def test_agent_native_iteration_repair_explains_non_supporting_gatekeeper_refs()
     assert repair["recommended_next_action"].startswith("Produce new project-owned proof")
 
 def test_agent_native_iteration_repair_does_not_repeat_resolved_target_specific_blocker() -> None:
-    repair = ServiceAgentNativeMixin._agent_native_capsule_iteration_repair_context(
+    repair = agent_native_step_view_iteration_repair_context(
         {
             "iteration": {
                 "iter_index": 2,

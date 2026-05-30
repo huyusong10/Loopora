@@ -565,8 +565,8 @@ def test_runner_support_boundary_is_runner_named() -> None:
     assert "class ServiceRunnerSupportMixin" in support_source
     assert "def _build_runner_summary" in support_source
     assert "def _build_runner_iteration_entry" in support_source
-    assert "Strategy preset" in support_source
-    assert "Workflow preset" not in support_source
+    assert all(marker in support_source for marker in ("Strategy preset", "The loop still needs more evidence.", '"strategy_steps": strategy_steps'))
+    assert not any(marker in support_source for marker in ("Workflow preset", "The workflow still needs more evidence."))
     assert "def _build_workflow_summary" not in support_source
     assert "def _build_workflow_iteration_entry" not in support_source
 
@@ -596,16 +596,16 @@ def test_runner_execution_boundary_is_runner_named() -> None:
     assert not (REPO_ROOT / "src" / "loopora" / "service_workflow_execution.py").exists()
     assert "from loopora.service_runner_execution import ServiceRunnerExecutionMixin" in service_app_source
     assert "ServiceWorkflowExecutionMixin" not in service_app_source
-    assert "class ServiceRunnerExecutionMixin" in runner_execution_source
-    assert "def _execute_runner_run" in runner_execution_source
-    assert "def _run_runner_iteration" in runner_execution_source
-    assert "def _run_runner_step_once" in runner_execution_source
-    assert "service.runner.execution.started" in runner_execution_source
-    assert "service.workflow." not in runner_execution_source
-    assert "class ServiceWorkflowExecutionMixin" not in runner_execution_source
-    assert "def _execute_workflow_run" not in runner_execution_source
-    assert "def _run_workflow_iteration" not in runner_execution_source
-    assert "def _run_workflow_step_once" not in runner_execution_source
+    runner_markers = (
+        "class ServiceRunnerExecutionMixin", "def _execute_runner_run", "def _run_runner_iteration", "def _run_runner_step_once",
+        "def _fail_run_without_strategy_snapshot", "missing_strategy_snapshot", 'phase="runner"', "service.runner.execution.started",
+    )
+    workflow_markers = (
+        "class ServiceWorkflowExecutionMixin", "def _execute_workflow_run", "def _run_workflow_iteration", "def _run_workflow_step_once",
+        "_fail_run_without_workflow_snapshot", "missing_workflow_snapshot", 'phase="workflow"', "service.workflow.",
+    )
+    assert all(marker in runner_execution_source for marker in runner_markers)
+    assert not any(marker in runner_execution_source for marker in workflow_markers)
 
 
 def test_runner_iteration_state_boundary_is_runner_named() -> None:
@@ -646,7 +646,7 @@ def test_runner_context_and_runtime_modules_are_runner_named() -> None:
     assert "workflow: dict" not in runner_context_source
     assert "workflow_steps: list[dict]" not in runner_context_source
     assert "workflow_controls: list[dict]" not in runner_context_source
-    assert "workflow_started_at: float" not in runner_context_source
+    assert "workflow_started_at: float" not in runner_context_source and "context_packet" not in runner_context_source
     assert "class RunnerRunProgress" in runner_runtime_source
     assert "class RunnerStepRunRequest" in runner_runtime_source
     assert "WorkflowRunProgress" not in runner_runtime_source
@@ -712,10 +712,11 @@ def test_agent_native_treats_active_step_state_as_projection_checked_cache() -> 
     projection_cache_source = (REPO_ROOT / "src" / "loopora" / "events" / "projection_cache.py").read_text(
         encoding="utf-8"
     )
-
-    assert "agent_native_active_step_is_stale" in agent_source
-    assert ".current_step_projection(" not in agent_source
-    assert "current_step_projection_for_run" in agent_source
+    forbidden = (".current_step_projection(", "AgentNativeCapsuleRequest", "submit_context.context_packet")
+    assert all(item in agent_source for item in ["agent_native_active_step_is_stale", "agent_native_step_view"])
+    assert all(item not in agent_source for item in forbidden)
+    assert "refresh_agent_native_capsule_with" not in agent_source and "def _agent_native_capsule(" not in agent_source
+    assert all(item in agent_source for item in ["current_step_projection_for_run", "AgentNativeStepViewRequest"])
     assert 'kind="event_replayed_current_step"' in projection_cache_source
     assert "get_projection_record(projection_name, run_id)" in projection_cache_source
 

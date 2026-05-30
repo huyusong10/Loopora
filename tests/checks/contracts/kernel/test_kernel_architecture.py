@@ -116,9 +116,8 @@ def test_run_engine_delegates_legacy_lifecycle_state_updates() -> None:
     lifecycle_commands_source = (REPO_ROOT / "src" / "loopora" / "engine" / "run_lifecycle_commands.py").read_text(
         encoding="utf-8"
     )
-    lifecycle_updates_source = (REPO_ROOT / "src" / "loopora" / "engine" / "run_lifecycle_updates.py").read_text(
-        encoding="utf-8"
-    )
+    lifecycle_updates_path = REPO_ROOT / "src" / "loopora" / "engine" / "run_lifecycle_updates.py"
+    legacy_updates_source = (REPO_ROOT / "src" / "loopora" / "engine" / "run_legacy_updates.py").read_text(encoding="utf-8")
 
     assert "update_run(" not in engine_source
     assert "utc_now" not in engine_source
@@ -128,18 +127,34 @@ def test_run_engine_delegates_legacy_lifecycle_state_updates() -> None:
     assert "mark_run_succeeded" not in engine_source
     assert "start_run" in engine_source
     assert "advance_run" in engine_source
+    assert not lifecycle_updates_path.exists()
+    assert "from loopora.engine.run_legacy_updates import mark_run_started, mark_run_succeeded" in lifecycle_commands_source
     assert "mark_run_started" in lifecycle_commands_source
     assert "mark_run_succeeded" in lifecycle_commands_source
     assert "RunLifecycleStatus" in lifecycle_commands_source
     assert "VerdictStatus" in lifecycle_commands_source
-    assert "update_run(" in lifecycle_updates_source
-    assert 'status="running"' in lifecycle_updates_source
-    assert 'status="succeeded"' in lifecycle_updates_source
+    assert "update_run(" in legacy_updates_source
+    assert 'status="running"' in legacy_updates_source
+    assert 'status="succeeded"' in legacy_updates_source
+
+
+def test_run_snapshot_legacy_row_adapter_is_separate_from_lifecycle_outcomes() -> None:
+    lifecycle_source = (REPO_ROOT / "src" / "loopora" / "engine" / "run_lifecycle.py").read_text(encoding="utf-8")
+    legacy_source = (REPO_ROOT / "src" / "loopora" / "engine" / "run_legacy_snapshot.py").read_text(encoding="utf-8")
+    snapshot_source = (REPO_ROOT / "src" / "loopora" / "engine" / "run_snapshot_source.py").read_text(
+        encoding="utf-8"
+    )
+
+    assert "legacy_run_snapshot" not in lifecycle_source
+    assert "legacy_status_to_lifecycle" not in lifecycle_source
+    assert "def legacy_run_snapshot" in legacy_source
+    assert "def legacy_status_to_lifecycle" in legacy_source
+    assert "from loopora.engine.run_legacy_snapshot import legacy_run_snapshot, missing_run_snapshot" in snapshot_source
 
 
 def test_run_engine_delegates_single_event_projection_refreshes() -> None:
     engine_source = (REPO_ROOT / "src" / "loopora" / "engine" / "run_engine.py").read_text(encoding="utf-8")
-    event_commands_source = (REPO_ROOT / "src" / "loopora" / "engine" / "run_event_commands.py").read_text(
+    event_commands_source = (REPO_ROOT / "src" / "loopora" / "events" / "run_event_commands.py").read_text(
         encoding="utf-8"
     )
     evidence_commands_source = (REPO_ROOT / "src" / "loopora" / "engine" / "run_evidence_commands.py").read_text(
@@ -200,9 +215,83 @@ def test_run_engine_delegates_single_event_projection_refreshes() -> None:
     assert "rebuild_run_projection_cache" in cache_source
 
 
+def test_run_event_append_refresh_helper_lives_under_event_core() -> None:
+    engine_event_commands_path = REPO_ROOT / "src" / "loopora" / "engine" / "run_event_commands.py"
+    event_commands_source = (REPO_ROOT / "src" / "loopora" / "events" / "run_event_commands.py").read_text(
+        encoding="utf-8"
+    )
+
+    assert not engine_event_commands_path.exists()
+    assert "def append_run_event_and_rebuild_projection_cache" in event_commands_source
+    assert "append_run_event(" in event_commands_source
+    assert "rebuild_run_projection_cache(" in event_commands_source
+
+
+def test_run_event_query_helpers_live_under_event_core() -> None:
+    engine_queries_path = REPO_ROOT / "src" / "loopora" / "engine" / "run_event_queries.py"
+    event_queries_source = (REPO_ROOT / "src" / "loopora" / "events" / "run_event_queries.py").read_text(
+        encoding="utf-8"
+    )
+    iteration_commands_source = (REPO_ROOT / "src" / "loopora" / "engine" / "run_iteration_commands.py").read_text(
+        encoding="utf-8"
+    )
+    step_cursor_source = (REPO_ROOT / "src" / "loopora" / "engine" / "run_step_cursor.py").read_text(
+        encoding="utf-8"
+    )
+
+    assert not engine_queries_path.exists()
+    assert "def list_run_events" in event_queries_source
+    assert "def find_iteration_event" in event_queries_source
+    assert "run_stream_id" in event_queries_source
+    assert "from loopora.events.run_event_queries import find_iteration_event" in iteration_commands_source
+    assert "from loopora.engine.run_event_queries import" not in iteration_commands_source
+    assert "from loopora.events.run_event_queries import list_run_events" in step_cursor_source
+    assert "run_stream_id" not in step_cursor_source
+
+
+def test_core_run_event_payload_codecs_live_under_event_core() -> None:
+    engine_payloads_path = REPO_ROOT / "src" / "loopora" / "engine" / "run_event_payloads.py"
+    payload_source = (REPO_ROOT / "src" / "loopora" / "events" / "step_instruction_payloads.py").read_text(
+        encoding="utf-8"
+    )
+    run_payloads_source = (REPO_ROOT / "src" / "loopora" / "events" / "run_event_payloads.py").read_text(
+        encoding="utf-8"
+    )
+    step_commands_source = (REPO_ROOT / "src" / "loopora" / "engine" / "run_step_commands.py").read_text(
+        encoding="utf-8"
+    )
+    projection_source = (REPO_ROOT / "src" / "loopora" / "projections" / "step_instruction.py").read_text(
+        encoding="utf-8"
+    )
+
+    assert not engine_payloads_path.exists()
+    assert "def step_instruction_event_payload" in payload_source
+    assert "def step_instruction_from_event_payload" in payload_source
+    assert "def step_instruction_payload" in run_payloads_source
+    assert "step_instruction_event_payload(instruction)" in run_payloads_source
+    assert "from loopora.events.run_event_payloads import" in step_commands_source
+    assert "from loopora.engine.run_event_payloads import" not in step_commands_source
+    assert "step_instruction_from_event_payload(event.payload" in projection_source
+    assert "RoleSpec(" not in projection_source
+    assert "EvidenceScope(" not in projection_source
+    assert "ActionPolicy(" not in projection_source
+    assert "StepOutputContract(" not in projection_source
+
+
 def test_run_engine_delegates_multi_event_transaction_commands() -> None:
     engine_source = (REPO_ROOT / "src" / "loopora" / "engine" / "run_engine.py").read_text(encoding="utf-8")
-    event_commands_source = (REPO_ROOT / "src" / "loopora" / "engine" / "run_event_commands.py").read_text(
+    engine_artifact_index_path = REPO_ROOT / "src" / "loopora" / "engine" / "run_artifact_index.py"
+    event_commands_source = (REPO_ROOT / "src" / "loopora" / "events" / "run_event_commands.py").read_text(
+        encoding="utf-8"
+    )
+    event_artifact_index_source = (REPO_ROOT / "src" / "loopora" / "events" / "run_artifact_index.py").read_text(
+        encoding="utf-8"
+    )
+    event_results_source = (REPO_ROOT / "src" / "loopora" / "events" / "run_event_results.py").read_text(
+        encoding="utf-8"
+    )
+    run_requests_source = (REPO_ROOT / "src" / "loopora" / "engine" / "run_requests.py").read_text(encoding="utf-8")
+    event_transactions_source = (REPO_ROOT / "src" / "loopora" / "events" / "run_event_transactions.py").read_text(
         encoding="utf-8"
     )
     evidence_commands_source = (REPO_ROOT / "src" / "loopora" / "engine" / "run_evidence_commands.py").read_text(
@@ -224,11 +313,42 @@ def test_run_engine_delegates_multi_event_transaction_commands() -> None:
     assert "append_step_submission_events" not in event_commands_source
     assert "append_step_evidence_events" not in event_commands_source
     assert "run_snapshot_from_repository" not in event_commands_source
-    assert "append_step_evidence_events" in evidence_commands_source
-    assert "run_event_append_request" in evidence_commands_source
-    assert "append_step_submission_events" in step_commands_source
-    assert "run_event_append_request" in step_commands_source
+    assert "append_domain_event_transaction" not in evidence_commands_source
+    assert "append_domain_event_transaction" not in step_commands_source
+    assert "rebuild_run_projection_cache" not in evidence_commands_source
+    assert "rebuild_run_projection_cache" not in step_commands_source
+    assert "run_event_append_request" not in evidence_commands_source
+    assert "run_event_append_request" not in step_commands_source
+    assert "append_step_evidence_events(" not in evidence_commands_source
+    assert "append_step_submission_events(" not in step_commands_source
+    assert "append_step_evidence_events_and_rebuild_projection_cache" in evidence_commands_source
+    assert "append_step_submission_events_and_rebuild_projection_cache" in step_commands_source
     assert "run_snapshot_from_repository" in step_commands_source
+    assert not engine_artifact_index_path.exists()
+    assert "def step_result_artifact_index_entries" in event_artifact_index_source
+    assert "class StepSubmissionEventsResult" in event_results_source
+    assert "class StepEvidenceEventsResult" in event_results_source
+    assert "RunEngineSubmitStepResult = StepSubmissionEventsResult" in run_requests_source
+    assert "RunEngineRecordStepEvidenceResult = StepEvidenceEventsResult" in run_requests_source
+    assert "from loopora.engine.run_requests import" not in event_transactions_source
+    assert "from loopora.events.run_artifact_index import step_result_artifact_index_entries" in event_transactions_source
+    assert "from loopora.events.run_event_results import StepEvidenceEventsResult, StepSubmissionEventsResult" in event_transactions_source
+    assert "run_event_append_request" in event_transactions_source
+    assert "rebuild_run_projection_cache" in event_transactions_source
+    assert "from loopora.engine.run_artifact_index import" not in event_transactions_source
+
+
+def test_run_event_transaction_helpers_live_under_event_core() -> None:
+    engine_transactions_path = REPO_ROOT / "src" / "loopora" / "engine" / "run_event_transactions.py"
+    event_transactions_source = (REPO_ROOT / "src" / "loopora" / "events" / "run_event_transactions.py").read_text(
+        encoding="utf-8"
+    )
+
+    assert not engine_transactions_path.exists()
+    assert "def append_step_submission_events" in event_transactions_source
+    assert "def append_step_evidence_events" in event_transactions_source
+    assert "def append_step_submission_events_and_rebuild_projection_cache" in event_transactions_source
+    assert "def append_step_evidence_events_and_rebuild_projection_cache" in event_transactions_source
 
 
 def test_event_writers_use_core_event_append_boundary_for_domain_envelopes() -> None:

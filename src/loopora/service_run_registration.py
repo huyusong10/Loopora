@@ -301,7 +301,7 @@ class ServiceRunRegistrationMixin:
         (loop_dir / "spec.md").write_text(snapshot.spec_markdown, encoding="utf-8")
         write_json(loop_dir / "compiled_spec.json", snapshot.compiled_spec)
         self._persist_prompt_files(loop_dir, snapshot.prompt_files)
-        write_json(loop_dir / "workflow.json", snapshot.strategy_source)
+        write_json_with_mirrors(loop_dir / "strategy_source.json", snapshot.strategy_source, mirror_paths=[loop_dir / "workflow.json"])
 
     @staticmethod
     def _read_and_compile_spec(spec_path: Path) -> tuple[str, dict]:
@@ -348,7 +348,7 @@ class ServiceRunRegistrationMixin:
         source_bundle = self._loop_source_bundle_snapshot(loop_id)
         write_json_with_mirrors(layout.contract_compiled_spec_path, compiled_spec)
         write_text_with_mirrors(layout.contract_spec_path, loop["spec_markdown"])
-        write_json_with_mirrors(layout.contract_workflow_path, strategy_source)
+        write_json_with_mirrors(layout.contract_strategy_source_path, strategy_source, mirror_paths=[layout.contract_workflow_path])
         self._persist_prompt_files(layout.contract_dir, prompt_files)
 
         run_contract = build_run_contract_snapshot(

@@ -5,20 +5,12 @@ from pathlib import Path
 from typing import Any
 
 from loopora.agent_adapters import normalize_agent_adapter_kind, read_agent_binding
-from loopora.agent_native_capsule_context import (
-    agent_native_capsule_continuation_context,
-    agent_native_capsule_iteration_repair_context,
-    agent_native_capsule_judgment_contract,
-    agent_native_evidence_rules,
-    agent_native_required_coverage,
-    agent_native_todo_contract,
+from loopora.agent_native_context_coverage import agent_native_step_instruction_context_with_coverage
+from loopora.agent_native_step_view import (
+    AgentNativeStepViewRequest,
+    agent_native_step_view,
 )
-from loopora.agent_native_capsule import (
-    AgentNativeCapsuleRequest,
-    agent_native_capsule,
-    agent_native_context_packet_with_coverage,
-    refresh_agent_native_capsule_with_judgment_contract,
-)
+from loopora.agent_native_step_view_refresh import refresh_agent_native_step_view_with_judgment_contract
 from loopora.agent_native_controls import (
     AgentNativeControlQueueRequest,
     agent_native_build_control_queue,
@@ -34,10 +26,9 @@ from loopora.agent_native_parallel_groups import (
     agent_native_claim_input_snapshot,
     agent_native_parallel_group_started_payload,
 )
-from loopora.agent_native_projection_state import agent_native_active_step_is_stale
+from loopora.agent_native_projection_state import agent_native_active_step_is_stale, agent_native_active_step_view
 from loopora.agent_native_result_template import (
-    agent_native_result_template,
-    write_agent_native_step_contract_files,
+    write_agent_native_step_view_files,
 )
 from loopora.agent_native_runtime_context import (
     agent_native_iteration_state,
@@ -50,11 +41,8 @@ from loopora.agent_native_submit_validation import (
 )
 from loopora.agent_native_state import (
     agent_native_state,
-    agent_native_state_path,
     agent_native_step_already_submitted,
     agent_native_submit_lock,
-    agent_native_submit_lock_path,
-    update_agent_native_parallel_group_snapshot_after_submit,
     write_agent_native_state,
 )
 from loopora.agent_native_submit_flow import (
@@ -66,7 +54,7 @@ from loopora.agent_native_submitted_step import (
     AgentNativeSubmittedStepResultRequest,
     agent_native_submitted_step_result,
 )
-from loopora.agent_native_task_proof import agent_native_task_next_action, with_agent_native_judgment_contract
+from loopora.agent_native_task_proof import with_agent_native_judgment_contract
 from loopora.context_flow import evidence_entry_id
 from loopora.engine import (
     RepositoryRunEngine,
@@ -81,6 +69,11 @@ from loopora.runners import agent_runner_actor
 from loopora.run_artifacts import RunArtifactLayout
 from loopora.service_agent_native_contracts import agent_native_unknown_evidence_refs
 from loopora.service_types import ACTIVE_RUN_STATUSES, LooporaConflictError, LooporaError, LooporaNotFoundError, TERMINAL_RUN_STATUSES, normalize_completion_mode
+from loopora.step_instruction_context import (
+    LEGACY_CONTEXT_PACKET_KEY,
+    step_instruction_context_from_mapping,
+    step_instruction_context_legacy_fields,
+)
 from loopora.structured_numbers import structured_non_negative_int
 from loopora.utils import utc_now, write_json
 from loopora.runner_support_requests import RunnerSummaryRequest, StepOutputNormalizationRequest
@@ -148,7 +141,7 @@ class _AgentNativeSubmitContext:
     iteration: RunnerIterationState
     role: dict[str, Any]
     runtime_role: str
-    context_packet: dict[str, Any]
+    step_instruction_context: dict[str, Any]
     host_dispatch: dict[str, Any]
 
 
@@ -163,10 +156,6 @@ class ServiceAgentNativeMixin:
     @staticmethod
     def _with_agent_native_judgment_contract(result: dict[str, Any]) -> dict[str, Any]:
         return with_agent_native_judgment_contract(result)
-
-    @staticmethod
-    def _agent_native_task_next_action(result: dict[str, Any]) -> dict[str, Any]:
-        return agent_native_task_next_action(result)
 
     def prepare_agent_native_run(
         self,
@@ -183,7 +172,7 @@ class ServiceAgentNativeMixin:
             raise LooporaConflictError(f"cannot prepare agent-native run in status {run['status']}")
 
         layout = self._run_artifact_layout(Path(run["runs_dir"]))
-        state = self._agent_native_state(layout, adapter=kind, run=run)
+        state = agent_native_state(layout, adapter=kind, run=run)
         if str(entry_source or "").strip():
             state["entry_source"] = str(entry_source or "").strip()
         summary = "# Loopora Run Summary\n\nAwaiting host Agent step execution.\n"
@@ -204,7 +193,7 @@ class ServiceAgentNativeMixin:
                 "entry_source": str(entry_source or "").strip(),
             },
         )
-        self._write_agent_native_state(layout, state)
+        write_agent_native_state(layout, state)
         next_result = self.claim_agent_native_step(
             AgentNativeStepClaimRequest(
                 adapter=kind,
@@ -237,46 +226,52 @@ class ServiceAgentNativeMixin:
             raise LooporaConflictError(f"cannot claim agent-native step in status {run['status']}")
 
         layout = self._run_artifact_layout(Path(run["runs_dir"]))
-        state = self._agent_native_state(layout, adapter=kind, run=run)
+        state = agent_native_state(layout, adapter=kind, run=run)
         entry_source = str(request.entry_source or "").strip() or str(state.get("entry_source") or "").strip()
         if entry_source and state.get("entry_source") != entry_source:
             state["entry_source"] = entry_source
-            self._write_agent_native_state(layout, state)
+            write_agent_native_state(layout, state)
         active = state.get("active_step") if isinstance(state.get("active_step"), dict) else {}
-        current_step_projection = self._agent_native_current_step_projection(run["id"])
-        if active and active.get("capsule") and agent_native_active_step_is_stale(active, current_step_projection):
+        current_step_projection = current_step_projection_for_run(self.repository, run["id"])
+        active_step_payload = active.get("capsule")
+        active_step_view = agent_native_active_step_view(active)
+        if active and active_step_payload and agent_native_active_step_is_stale(active, current_step_projection):
             active = {}
+            active_step_payload = None
+            active_step_view = {}
             state["active_step"] = {}
-            self._write_agent_native_state(layout, state)
-        if active and active.get("capsule"):
-            refreshed_context_packet = self._agent_native_context_packet_with_latest_coverage(
+            write_agent_native_state(layout, state)
+        if active and active_step_payload:
+            step_instruction_context = step_instruction_context_from_mapping(active)
+            refreshed_step_instruction_context = self._agent_native_step_instruction_context_with_latest_coverage(
                 layout,
-                active.get("context_packet"),
+                step_instruction_context,
             )
-            if refreshed_context_packet != active.get("context_packet"):
-                active["context_packet"] = refreshed_context_packet
-            capsule = self._agent_native_capsule_with_judgment_contract(
+            context_changed = active.get(LEGACY_CONTEXT_PACKET_KEY) != refreshed_step_instruction_context
+            if context_changed:
+                active[LEGACY_CONTEXT_PACKET_KEY] = refreshed_step_instruction_context
+            step_view = refresh_agent_native_step_view_with_judgment_contract(
                 run,
-                active["capsule"],
-                context_packet=active.get("context_packet"),
+                active_step_payload,
+                step_instruction_context=refreshed_step_instruction_context,
             )
-            if capsule != active["capsule"]:
-                active["capsule"] = capsule
+            if context_changed or step_view != active_step_view:
+                active["capsule"] = step_view
                 state["active_step"] = active
-                self._write_agent_native_state(layout, state)
-            self._write_agent_native_step_contract_files(capsule)
+                write_agent_native_state(layout, state)
+            write_agent_native_step_view_files(step_view)
             return self._with_agent_native_judgment_contract(
                 {
                     "adapter": kind,
                     "run": run,
                     "run_path": f"/runs/{run['id']}",
-                    "next_step": capsule,
+                    "next_step": step_view,
                     "complete": False,
                 }
             )
 
         context = self._agent_native_run_context(run, state)
-        iteration = self._agent_native_iteration_state(state)
+        iteration = agent_native_iteration_state(state)
         step_index = RepositoryRunEngine(self.repository).runner_step_index(
             run["id"],
             strategy_steps=context.strategy_steps,
@@ -368,9 +363,11 @@ class ServiceAgentNativeMixin:
         )
         runtime_role = str(prepared["runtime_role"])
         role_request = prepared["role_request"]
-        context_packet = prepared["context_packet"] if isinstance(prepared.get("context_packet"), dict) else {}
-        evidence_context = context_packet.get("evidence") if isinstance(context_packet.get("evidence"), dict) else {}
-        capsule = self._agent_native_capsule(
+        step_instruction_context = step_instruction_context_from_mapping(prepared)
+        evidence_context = (
+            step_instruction_context.get("evidence") if isinstance(step_instruction_context.get("evidence"), dict) else {}
+        )
+        step_view = self._agent_native_step_view(
             kind,
             run=run,
             layout=context.layout,
@@ -384,7 +381,7 @@ class ServiceAgentNativeMixin:
             known_evidence_ids=list(
                 dict.fromkeys(str(item) for item in list(evidence_context.get("known_ids") or []) if str(item).strip())
             ),
-            context_packet=context_packet,
+            step_instruction_context=step_instruction_context,
             entry_source=request.entry_source,
         )
         run = self.repository.update_run(run["id"], status="awaiting_agent", current_iter=iteration.iter_id, active_role=runtime_role)
@@ -399,11 +396,11 @@ class ServiceAgentNativeMixin:
                 pending_actor=agent_runner_actor(kind),
             )
         )
-        self._write_agent_native_step_contract_files(capsule)
+        write_agent_native_step_view_files(step_view)
         state["active_step"] = {
             "claimed_at": utc_now(),
-            "capsule": capsule,
-            "context_packet": context_packet,
+            "capsule": step_view,
+            LEGACY_CONTEXT_PACKET_KEY: step_instruction_context,
             "execution_settings": execution_settings,
             "role": role,
             "runtime_role": runtime_role,
@@ -411,7 +408,7 @@ class ServiceAgentNativeMixin:
             "step_order": step_order,
             "iter_id": iteration.iter_id,
         }
-        self._write_agent_native_state(context.layout, state)
+        write_agent_native_state(context.layout, state)
         self.append_run_event(
             run["id"],
             "agent_native_step_claimed",
@@ -423,10 +420,11 @@ class ServiceAgentNativeMixin:
                 "role_name": role["name"],
                 "archetype": role["archetype"],
                 "runtime_role": runtime_role,
-                "target_agent": str((capsule.get("role_dispatch") or {}).get("target_agent") or ""),
-                "step_contract_path": str(capsule.get("step_contract_path") or capsule.get("capsule_path") or ""),
-                "capsule_path": str(capsule.get("capsule_path") or ""),
-                "result_template_path": str((capsule.get("submit_hint") or {}).get("result_template_path") or ""),
+                "target_agent": str((step_view.get("role_dispatch") or {}).get("target_agent") or ""),
+                "agent_step_view_path": str(step_view.get("agent_step_view_path") or step_view.get("capsule_path") or ""),
+                "step_contract_path": str(step_view.get("step_contract_path") or step_view.get("capsule_path") or ""),
+                "capsule_path": str(step_view.get("capsule_path") or ""),
+                "result_template_path": str((step_view.get("submit_hint") or {}).get("result_template_path") or ""),
                 "parallel_group": str(step.get("parallel_group") or ""),
                 "control_id": str(step.get("control_id") or ""),
             },
@@ -440,7 +438,7 @@ class ServiceAgentNativeMixin:
                 "adapter": kind,
                 "run": self._hydrate_run_files(run),
                 "run_path": f"/runs/{run['id']}",
-                "next_step": capsule,
+                "next_step": step_view,
                 "complete": False,
             }
         )
@@ -457,7 +455,7 @@ class ServiceAgentNativeMixin:
         output = request.output
 
         layout = self._run_artifact_layout(Path(run["runs_dir"]))
-        with self._agent_native_submit_lock(layout):
+        with agent_native_submit_lock(layout):
             return self._submit_agent_native_step_locked(request, kind=kind, run=run, layout=layout, output=output)
 
     def _submit_agent_native_step_locked(
@@ -491,7 +489,7 @@ class ServiceAgentNativeMixin:
         run: dict[str, Any],
         layout: RunArtifactLayout,
     ) -> _AgentNativeSubmitContext:
-        state = self._agent_native_state(layout, adapter=kind, run=run)
+        state = agent_native_state(layout, adapter=kind, run=run)
         active = state.get("active_step") if isinstance(state.get("active_step"), dict) else {}
         if not active:
             raise LooporaConflictError("no agent-native step is currently claimed; run next first")
@@ -502,19 +500,19 @@ class ServiceAgentNativeMixin:
 
         iter_id = _agent_native_first_present_int(active.get("iter_id"), state.get("iter_id"))
         step_order = _agent_native_first_present_int(active.get("step_order"), state.get("step_index"))
-        if self._agent_native_step_already_submitted(layout, iter_id=iter_id, step_order=step_order, step_id=step_id):
+        if agent_native_step_already_submitted(layout, iter_id=iter_id, step_order=step_order, step_id=step_id):
             raise LooporaConflictError(
                 "agent-native step was already submitted; rerun agent next --json if the run advanced or this result file is stale"
             )
-        current_step_projection = self._agent_native_current_step_projection(run["id"])
+        current_step_projection = current_step_projection_for_run(self.repository, run["id"])
         if agent_native_active_step_is_stale(active, current_step_projection):
             raise LooporaConflictError("claimed agent-native step is stale; rerun agent next before submitting")
 
         context = self._agent_native_run_context(run, state)
-        iteration = self._agent_native_iteration_state(state)
+        iteration = agent_native_iteration_state(state)
         role = active.get("role") if isinstance(active.get("role"), dict) else context.role_by_id[step["role_id"]]
         runtime_role = str(active.get("runtime_role") or self._runtime_role_key(role))
-        context_packet = active.get("context_packet") if isinstance(active.get("context_packet"), dict) else {}
+        step_instruction_context = step_instruction_context_from_mapping(active)
         host_dispatch = self._validate_agent_native_host_dispatch(
             {
                 "adapter": kind,
@@ -539,7 +537,7 @@ class ServiceAgentNativeMixin:
             iteration=iteration,
             role=role,
             runtime_role=runtime_role,
-            context_packet=context_packet,
+            step_instruction_context=step_instruction_context,
             host_dispatch=host_dispatch,
         )
 
@@ -561,11 +559,15 @@ class ServiceAgentNativeMixin:
         iteration = submit_context.iteration
         role = submit_context.role
         runtime_role = submit_context.runtime_role
-        context_packet = submit_context.context_packet
+        step_instruction_context = submit_context.step_instruction_context
         host_dispatch = submit_context.host_dispatch
         self._validate_agent_native_step_output_contract(output, active=active)
         if role["archetype"] != "gatekeeper":
-            unknown_refs = agent_native_unknown_evidence_refs(output, active=active, context_packet=context_packet)
+            unknown_refs = agent_native_unknown_evidence_refs(
+                output,
+                active=active,
+                step_instruction_context=step_instruction_context,
+            )
             if unknown_refs:
                 raise LooporaError(
                     "agent-native evidence_refs_unknown: "
@@ -579,7 +581,7 @@ class ServiceAgentNativeMixin:
                 output=output,
                 compiled_spec=context.compiled_spec,
                 inspector_output=dict(iteration.current_outputs_by_archetype).get("inspector"),
-                evidence_context=evidence_context_with_canonical_items(context_packet, context.layout),
+                evidence_context=evidence_context_with_canonical_items(step_instruction_context, context.layout),
                 current_evidence_id=evidence_entry_id(iter_id, step_order, step_id),
             )
         )
@@ -594,7 +596,7 @@ class ServiceAgentNativeMixin:
             "runtime_role": runtime_role,
             "execution_settings": active.get("execution_settings") if isinstance(active.get("execution_settings"), dict) else {},
             "normalized_output": normalized_output,
-            "context_packet": context_packet,
+            **step_instruction_context_legacy_fields(step_instruction_context),
             "session_ref": submitted_session_ref,
             "actor_ref": agent_runner_actor(submit_context.kind).to_dict(),
             "duration_ms": 0,
@@ -658,7 +660,7 @@ class ServiceAgentNativeMixin:
             role=runtime_role,
         )
 
-        state.update(self._state_from_iteration(iteration))
+        state.update(agent_native_state_from_iteration(iteration))
         state["control_fire_counts"] = dict(context.control_fire_counts)
         state["host_dispatches"] = [*list(state.get("host_dispatches") or []), host_dispatch]
         state["active_step"] = {}
@@ -673,7 +675,7 @@ class ServiceAgentNativeMixin:
                 is_control_step=normalized.is_control_step,
             )
         )
-        self._write_agent_native_state(layout, state)
+        write_agent_native_state(layout, state)
         return self._agent_native_submit_response(
             _AgentNativeSubmitResponseRequest(
                 kind=kind,
@@ -689,7 +691,7 @@ class ServiceAgentNativeMixin:
     def _agent_native_submit_response(self, request: _AgentNativeSubmitResponseRequest) -> dict[str, Any]:
         if request.finish_result is not None:
             request.state["status"] = "complete"
-            self._write_agent_native_state(request.layout, request.state)
+            write_agent_native_state(request.layout, request.state)
             self.repository.release_run_slot(request.run["id"])
             return self._with_agent_native_judgment_contract(
                 {
@@ -728,7 +730,7 @@ class ServiceAgentNativeMixin:
         context: RunnerRunContext,
     ) -> dict[str, Any]:
         layout = context.layout
-        iteration = self._agent_native_iteration_state(state)
+        iteration = agent_native_iteration_state(state)
         control_claim = self._agent_native_claim_pending_control_step(adapter, run, state, context, iteration)
         if control_claim is not None:
             return control_claim
@@ -795,7 +797,7 @@ class ServiceAgentNativeMixin:
             )
             self.repository.release_run_slot(run["id"])
             state["status"] = "complete"
-            self._write_agent_native_state(layout, state)
+            write_agent_native_state(layout, state)
             return self._with_agent_native_judgment_contract(
                 {
                     "adapter": adapter,
@@ -820,7 +822,7 @@ class ServiceAgentNativeMixin:
                 )
             )
         )
-        self._write_agent_native_state(layout, state)
+        write_agent_native_state(layout, state)
         return self.claim_agent_native_step(AgentNativeStepClaimRequest(adapter=adapter, run_id=run["id"]))
 
     def _agent_native_claim_pending_control_step(
@@ -846,7 +848,7 @@ class ServiceAgentNativeMixin:
             state["control_queue_index"] = 0
             state["control_queue_iter"] = iteration.iter_id
             state["control_fire_counts"] = dict(context.control_fire_counts)
-            self._write_agent_native_state(context.layout, state)
+            write_agent_native_state(context.layout, state)
 
         queue = [item for item in list(state.get("control_queue") or []) if isinstance(item, dict)]
         index = agent_native_control_queue_index(state, queue=queue)
@@ -857,7 +859,7 @@ class ServiceAgentNativeMixin:
         step_order = agent_native_control_queue_step_order(entry)
         if not step or step_order is None:
             state["control_queue_index"] = index + 1
-            self._write_agent_native_state(context.layout, state)
+            write_agent_native_state(context.layout, state)
             return self._agent_native_claim_pending_control_step(adapter, run, state, context, iteration)
         return self._agent_native_claim_runtime_step(
             _AgentNativeRuntimeClaimRequest(
@@ -902,53 +904,7 @@ class ServiceAgentNativeMixin:
             prompt_files=self._read_prompt_files_for_run(run),
         )
 
-    def _agent_native_iteration_state(self, state: dict[str, Any]) -> RunnerIterationState:
-        return agent_native_iteration_state(state)
-
-    def _state_from_iteration(self, iteration: RunnerIterationState) -> dict[str, Any]:
-        return agent_native_state_from_iteration(iteration)
-
-    def _agent_native_state(self, layout, *, adapter: str, run: dict) -> dict[str, Any]:
-        return agent_native_state(layout, adapter=adapter, run=run)
-
-    def _agent_native_current_step_projection(self, run_id: str) -> dict[str, Any]:
-        return current_step_projection_for_run(self.repository, run_id)
-
-    @staticmethod
-    def _agent_native_update_parallel_group_snapshot_after_submit(
-        state: dict[str, Any],
-        context: RunnerRunContext,
-        step: dict,
-        step_order: int,
-    ) -> None:
-        update_agent_native_parallel_group_snapshot_after_submit(
-            state,
-            strategy_steps=context.strategy_steps,
-            step=step,
-            step_order=step_order,
-        )
-
-    @staticmethod
-    def _write_agent_native_state(layout, state: dict[str, Any]) -> None:
-        write_agent_native_state(layout, state)
-
-    @staticmethod
-    def _agent_native_state_path(layout) -> Path:
-        return agent_native_state_path(layout)
-
-    @staticmethod
-    def _agent_native_submit_lock(layout):
-        return agent_native_submit_lock(layout)
-
-    @staticmethod
-    def _agent_native_submit_lock_path(layout) -> Path:
-        return agent_native_submit_lock_path(layout)
-
-    @staticmethod
-    def _agent_native_step_already_submitted(layout, *, iter_id: int, step_order: int, step_id: str) -> bool:
-        return agent_native_step_already_submitted(layout, iter_id=iter_id, step_order=step_order, step_id=step_id)
-
-    def _agent_native_capsule(  # noqa: PLR0913 - legacy capsule payload is the current step contract projection.
+    def _agent_native_step_view(  # noqa: PLR0913 - Agent Step View projection needs the frozen step contract inputs.
         self,
         adapter: str,
         *,
@@ -962,11 +918,11 @@ class ServiceAgentNativeMixin:
         prompt: str,
         output_schema: dict,
         known_evidence_ids: list[str] | None = None,
-        context_packet: dict[str, Any] | None = None,
+        step_instruction_context: dict[str, Any] | None = None,
         entry_source: str = "",
     ) -> dict[str, Any]:
-        return agent_native_capsule(
-            AgentNativeCapsuleRequest(
+        return agent_native_step_view(
+            AgentNativeStepViewRequest(
                 adapter=adapter,
                 run=run,
                 layout=layout,
@@ -978,57 +934,20 @@ class ServiceAgentNativeMixin:
                 prompt=prompt,
                 output_schema=output_schema,
                 known_evidence_ids=known_evidence_ids,
-                context_packet=context_packet,
+                step_instruction_context=step_instruction_context,
                 entry_source=entry_source,
             )
         )
 
-    def _write_agent_native_step_contract_files(self, capsule: dict[str, Any]) -> None:
-        write_agent_native_step_contract_files(capsule)
-
-    @staticmethod
-    def _agent_native_result_template(capsule: dict[str, Any]) -> dict[str, Any]:
-        return agent_native_result_template(capsule)
-
-    @classmethod
-    def _agent_native_capsule_with_judgment_contract(
-        cls,
-        run: dict,
-        capsule: object,
-        *,
-        context_packet: object = None,
-    ) -> dict[str, Any]:
-        return refresh_agent_native_capsule_with_judgment_contract(run, capsule, context_packet=context_packet)
-
-    def _agent_native_context_packet_with_latest_coverage(
+    def _agent_native_step_instruction_context_with_latest_coverage(
         self,
         layout: RunArtifactLayout,
-        context_packet: object,
+        step_instruction_context: object,
     ) -> object:
-        if not isinstance(context_packet, dict):
-            return context_packet
+        if not isinstance(step_instruction_context, dict):
+            return step_instruction_context
         coverage = self._coverage_context_for_run(layout)
-        return agent_native_context_packet_with_coverage(context_packet, coverage)
-
-    @staticmethod
-    def _agent_native_capsule_continuation_context(context_packet: object) -> dict[str, Any]:
-        return agent_native_capsule_continuation_context(context_packet)
-
-    @staticmethod
-    def _agent_native_capsule_iteration_repair_context(context_packet: object) -> dict[str, Any]:
-        return agent_native_capsule_iteration_repair_context(context_packet)
-
-    @staticmethod
-    def _agent_native_capsule_judgment_contract(run: dict, context_packet: object) -> dict[str, Any]:
-        return agent_native_capsule_judgment_contract(run, context_packet)
-
-    @staticmethod
-    def _agent_native_required_coverage(context_packet: dict[str, Any] | None) -> dict[str, Any]:
-        return agent_native_required_coverage(context_packet)
-
-    @staticmethod
-    def _agent_native_todo_contract(*, step_id: str, target_agent: str) -> dict[str, Any]:
-        return agent_native_todo_contract(step_id=step_id, target_agent=target_agent)
+        return agent_native_step_instruction_context_with_coverage(step_instruction_context, coverage)
 
     @staticmethod
     def _validate_agent_native_step_output_contract(output: dict[str, Any], *, active: dict[str, Any]) -> None:
@@ -1037,11 +956,6 @@ class ServiceAgentNativeMixin:
     @staticmethod
     def _validate_agent_native_host_dispatch(context: dict[str, Any], dispatch: dict[str, Any] | None) -> dict[str, Any]:
         return validate_agent_native_host_dispatch(context, dispatch)
-
-    @staticmethod
-    def _agent_native_evidence_rules(archetype: str) -> list[dict[str, str]]:
-        return agent_native_evidence_rules(archetype)
-
 
 def _agent_native_first_present_int(*values: object, default: int = 0) -> int:
     for value in values:

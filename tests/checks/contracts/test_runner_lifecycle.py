@@ -15,7 +15,7 @@ from loopora.service import LooporaError, LooporaService
 
 from runner_helpers import (
     _create_loop,
-    _force_run_missing_workflow_snapshot,
+    _force_run_missing_strategy_snapshot,
     _join_async_run,
     _wait_for_terminal_run,
 )
@@ -533,27 +533,27 @@ def test_unexpected_run_error_marks_run_failed(service_factory, sample_spec_file
     )
 
 
-def test_empty_workflow_snapshot_fails_closed_without_legacy_runtime(
+def test_empty_strategy_snapshot_fails_closed_without_legacy_runtime(
     service_factory,
     sample_spec_file: Path,
     sample_workdir: Path,
 ) -> None:
     service = service_factory(scenario="success")
-    loop = _create_loop(service, sample_spec_file, sample_workdir, name="Missing Workflow Loop")
+    loop = _create_loop(service, sample_spec_file, sample_workdir, name="Missing Strategy Loop")
     run = service.start_run(loop["id"])
-    _force_run_missing_workflow_snapshot(service, run["id"])
+    _force_run_missing_strategy_snapshot(service, run["id"])
 
     failed = service.execute_run(run["id"])
 
     assert failed["status"] == "failed"
-    assert failed["error_message"] == "Run has no workflow snapshot; legacy execution runtime has been removed."
+    assert failed["error_message"] == "Run has no strategy snapshot; legacy execution runtime has been removed."
     assert not hasattr(service, "_execute_legacy_run")
     events = service.repository.list_events(run["id"], after_id=0, limit=1000)
     assert any(event["event_type"] == "run_aborted" for event in events)
     assert any(
         event["event_type"] == "run_finished"
         and event["payload"]["status"] == "failed"
-        and event["payload"].get("reason") == "missing_workflow_snapshot"
+        and event["payload"].get("reason") == "missing_strategy_snapshot"
         for event in events
     )
 

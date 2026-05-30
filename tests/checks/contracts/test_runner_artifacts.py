@@ -9,9 +9,9 @@ from loopora.branding import state_dir_for_workdir
 from loopora.context_flow import (
     RunContractSnapshotRequest,
     STEP_CONTEXT_PACKET_SCHEMA,
-    StepContextPacketRequest,
+    StepInstructionContextRequest,
     build_run_contract_snapshot,
-    build_step_context_packet,
+    build_step_instruction_context,
     output_contract_prompt,
     render_evidence_section,
     render_iteration_section,
@@ -68,12 +68,12 @@ def test_successful_run_writes_expected_artifacts(service_factory, sample_spec_f
     assert (run_dir / "evidence" / "manifest.json").exists()
     assert (run_dir / "evidence" / "task_verdict.json").exists()
     assert (run_dir / "contract" / "compiled_spec.json").exists()
-    assert (run_dir / "contract" / "workflow.json").exists()
+    assert (run_dir / "contract" / "strategy_source.json").exists() and (run_dir / "contract" / "workflow.json").exists()
     assert (run_dir / "contract" / "run_contract.json").exists()
     assert (run_dir / "context" / "latest_state.json").exists()
     assert (run_dir / "context" / "latest_iteration_summary.json").exists()
-    assert (sample_workdir / ".loopora" / "loops" / loop["id"] / "compiled_spec.json").exists()
-    frozen_workflow = json.loads((run_dir / "contract" / "workflow.json").read_text(encoding="utf-8"))
+    assert all((sample_workdir / ".loopora" / "loops" / loop["id"] / name).exists() for name in ("compiled_spec.json", "strategy_source.json"))
+    frozen_strategy_source = json.loads((run_dir / "contract" / "strategy_source.json").read_text(encoding="utf-8"))
     run_contract = json.loads((run_dir / "contract" / "run_contract.json").read_text(encoding="utf-8"))
     coverage = json.loads((run_dir / "evidence" / "coverage.json").read_text(encoding="utf-8"))
     assert coverage["coverage_path"] == "evidence/coverage.json"
@@ -98,7 +98,7 @@ def test_successful_run_writes_expected_artifacts(service_factory, sample_spec_f
             "inputs": step.get("inputs", {}),
             "action_policy": step.get("action_policy", {}),
         }
-        for step in frozen_workflow["steps"]
+        for step in frozen_strategy_source["steps"]
     ]
     role_requests = _read_jsonl(run_dir / "context" / "role_requests.jsonl")
     builder_request = next(item for item in role_requests if item["role_archetype"] == "builder")
@@ -242,8 +242,8 @@ def test_manifest_prompt_context_does_not_promote_string_booleans(tmp_path: Path
 def test_step_context_packet_preserves_manifest_claim_target_trace(tmp_path: Path) -> None:
     layout = RunArtifactLayout(tmp_path / "run_prompt")
     layout.initialize()
-    packet = build_step_context_packet(
-        StepContextPacketRequest(
+    packet = build_step_instruction_context(
+        StepInstructionContextRequest(
             run_contract={
                 "compiled_spec": {},
                 "workflow": {"preset": "custom"},
@@ -357,8 +357,8 @@ def test_step_context_packet_derives_legacy_local_governance_before_prompting(tm
     layout = RunArtifactLayout(tmp_path / "run_prompt_legacy_governance")
     layout.initialize()
 
-    packet = build_step_context_packet(
-        StepContextPacketRequest(
+    packet = build_step_instruction_context(
+        StepInstructionContextRequest(
             run_contract={
                 "compiled_spec": {
                     "raw_sections": {
@@ -409,8 +409,8 @@ def test_step_context_packet_normalizes_judgment_contract_field_types(tmp_path: 
     layout = RunArtifactLayout(tmp_path / "run_prompt_contract_types")
     layout.initialize()
 
-    packet = build_step_context_packet(
-        StepContextPacketRequest(
+    packet = build_step_instruction_context(
+        StepInstructionContextRequest(
             run_contract={
                 "compiled_spec": {
                     "goal": "Keep the step contract typed.",
@@ -919,7 +919,7 @@ def test_gatekeeper_coverage_results_cover_advisory_targets(
                     "coverage_results": [],
                 }
             else:
-                context_packet = request.extra_context["context_packet"]
+                context_packet = request.extra_context["step_instruction_context"]
                 evidence_refs = [item["id"] for item in context_packet["evidence"]["items"]]
                 targets = list((request.extra_context.get("compiled_spec") or {}).get("coverage_targets") or [])
                 payload = {
@@ -1033,7 +1033,7 @@ def test_run_persists_role_request_snapshots_and_iteration_handoff(
     generator_requests = [item for item in role_requests if item["role"] == "generator"]
     assert generator_requests
     second_generator = next(item for item in generator_requests if item["iter"] == 1)
-    assert "context_packet" in second_generator["extra_context_keys"]
+    assert "step_instruction_context" in second_generator["extra_context_keys"]
     assert second_generator["context_summary"]["previous_iteration_summary"]["composite"] == 0.62
 
     prompt_path = run_dir / second_generator["prompt_path"]

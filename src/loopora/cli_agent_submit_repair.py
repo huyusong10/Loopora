@@ -5,6 +5,7 @@ from pathlib import Path
 
 from loopora.agent_native_evidence_refs import agent_known_evidence_ref_summaries as _agent_known_evidence_ref_summaries
 from loopora.agent_native_guidance import core_blocker_kind as _core_blocker_kind
+from loopora.agent_native_projection_state import agent_native_active_step_view as _agent_native_active_step_view
 from loopora.agent_native_surface import attach_native_run_surface
 from loopora.agent_native_v3 import agent_v3_envelope as _agent_v3_envelope
 from loopora.agent_native_v3 import agent_v3_legacy_raw as _agent_v3_legacy_raw
@@ -73,7 +74,7 @@ def _agent_submit_repair_result(
     error = str(exc)
     if not _agent_submit_error_is_repairable(error):
         return {}
-    active_step = _active_agent_native_step(service, run_id=run_id)
+    active_step_view = _active_agent_native_step_view(service, run_id=run_id)
     result = {
         "adapter": adapter,
         "ready": False,
@@ -90,9 +91,9 @@ def _agent_submit_repair_result(
     submitted_dispatch = _agent_submit_result_file_dispatch_summary(result_file)
     if submitted_dispatch:
         result["submitted_dispatch"] = submitted_dispatch
-    if active_step:
-        _attach_agent_submit_active_step_repair_context(result, active_step, result_file)
-    focus = _agent_submit_repair_focus(error, active_step)
+    if active_step_view:
+        _attach_agent_submit_active_step_view_repair_context(result, active_step_view, result_file)
+    focus = _agent_submit_repair_focus(error, active_step_view)
     null_placeholder_focus = _result_file_null_placeholder_focus(result_file)
     if null_placeholder_focus:
         focus = [null_placeholder_focus, *[item for item in focus if not item.startswith("replace null placeholders before submit:")]]
@@ -171,17 +172,17 @@ def _agent_submit_repair_summary(result: dict) -> dict:
     return {key: value for key, value in summary.items() if value not in ("", [], {})}
 
 
-def _attach_agent_submit_active_step_repair_context(result: dict, active_step: dict, result_file: Path) -> None:
-    role = active_step.get("role") if isinstance(active_step.get("role"), dict) else {}
-    dispatch = active_step.get("role_dispatch") if isinstance(active_step.get("role_dispatch"), dict) else {}
-    submit_hint = active_step.get("submit_hint") if isinstance(active_step.get("submit_hint"), dict) else {}
-    target_agent = str(dispatch.get("target_agent") or active_step.get("target_agent") or "").strip()
-    result["active_step_id"] = active_step.get("step_id")
+def _attach_agent_submit_active_step_view_repair_context(result: dict, active_step_view: dict, result_file: Path) -> None:
+    role = active_step_view.get("role") if isinstance(active_step_view.get("role"), dict) else {}
+    dispatch = active_step_view.get("role_dispatch") if isinstance(active_step_view.get("role_dispatch"), dict) else {}
+    submit_hint = active_step_view.get("submit_hint") if isinstance(active_step_view.get("submit_hint"), dict) else {}
+    target_agent = str(dispatch.get("target_agent") or active_step_view.get("target_agent") or "").strip()
+    result["active_step_id"] = active_step_view.get("step_id")
     result["active_role"] = role.get("name") or role.get("id")
-    _attach_agent_submit_active_step_position(result, active_step)
+    _attach_agent_submit_active_step_view_position(result, active_step_view)
     if target_agent:
         result["active_target_agent"] = target_agent
-    context_path = str(active_step.get("context_absolute_path") or active_step.get("context_path") or "").strip()
+    context_path = str(active_step_view.get("context_absolute_path") or active_step_view.get("context_path") or "").strip()
     if context_path:
         result["active_context_path"] = context_path
     result_template_path = str(submit_hint.get("result_template_absolute_path") or submit_hint.get("result_template_path") or "").strip()
@@ -195,22 +196,22 @@ def _attach_agent_submit_active_step_repair_context(result: dict, active_step: d
         result_outbox_dir = str(submit_hint.get("result_outbox_absolute_dir") or submit_hint.get("result_outbox_dir") or "").strip()
         if result_outbox_dir:
             result["result_outbox_dir"] = result_outbox_dir
-    known_evidence_ids = [str(item).strip() for item in list(active_step.get("known_evidence_ids") or []) if str(item).strip()]
+    known_evidence_ids = [str(item).strip() for item in list(active_step_view.get("known_evidence_ids") or []) if str(item).strip()]
     if known_evidence_ids:
         result["active_known_evidence_ids"] = known_evidence_ids
-    known_evidence_refs = _agent_known_evidence_ref_summaries(active_step.get("known_evidence_refs"), limit=5)
+    known_evidence_refs = _agent_known_evidence_ref_summaries(active_step_view.get("known_evidence_refs"), limit=5)
     if known_evidence_refs:
         result["active_known_evidence_refs"] = known_evidence_refs
-    coverage_target_ids = _active_step_coverage_target_ids(active_step)
+    coverage_target_ids = _active_step_coverage_target_ids(active_step_view)
     if coverage_target_ids:
         result["active_coverage_target_ids"] = coverage_target_ids
 
 
-def _attach_agent_submit_active_step_position(result: dict, active_step: dict) -> None:
-    if isinstance(active_step.get("iter"), int) and not isinstance(active_step.get("iter"), bool):
-        result["active_iter"] = active_step.get("iter")
-    if isinstance(active_step.get("step_order"), int) and not isinstance(active_step.get("step_order"), bool):
-        result["active_step_order"] = active_step.get("step_order")
+def _attach_agent_submit_active_step_view_position(result: dict, active_step_view: dict) -> None:
+    if isinstance(active_step_view.get("iter"), int) and not isinstance(active_step_view.get("iter"), bool):
+        result["active_iter"] = active_step_view.get("iter")
+    if isinstance(active_step_view.get("step_order"), int) and not isinstance(active_step_view.get("step_order"), bool):
+        result["active_step_order"] = active_step_view.get("step_order")
 
 
 def _same_path(candidate: Path, reference: str) -> bool:
@@ -243,8 +244,8 @@ def _agent_submit_next_repair_step(result: dict) -> str:
             "replace null placeholders, then submit the filled copy"
         )
     elif "submitted step_id does not match" in error or "agent-native step was already submitted" in error:
-        active_step = str(result.get("active_step_id") or "").strip()
-        step_part = f" for active step {active_step}" if active_step else ""
+        active_step_id = str(result.get("active_step_id") or "").strip()
+        step_part = f" for active step {active_step_id}" if active_step_id else ""
         stale_detail = _agent_submit_stale_dispatch_detail(result)
         stale_part = f"{stale_detail}; " if stale_detail else ""
         lookup = str(result.get("schema_lookup") or "agent next --json").strip()
@@ -325,8 +326,8 @@ def _agent_submit_stale_dispatch_detail(result: dict) -> str:
     submitted_label = submitted_step or "another step"
     if submitted_bits:
         submitted_label = f"{submitted_label} ({', '.join(submitted_bits)})"
-    active_step = str(result.get("active_step_id") or "").strip()
-    if not active_step:
+    active_step_id = str(result.get("active_step_id") or "").strip()
+    if not active_step_id:
         return f"submitted file is for {submitted_label}"
     active_bits: list[str] = []
     active_iter = result.get("active_iter")
@@ -335,7 +336,7 @@ def _agent_submit_stale_dispatch_detail(result: dict) -> str:
     active_step_order = result.get("active_step_order")
     if isinstance(active_step_order, int) and not isinstance(active_step_order, bool):
         active_bits.append(f"step_order {active_step_order}")
-    active_label = active_step
+    active_label = active_step_id
     if active_bits:
         active_label = f"{active_label} ({', '.join(active_bits)})"
     return f"submitted file is for {submitted_label}, but active step is {active_label}"
@@ -365,7 +366,7 @@ def _agent_submit_core_blocker_kind(error: str) -> str:
     return _core_blocker_kind(error)
 
 
-def _active_agent_native_step(service, *, run_id: str) -> dict:
+def _active_agent_native_step_view(service, *, run_id: str) -> dict:
     if not run_id:
         return {}
     try:
@@ -379,12 +380,11 @@ def _active_agent_native_step(service, *, run_id: str) -> dict:
         state = json.loads((Path(runs_dir) / "agent_native" / "state.json").read_text(encoding="utf-8"))
     except (OSError, UnicodeDecodeError, json.JSONDecodeError):
         return {}
-    active = state.get("active_step") if isinstance(state.get("active_step"), dict) else {}
-    capsule = active.get("capsule") if isinstance(active.get("capsule"), dict) else {}
-    return capsule if isinstance(capsule, dict) else {}
+    active_step_state = state.get("active_step") if isinstance(state.get("active_step"), dict) else {}
+    return _agent_native_active_step_view(active_step_state)
 
 
-def _agent_submit_repair_focus(error: str, active_step: dict) -> list[str]:
+def _agent_submit_repair_focus(error: str, active_step_view: dict) -> list[str]:
     focus: list[str] = []
     if _result_file_missing(error):
         focus.append("create the filled result JSON file at result_file_to_repair before submitting")
@@ -392,13 +392,13 @@ def _agent_submit_repair_focus(error: str, active_step: dict) -> list[str]:
         focus.append("fix JSON syntax; the file must be one wrapper object with loopora_host_dispatch and result")
     if "result file must contain one JSON object" in error:
         focus.append("replace the file with one JSON object; do not submit an array, string, or multiple documents")
-    schema = active_step.get("output_schema") if isinstance(active_step.get("output_schema"), dict) else {}
+    schema = active_step_view.get("output_schema") if isinstance(active_step_view.get("output_schema"), dict) else {}
     focus.extend(_output_schema_error_hints(error, schema))
     if "result wrapper must contain" in error:
         focus.append("use one wrapper JSON object with loopora_host_dispatch and result")
-    focus.extend(_host_dispatch_repair_focus(error, active_step))
-    focus.extend(_evidence_ref_repair_focus(error, active_step))
-    focus.extend(_coverage_target_repair_focus(error, active_step))
+    focus.extend(_host_dispatch_repair_focus(error, active_step_view))
+    focus.extend(_evidence_ref_repair_focus(error, active_step_view))
+    focus.extend(_coverage_target_repair_focus(error, active_step_view))
     if "read-only step cannot claim workspace artifact fields" in error:
         focus.append("remove workspace artifact fields such as changed_files/proof_files from this read_only role result")
     if "submitted step_id does not match" in error:
@@ -410,10 +410,10 @@ def _agent_submit_repair_focus(error: str, active_step: dict) -> list[str]:
     return list(dict.fromkeys(focus))[:6]
 
 
-def _host_dispatch_repair_focus(error: str, active_step: dict) -> list[str]:
+def _host_dispatch_repair_focus(error: str, active_step_view: dict) -> list[str]:
     if not _host_dispatch_error_is_repairable(error):
         return []
-    role_dispatch = active_step.get("role_dispatch") if isinstance(active_step.get("role_dispatch"), dict) else {}
+    role_dispatch = active_step_view.get("role_dispatch") if isinstance(active_step_view.get("role_dispatch"), dict) else {}
     target_agent = str(role_dispatch.get("target_agent") or "").strip()
     if target_agent:
         return [
@@ -446,19 +446,19 @@ def _host_dispatch_error_is_repairable(error: str) -> bool:
     )
 
 
-def _evidence_ref_repair_focus(error: str, active_step: dict) -> list[str]:
+def _evidence_ref_repair_focus(error: str, active_step_view: dict) -> list[str]:
     if "evidence_refs_unknown" not in error:
         return []
-    known = [str(item) for item in list(active_step.get("known_evidence_ids") or []) if str(item).strip()]
+    known = [str(item) for item in list(active_step_view.get("known_evidence_ids") or []) if str(item).strip()]
     if known:
         return ["use only known_evidence_ids in evidence_refs: " + ", ".join(known[:6])]
     return ["remove invented evidence_refs; evidence_refs must be exact IDs from the active step contract"]
 
 
-def _coverage_target_repair_focus(error: str, active_step: dict) -> list[str]:
+def _coverage_target_repair_focus(error: str, active_step_view: dict) -> list[str]:
     if "coverage_results_unknown_target_id" not in error:
         return []
-    target_ids = _active_step_coverage_target_ids(active_step)
+    target_ids = _active_step_coverage_target_ids(active_step_view)
     if target_ids:
         return ["use only frozen coverage target IDs: " + ", ".join(target_ids[:8])]
     return ["coverage_results.target_id must come from the active judgment_contract coverage targets"]

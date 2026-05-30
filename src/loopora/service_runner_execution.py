@@ -37,6 +37,7 @@ from loopora.service_types import (
     WorkspaceSafetyError,
     normalize_completion_mode,
 )
+from loopora.step_instruction_context import step_instruction_context_legacy_fields
 from loopora.structured_booleans import structured_bool_is_true
 from loopora.service_runner_failure_handling import ServiceRunnerFailureHandlingMixin
 from loopora.service_runner_iteration_state import ServiceRunnerIterationStateMixin
@@ -108,7 +109,7 @@ class ServiceRunnerExecutionMixin(
             raise
 
         if not strategy_source:
-            return self._fail_run_without_workflow_snapshot(run_id, run, run_dir)
+            return self._fail_run_without_strategy_snapshot(run_id, run, run_dir)
 
         result = self._execute_runner_run(run_id, run, run_dir, strategy_source)
         return self._execution_result_after_cleanup(run_id, result)
@@ -121,8 +122,8 @@ class ServiceRunnerExecutionMixin(
         except Exception:  # noqa: BLE001 - execution already produced a terminal result; preserve it if refresh fails.
             return result
 
-    def _fail_run_without_workflow_snapshot(self, run_id: str, run: dict, run_dir: Path) -> dict:
-        error_text = "Run has no workflow snapshot; legacy execution runtime has been removed."
+    def _fail_run_without_strategy_snapshot(self, run_id: str, run: dict, run_dir: Path) -> dict:
+        error_text = "Run has no strategy snapshot; legacy execution runtime has been removed."
         summary = f"# Loopora Run Summary\n\nExecution failed before starting.\n\nReason: `{error_text}`.\n"
         try:
             failed = self._finalize_terminal_run(
@@ -132,7 +133,7 @@ class ServiceRunnerExecutionMixin(
                     status="failed",
                     summary=summary,
                     error_message=error_text,
-                    final_reason="missing_workflow_snapshot",
+                    final_reason="missing_strategy_snapshot",
                 )
             )
             self._append_run_aborted_event(
@@ -145,11 +146,11 @@ class ServiceRunnerExecutionMixin(
             self.append_run_event(
                 run_id,
                 "run_finished",
-                self._run_finished_event_payload(failed, status="failed", reason="missing_workflow_snapshot"),
+                self._run_finished_event_payload(failed, status="failed", reason="missing_strategy_snapshot"),
             )
             return failed
         finally:
-            self._cleanup_run_execution(run_id, run, phase="workflow")
+            self._cleanup_run_execution(run_id, run, phase="runner")
 
     def _run_runner_step_once(
         self,
@@ -194,7 +195,7 @@ class ServiceRunnerExecutionMixin(
             ),
         )
         step_started_at = time.perf_counter()
-        output, context_packet, session_ref = self._run_runner_step(
+        output, step_instruction_context, session_ref = self._run_runner_step(
             RunnerStepRuntimeRequest(
                 executor=context.executor,
                 run=context.run,
@@ -235,7 +236,7 @@ class ServiceRunnerExecutionMixin(
                 output=output,
                 compiled_spec=context.compiled_spec,
                 inspector_output=dict(state_snapshot["current_outputs_by_archetype"]).get("inspector"),
-                evidence_context=evidence_context_with_canonical_items(context_packet, context.layout),
+                evidence_context=evidence_context_with_canonical_items(step_instruction_context, context.layout),
                 current_evidence_id=evidence_entry_id(iteration.iter_id, step_order, step["id"]),
             )
         )
@@ -247,7 +248,7 @@ class ServiceRunnerExecutionMixin(
             "runtime_role": runtime_role,
             "execution_settings": execution_settings,
             "normalized_output": normalized_output,
-            "context_packet": context_packet,
+            **step_instruction_context_legacy_fields(step_instruction_context),
             "session_ref": session_ref,
             "actor_ref": actor.to_dict(),
             "duration_ms": int((time.perf_counter() - step_started_at) * 1000),
@@ -771,7 +772,7 @@ class ServiceRunnerExecutionMixin(
             )
         except (StopRequested, ExecutionStopped, RoleExecutionError, WorkspaceSafetyError) as exc:
             return self._handle_runner_execution_exception(run_id, run, run_dir, exc)
-        except Exception as exc:  # noqa: BLE001 - workflow crash boundary must persist failed run state.
+        except Exception as exc:  # noqa: BLE001 - runner crash boundary must persist failed run state.
             return self._handle_runner_execution_exception(run_id, run, run_dir, exc)
         finally:
-            self._cleanup_run_execution(run_id, run, phase="workflow")
+            self._cleanup_run_execution(run_id, run, phase="runner")

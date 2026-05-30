@@ -6,7 +6,7 @@ from loopora.engine.run_lifecycle import (
     advance_outcome,
     advance_outcome_for_snapshot,
 )
-from loopora.engine.run_lifecycle_updates import mark_run_started, mark_run_succeeded
+from loopora.engine.run_legacy_updates import mark_run_started, mark_run_succeeded
 from loopora.engine.run_snapshot_source import run_snapshot_from_repository
 from loopora.kernel.run_state import RunLifecycleStatus
 from loopora.kernel.verdict import VerdictStatus

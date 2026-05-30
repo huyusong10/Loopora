@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from loopora.engine.run_lifecycle import legacy_run_snapshot, missing_run_snapshot
+from loopora.engine.run_legacy_snapshot import legacy_run_snapshot, missing_run_snapshot
 from loopora.events.projection_cache import run_snapshot_projection_for_run
 from loopora.events.replay import RunSnapshot
 from loopora.projections.run_snapshot import run_snapshot_from_projection

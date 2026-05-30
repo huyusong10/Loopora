@@ -5,6 +5,7 @@ from pathlib import Path
 import re
 
 from loopora.branding import APP_STATE_DIRNAME
+from loopora.step_instruction_context import step_instruction_context_from_mapping
 
 
 class FakePayloadError(RuntimeError):
@@ -1598,10 +1599,10 @@ def _fake_gatekeeper_evidence_claims(
 
 
 def _evidence_refs(request) -> list[str]:
-    context_packet = request.extra_context.get("context_packet") if isinstance(request.extra_context, dict) else {}
+    step_instruction_context = step_instruction_context_from_mapping(request.extra_context)
     evidence_items = []
-    if isinstance(context_packet, dict):
-        evidence_items = list((context_packet.get("evidence") or {}).get("items") or [])
+    if isinstance(step_instruction_context, dict):
+        evidence_items = list((step_instruction_context.get("evidence") or {}).get("items") or [])
     return [
         str(item.get("id"))
         for item in evidence_items

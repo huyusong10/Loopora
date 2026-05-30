@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from loopora.executor import RoleRequest
+from loopora.step_instruction_context import step_instruction_context_from_mapping, step_instruction_context_legacy_fields
 from loopora.utils import append_jsonl, utc_now
 
 
@@ -31,6 +32,10 @@ def _dict_context(value: object) -> dict:
     return value if isinstance(value, dict) else {}
 
 
+def _step_instruction_context(extra_context: dict) -> dict:
+    return step_instruction_context_from_mapping(extra_context)
+
+
 def _add_contract_context_summary(summary: dict[str, object], extra_context: dict) -> None:
     compiled_spec = extra_context.get("compiled_spec")
     if isinstance(compiled_spec, dict):
@@ -38,12 +43,12 @@ def _add_contract_context_summary(summary: dict[str, object], extra_context: dic
             "check_mode": compiled_spec.get("check_mode"),
             "check_count": len(compiled_spec.get("checks", [])),
         }
-    context_packet = extra_context.get("context_packet")
-    if isinstance(context_packet, dict):
-        iteration = _dict_context(context_packet.get("iteration"))
-        current_step = _dict_context(context_packet.get("current_step"))
-        upstream = _dict_context(context_packet.get("upstream"))
-        summary["context_packet"] = {
+    step_context = _step_instruction_context(extra_context)
+    if step_context:
+        iteration = _dict_context(step_context.get("iteration"))
+        current_step = _dict_context(step_context.get("current_step"))
+        upstream = _dict_context(step_context.get("upstream"))
+        headless_prompt_context = {
             "iter_index": iteration.get("iter_index"),
             "step_order": current_step.get("step_order"),
             "previous_iteration_exists": iteration.get("previous_iteration_exists"),
@@ -56,6 +61,8 @@ def _add_contract_context_summary(summary: dict[str, object], extra_context: dic
             "coverage_top_gaps": list(iteration.get("coverage_top_gaps") or [])[:5],
             "completed_steps_this_iteration": len(upstream.get("completed_steps_this_iteration", [])),
         }
+        summary.update(step_instruction_context_legacy_fields(headless_prompt_context))
+        summary["headless_prompt_context"] = headless_prompt_context
 
 
 def _add_archetype_context_summary(summary: dict[str, object], extra_context: dict) -> None:

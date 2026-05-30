@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from loopora.cli_agent_submit_repair import _active_agent_native_step
+from loopora.cli_agent_submit_repair import _active_agent_native_step_view
 from loopora.service import LooporaError
 
 
@@ -90,14 +90,14 @@ def _active_template_context(service, *, run_id: str, workdir: Path | None) -> d
     if not run_id or not hasattr(service, "get_run"):
         return {}
     try:
-        active_step = _active_agent_native_step(service, run_id=run_id)
+        active_step_view = _active_agent_native_step_view(service, run_id=run_id)
     except (AttributeError, LooporaError):
         return {}
-    return _active_template_context_from_step(active_step, workdir=workdir)
+    return _active_template_context_from_step_view(active_step_view, workdir=workdir)
 
 
-def _active_template_context_from_step(active_step: dict, *, workdir: Path | None) -> dict[str, Any]:
-    submit_hint = active_step.get("submit_hint") if isinstance(active_step.get("submit_hint"), dict) else {}
+def _active_template_context_from_step_view(active_step_view: dict, *, workdir: Path | None) -> dict[str, Any]:
+    submit_hint = active_step_view.get("submit_hint") if isinstance(active_step_view.get("submit_hint"), dict) else {}
     template_path = _active_template_path(submit_hint, workdir=workdir)
     if not template_path:
         return {}
@@ -108,7 +108,7 @@ def _active_template_context_from_step(active_step: dict, *, workdir: Path | Non
     if not isinstance(template, dict):
         return {}
     dispatch = template.get("loopora_host_dispatch")
-    if not isinstance(dispatch, dict) or not _template_dispatch_matches_active(dispatch, active_step):
+    if not isinstance(dispatch, dict) or not _template_dispatch_matches_active_step_view(dispatch, active_step_view):
         return {}
     return {"path": template_path, "loopora_host_dispatch": dispatch}
 
@@ -123,7 +123,7 @@ def _active_template_path(submit_hint: dict, *, workdir: Path | None) -> Path | 
     return path
 
 
-def _template_dispatch_matches_active(dispatch: dict, active_step: dict) -> bool:
+def _template_dispatch_matches_active_step_view(dispatch: dict, active_step_view: dict) -> bool:
     checks = (
         ("run_id", "run_id"),
         ("step_id", "step_id"),
@@ -132,7 +132,7 @@ def _template_dispatch_matches_active(dispatch: dict, active_step: dict) -> bool
         ("step_order", "step_order"),
     )
     for dispatch_key, active_key in checks:
-        active_value = active_step.get(active_key)
+        active_value = active_step_view.get(active_key)
         if active_value in ("", None):
             continue
         if _text(dispatch.get(dispatch_key)) != _text(active_value):

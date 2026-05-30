@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from agent_native_v3_helpers import assert_agent_v3_envelope
+from loopora.agent_native_step_view_context import agent_native_step_view_judgment_contract
 from agent_adapter_test_support import (
     AgentBundleCandidateRequest,
     AgentNativeStepClaimRequest,
@@ -10,7 +11,6 @@ from agent_adapter_test_support import (
     LooporaError,
     Path,
     RunArtifactLayout,
-    ServiceAgentNativeMixin,
     _agent_native_host_dispatch,
     _agent_native_step_output,
     _alignment_bundle_yaml_with_peer_visible_parallel_review_inputs,
@@ -831,7 +831,7 @@ def test_agent_native_capsule_judgment_contract_falls_back_when_context_is_trimm
         encoding="utf-8",
     )
 
-    contract = ServiceAgentNativeMixin._agent_native_capsule_judgment_contract(
+    contract = agent_native_step_view_judgment_contract(
         {"runs_dir": str(layout.run_dir)},
         {
             "contract": {

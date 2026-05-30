@@ -16,7 +16,6 @@ from loopora.service_bundle_control_summary import (
     build_runtime_local_governance_trace,
     role_posture_preview,
 )
-from loopora.specs import resolve_role_note
 from loopora.structured_booleans import structured_bool_is_true
 from loopora.structured_numbers import structured_non_negative_int, structured_optional_finite_number
 from loopora.utils import utc_now
@@ -35,7 +34,7 @@ class RunContractSnapshotRequest:
 
 
 @dataclass(frozen=True)
-class StepContextPacketRequest:
+class StepInstructionContextRequest:
     run_contract: dict
     layout: RunArtifactLayout
     iter_id: int
@@ -60,6 +59,9 @@ class StepContextPacketRequest:
     evidence_manifest_summary: dict | None = None
     evidence_manifest_claims: list[dict] | None = None
     continuation_context: dict | None = None
+
+
+StepContextPacketRequest = StepInstructionContextRequest
 
 
 @dataclass(frozen=True)
@@ -793,6 +795,7 @@ def build_run_contract_snapshot(request: RunContractSnapshotRequest) -> dict:
         "artifacts": {
             "summary": artifact_ref(layout, layout.summary_path, kind="summary", label="summary"),
             "compiled_spec": artifact_ref(layout, layout.contract_compiled_spec_path, kind="contract", label="compiled-spec"),
+            "strategy_source": artifact_ref(layout, layout.contract_strategy_source_path, kind="contract", label="strategy-source"),
             "workflow": artifact_ref(layout, layout.contract_workflow_path, kind="contract", label="workflow"),
             "run_contract": artifact_ref(layout, layout.run_contract_path, kind="contract", label="run-contract"),
             "latest_state": artifact_ref(layout, layout.latest_state_path, kind="state", label="latest-state"),
@@ -1001,7 +1004,7 @@ def _normalize_continuation_context(value: object) -> dict:
     }
 
 
-def build_step_context_packet(request: StepContextPacketRequest) -> dict:
+def build_step_instruction_context(request: StepInstructionContextRequest) -> dict:
     run_contract = request.run_contract
     layout = request.layout
     step = request.step
@@ -1122,6 +1125,10 @@ def build_step_context_packet(request: StepContextPacketRequest) -> dict:
             artifact_ref(layout, layout.evidence_manifest_path, kind="evidence", label="evidence-manifest"),
         ],
     }
+
+
+def build_step_context_packet(request: StepContextPacketRequest) -> dict:
+    return build_step_instruction_context(request)
 
 
 def build_step_handoff(result: StepResultContext) -> dict:
@@ -1561,48 +1568,17 @@ def render_step_prompt(
     packet: dict,
     compiled_spec: dict,
 ) -> str:
-    role_note = resolve_role_note(
-        compiled_spec,
-        role_name=str(role.get("name") or ""),
-        archetype=str(role.get("archetype") or ""),
+    from loopora.headless_prompt import HeadlessPromptRequest, build_headless_prompt
+
+    return build_headless_prompt(
+        HeadlessPromptRequest(
+            role=role,
+            prompt_label=prompt_label,
+            prompt_body=prompt_body,
+            step_instruction_context=packet,
+            compiled_spec=compiled_spec,
+        )
     )
-    role_posture = str(role.get("posture_notes", "") or "").strip()
-    role_guidance = _combine_role_guidance(role_note, role_posture)
-    sections = [
-        f"You are {role['name']} inside Loopora.",
-        system_prompt_prefix(role["archetype"]),
-        output_contract_prompt(role["archetype"]),
-        prompt_body.strip(),
-        render_run_contract_section(packet["contract"], compiled_spec),
-        render_continuation_section(packet.get("continuation") or {}),
-        render_role_note_section(role_guidance),
-        render_iteration_section(packet),
-        render_handoff_section(
-            "Immediate upstream handoff",
-            packet["upstream"]["immediate_previous_step"],
-            empty_text="No previous step has completed in this iteration yet.",
-        ),
-        render_handoff_list_section(
-            "Completed steps in this iteration",
-            packet["upstream"]["completed_steps_this_iteration"],
-            empty_text="No earlier steps have completed in this iteration yet.",
-        ),
-        render_handoff_section(
-            "Previous iteration · same step",
-            packet["upstream"]["previous_iteration_same_step"],
-            empty_text="This step has no previous-iteration handoff yet.",
-        ),
-        render_handoff_section(
-            "Previous iteration · same role",
-            packet["upstream"]["previous_iteration_same_role"],
-            empty_text="This role has no previous-iteration handoff yet.",
-        ),
-        render_previous_iteration_summary(packet["upstream"]["previous_iteration_summary"]),
-        render_evidence_section(packet.get("evidence") or {}),
-        render_artifact_refs(packet["artifacts"]),
-        f"Prompt template: {prompt_label}",
-    ]
-    return "\n\n".join(section for section in sections if str(section).strip()).strip()
 
 
 def render_continuation_section(continuation: dict) -> str:

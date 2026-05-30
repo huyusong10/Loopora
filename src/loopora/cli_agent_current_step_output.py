@@ -17,6 +17,7 @@ from loopora.agent_native_next_step_summary import (
     action_policy_summary as _action_policy_summary,
     agent_current_step_evidence_scope_summary as _agent_current_step_evidence_scope_summary,
 )
+from loopora.agent_native_step_view_paths import agent_native_step_contract_path_text as _agent_native_step_contract_path_text
 from loopora.cli_agent_submitted_step_output import _actionable_blocking_item, _actionable_next_action
 from loopora.cli_summary_helpers import clip as _clip
 from loopora.cli_summary_helpers import non_bool_int as _non_bool_int
@@ -124,13 +125,10 @@ def _print_agent_current_step_paths(next_step: dict, submit_hint: dict) -> None:
     context_path = str(next_step.get("context_absolute_path") or next_step.get("context_path") or "").strip()
     if context_path:
         typer.echo(f"next_context_path: {context_path}")
-    step_contract_path = str(
-        next_step.get("step_contract_absolute_path")
-        or next_step.get("step_contract_path")
-        or next_step.get("capsule_absolute_path")
-        or next_step.get("capsule_path")
-        or ""
-    ).strip()
+    agent_step_view_path = str(next_step.get("agent_step_view_absolute_path") or next_step.get("agent_step_view_path") or "").strip()
+    if agent_step_view_path:
+        typer.echo(f"next_agent_step_view_path: {agent_step_view_path}")
+    step_contract_path = _agent_native_step_contract_path_text(next_step, absolute=True)
     if step_contract_path:
         typer.echo(f"next_step_contract_path: {step_contract_path}")
     known_evidence_count = _non_bool_int(next_step.get("known_evidence_count"))

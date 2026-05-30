@@ -255,7 +255,7 @@ def _score_values(value: object) -> list[float]:
 
 def _populate_gatekeeper_result(result: dict, fields: GatekeeperResultFields) -> dict:
     result["decision_summary"] = str(result.get("decision_summary") or "").strip() or (
-        "The workflow still needs more evidence." if not result["passed"] else "All checks passed."
+        "The loop still needs more evidence." if not result["passed"] else "All checks passed."
     )
     result["feedback_to_builder"] = fields.feedback
     result["feedback_to_generator"] = fields.feedback
@@ -454,22 +454,24 @@ class ServiceRunnerSupportMixin:
         gatekeeper_output = by_archetype.get("gatekeeper", {})
         composite_score = _score_value(gatekeeper_output.get("composite_score"))
         previous_score = _score_value(previous_composite)
+        strategy_steps = [
+            {
+                "step_id": item["step"]["id"],
+                "role_id": item["role"]["id"],
+                "runtime_role": item.get("runtime_role"),
+                "role_name": item["role"]["name"],
+                "archetype": item["role"]["archetype"],
+                "model": item.get("resolved_model") or "",
+                "parallel_group": str(item["step"].get("parallel_group") or ""),
+            }
+            for item in step_results
+        ]
         entry = {
             "phase": "complete",
             "iter": iter_id,
             "timestamp": utc_now(),
-            "workflow": [
-                {
-                    "step_id": item["step"]["id"],
-                    "role_id": item["role"]["id"],
-                    "runtime_role": item.get("runtime_role"),
-                    "role_name": item["role"]["name"],
-                    "archetype": item["role"]["archetype"],
-                    "model": item.get("resolved_model") or "",
-                    "parallel_group": str(item["step"].get("parallel_group") or ""),
-                }
-                for item in step_results
-            ],
+            "strategy_steps": strategy_steps,
+            "workflow": strategy_steps,
             "builder": by_archetype.get("builder", {}),
             "inspector": by_archetype.get("inspector", {}),
             "gatekeeper": gatekeeper_output,
@@ -572,7 +574,7 @@ class ServiceRunnerSupportMixin:
             [
                 "",
                 "## Artifacts",
-                "- Inspect `evidence/ledger.jsonl`, `contract/workflow.json`, `timeline/iterations.jsonl`, `timeline/events.jsonl`, and `iterations/` for full details.",
+                "- Inspect `evidence/ledger.jsonl`, `contract/strategy_source.json`, `timeline/iterations.jsonl`, `timeline/events.jsonl`, and `iterations/` for full details.",
             ]
         )
         return "\n".join(lines).rstrip() + "\n"

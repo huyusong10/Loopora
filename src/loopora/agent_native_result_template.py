@@ -4,54 +4,61 @@ from pathlib import Path
 from typing import Any
 
 from loopora.agent_native_role_dispatch import agent_native_template_role_dispatch
+from loopora.agent_native_step_view_paths import agent_native_step_view_artifact_path_texts
 from loopora.service_agent_native_contracts import (
     _agent_native_result_scaffold_from_schema,
-    _agent_native_template_coverage_targets,
+    _agent_native_step_view_coverage_targets,
 )
 from loopora.service_types import LooporaError
 from loopora.structured_numbers import structured_non_negative_int
 from loopora.utils import write_json
 
 
-def write_agent_native_step_contract_files(capsule: dict[str, Any]) -> None:
-    step_contract_path_text = str(capsule.get("step_contract_absolute_path") or capsule.get("step_contract_path") or "").strip()
-    legacy_capsule_path_text = str(capsule.get("capsule_absolute_path") or capsule.get("capsule_path") or "").strip()
-    if not step_contract_path_text and not legacy_capsule_path_text:
+def write_agent_native_step_view_files(step_view: dict[str, Any]) -> None:
+    step_contract_paths = [Path(path) for path in agent_native_step_view_artifact_path_texts(step_view)]
+    if not step_contract_paths:
         raise LooporaError("agent-native step contract path is required")
-    step_contract_paths = [Path(path) for path in (step_contract_path_text, legacy_capsule_path_text) if path]
     written_paths: set[Path] = set()
     for step_contract_path in step_contract_paths:
         if step_contract_path in written_paths:
             continue
-        write_json(step_contract_path, capsule)
+        write_json(step_contract_path, step_view)
         written_paths.add(step_contract_path)
 
-    submit_hint = capsule.get("submit_hint") if isinstance(capsule.get("submit_hint"), dict) else {}
+    submit_hint = step_view.get("submit_hint") if isinstance(step_view.get("submit_hint"), dict) else {}
     template_path_text = str(submit_hint.get("result_template_absolute_path") or "").strip()
     if not template_path_text:
         raise LooporaError("agent-native result template path is required")
     template_path = Path(template_path_text)
-    write_json(template_path, agent_native_result_template(capsule))
+    write_json(template_path, agent_native_step_view_result_template(step_view))
 
 
-def agent_native_result_template(capsule: dict[str, Any]) -> dict[str, Any]:
-    dispatch = capsule.get("role_dispatch") if isinstance(capsule.get("role_dispatch"), dict) else {}
+def write_agent_native_step_contract_files(step_view: dict[str, Any]) -> None:
+    write_agent_native_step_view_files(step_view)
+
+
+def agent_native_step_view_result_template(step_view: dict[str, Any]) -> dict[str, Any]:
+    dispatch = step_view.get("role_dispatch") if isinstance(step_view.get("role_dispatch"), dict) else {}
     target_agent = str(dispatch.get("target_agent") or "").strip()
-    output_schema = dict(capsule.get("output_schema") or {}) if isinstance(capsule.get("output_schema"), dict) else {}
+    output_schema = dict(step_view.get("output_schema") or {}) if isinstance(step_view.get("output_schema"), dict) else {}
     return {
-        "loopora_host_dispatch": _agent_native_template_host_dispatch(capsule, target_agent=target_agent),
-        "loopora_result_contract": _agent_native_result_contract(capsule, dispatch=dispatch, output_schema=output_schema),
+        "loopora_host_dispatch": _agent_native_template_host_dispatch(step_view, target_agent=target_agent),
+        "loopora_result_contract": _agent_native_result_contract(step_view, dispatch=dispatch, output_schema=output_schema),
         "result": _agent_native_result_scaffold_from_schema(output_schema),
     }
 
 
+def agent_native_result_template(step_view: dict[str, Any]) -> dict[str, Any]:
+    return agent_native_step_view_result_template(step_view)
+
+
 def _agent_native_result_contract(
-    capsule: dict[str, Any],
+    step_view: dict[str, Any],
     *,
     dispatch: dict[str, Any],
     output_schema: dict[str, Any],
 ) -> dict[str, Any]:
-    coverage_targets = _agent_native_template_coverage_targets(capsule)
+    coverage_targets = _agent_native_step_view_coverage_targets(step_view)
     result_contract: dict[str, Any] = {
         "ignored_on_submit": True,
         "result_must_match_output_schema": True,
@@ -60,31 +67,31 @@ def _agent_native_result_contract(
         "replace_null_placeholders_before_submit": True,
         "remove_optional_placeholders_if_unused": True,
         "array_placeholders_show_item_shape": True,
-        "step_id": str(capsule.get("step_id") or ""),
-        "role": dict(capsule.get("role") or {}) if isinstance(capsule.get("role"), dict) else {},
-        "action_policy": dict(capsule.get("action_policy") or {}) if isinstance(capsule.get("action_policy"), dict) else {},
-        "required_coverage": dict(capsule.get("required_coverage") or {})
-        if isinstance(capsule.get("required_coverage"), dict)
+        "step_id": str(step_view.get("step_id") or ""),
+        "role": dict(step_view.get("role") or {}) if isinstance(step_view.get("role"), dict) else {},
+        "action_policy": dict(step_view.get("action_policy") or {}) if isinstance(step_view.get("action_policy"), dict) else {},
+        "required_coverage": dict(step_view.get("required_coverage") or {})
+        if isinstance(step_view.get("required_coverage"), dict)
         else {},
         "coverage_target_ids": [str(item["id"]) for item in coverage_targets],
         "coverage_targets": coverage_targets,
         "known_evidence_ids": list(
-            dict.fromkeys(str(item) for item in list(capsule.get("known_evidence_ids") or []) if isinstance(item, str))
+            dict.fromkeys(str(item) for item in list(step_view.get("known_evidence_ids") or []) if isinstance(item, str))
         ),
-        "known_evidence_refs": [dict(item) for item in list(capsule.get("known_evidence_refs") or []) if isinstance(item, dict)],
-        "evidence_ref_contract": dict(capsule.get("evidence_ref_contract") or {})
-        if isinstance(capsule.get("evidence_ref_contract"), dict)
+        "known_evidence_refs": [dict(item) for item in list(step_view.get("known_evidence_refs") or []) if isinstance(item, dict)],
+        "evidence_ref_contract": dict(step_view.get("evidence_ref_contract") or {})
+        if isinstance(step_view.get("evidence_ref_contract"), dict)
         else {},
-        "evidence_rules": [dict(item) for item in list(capsule.get("evidence_rules") or []) if isinstance(item, dict)],
+        "evidence_rules": [dict(item) for item in list(step_view.get("evidence_rules") or []) if isinstance(item, dict)],
         "role_dispatch": agent_native_template_role_dispatch(dispatch),
         "output_schema": output_schema,
     }
-    submit_hint = capsule.get("submit_hint") if isinstance(capsule.get("submit_hint"), dict) else {}
+    submit_hint = step_view.get("submit_hint") if isinstance(step_view.get("submit_hint"), dict) else {}
     _add_submit_hint_contract_fields(result_contract, submit_hint)
-    iteration_repair = dict(capsule.get("iteration_repair") or {}) if isinstance(capsule.get("iteration_repair"), dict) else {}
+    iteration_repair = dict(step_view.get("iteration_repair") or {}) if isinstance(step_view.get("iteration_repair"), dict) else {}
     if iteration_repair.get("active") is True:
         result_contract["iteration_repair"] = iteration_repair
-    native_todo = capsule.get("native_todo") if isinstance(capsule.get("native_todo"), dict) else {}
+    native_todo = step_view.get("native_todo") if isinstance(step_view.get("native_todo"), dict) else {}
     if native_todo:
         result_contract["native_todo"] = native_todo
     native_trace_contract = dispatch.get("native_trace_contract") if isinstance(dispatch.get("native_trace_contract"), dict) else {}
@@ -107,14 +114,14 @@ def _add_submit_hint_contract_fields(result_contract: dict[str, Any], submit_hin
         result_contract["result_template_path"] = result_template_path
 
 
-def _agent_native_template_host_dispatch(capsule: dict[str, Any], *, target_agent: str) -> dict[str, Any]:
+def _agent_native_template_host_dispatch(step_view: dict[str, Any], *, target_agent: str) -> dict[str, Any]:
     return {
         "schema_version": 1,
-        "adapter": str(capsule.get("adapter") or ""),
-        "run_id": str(capsule.get("run_id") or ""),
-        "iter": structured_non_negative_int(capsule.get("iter")),
-        "step_id": str(capsule.get("step_id") or ""),
-        "step_order": structured_non_negative_int(capsule.get("step_order")),
+        "adapter": str(step_view.get("adapter") or ""),
+        "run_id": str(step_view.get("run_id") or ""),
+        "iter": structured_non_negative_int(step_view.get("iter")),
+        "step_id": str(step_view.get("step_id") or ""),
+        "step_order": structured_non_negative_int(step_view.get("step_order")),
         "target_agent": target_agent,
         "actual_agent": target_agent,
         "dispatch_mode": "host_subagent",

@@ -271,7 +271,8 @@ def test_run_engine_replays_current_step_projection_from_claim_events(tmp_path: 
     }
     assert projections["step_surfaces"]["available"] is True
     assert projections["step_surfaces"]["agent_step_view"]["step_id"] == "builder"
-    assert projections["step_surfaces"]["cli_step_summary"]["role_archetype"] == "builder"
+    assert projections["step_surfaces"]["cli_summary"]["role_archetype"] == "builder"
+    assert projections["step_surfaces"]["cli_step_summary"]["kind"] == "cli_step_summary"
     assert cached_current_step["payload"] == projections["current_step"]
     assert cached_step_surfaces["payload"] == projections["step_surfaces"]
 

@@ -37,7 +37,7 @@ def test_inspect_first_workflow_runs_inspector_before_builder(
     assert run["workflow_json"]["preset"] == "inspect_first"
     iteration_log = [json.loads(line) for line in (Path(run["runs_dir"]) / "iteration_log.jsonl").read_text(encoding="utf-8").splitlines() if line.strip()]
     workflow_entry = next(entry for entry in iteration_log if entry["phase"] == "complete")
-    assert [step["archetype"] for step in workflow_entry["workflow"][:3]] == ["inspector", "builder", "gatekeeper"]
+    assert [step["archetype"] for step in workflow_entry["strategy_steps"][:3]] == ["inspector", "builder", "gatekeeper"]
 
 
 def test_workflow_role_events_include_step_metadata(
@@ -366,7 +366,7 @@ def test_gatekeeper_pass_with_residual_risk_projects_task_verdict(
                     "coverage_results": [],
                 }
             else:
-                evidence_refs = [item["id"] for item in request.extra_context["context_packet"]["evidence"]["items"]]
+                evidence_refs = [item["id"] for item in request.extra_context["step_instruction_context"]["evidence"]["items"]]
                 payload = {
                     "passed": True,
                     "decision_summary": "GateKeeper passed with a named acceptable follow-up risk.",
@@ -448,7 +448,7 @@ def test_loop_rejects_gatekeeper_residual_risk_when_contract_disallows_acceptanc
                     "coverage_results": [],
                 }
             else:
-                evidence_refs = [item["id"] for item in request.extra_context["context_packet"]["evidence"]["items"]]
+                evidence_refs = [item["id"] for item in request.extra_context["step_instruction_context"]["evidence"]["items"]]
                 payload = {
                     "passed": True,
                     "decision_summary": "GateKeeper accepted a managed residual risk.",
@@ -525,7 +525,7 @@ def test_round_mode_carries_gatekeeper_residual_risk_into_next_iteration_prompt(
             if request.role_archetype == "builder":
                 if iter_id == 1:
                     second_builder_prompt = request.prompt
-                    second_builder_context = request.extra_context["context_packet"]
+                    second_builder_context = request.extra_context["step_instruction_context"]
                 payload = {
                     "attempted": "Built the primary slice.",
                     "summary": "Builder changed only the focused primary slice.",
@@ -556,7 +556,7 @@ def test_round_mode_carries_gatekeeper_residual_risk_into_next_iteration_prompt(
                     "coverage_results": [],
                 }
             else:
-                context_packet = request.extra_context["context_packet"]
+                context_packet = request.extra_context["step_instruction_context"]
                 evidence_refs = [
                     item["id"]
                     for item in context_packet["evidence"]["items"]
@@ -918,7 +918,7 @@ def test_parallel_inspection_group_fans_out_then_gatekeeper_sees_all_evidence(
                     "tester_observations": f"{request.step_id} completed its independent inspection.",
                 }
             else:
-                context_packet = request.extra_context["context_packet"]
+                context_packet = request.extra_context["step_instruction_context"]
                 evidence_refs = [item["id"] for item in context_packet["evidence"]["items"] if item.get("archetype") == "inspector"]
                 payload = {
                     "passed": True,
@@ -1151,12 +1151,12 @@ def test_workflow_control_triggers_when_required_coverage_stalls(
     assert latest_iteration_summary["stagnation"]["missing_check_count"] == 2
     assert latest_iteration_summary["stagnation"]["missing_check_ids"] == ["check_001", "check_002"]
     assert any(item["target_id"] == "done_when.check_001" for item in latest_iteration_summary["stagnation"]["coverage_top_gaps"])
-    assert guide_request["context_summary"]["context_packet"]["evidence_progress_mode"] == "stalled"
-    assert guide_request["context_summary"]["context_packet"]["coverage_status"] == "blocked"
-    assert guide_request["context_summary"]["context_packet"]["covered_check_count"] == 0
-    assert guide_request["context_summary"]["context_packet"]["missing_check_count"] == 2
-    assert guide_request["context_summary"]["context_packet"]["missing_check_ids"] == ["check_001", "check_002"]
-    assert any(item["target_id"] == "done_when.check_001" for item in guide_request["context_summary"]["context_packet"]["coverage_top_gaps"])
+    assert (prompt_context := guide_request["context_summary"]["headless_prompt_context"])["evidence_progress_mode"] == "stalled"
+    assert prompt_context["coverage_status"] == "blocked"
+    assert prompt_context["covered_check_count"] == 0
+    assert prompt_context["missing_check_count"] == 2
+    assert prompt_context["missing_check_ids"] == ["check_001", "check_002"]
+    assert any(item["target_id"] == "done_when.check_001" for item in prompt_context["coverage_top_gaps"])
     assert "Evidence progress mode: stalled" in guide_prompt
     assert 'Missing required check ids: ["check_001", "check_002"]' in guide_prompt
     assert '"target_id": "done_when.check_001"' in guide_prompt
@@ -1353,7 +1353,7 @@ def test_step_input_policy_filters_handoffs_and_evidence_context(
                     "tester_observations": f"{request.step_id} evidence.",
                 }
             else:
-                context_packet = request.extra_context["context_packet"]
+                context_packet = request.extra_context["step_instruction_context"]
                 recorded_gate_context.update(context_packet)
                 evidence_refs = [item["id"] for item in context_packet["evidence"]["items"]]
                 payload = {
@@ -1449,7 +1449,7 @@ def test_evidence_query_filters_canonical_ledger_before_recent_prompt_window(
                     "changed_files": [],
                 }
             else:
-                context_packet = request.extra_context["context_packet"]
+                context_packet = request.extra_context["step_instruction_context"]
                 recorded_gate_context.update(context_packet)
                 recorded_gate_prompt = request.prompt
                 payload = {
@@ -1620,7 +1620,7 @@ def test_triage_first_workflow_runs_inspector_then_guide_then_builder(
     assert [step["role_id"] for step in run["workflow_json"]["steps"][:4]] == ["inspector", "guide", "builder", "gatekeeper"]
     iteration_log = [json.loads(line) for line in (Path(run["runs_dir"]) / "iteration_log.jsonl").read_text(encoding="utf-8").splitlines() if line.strip()]
     workflow_entry = next(entry for entry in iteration_log if entry["phase"] == "complete")
-    assert [step["archetype"] for step in workflow_entry["workflow"][:4]] == [
+    assert [step["archetype"] for step in workflow_entry["strategy_steps"][:4]] == [
         "inspector",
         "guide",
         "builder",
@@ -1648,7 +1648,7 @@ def test_fast_lane_workflow_runs_builder_before_gatekeeper(
     assert run["workflow_json"]["preset"] == "fast_lane"
     iteration_log = [json.loads(line) for line in (Path(run["runs_dir"]) / "iteration_log.jsonl").read_text(encoding="utf-8").splitlines() if line.strip()]
     workflow_entry = next(entry for entry in iteration_log if entry["phase"] == "complete")
-    assert [step["archetype"] for step in workflow_entry["workflow"][:2]] == ["builder", "gatekeeper"]
+    assert [step["archetype"] for step in workflow_entry["strategy_steps"][:2]] == ["builder", "gatekeeper"]
 
 
 def test_workflow_step_model_override_is_used_for_role_requests(

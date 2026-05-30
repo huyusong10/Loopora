@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from agent_native_v3_helpers import assert_agent_v3_envelope
+from loopora.agent_native_result_template import agent_native_step_view_result_template
 from agent_adapter_test_support import (
     CliRunner,
     EXPECTED_NATIVE_CONTEXT_LOADING,
@@ -10,7 +11,6 @@ from agent_adapter_test_support import (
     EXPECTED_NATIVE_TOOLING_BOUNDARY,
     LooporaConflictError,
     Path,
-    ServiceAgentNativeMixin,
     _assert_claude_managed_install,
     _assert_codex_managed_install,
     _assert_labeled_loopora_agent_command,
@@ -232,7 +232,7 @@ def _assert_first_task_message_example(value: str) -> None:
 
 
 def test_agent_native_result_template_uses_schema_shaped_null_scaffold() -> None:
-    template = ServiceAgentNativeMixin._agent_native_result_template(
+    template = agent_native_step_view_result_template(
         {
             "adapter": "codex",
             "run_id": "run-scaffold",
@@ -329,7 +329,7 @@ def test_agent_native_result_template_uses_schema_shaped_null_scaffold() -> None
     }
 
 def test_agent_native_result_template_projects_active_iteration_repair_focus() -> None:
-    template = ServiceAgentNativeMixin._agent_native_result_template(
+    template = agent_native_step_view_result_template(
         {
             "adapter": "codex",
             "run_id": "run-repair",

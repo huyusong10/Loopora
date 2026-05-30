@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from loopora.events.envelope import EventEnvelope
+from loopora.events.run_event_results import StepEvidenceEventsResult, StepSubmissionEventsResult
 from loopora.kernel import StepResult
 from loopora.kernel.actors import ActorRef
 from loopora.kernel.step import StepInstruction
@@ -35,7 +36,7 @@ class RunEngineClaimRunnerStepRequest:
 @dataclass(frozen=True, slots=True)
 class RunEngineClaimRunnerStepResult:
     instruction: StepInstruction
-    event: object
+    event: EventEnvelope
 
 
 @dataclass(frozen=True, slots=True)
@@ -56,10 +57,7 @@ class RunEngineSubmitStepRequest:
     causation_id: str | None = None
 
 
-@dataclass(frozen=True, slots=True)
-class RunEngineSubmitStepResult:
-    submitted_event: EventEnvelope
-    committed_event: EventEnvelope
+RunEngineSubmitStepResult = StepSubmissionEventsResult
 
 
 @dataclass(frozen=True, slots=True)
@@ -90,10 +88,7 @@ class RunEngineRecordStepEvidenceRequest:
     causation_id: str | None = None
 
 
-@dataclass(frozen=True, slots=True)
-class RunEngineRecordStepEvidenceResult:
-    evidence_event: EventEnvelope
-    coverage_event: EventEnvelope
+RunEngineRecordStepEvidenceResult = StepEvidenceEventsResult
 
 
 @dataclass(frozen=True, slots=True)

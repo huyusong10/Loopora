@@ -188,6 +188,7 @@ def test_cli_agent_next_prints_run_contract_for_intermediate_capsule(monkeypatch
                         ],
                     },
                     "context_path": "iterations/iter_000/steps/01__inspector_step/input.context.json",
+                    "agent_step_view_path": "iterations/iter_000/steps/01__inspector_step/agent_step_view.json",
                     "step_contract_path": "iterations/iter_000/steps/01__inspector_step/step_contract.json",
                     "capsule_path": "iterations/iter_000/steps/01__inspector_step/capsule.json",
                     "submit_hint": {
@@ -241,6 +242,7 @@ def test_cli_agent_next_prints_run_contract_for_intermediate_capsule(monkeypatch
     assert "required_coverage: weak; required checks 1 covered / 1 missing" in result.stdout
     assert "- done_when.check_001: [weak] Authorization proof is still weak." in result.stdout
     assert "next_context_path: iterations/iter_000/steps/01__inspector_step/input.context.json" in result.stdout
+    assert "next_agent_step_view_path: iterations/iter_000/steps/01__inspector_step/agent_step_view.json" in result.stdout
     assert "known_evidence_count: 4" in result.stdout
     assert "known_evidence_scope: filtered by evidence_query archetypes=builder limit=12" in result.stdout
     assert "iteration_repair_source: gatekeeper_step (GateKeeper)" in result.stdout

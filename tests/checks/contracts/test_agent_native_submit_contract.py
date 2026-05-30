@@ -905,6 +905,7 @@ def test_agent_native_active_capsule_refresh_persists_known_evidence_count(
         if isinstance(item, dict)
     }
     assert "loopora_result_contract.coverage_target_ids" in refreshed_rules["coverage_results.target_id_must_be_known_coverage_target"]
+    assert json.loads(Path(refreshed["next_step"]["agent_step_view_absolute_path"]).read_text(encoding="utf-8"))["known_evidence_count"] == 0
     assert json.loads(capsule_path.read_text(encoding="utf-8"))["known_evidence_count"] == 0
     refreshed_state = json.loads(state_path.read_text(encoding="utf-8"))
     assert refreshed_state["active_step"]["capsule"]["known_evidence_count"] == 0

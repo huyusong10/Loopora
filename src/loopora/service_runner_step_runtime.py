@@ -3,17 +3,18 @@ from __future__ import annotations
 from pathlib import Path
 
 from loopora.context_flow import (
-    StepContextPacketRequest,
-    build_step_context_packet,
+    StepInstructionContextRequest,
+    build_step_instruction_context,
     normalize_manifest_claim_coverage_targets,
-    render_step_prompt,
 )
 from loopora.evidence_coverage import load_or_build_evidence_coverage_projection, summarize_evidence_coverage_projection
 from loopora.executor import RoleRequest, coerce_reasoning_effort, normalize_reasoning_effort, validate_command_args_text
+from loopora.headless_prompt import HeadlessPromptRequest, build_headless_prompt
 from loopora.providers import executor_profile, normalize_executor_kind, normalize_executor_mode
 from loopora.run_artifacts import RunArtifactLayout, read_jsonl
 from loopora.service_role_execution import RoleExecutionRequest
 from loopora.service_types import LooporaError
+from loopora.step_instruction_context import step_instruction_context_legacy_fields
 from loopora.strategy_source import (
     StrategySourceError,
     normalize_strategy_step_evidence_limit,
@@ -268,8 +269,8 @@ class ServiceRunnerStepRuntimeMixin:
         if not declares_evidence_query:
             evidence_known_ids = self._evidence_known_ids(all_evidence_items)
         evidence_manifest_summary, evidence_manifest_claims = _manifest_prompt_context(layout, evidence_known_ids)
-        context_packet = build_step_context_packet(
-            StepContextPacketRequest(
+        step_instruction_context = build_step_instruction_context(
+            StepInstructionContextRequest(
                 run_contract=runtime_request.run_contract,
                 layout=layout,
                 iter_id=iter_id,
@@ -299,7 +300,7 @@ class ServiceRunnerStepRuntimeMixin:
             )
         )
         context_path = layout.step_context_path(iter_id, step_order, step["id"])
-        write_json(context_path, context_packet)
+        write_json(context_path, step_instruction_context)
         self.append_run_event(
             run["id"],
             "step_context_prepared",
@@ -310,22 +311,24 @@ class ServiceRunnerStepRuntimeMixin:
                 "role_name": role["name"],
                 "archetype": role["archetype"],
                 "context_path": layout.relative(context_path),
-                "previous_iteration_exists": context_packet["iteration"]["previous_iteration_exists"],
+                "previous_iteration_exists": step_instruction_context["iteration"]["previous_iteration_exists"],
                 "completed_steps_this_iteration": len(current_handoffs_for_step),
                 "immediate_previous_step_id": (
-                    context_packet["upstream"]["immediate_previous_step"]["source"]["step_id"]
-                    if context_packet["upstream"]["immediate_previous_step"]
+                    step_instruction_context["upstream"]["immediate_previous_step"]["source"]["step_id"]
+                    if step_instruction_context["upstream"]["immediate_previous_step"]
                     else None
                 ),
             },
             role=runtime_role,
         )
-        prompt_text = render_step_prompt(
-            role=role,
-            prompt_label=str(prompt_metadata.get("label", role["name"])),
-            prompt_body=prompt_body,
-            packet=context_packet,
-            compiled_spec=runtime_request.compiled_spec,
+        prompt_text = build_headless_prompt(
+            HeadlessPromptRequest(
+                role=role,
+                prompt_label=str(prompt_metadata.get("label", role["name"])),
+                prompt_body=prompt_body,
+                step_instruction_context=step_instruction_context,
+                compiled_spec=runtime_request.compiled_spec,
+            )
         )
         resume_session_ref = runtime_request.previous_session_refs_by_step.get(step["id"]) if execution_settings["inherit_session"] else None
         role_request = RoleRequest(
@@ -365,8 +368,8 @@ class ServiceRunnerStepRuntimeMixin:
                 "executor_kind": execution_settings["executor_kind"],
                 "executor_mode": execution_settings["executor_mode"],
                 "legacy_role": runtime_role,
-                "context_packet": context_packet,
-                "immediate_previous_step": context_packet["upstream"]["immediate_previous_step"],
+                **step_instruction_context_legacy_fields(step_instruction_context),
+                "immediate_previous_step": step_instruction_context["upstream"]["immediate_previous_step"],
                 "previous_iteration_summary": previous_iteration_summary_for_step,
                 "current_outputs_by_step": runtime_request.current_outputs_by_step,
                 "current_outputs_by_role": runtime_request.current_outputs_by_role,
@@ -393,7 +396,7 @@ class ServiceRunnerStepRuntimeMixin:
         )
         self._record_role_request(run["id"], role_request)
         return {
-            "context_packet": context_packet,
+            **step_instruction_context_legacy_fields(step_instruction_context),
             "role_request": role_request,
             "prompt": prompt_text,
             "output_path": output_path,
@@ -411,7 +414,7 @@ class ServiceRunnerStepRuntimeMixin:
         step_order = runtime_request.step_order
         role = runtime_request.role
         prepared = self.prepare_runner_step_request(request)
-        context_packet = prepared["context_packet"]
+        step_instruction_context = prepared["step_instruction_context"]
         role_request = prepared["role_request"]
         runtime_role = str(prepared["runtime_role"])
 
@@ -459,7 +462,7 @@ class ServiceRunnerStepRuntimeMixin:
                 **session_ref,
                 "session_id": role_request.resume_session_id.strip(),
             }
-        return output, context_packet, session_ref
+        return output, step_instruction_context, session_ref
 
     def _resolve_role_execution_settings(self, run: dict, step: dict, role: dict) -> dict[str, object]:
         step_model = str(step.get("model") or "").strip()

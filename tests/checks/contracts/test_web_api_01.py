@@ -347,7 +347,7 @@ def test_web_url_helpers_keep_redirects_and_filenames_local() -> None:
     )
     assert safe_attachment_filename('Bad/Name" \r\n injected.yml') == "Bad-Name-injected.yml"
 
-def test_api_run_detail_includes_v3_web_projection(
+def test_api_run_detail_includes_v4_web_projection(
     service_factory,
     sample_spec_file: Path,
     sample_workdir: Path,
@@ -360,7 +360,7 @@ def test_api_run_detail_includes_v3_web_projection(
     payload = client.get(f"/api/runs/{run_id}").json()
     projection = payload["web_projection"]
 
-    assert projection["schema_version"] == 3
+    assert projection["schema_version"] == 4
     assert projection["kind"] == "web_run_detail"
     assert projection["summary"]["run_id"] == run_id
     assert projection["summary"]["run_status"] == payload["status"]
@@ -369,7 +369,8 @@ def test_api_run_detail_includes_v3_web_projection(
     assert "summary_md" in projection["display"]
     assert {"queued_at", "started_at", "finished_at", "updated_at", "created_at"} <= set(projection["timing"])
     assert projection["technical_handoff"]["run_url"] == f"/runs/{run_id}"
-    assert projection["raw"]["run"]["id"] == run_id
+    assert projection["diagnostics"]["source_shape"] == "run_record"
+    assert "raw" not in projection
 
 def test_run_artifact_download_rejects_symlink_escaping_loopora_root(
     service_factory,

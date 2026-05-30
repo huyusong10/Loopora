@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from typing import Any, Literal, NotRequired, TypedDict
+from typing import Any, Literal, TypedDict
 
-WEB_PROJECTION_SCHEMA_VERSION = 3
+WEB_PROJECTION_SCHEMA_VERSION = 4
 
 
-class WebRunDetailSummaryV3(TypedDict):
+class WebRunDetailSummaryV4(TypedDict):
     run_id: str
     loop_id: str
     run_status: str
@@ -15,7 +15,7 @@ class WebRunDetailSummaryV3(TypedDict):
     workdir: str
 
 
-class WebRunDetailTimingV3(TypedDict):
+class WebRunDetailTimingV4(TypedDict):
     queued_at: str
     started_at: str
     finished_at: str
@@ -23,11 +23,11 @@ class WebRunDetailTimingV3(TypedDict):
     created_at: str
 
 
-class WebRunDetailDisplayV3(TypedDict):
+class WebRunDetailDisplayV4(TypedDict):
     summary_md: str
 
 
-class WebRunDetailLifecycleV3(TypedDict):
+class WebRunDetailLifecycleV4(TypedDict):
     run_id: str
     loop_id: str
     run_status: str
@@ -36,21 +36,20 @@ class WebRunDetailLifecycleV3(TypedDict):
     workdir: str
 
 
-class WebRunDetailProjectionV3(TypedDict):
+class WebRunDetailProjectionV4(TypedDict):
     schema_version: int
     kind: Literal["web_run_detail"]
     status: str
-    summary: WebRunDetailSummaryV3
-    lifecycle: WebRunDetailLifecycleV3
+    summary: WebRunDetailSummaryV4
+    lifecycle: WebRunDetailLifecycleV4
     task_verdict: dict[str, Any]
-    display: WebRunDetailDisplayV3
-    timing: WebRunDetailTimingV3
+    display: WebRunDetailDisplayV4
+    timing: WebRunDetailTimingV4
     technical_handoff: dict[str, str]
     diagnostics: dict[str, Any]
-    raw: NotRequired[dict[str, Any]]
 
 
-def web_run_detail_projection(run: dict[str, Any]) -> WebRunDetailProjectionV3:
+def web_run_detail_projection(run: dict[str, Any]) -> WebRunDetailProjectionV4:
     run_id = str(run.get("id") or "").strip()
     task_verdict = run.get("task_verdict") if isinstance(run.get("task_verdict"), dict) else run.get("task_verdict_json")
     task_verdict = task_verdict if isinstance(task_verdict, dict) else {}
@@ -58,7 +57,7 @@ def web_run_detail_projection(run: dict[str, Any]) -> WebRunDetailProjectionV3:
         **task_verdict,
         "status": str(task_verdict.get("status") or "not_evaluated").strip() or "not_evaluated",
     }
-    summary: WebRunDetailSummaryV3 = {
+    summary: WebRunDetailSummaryV4 = {
         "run_id": run_id,
         "loop_id": str(run.get("loop_id") or "").strip(),
         "run_status": str(run.get("run_status") or run.get("status") or "").strip(),
@@ -67,7 +66,7 @@ def web_run_detail_projection(run: dict[str, Any]) -> WebRunDetailProjectionV3:
         "active_role": str(run.get("active_role") or "").strip(),
         "workdir": str(run.get("workdir") or "").strip(),
     }
-    lifecycle: WebRunDetailLifecycleV3 = {
+    lifecycle: WebRunDetailLifecycleV4 = {
         "run_id": summary["run_id"],
         "loop_id": summary["loop_id"],
         "run_status": summary["run_status"] or "unknown",
@@ -98,10 +97,9 @@ def web_run_detail_projection(run: dict[str, Any]) -> WebRunDetailProjectionV3:
             "observation_snapshot_url": f"/api/runs/{run_id}/observation-snapshot" if run_id else "",
         },
         "diagnostics": {
-            "raw_shape": "run_record",
+            "source_shape": "run_record",
             "projection_role": "web_run_detail",
         },
-        "raw": {"run": run},
     }
 
 

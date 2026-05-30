@@ -9,6 +9,7 @@ from loopora.agent_adapters import prefix_loopora_command
 from loopora.agent_native_guidance import actionable_blocking_item as _shared_actionable_blocking_item
 from loopora.agent_native_guidance import actionable_next_action as _shared_actionable_next_action
 from loopora.agent_native_guidance import coverage_target_blocker_explanation as _shared_coverage_target_blocker_explanation
+from loopora.agent_native_projection_state import agent_native_active_step_view
 from loopora.evidence_support import evidence_item_is_supporting_gatekeeper_ref
 from loopora.structured_booleans import structured_bool_is_true
 from loopora.structured_numbers import structured_non_negative_int
@@ -139,12 +140,12 @@ def _agent_native_result_artifact_stem(*, run_id: str, iter_id: int, step_order:
     return f"{run_id}__iter{iter_id:03d}__step{step_order:02d}__{step_id}"
 
 
-def _agent_native_capsule_has_step_position(capsule: dict[str, Any]) -> bool:
+def _agent_native_step_view_has_step_position(step_view: dict[str, Any]) -> bool:
     return (
-        isinstance(capsule.get("iter"), int)
-        and not isinstance(capsule.get("iter"), bool)
-        and isinstance(capsule.get("step_order"), int)
-        and not isinstance(capsule.get("step_order"), bool)
+        isinstance(step_view.get("iter"), int)
+        and not isinstance(step_view.get("iter"), bool)
+        and isinstance(step_view.get("step_order"), int)
+        and not isinstance(step_view.get("step_order"), bool)
     )
 
 
@@ -157,18 +158,18 @@ def _agent_native_path_parent(path_value: object) -> str:
 
 def _agent_native_submit_hint_with_scoped_result_paths(
     submit_hint: dict[str, Any],
-    capsule: dict[str, Any],
+    step_view: dict[str, Any],
     *,
     run_id: str,
     step_id: str,
 ) -> dict[str, Any]:
-    if not _agent_native_capsule_has_step_position(capsule):
+    if not _agent_native_step_view_has_step_position(step_view):
         return submit_hint
     scoped_hint = dict(submit_hint)
     result_stem = _agent_native_result_artifact_stem(
         run_id=run_id,
-        iter_id=structured_non_negative_int(capsule.get("iter")),
-        step_order=structured_non_negative_int(capsule.get("step_order")),
+        iter_id=structured_non_negative_int(step_view.get("iter")),
+        step_order=structured_non_negative_int(step_view.get("step_order")),
         step_id=step_id,
     )
     _agent_native_set_scoped_result_paths(
@@ -238,16 +239,23 @@ def _agent_native_output_evidence_refs(output: dict[str, Any]) -> list[str]:
     return list(dict.fromkeys(refs))
 
 
-def _agent_native_known_evidence_ids(active: dict, context_packet: dict) -> set[str]:
-    capsule = active.get("capsule") if isinstance(active.get("capsule"), dict) else {}
-    if isinstance(capsule.get("known_evidence_ids"), list):
-        return set(_agent_native_string_list(capsule.get("known_evidence_ids")))
-    evidence = context_packet.get("evidence") if isinstance(context_packet.get("evidence"), dict) else {}
+def _agent_native_known_evidence_ids(active: dict, step_instruction_context: dict) -> set[str]:
+    step_view = agent_native_active_step_view(active)
+    if isinstance(step_view.get("known_evidence_ids"), list):
+        return set(_agent_native_string_list(step_view.get("known_evidence_ids")))
+    evidence = (
+        step_instruction_context.get("evidence") if isinstance(step_instruction_context.get("evidence"), dict) else {}
+    )
     return set(_agent_native_string_list(evidence.get("known_ids")))
 
 
-def agent_native_unknown_evidence_refs(output: dict[str, Any], *, active: dict, context_packet: dict) -> list[str]:
-    known_ids = _agent_native_known_evidence_ids(active, context_packet)
+def agent_native_unknown_evidence_refs(
+    output: dict[str, Any],
+    *,
+    active: dict,
+    step_instruction_context: dict,
+) -> list[str]:
+    known_ids = _agent_native_known_evidence_ids(active, step_instruction_context)
     return [item for item in _agent_native_output_evidence_refs(output) if item not in known_ids]
 
 
@@ -282,9 +290,9 @@ def _agent_native_output_coverage_results(output: dict[str, Any]) -> list[dict[s
     return results
 
 
-def _agent_native_capsule_coverage_target_ids(active: dict[str, Any]) -> set[str]:
-    capsule = active.get("capsule") if isinstance(active.get("capsule"), dict) else {}
-    judgment_contract = capsule.get("judgment_contract") if isinstance(capsule.get("judgment_contract"), dict) else {}
+def _agent_native_step_view_coverage_target_ids(active: dict[str, Any]) -> set[str]:
+    step_view = agent_native_active_step_view(active)
+    judgment_contract = step_view.get("judgment_contract") if isinstance(step_view.get("judgment_contract"), dict) else {}
     target_ids: set[str] = set()
     for item in list(judgment_contract.get("coverage_targets") or []):
         if not isinstance(item, dict):
@@ -296,12 +304,12 @@ def _agent_native_capsule_coverage_target_ids(active: dict[str, Any]) -> set[str
 
 
 def _agent_native_unknown_coverage_target_ids(output: dict[str, Any], *, active: dict[str, Any]) -> list[str]:
-    known_target_ids = _agent_native_capsule_coverage_target_ids(active)
+    known_target_ids = _agent_native_step_view_coverage_target_ids(active)
     return [target_id for target_id in _agent_native_output_coverage_target_ids(output) if target_id not in known_target_ids]
 
 
-def _agent_native_template_coverage_targets(capsule: dict[str, Any]) -> list[dict[str, Any]]:
-    judgment_contract = capsule.get("judgment_contract") if isinstance(capsule.get("judgment_contract"), dict) else {}
+def _agent_native_step_view_coverage_targets(step_view: dict[str, Any]) -> list[dict[str, Any]]:
+    judgment_contract = step_view.get("judgment_contract") if isinstance(step_view.get("judgment_contract"), dict) else {}
     targets: list[dict[str, Any]] = []
     for item in list(judgment_contract.get("coverage_targets") or []):
         if not isinstance(item, dict):
@@ -320,9 +328,12 @@ def _agent_native_template_coverage_targets(capsule: dict[str, Any]) -> list[dic
     return targets
 
 
-def _agent_native_compact_known_evidence_refs(known_evidence_ids: list[str], context_packet: object) -> list[dict[str, Any]]:
-    packet = context_packet if isinstance(context_packet, dict) else {}
-    evidence = packet.get("evidence") if isinstance(packet.get("evidence"), dict) else {}
+def _agent_native_compact_known_evidence_refs(
+    known_evidence_ids: list[str],
+    step_instruction_context: object,
+) -> list[dict[str, Any]]:
+    step_context = step_instruction_context if isinstance(step_instruction_context, dict) else {}
+    evidence = step_context.get("evidence") if isinstance(step_context.get("evidence"), dict) else {}
     items_by_id = {
         str(item.get("id")): item
         for item in list(evidence.get("items") or [])

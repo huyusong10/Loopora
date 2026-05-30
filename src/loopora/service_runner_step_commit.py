@@ -17,6 +17,7 @@ from loopora.service_runner_iteration_state import (
     GatekeeperIterationRecordRequest,
     RunnerGatekeeperSuccessRequest,
 )
+from loopora.step_instruction_context import required_step_instruction_context_from_mapping
 
 
 class ServiceRunnerStepCommitMixin:
@@ -83,6 +84,7 @@ class ServiceRunnerStepCommitMixin:
         session_ref = result.get("session_ref")
         if isinstance(session_ref, dict) and session_ref:
             iteration.current_session_refs_by_step[step["id"]] = dict(session_ref)
+        step_instruction_context = required_step_instruction_context_from_mapping(result)
         iteration.step_results.append(
             self._build_runner_step_result_entry(
                 RunnerStepResultEntryRequest(
@@ -93,7 +95,7 @@ class ServiceRunnerStepCommitMixin:
                     execution_settings=result["execution_settings"],
                     normalized_output=normalized_output,
                     handoff=handoff,
-                    context_packet=result["context_packet"],
+                    step_instruction_context=step_instruction_context,
                 )
             )
         )

@@ -7,8 +7,10 @@ from loopora.recovery import RetryConfig
 from loopora.run_artifacts import read_jsonl
 
 
-def evidence_context_with_canonical_items(context_packet: dict, layout: object) -> dict:
-    evidence_context = context_packet.get("evidence") if isinstance(context_packet.get("evidence"), dict) else {}
+def evidence_context_with_canonical_items(step_instruction_context: dict, layout: object) -> dict:
+    evidence_context = (
+        step_instruction_context.get("evidence") if isinstance(step_instruction_context.get("evidence"), dict) else {}
+    )
     known_ids = {str(item).strip() for item in list(evidence_context.get("known_ids") or []) if str(item).strip()}
     current_items = [item for item in list(evidence_context.get("items") or []) if isinstance(item, dict)]
     current_ids = {str(item.get("id") or "").strip() for item in current_items if str(item.get("id") or "").strip()}

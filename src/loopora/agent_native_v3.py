@@ -65,6 +65,7 @@ class CurrentStepHandoffV3(TypedDict, total=False):
     role: str
     target_agent: str
     context_path: str
+    agent_step_view_path: str
     step_contract_path: str
     result_template: str
     submit_command: str
@@ -127,10 +128,12 @@ def agent_v3_technical_handoff(summary: dict[str, Any]) -> dict[str, Any]:
         "run_url",
         "preview_url",
         "context_path",
+        "agent_step_view_path",
         "step_contract_path",
         "result_template",
         "submit_command",
         "next_context_path",
+        "next_agent_step_view_path",
         "next_step_contract_path",
         "next_result_template",
         "next_submit_command",

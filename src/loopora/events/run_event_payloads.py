@@ -1,22 +1,11 @@
 from __future__ import annotations
 
-from dataclasses import asdict
-
+from loopora.events.step_instruction_payloads import step_instruction_event_payload
 from loopora.kernel.step import StepInstruction, StepResult
 
 
 def step_instruction_payload(instruction: StepInstruction) -> dict:
-    return {
-        "run_id": instruction.run_id,
-        "step_id": instruction.step_id,
-        "iteration": instruction.iteration,
-        "role": asdict(instruction.role),
-        "objective": instruction.objective,
-        "contract_ref": instruction.contract_ref,
-        "evidence_scope": asdict(instruction.evidence_scope),
-        "action_policy": asdict(instruction.action_policy),
-        "output_contract": asdict(instruction.output_contract),
-    }
+    return step_instruction_event_payload(instruction)
 
 
 def step_submitted_payload(result: StepResult) -> dict:

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from loopora.cli_summary_helpers import clip_inline, set_summary_text
+from loopora.run_artifacts import RunArtifactLayout, read_jsonl
 
 
 def known_evidence_ref_items(known_evidence_refs: object) -> list[dict]:
@@ -46,3 +47,19 @@ def agent_known_evidence_ref_summaries(known_evidence_refs: object, *, limit: in
         if summary:
             summaries.append(summary)
     return summaries
+
+
+def agent_native_step_view_known_evidence_ids(
+    *,
+    known_evidence_ids: list[str] | None,
+    layout: RunArtifactLayout,
+) -> list[str]:
+    if known_evidence_ids is not None:
+        return list(dict.fromkeys(str(item) for item in known_evidence_ids if str(item).strip()))
+    return list(
+        dict.fromkeys(
+            str(item.get("id"))
+            for item in read_jsonl(layout.evidence_ledger_path)
+            if isinstance(item, dict) and str(item.get("id") or "").strip()
+        )
+    )

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from loopora.agent_native_projection_state import agent_native_active_step_view
 from loopora.agent_native_role_dispatch import agent_native_accepted_native_tools
 from loopora.service_agent_native_contracts import (
     AGENT_NATIVE_WORKSPACE_ARTIFACT_FIELDS,
@@ -18,9 +19,9 @@ def validate_agent_native_step_output_contract(output: dict[str, Any], *, active
     if not output_schema:
         raise LooporaConflictError("agent-native output_schema is required")
 
-    _agent_native_required_capsule_object(active, "judgment_contract")
-    _agent_native_required_capsule_object(active, "required_coverage")
-    action_policy = _agent_native_required_capsule_object(active, "action_policy")
+    _agent_native_required_step_view_object(active, "judgment_contract")
+    _agent_native_required_step_view_object(active, "required_coverage")
+    action_policy = _agent_native_required_step_view_object(active, "action_policy")
     _validate_agent_native_action_policy(action_policy)
     _validate_agent_native_known_evidence_ids(active)
 
@@ -103,24 +104,24 @@ def validate_agent_native_host_dispatch(context: dict[str, Any], dispatch: dict[
 
 
 def _agent_native_output_schema(active: dict[str, Any]) -> dict[str, Any]:
-    capsule = active.get("capsule") if isinstance(active.get("capsule"), dict) else {}
-    output_schema = capsule.get("output_schema") if isinstance(capsule.get("output_schema"), dict) else {}
+    step_view = agent_native_active_step_view(active)
+    output_schema = step_view.get("output_schema") if isinstance(step_view.get("output_schema"), dict) else {}
     return dict(output_schema)
 
 
-def _agent_native_required_capsule_object(active: dict[str, Any], field_name: str) -> dict[str, Any]:
-    capsule = active.get("capsule") if isinstance(active.get("capsule"), dict) else {}
-    value = capsule.get(field_name)
+def _agent_native_required_step_view_object(active: dict[str, Any], field_name: str) -> dict[str, Any]:
+    step_view = agent_native_active_step_view(active)
+    value = step_view.get(field_name)
     if not isinstance(value, dict) or not value:
         raise LooporaConflictError(f"agent-native {field_name} is required")
     return dict(value)
 
 
 def _validate_agent_native_known_evidence_ids(active: dict[str, Any]) -> None:
-    capsule = active.get("capsule") if isinstance(active.get("capsule"), dict) else {}
-    if "known_evidence_ids" not in capsule or not isinstance(capsule.get("known_evidence_ids"), list):
+    step_view = agent_native_active_step_view(active)
+    if "known_evidence_ids" not in step_view or not isinstance(step_view.get("known_evidence_ids"), list):
         raise LooporaConflictError("agent-native known_evidence_ids must be a list")
-    if any(not isinstance(item, str) for item in capsule["known_evidence_ids"]):
+    if any(not isinstance(item, str) for item in step_view["known_evidence_ids"]):
         raise LooporaConflictError("agent-native known_evidence_ids must contain strings")
 
 
@@ -157,8 +158,8 @@ def _agent_native_dispatch_schema_version(dispatch: dict[str, Any]) -> int:
 
 
 def _agent_native_role_dispatch_for_submit(active: dict[str, Any]) -> dict[str, Any]:
-    capsule = active.get("capsule") if isinstance(active.get("capsule"), dict) else {}
-    role_dispatch = capsule.get("role_dispatch") if isinstance(capsule.get("role_dispatch"), dict) else {}
+    step_view = agent_native_active_step_view(active)
+    role_dispatch = step_view.get("role_dispatch") if isinstance(step_view.get("role_dispatch"), dict) else {}
     if not role_dispatch:
         raise LooporaConflictError("agent-native role_dispatch is required")
     if not structured_bool_is_true(role_dispatch.get("required")):
@@ -238,14 +239,14 @@ def _agent_native_dispatch_position(active: dict[str, Any], dispatch: dict[str, 
     return position
 
 
-def _agent_native_expected_dispatch_int(active: dict[str, Any], active_field: str, capsule_field: str) -> int | None:
+def _agent_native_expected_dispatch_int(active: dict[str, Any], active_field: str, step_view_field: str) -> int | None:
     value = active.get(active_field)
     if isinstance(value, bool):
         return None
     if isinstance(value, int):
         return value
-    capsule = active.get("capsule") if isinstance(active.get("capsule"), dict) else {}
-    value = capsule.get(capsule_field)
+    step_view = agent_native_active_step_view(active)
+    value = step_view.get(step_view_field)
     if isinstance(value, bool):
         return None
     if isinstance(value, int):
