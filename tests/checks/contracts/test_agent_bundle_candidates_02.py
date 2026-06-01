@@ -292,10 +292,10 @@ def test_cli_agent_gen_without_bundle_rejects_missing_task_summary(sample_workdi
     assert "- judgment_tradeoffs" in text_result.stdout
     assert "ask_user: What long-running task should Loopora govern?" in text_result.stdout
     assert "question_action: Use the host's official user-question or follow-up capability" in text_result.stdout
-    assert (
-        "recommended_reply_shape: Goal: ...; Fake-done risks: ...; Required evidence: ...; Judgment tradeoffs: ..."
-        in text_result.stdout
-    )
+    assert "recommended_reply_shape: Goal: ..." in text_result.stdout
+    assert "Fake-done risks: ..." in text_result.stdout
+    assert "Required evidence: ..." in text_result.stdout
+    assert "Judgment tradeoffs: ..." in text_result.stdout
     assert "decision_impact: This answer decides the Loop's task contract" in text_result.stdout
     assert "example_user_reply: Build the account-deletion audit flow;" in text_result.stdout
     assert "task_message_template:" not in text_result.stdout
@@ -355,7 +355,7 @@ def test_agent_adapter_preview_fallback_uses_web_review_language() -> None:
         [
             (root / "src" / "loopora" / "agent_adapters.py").read_text(encoding="utf-8"),
             (root / "src" / "loopora" / "cli_agent_adapter_commands.py").read_text(encoding="utf-8"),
-            (root / "src" / "loopora" / "cli_agent_native.py").read_text(encoding="utf-8"),
+            (root / "src" / "loopora" / "cli_agent_recovery.py").read_text(encoding="utf-8"),
         ]
     )
 

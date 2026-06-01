@@ -1,16 +1,52 @@
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 from loopora.task_verdicts import build_task_verdict, normalize_task_verdict
 
+from task_verdict_test_support import write_task_verdict_coverage as _write_coverage
 
-def _write_coverage(run_dir: Path, payload: dict) -> None:
-    coverage_path = run_dir / "evidence" / "coverage.json"
-    coverage_path.parent.mkdir(parents=True)
-    coverage_payload = {"schema_version": 1, **payload}
-    coverage_path.write_text(json.dumps(coverage_payload, ensure_ascii=False), encoding="utf-8")
+REPO_ROOT = Path(__file__).resolve().parents[3]
+
+
+def test_task_verdict_bucket_projection_has_dedicated_boundary() -> None:
+    task_verdicts_source = (REPO_ROOT / "src" / "loopora" / "task_verdicts.py").read_text(encoding="utf-8")
+    bucket_source = (REPO_ROOT / "src" / "loopora" / "task_verdict_buckets.py").read_text(encoding="utf-8")
+    status_source = (REPO_ROOT / "src" / "loopora" / "task_verdict_status.py").read_text(encoding="utf-8")
+    contracts_source = (REPO_ROOT / "design" / "contracts.md").read_text(encoding="utf-8")
+
+    assert "from loopora.task_verdict_buckets import" in task_verdicts_source
+    assert "from loopora.task_verdict_status import" in task_verdicts_source
+    assert "def build_task_verdict_buckets" in bucket_source
+    assert "def status_from_gatekeeper" in status_source
+    assert "def summary_for_task_verdict" in status_source
+    assert "def _append_coverage_target_buckets" not in task_verdicts_source
+    assert "def _dedupe_bucket_items" not in task_verdicts_source
+    assert "def _passed_gatekeeper_status" not in task_verdicts_source
+    assert "def _required_coverage_status" not in task_verdicts_source
+    assert "task_verdict_buckets.py" in contracts_source
+    assert "task_verdict_status.py" in contracts_source
+
+
+def test_residual_risk_support_uses_dedicated_marker_boundary() -> None:
+    support_source = (REPO_ROOT / "src" / "loopora" / "residual_risk_support.py").read_text(encoding="utf-8")
+    markers_source = (REPO_ROOT / "src" / "loopora" / "residual_risk_markers.py").read_text(encoding="utf-8")
+    contracts_source = (REPO_ROOT / "design" / "contracts.md").read_text(encoding="utf-8")
+
+    assert "from loopora.residual_risk_markers import" in support_source
+    for marker in (
+        "NO_RESIDUAL_RISK_MARKERS",
+        "VAGUE_RESIDUAL_RISK_MARKERS",
+        "RESIDUAL_RISK_MANAGEMENT_MARKERS",
+        "UNMANAGED_RESIDUAL_RISK_DETAIL_PATTERNS",
+    ):
+        assert marker in markers_source
+        assert f"{marker} =" not in support_source
+    for marker in ("def residual_risk_is_meaningful", "def residual_risk_is_managed", "def residual_risk_policy_disallows_acceptance"):
+        assert marker in support_source
+        assert marker not in markers_source
+    assert "residual_risk_markers.py" in contracts_source
+    assert "residual_risk_support.py" in contracts_source
 
 
 def test_task_verdict_projects_coverage_targets_into_semantic_buckets(tmp_path: Path) -> None:
@@ -273,255 +309,6 @@ def test_task_verdict_projects_raw_gatekeeper_residual_risks_into_bucket(tmp_pat
     assert [item["label"] for item in task_verdict["buckets"]["residual_risk"]] == [
         "Manual copy polish remains visible as a follow-up."
     ]
-
-
-def test_task_verdict_does_not_pass_with_unmanaged_residual_risk(tmp_path: Path) -> None:
-    run_dir = tmp_path / "run_unmanaged_residual_risk"
-    _write_coverage(
-        run_dir,
-        {
-            "summary": {"reason": "Required evidence is covered."},
-            "targets": [
-                {"id": "done_when.check_001", "label": "Required proof", "status": "covered", "required": True},
-                {"id": "gatekeeper.finish", "label": "GateKeeper finish", "status": "covered", "required": True},
-            ],
-            "risk_signals": [],
-            "latest_gatekeeper": {
-                "id": "ev_gatekeeper",
-                "result": "passed",
-                "residual_risk": "Some residual risk remains.",
-            },
-        },
-    )
-
-    task_verdict = build_task_verdict(
-        {
-            "status": "succeeded",
-            "last_verdict_json": {
-                "passed": True,
-                "decision_summary": "GateKeeper accepted a vague risk.",
-                "residual_risks": ["Some residual risk remains."],
-            },
-        },
-        run_dir=run_dir,
-    )
-
-    assert task_verdict["status"] == "insufficient_evidence"
-    assert task_verdict["summary"] == "GateKeeper reported residual risk without a named owner, follow-up, or acceptance path."
-    assert task_verdict["buckets"]["weak"] == [
-        {
-            "label": "Some residual risk remains.",
-            "reason": "Residual risk was reported without enough management detail to accept it.",
-            "managed": False,
-        }
-    ]
-    assert task_verdict["buckets"]["residual_risk"] == []
-
-
-def test_task_verdict_treats_vague_chinese_residual_risk_acceptance_as_unmanaged(tmp_path: Path) -> None:
-    run_dir = tmp_path / "run_vague_chinese_residual_risk"
-    _write_coverage(
-        run_dir,
-        {
-            "summary": {"reason": "Required evidence is covered."},
-            "targets": [
-                {"id": "done_when.check_001", "label": "Required proof", "status": "covered", "required": True},
-                {"id": "gatekeeper.finish", "label": "GateKeeper finish", "status": "covered", "required": True},
-            ],
-            "risk_signals": [],
-            "latest_gatekeeper": {
-                "id": "ev_gatekeeper",
-                "result": "passed",
-                "residual_risk": "有些风险可以接受。",
-            },
-        },
-    )
-
-    task_verdict = build_task_verdict(
-        {
-            "status": "succeeded",
-            "last_verdict_json": {
-                "passed": True,
-                "decision_summary": "GateKeeper accepted a vague risk.",
-                "residual_risks": ["有些风险可以接受。"],
-            },
-        },
-        run_dir=run_dir,
-    )
-
-    assert task_verdict["status"] == "insufficient_evidence"
-    assert task_verdict["summary"] == "GateKeeper reported residual risk without a named owner, follow-up, or acceptance path."
-    assert task_verdict["buckets"]["weak"] == [
-        {
-            "label": "有些风险可以接受。",
-            "reason": "Residual risk was reported without enough management detail to accept it.",
-            "managed": False,
-        }
-    ]
-    assert task_verdict["buckets"]["residual_risk"] == []
-
-
-def test_task_verdict_does_not_treat_manual_or_visible_words_as_residual_risk_management(tmp_path: Path) -> None:
-    run_dir = tmp_path / "run_manual_visible_residual_risk"
-    _write_coverage(
-        run_dir,
-        {
-            "summary": {"reason": "Required evidence is covered."},
-            "targets": [
-                {"id": "done_when.check_001", "label": "Required proof", "status": "covered", "required": True},
-                {"id": "gatekeeper.finish", "label": "GateKeeper finish", "status": "covered", "required": True},
-            ],
-            "risk_signals": [],
-        },
-    )
-
-    task_verdict = build_task_verdict(
-        {
-            "status": "succeeded",
-            "last_verdict_json": {
-                "passed": True,
-                "decision_summary": "GateKeeper named a manual but ownerless risk.",
-                "residual_risks": ["Ownerless manual billing export remains visible."],
-            },
-        },
-        run_dir=run_dir,
-    )
-
-    assert task_verdict["status"] == "insufficient_evidence"
-    assert task_verdict["summary"] == "GateKeeper reported residual risk without a named owner, follow-up, or acceptance path."
-    assert task_verdict["buckets"]["weak"] == [
-        {
-            "label": "Ownerless manual billing export remains visible.",
-            "reason": "Residual risk was reported without enough management detail to accept it.",
-            "managed": False,
-        }
-    ]
-    assert task_verdict["buckets"]["residual_risk"] == []
-
-
-def test_task_verdict_does_not_accept_residual_risk_when_run_contract_disallows_it(tmp_path: Path) -> None:
-    run_dir = tmp_path / "run_disallowed_residual_risk"
-    _write_coverage(
-        run_dir,
-        {
-            "summary": {"reason": "Required evidence is covered."},
-            "targets": [
-                {"id": "done_when.check_001", "label": "Required proof", "status": "covered", "required": True},
-                {"id": "gatekeeper.finish", "label": "GateKeeper finish", "status": "covered", "required": True},
-            ],
-            "risk_signals": [],
-            "latest_gatekeeper": {
-                "id": "ev_gatekeeper",
-                "result": "passed",
-                "residual_risk": "Manual billing export remains visible as a follow-up owned by Support.",
-            },
-        },
-    )
-
-    task_verdict = build_task_verdict(
-        {
-            "status": "succeeded",
-            "compiled_spec_json": {
-                "residual_risk": "No residual risk is acceptable; any remaining risk must fail closed.",
-            },
-            "last_verdict_json": {
-                "passed": True,
-                "decision_summary": "GateKeeper accepted a managed residual risk.",
-                "residual_risks": ["Manual billing export remains visible as a follow-up owned by Support."],
-            },
-        },
-        run_dir=run_dir,
-    )
-
-    assert task_verdict["status"] == "insufficient_evidence"
-    assert task_verdict["summary"] == "GateKeeper reported residual risk even though the run contract disallows accepted residual risk."
-    assert task_verdict["buckets"]["weak"] == [
-        {
-            "label": "Manual billing export remains visible as a follow-up owned by Support.",
-            "reason": "Residual risk was reported even though the run contract disallows accepted residual risk.",
-            "residual_risk_policy": "disallowed",
-        }
-    ]
-    assert task_verdict["buckets"]["residual_risk"] == []
-
-
-def test_task_verdict_does_not_erase_negated_residual_risk_with_exception(tmp_path: Path) -> None:
-    run_dir = tmp_path / "run_excepted_residual_risk"
-    _write_coverage(
-        run_dir,
-        {
-            "summary": {"reason": "Required evidence is covered."},
-            "targets": [
-                {"id": "done_when.check_001", "label": "Required proof", "status": "covered", "required": True},
-                {"id": "gatekeeper.finish", "label": "GateKeeper finish", "status": "covered", "required": True},
-            ],
-            "risk_signals": [],
-            "latest_gatekeeper": {
-                "id": "ev_gatekeeper",
-                "result": "passed",
-                "residual_risk": "No blocking residual risk except untested billing export.",
-            },
-        },
-    )
-
-    task_verdict = build_task_verdict(
-        {
-            "status": "succeeded",
-            "last_verdict_json": {
-                "passed": True,
-                "decision_summary": "GateKeeper used a negated phrase while naming an unowned exception.",
-                "residual_risks": ["No blocking residual risk except untested billing export."],
-            },
-        },
-        run_dir=run_dir,
-    )
-
-    assert task_verdict["status"] == "insufficient_evidence"
-    assert task_verdict["summary"] == "GateKeeper reported residual risk without a named owner, follow-up, or acceptance path."
-    assert task_verdict["buckets"]["weak"] == [
-        {
-            "label": "No blocking residual risk except untested billing export.",
-            "reason": "Residual risk was reported without enough management detail to accept it.",
-            "managed": False,
-        }
-    ]
-    assert task_verdict["buckets"]["residual_risk"] == []
-
-
-def test_task_verdict_classifies_unmanaged_coverage_risk_signal_as_weak(tmp_path: Path) -> None:
-    run_dir = tmp_path / "run_unmanaged_coverage_risk"
-    _write_coverage(
-        run_dir,
-        {
-            "summary": {"reason": "Required evidence is covered."},
-            "targets": [
-                {"id": "done_when.check_001", "label": "Required proof", "status": "covered", "required": True},
-                {"id": "gatekeeper.finish", "label": "GateKeeper finish", "status": "covered", "required": True},
-            ],
-            "risk_signals": ["Some residual risk remains."],
-        },
-    )
-
-    task_verdict = build_task_verdict(
-        {
-            "status": "succeeded",
-            "last_verdict_json": {
-                "passed": True,
-                "decision_summary": "GateKeeper passed without accepting a residual risk.",
-            },
-        },
-        run_dir=run_dir,
-    )
-
-    assert task_verdict["status"] == "passed"
-    assert task_verdict["buckets"]["weak"] == [
-        {
-            "label": "Some residual risk remains.",
-            "reason": "Residual risk was observed without enough management detail to accept it.",
-            "managed": False,
-        }
-    ]
-    assert task_verdict["buckets"]["residual_risk"] == []
 
 
 def test_task_verdict_drops_non_string_raw_verdict_list_items(tmp_path: Path) -> None:

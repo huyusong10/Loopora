@@ -9,43 +9,109 @@ from loopora.bundles import load_bundle_text
 from loopora.executor_fake_payloads import alignment_bundle_yaml
 from loopora.service_alignment_context import (
     add_alignment_context_option,
-    alignment_assert_bundle_workdir,
-    alignment_bundle_completion_mode,
-    alignment_bundle_file_has_ready_validation,
-    alignment_bundle_file_is_valid_alignment_bundle,
-    alignment_bundle_revision_source_context,
-    alignment_bundle_source_seed,
     alignment_bundle_context_option,
     alignment_context_option_by_id,
     alignment_context_title_from_session,
     alignment_file_bundle_context_option,
-    alignment_generation_prefers_chinese,
     alignment_loop_context_option,
-    alignment_loop_bundle_id,
-    alignment_loop_source_seed,
+    alignment_run_context_option,
+    alignment_session_context_options,
+    alignment_source_option_seed_kind,
+    alignment_spec_file_context_option,
+    bounded_alignment_context_options,
+)
+from loopora.service_alignment_language import (
+    alignment_generation_prefers_chinese,
     alignment_prefers_chinese,
-    alignment_revision_seed_bundle,
+    alignment_user_language_hint,
+)
+from loopora.service_alignment_run_source_projection import (
     alignment_run_artifact_paths,
     alignment_run_evidence_summary,
     alignment_run_judgment_contract,
-    alignment_run_context_option,
+)
+from loopora.service_alignment_ready_bundle_validation import (
+    alignment_assert_bundle_workdir,
+    alignment_bundle_file_has_ready_validation,
+    alignment_bundle_file_is_valid_alignment_bundle,
+)
+from loopora.service_alignment_source_seed import (
+    alignment_bundle_completion_mode,
+    alignment_bundle_revision_source_context,
+    alignment_bundle_source_seed,
+    alignment_loop_bundle_id,
+    alignment_loop_source_seed,
+    alignment_revision_seed_bundle,
     alignment_run_revision_source_context,
     alignment_run_source_seed,
     alignment_session_source_seed,
-    alignment_same_workdir,
-    alignment_session_context_options,
     alignment_source_seed_payload,
-    alignment_source_option_seed_kind,
     alignment_spec_file_source_seed,
-    alignment_spec_file_context_option,
     alignment_transcript_source_summary,
-    alignment_user_language_hint,
-    alignment_workdir_spec_candidates,
-    bounded_alignment_context_options,
     bounded_alignment_file_text,
     redact_alignment_source_value,
 )
+from loopora.service_alignment_workdir_snapshot import alignment_same_workdir, alignment_workdir_spec_candidates
 from loopora.service_types import LooporaError
+
+
+REPO_ROOT = Path(__file__).resolve().parents[3]
+
+
+def _loopora_source(module_name: str) -> str:
+    return (REPO_ROOT / "src" / "loopora" / module_name).read_text(encoding="utf-8")
+
+
+def test_alignment_ready_bundle_validation_has_dedicated_boundary() -> None:
+    context_source = _loopora_source("service_alignment_context.py")
+    ready_validation_source = _loopora_source("service_alignment_ready_bundle_validation.py")
+    workdir_context_source = _loopora_source("service_alignment_workdir_context.py")
+    validation_source = _loopora_source("service_alignment_validation.py")
+    contracts_source = (REPO_ROOT / "design" / "contracts.md").read_text(encoding="utf-8")
+
+    assert "from loopora.service_alignment_ready_bundle_validation import" in context_source
+    for marker in (
+        "def alignment_assert_bundle_workdir",
+        "def alignment_bundle_file_is_valid_alignment_bundle",
+        "def alignment_bundle_file_has_ready_validation",
+        "def alignment_session_has_current_ready_bundle",
+    ):
+        assert marker in ready_validation_source
+        assert marker not in context_source
+    assert "from loopora.service_alignment_ready_bundle_validation import alignment_bundle_file_has_ready_validation" in workdir_context_source
+    assert "from loopora.service_alignment_ready_bundle_validation import alignment_assert_bundle_workdir" in validation_source
+    assert "service_alignment_ready_bundle_validation.py" in contracts_source
+
+
+def test_alignment_source_context_helpers_have_dedicated_boundary() -> None:
+    context_source = _loopora_source("service_alignment_context.py")
+    seed_source = _loopora_source("service_alignment_source_seed.py")
+    source_context = _loopora_source("service_alignment_source_context.py")
+    context_factory_source = _loopora_source("service_alignment_context_factory.py")
+    artifacts_source = _loopora_source("service_alignment_artifacts.py")
+    contracts_source = (REPO_ROOT / "design" / "contracts.md").read_text(encoding="utf-8")
+
+    assert "from loopora.service_alignment_source_context import" in seed_source
+    assert "from loopora.service_alignment_source_context import" in context_source
+    assert "from loopora.service_alignment_source_context import redact_alignment_source_value" in context_factory_source
+    assert "from loopora.service_alignment_source_context import redact_alignment_source_value" in artifacts_source
+    for marker in (
+        "def bounded_alignment_file_text",
+        "def alignment_transcript_source_summary",
+        "def redact_alignment_source_value",
+    ):
+        assert marker in source_context
+        assert marker not in seed_source
+    for marker in (
+        "def alignment_source_seed_payload",
+        "def alignment_bundle_source_seed",
+        "def alignment_run_source_seed",
+        "def alignment_session_source_seed",
+    ):
+        assert marker in seed_source
+        assert marker not in source_context
+    assert "service_alignment_source_context.py" in contracts_source
+    assert "service_alignment_source_seed.py" in contracts_source
 
 
 def test_alignment_context_title_from_session_uses_first_redacted_user_message() -> None:

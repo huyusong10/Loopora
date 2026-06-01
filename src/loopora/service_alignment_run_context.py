@@ -6,12 +6,16 @@ from pathlib import Path
 from typing import Protocol
 
 from loopora.agent_adapters import read_agent_binding
-from loopora.service_alignment_run_recovery import (
+from loopora.service_alignment_run_context_choices import (
+    agent_run_context_choice_summary,
+)
+from loopora.service_alignment_run_context_recovery_fields import (
     agent_exact_binding_recovery_action,
     agent_redacted_context_binding,
+)
+from loopora.service_alignment_run_recovery import (
     agent_run_context_choice_from_session,
     agent_run_context_choices,
-    agent_run_context_choice_summary,
 )
 from loopora.service_types import LooporaError
 

@@ -8,7 +8,8 @@ from loopora.bundles import load_bundle_text
 from loopora.executor_fake_payloads import alignment_bundle_yaml
 from loopora.service import LooporaError
 from loopora.service_agent_adapters import AgentBundleCandidateRequest
-from loopora.service_bundle_control_summary import _traceability_projection, build_bundle_control_summary, build_execution_strategy_trace
+from loopora.service_bundle_control_summary import _traceability_projection, build_bundle_control_summary
+from loopora.service_bundle_control_trace_mining import build_execution_strategy_trace
 
 
 def _add_project_local_governance_responsibilities(bundle: dict) -> dict:

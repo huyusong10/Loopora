@@ -102,8 +102,8 @@ def test_domain_event_store_rejects_run_lifecycle_events_after_terminal(tmp_path
             stream_id=stream_id,
             aggregate_type="run",
             aggregate_id="run_terminal_boundary",
-            event_type="RunClosed",
-            payload={"run_id": "run_terminal_boundary"},
+            event_type="RunStopped",
+            payload={"run_id": "run_terminal_boundary", "reason": "user_requested_stop"},
         )
     )
 
@@ -118,7 +118,33 @@ def test_domain_event_store_rejects_run_lifecycle_events_after_terminal(tmp_path
             )
         )
 
-    assert [event.event_type for event in repository.list_domain_events(stream_id)] == ["RunCreated", "RunClosed"]
+    assert [event.event_type for event in repository.list_domain_events(stream_id)] == ["RunCreated", "RunStopped"]
+
+
+def test_non_success_terminal_run_events_require_reason(tmp_path: Path) -> None:
+    repository = LooporaRepository(tmp_path / "app.db")
+    stream_id = run_stream_id("run_terminal_reason_boundary")
+
+    repository.append_domain_event(
+        DomainEventAppendRequest(
+            stream_id=stream_id,
+            aggregate_type="run",
+            aggregate_id="run_terminal_reason_boundary",
+            event_type="RunCreated",
+            payload={"run_id": "run_terminal_reason_boundary", "loop_id": "loop_terminal_reason_boundary"},
+        )
+    )
+
+    with pytest.raises(ValueError, match="RunFailed requires reason"):
+        repository.append_domain_event(
+            DomainEventAppendRequest(
+                stream_id=stream_id,
+                aggregate_type="run",
+                aggregate_id="run_terminal_reason_boundary",
+                event_type="RunFailed",
+                payload={"run_id": "run_terminal_reason_boundary"},
+            )
+        )
 
 
 def test_domain_event_store_rejects_accepted_evidence_without_identity(tmp_path: Path) -> None:
@@ -418,101 +444,33 @@ def test_domain_event_store_requires_verdict_causation_when_coverage_exists(tmp_
     )
 
     assert verdict_event.causation_id == coverage_event.event_id
-    assert [event.event_type for event in repository.list_domain_events(stream_id)] == [
-        "RunCreated",
-        "CoverageRecomputed",
-        "VerdictIssued",
-    ]
-
-
-def test_domain_event_store_rejects_run_closed_causation_without_passing_verdict(tmp_path: Path) -> None:
-    repository = LooporaRepository(tmp_path / "app.db")
-    run_id = "run_closed_verdict_boundary"
-    stream_id = run_stream_id(run_id)
-
-    repository.append_domain_event(
+    requested_event = repository.append_domain_event(
         DomainEventAppendRequest(
             stream_id=stream_id,
             aggregate_type="run",
             aggregate_id=run_id,
-            event_type="RunCreated",
-            payload={"run_id": run_id, "loop_id": "loop_closed_verdict_boundary"},
+            event_type="VerdictRequested",
+            payload={"run_id": run_id, "requested_status": "continue_required"},
+            causation_id=coverage_event.event_id,
         )
     )
-    partial_coverage_event = repository.append_domain_event(
-        DomainEventAppendRequest(
-            stream_id=stream_id,
-            aggregate_type="run",
-            aggregate_id=run_id,
-            event_type="CoverageRecomputed",
-            payload={"run_id": run_id, "status": "partial", "target_count": 1, "missing_target_count": 1},
-        )
-    )
-    nonpassing_verdict = repository.append_domain_event(
+    issued_event = repository.append_domain_event(
         DomainEventAppendRequest(
             stream_id=stream_id,
             aggregate_type="run",
             aggregate_id=run_id,
             event_type="VerdictIssued",
             payload={"run_id": run_id, "status": "continue_required"},
-            causation_id=partial_coverage_event.event_id,
+            causation_id=requested_event.event_id,
         )
     )
-    with pytest.raises(ValueError, match="passing VerdictIssued"):
-        repository.append_domain_event(
-            DomainEventAppendRequest(
-                stream_id=stream_id,
-                aggregate_type="run",
-                aggregate_id=run_id,
-                event_type="RunClosed",
-                payload={"run_id": run_id, "status": "succeeded"},
-                causation_id=nonpassing_verdict.event_id,
-            )
-        )
-    evidence_event = repository.append_domain_event(
-        DomainEventAppendRequest(
-            stream_id=stream_id,
-            aggregate_type="run",
-            aggregate_id=run_id,
-            event_type="EvidenceAccepted",
-            payload={"run_id": run_id, "evidence_id": "ev_closed", "verifies": ["target:done_when.proof:covered"]},
-        )
-    )
-    passable_coverage_event = repository.append_domain_event(
-        DomainEventAppendRequest(
-            stream_id=stream_id,
-            aggregate_type="run",
-            aggregate_id=run_id,
-            event_type="CoverageRecomputed",
-            payload={"run_id": run_id, "status": "covered", "target_count": 1, "covered_target_count": 1},
-            causation_id=evidence_event.event_id,
-        )
-    )
-    passing_verdict = repository.append_domain_event(
-        DomainEventAppendRequest(
-            stream_id=stream_id,
-            aggregate_type="run",
-            aggregate_id=run_id,
-            event_type="VerdictIssued",
-            payload={"run_id": run_id, "status": "passed"},
-            causation_id=passable_coverage_event.event_id,
-        )
-    )
-    repository.append_domain_event(
-        DomainEventAppendRequest(
-            stream_id=stream_id,
-            aggregate_type="run",
-            aggregate_id=run_id,
-            event_type="RunClosed",
-            payload={"run_id": run_id, "status": "succeeded"},
-            causation_id=passing_verdict.event_id,
-        )
-    )
-
-    assert [event.event_type for event in repository.list_domain_events(stream_id)][-3:] == [
+    assert issued_event.causation_id == requested_event.event_id
+    assert [event.event_type for event in repository.list_domain_events(stream_id)] == [
+        "RunCreated",
         "CoverageRecomputed",
         "VerdictIssued",
-        "RunClosed",
+        "VerdictRequested",
+        "VerdictIssued",
     ]
 
 

@@ -2,23 +2,27 @@ from __future__ import annotations
 
 import typer
 
-from loopora.agent_adapters import prefix_loopora_command
 from loopora.agent_native_adapter_contracts import agent_adapter_native_surface_summary
 from loopora.agent_native_coverage_summary import (
     coverage_classification_note as _agent_coverage_classification_note,
-    evidence_scope_items as _evidence_scope_items,
     required_coverage_summary as _required_coverage_summary,
 )
-from loopora.agent_native_evidence_refs import (
-    agent_known_evidence_ref_summaries as _agent_known_evidence_ref_summaries,
-    known_evidence_ref_items as _known_evidence_ref_items,
-)
-from loopora.agent_native_next_step_summary import (
+from loopora.agent_native_next_step_sections import (
     action_policy_summary as _action_policy_summary,
-    agent_current_step_evidence_scope_summary as _agent_current_step_evidence_scope_summary,
+    agent_dispatch_unavailable_summary as _agent_dispatch_unavailable_summary,
 )
 from loopora.agent_native_step_view_paths import agent_native_step_contract_path_text as _agent_native_step_contract_path_text
-from loopora.cli_agent_submitted_step_output import _actionable_blocking_item, _actionable_next_action
+from loopora.cli_agent_current_step_continuation_output import print_agent_continuation as _print_agent_continuation
+from loopora.cli_agent_current_step_evidence_output import (
+    print_agent_current_step_evidence_scope as _print_agent_current_step_evidence_scope,
+)
+from loopora.cli_agent_current_step_evidence_output import (
+    print_agent_current_step_known_evidence as _print_agent_current_step_known_evidence,
+)
+from loopora.cli_agent_current_step_evidence_output import (
+    print_agent_current_step_known_evidence_refs as _print_agent_current_step_known_evidence_refs,
+)
+from loopora.cli_agent_current_step_iteration_output import print_agent_iteration_context as _print_agent_iteration_context
 from loopora.cli_summary_helpers import clip as _clip
 from loopora.cli_summary_helpers import non_bool_int as _non_bool_int
 
@@ -43,8 +47,13 @@ def _print_agent_current_step(next_step: dict) -> None:
             typer.echo(f"next_target_agent_config_exists: {str(role_dispatch.get('target_agent_config_exists') is True).lower()}")
         if role_dispatch.get("target_agent_config_exists") is False:
             adapter = str(next_step.get("adapter") or "").strip() or "codex"
-            check_command = prefix_loopora_command(f'loopora agent {adapter} check --workdir "$PWD"')
-            repair_command = prefix_loopora_command(f'loopora init {adapter} --workdir "$PWD"')
+            dispatch_unavailable = _agent_dispatch_unavailable_summary(
+                adapter=adapter,
+                workdir="$PWD",
+                role_dispatch=role_dispatch,
+            )
+            check_command = str(dispatch_unavailable.get("check_command") or "").strip()
+            repair_command = str(dispatch_unavailable.get("repair_command") or "").strip()
             typer.echo(
                 "dispatch_unavailable: "
                 f"{target_agent} config is missing; run {check_command} "
@@ -108,19 +117,6 @@ def _print_agent_native_dispatch_contract(next_step: dict, target_agent: str) ->
         typer.echo(f"native_proof_boundary: {proof_boundary}")
 
 
-def _print_agent_iteration_context(next_step: dict) -> None:
-    iteration = _non_bool_int(next_step.get("iter"))
-    step_order = _non_bool_int(next_step.get("step_order"))
-    if iteration is None:
-        return
-    typer.echo(f"next_iteration: {iteration}")
-    if step_order is not None:
-        typer.echo(f"next_step_order: {step_order}")
-    if iteration > 0 and (step_order or 0) == 0:
-        typer.echo("iteration_continuation: previous iteration completed without closing the run; address current coverage gaps in this next pass")
-        _print_agent_iteration_repair(next_step.get("iteration_repair"))
-
-
 def _print_agent_current_step_paths(next_step: dict, submit_hint: dict) -> None:
     context_path = str(next_step.get("context_absolute_path") or next_step.get("context_path") or "").strip()
     if context_path:
@@ -142,103 +138,6 @@ def _print_agent_current_step_paths(next_step: dict, submit_hint: dict) -> None:
     result_template_path = str(submit_hint.get("result_template_absolute_path") or submit_hint.get("result_template_path") or "").strip()
     if result_template_path:
         typer.echo(f"result_template_path: {result_template_path}")
-
-
-def _print_agent_iteration_repair(repair: object) -> None:
-    if not isinstance(repair, dict) or repair.get("active") is not True:
-        return
-    source_step = str(repair.get("source_step_id") or "").strip()
-    source_role = str(repair.get("source_role") or "").strip()
-    if source_step or source_role:
-        source = source_step
-        if source_role:
-            source = f"{source_step} ({source_role})" if source_step else source_role
-        typer.echo(f"iteration_repair_source: {source}")
-    summary = str(repair.get("summary") or "").strip()
-    if summary:
-        typer.echo(f"iteration_repair_summary: {_clip(summary, 220)}")
-    blocking_items = _evidence_scope_items(repair.get("blocking_items"))
-    if blocking_items:
-        typer.echo("iteration_repair_blocking_items:")
-        for item in blocking_items[:5]:
-            typer.echo(f"- {_clip(_actionable_blocking_item(item), 220)}")
-    next_action = _actionable_next_action(
-        str(repair.get("recommended_next_action") or "").strip(),
-        [_actionable_blocking_item(item) for item in blocking_items],
-    )
-    if next_action:
-        typer.echo(f"iteration_repair_next_action: {_clip(next_action, 220)}")
-    evidence_refs = _evidence_scope_items(repair.get("evidence_refs"))
-    if evidence_refs:
-        typer.echo("iteration_repair_evidence_refs:")
-        for item in evidence_refs[:5]:
-            typer.echo(f"- {item}")
-
-
-def _print_agent_current_step_evidence_scope(next_step: dict) -> None:
-    scope = _agent_current_step_evidence_scope_summary(next_step)
-    if scope:
-        typer.echo(f"known_evidence_scope: {scope}")
-
-
-def _print_agent_current_step_known_evidence(known_evidence_ids: object) -> None:
-    if not isinstance(known_evidence_ids, list):
-        return
-    ids = [str(item).strip() for item in known_evidence_ids if str(item).strip()]
-    if not ids:
-        return
-    displayed_ids = ids[-8:]
-    if len(ids) > len(displayed_ids):
-        typer.echo(f"known_evidence_ids_omitted: {len(ids) - len(displayed_ids)} older")
-    typer.echo("known_evidence_ids:")
-    for evidence_id in displayed_ids:
-        typer.echo(f"- {evidence_id}")
-
-
-def _print_agent_current_step_known_evidence_refs(known_evidence_refs: object) -> None:
-    summaries = _agent_known_evidence_ref_summaries(known_evidence_refs, limit=5)
-    if not summaries:
-        return
-    refs = _known_evidence_ref_items(known_evidence_refs)
-    omitted = max(0, len(refs) - len(summaries))
-    if omitted:
-        typer.echo(f"known_evidence_refs_omitted: {omitted} older")
-    typer.echo("known_evidence_refs:")
-    for item in summaries:
-        parts = [str(item.get("id") or "").strip()]
-        result = str(item.get("result") or "").strip()
-        if result:
-            parts.append(f"result={result}")
-        support = str(item.get("gatekeeper_support") or "").strip()
-        if support:
-            parts.append(f"support={support}")
-        reason = str(item.get("gatekeeper_support_reason") or "").strip()
-        if reason:
-            parts.append(f"reason={reason}")
-        typer.echo(f"- {' '.join(part for part in parts if part)}")
-        claim = str(item.get("claim") or "").strip()
-        if claim:
-            typer.echo(f"  claim: {claim}")
-        coverage_targets = item.get("coverage_target_ids") if isinstance(item.get("coverage_target_ids"), list) else []
-        if coverage_targets:
-            typer.echo(f"  coverage_targets: {', '.join(str(target) for target in coverage_targets)}")
-        rendered_artifacts = _format_known_evidence_artifact_refs(item.get("artifact_refs"))
-        if rendered_artifacts:
-            typer.echo(f"  artifacts: {rendered_artifacts}")
-
-
-def _format_known_evidence_artifact_refs(artifact_refs: object) -> str:
-    if not isinstance(artifact_refs, list):
-        return ""
-    rendered_refs: list[str] = []
-    for ref in artifact_refs[:4]:
-        if not isinstance(ref, dict):
-            continue
-        label = str(ref.get("label") or "").strip()
-        path = str(ref.get("path") or "").strip()
-        if path:
-            rendered_refs.append(f"{label}: {path}" if label else path)
-    return "; ".join(rendered_refs)
 
 
 def _print_agent_current_step_submit_hint(submit_hint: dict) -> None:
@@ -263,65 +162,6 @@ def _print_agent_current_step_submit_hint(submit_hint: dict) -> None:
     submit_command = str(submit_hint.get("command") or "").strip()
     if submit_command:
         typer.echo(f"submit_hint: {submit_command}")
-
-
-def _print_agent_continuation(continuation: object) -> None:
-    if not isinstance(continuation, dict) or continuation.get("active") is not True:
-        return
-    verdict = continuation.get("previous_task_verdict") if isinstance(continuation.get("previous_task_verdict"), dict) else {}
-    coverage = continuation.get("coverage") if isinstance(continuation.get("coverage"), dict) else {}
-    previous_run_id = str(continuation.get("previous_run_id") or "").strip()
-    if previous_run_id:
-        typer.echo(f"continuation_previous_run: {previous_run_id}")
-    status = str(verdict.get("status") or "").strip()
-    if status:
-        typer.echo(f"continuation_task_verdict: {status}")
-    summary = str(verdict.get("summary") or "").strip()
-    if summary:
-        typer.echo(f"continuation_task_verdict_summary: {_clip(summary, 200)}")
-    _print_continuation_coverage(coverage)
-    _print_continuation_focus_items("blocking", continuation.get("focus_blocking"))
-    _print_continuation_focus_items("unproven", continuation.get("focus_unproven"))
-    _print_continuation_focus_items("weak", continuation.get("focus_weak"))
-    _print_continuation_next_focus(continuation.get("next_focus"))
-
-
-def _print_continuation_coverage(coverage: dict) -> None:
-    missing = coverage.get("missing_check_count")
-    covered = coverage.get("covered_check_count")
-    if covered is not None or missing is not None:
-        typer.echo(f"continuation_required_coverage: {covered or 0} covered / {missing or 0} missing")
-    target_count = coverage.get("target_count")
-    covered_targets = coverage.get("covered_target_count")
-    weak_targets = coverage.get("weak_target_count")
-    missing_targets = coverage.get("missing_target_count")
-    blocked_targets = coverage.get("blocked_target_count")
-    if target_count:
-        target_bits = [f"{covered_targets or 0} covered"]
-        if weak_targets:
-            target_bits.append(f"{weak_targets} weak")
-        if missing_targets:
-            target_bits.append(f"{missing_targets} missing")
-        if blocked_targets:
-            target_bits.append(f"{blocked_targets} blocked")
-        typer.echo(f"continuation_coverage_targets: {target_count} total ({' / '.join(target_bits)})")
-
-
-def _print_continuation_next_focus(items: object) -> None:
-    next_focus = [str(item).strip() for item in list(items or []) if str(item).strip()]
-    if next_focus:
-        typer.echo("continuation_next_focus:")
-        for item in next_focus[:5]:
-            typer.echo(f"- {item}")
-
-
-def _print_continuation_focus_items(label: str, items: object) -> None:
-    focus_items = [str(item).strip() for item in list(items or []) if str(item).strip()]
-    if not focus_items:
-        return
-    typer.echo(f"continuation_{label}:")
-    for item in focus_items[:4]:
-        typer.echo(f"- {_clip(item, 180)}")
 
 
 def _print_top_coverage_gaps(required_coverage: object) -> None:

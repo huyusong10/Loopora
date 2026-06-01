@@ -3,10 +3,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from loopora.context_flow import evidence_entry_id
+from loopora.context_step_results import evidence_entry_id
+from loopora.agent_native_evidence_contracts import _agent_native_output_coverage_results
 from loopora.run_artifacts import RunArtifactLayout
 from loopora.service_agent_native_contracts import (
-    _agent_native_output_coverage_results,
     agent_native_actionable_blocking_item,
     agent_native_actionable_repair_next_action,
 )

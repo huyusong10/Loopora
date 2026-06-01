@@ -6,11 +6,12 @@ from loopora.projections._event_replay_support import EVENT_REPLAY_PROJECTION_SC
 
 def replay_task_verdict_projection(events: list[EventEnvelope]) -> dict:
     event = latest_event(events, "VerdictIssued")
+    source_sequence = latest_sequence(events)
     if event is None:
         return {
             "schema_version": EVENT_REPLAY_PROJECTION_SCHEMA_VERSION,
             "kind": "event_replayed_task_verdict",
-            "source_sequence": latest_sequence(events),
+            "source_sequence": source_sequence,
             "status": "not_evaluated",
             "source": "",
             "summary": "",
@@ -19,7 +20,7 @@ def replay_task_verdict_projection(events: list[EventEnvelope]) -> dict:
     projection = {
         "schema_version": EVENT_REPLAY_PROJECTION_SCHEMA_VERSION,
         "kind": "event_replayed_task_verdict",
-        "source_sequence": event.sequence,
+        "source_sequence": source_sequence,
         "status": str(payload.get("status") or "not_evaluated"),
         "source": str(payload.get("source") or ""),
         "summary": str(payload.get("summary") or ""),

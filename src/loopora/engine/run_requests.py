@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from loopora.events.envelope import EventEnvelope
-from loopora.events.run_event_results import StepEvidenceEventsResult, StepSubmissionEventsResult
+from loopora.events.run_event_results import StepEvidenceEventsResult, StepSubmissionEventsResult, VerdictEventsResult
 from loopora.kernel import StepResult
 from loopora.kernel.actors import ActorRef
 from loopora.kernel.step import StepInstruction
@@ -22,12 +22,7 @@ RunEngineClaimStepRequest = RunEngineIssueStepRequest
 
 @dataclass(frozen=True, slots=True)
 class RunEngineClaimRunnerStepRequest:
-    run_id: str
-    contract_ref: str
-    compiled_spec: dict
-    iteration: int
-    step: dict
-    role: dict
+    instruction: StepInstruction
     pending_actor: ActorRef
     correlation_id: str = ""
     causation_id: str | None = None
@@ -47,6 +42,24 @@ class RunEngineSubmitStepRequest:
 
 
 RunEngineSubmitStepResult = StepSubmissionEventsResult
+
+
+@dataclass(frozen=True, slots=True)
+class RunEngineStopRunRequest:
+    run_id: str
+    reason: str
+    actor: ActorRef
+    correlation_id: str = ""
+    causation_id: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class RunEngineFailRunRequest:
+    run_id: str
+    reason: str
+    actor: ActorRef
+    correlation_id: str = ""
+    causation_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -87,6 +100,9 @@ class RunEngineIssueVerdictRequest:
     actor: ActorRef
     correlation_id: str = ""
     causation_id: str | None = None
+
+
+RunEngineIssueVerdictResult = VerdictEventsResult
 
 
 @dataclass(frozen=True, slots=True)

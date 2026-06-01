@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from loopora.executor import CodexExecutor
+from loopora.executor_types import CodexExecutor
 from loopora.recovery import RetryConfig
 from loopora.run_artifacts import RunArtifactLayout
 

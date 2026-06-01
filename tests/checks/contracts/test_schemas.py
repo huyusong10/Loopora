@@ -18,6 +18,16 @@ from loopora.service import (
     VERIFIER_SCHEMA,
 )
 from loopora.service_prompts import CUSTOM_SCHEMA, ServiceRunPromptMixin
+import loopora.context_schema_evidence as context_schema_evidence
+import loopora.context_schema_shared as context_schema_shared
+import loopora.context_schemas as context_schemas
+import loopora.service_prompt_checks as service_prompt_checks
+import loopora.service_prompt_builder_schemas as service_prompt_builder_schemas
+import loopora.service_prompt_guidance_schemas as service_prompt_guidance_schemas
+import loopora.service_prompt_requests as service_prompt_requests
+import loopora.service_prompt_review_schemas as service_prompt_review_schemas
+import loopora.service_prompt_schemas as service_prompt_schemas
+import loopora.service_prompts as service_prompts
 
 
 class PromptHarness(ServiceRunPromptMixin):
@@ -43,6 +53,101 @@ def test_object_schemas_with_properties_are_strict_and_exhaustive() -> None:
     for schema_name, schema in schemas.items():
         for path, issue in _find_schema_issues(schema):
             raise AssertionError(f"{schema_name} at {path}: {issue}")
+
+
+def test_service_prompts_keep_role_output_schemas_in_dedicated_module() -> None:
+    schema_sources = {
+        "GENERATOR_SCHEMA": service_prompt_builder_schemas,
+        "CHECK_PLANNER_SCHEMA": service_prompt_builder_schemas,
+        "TESTER_SCHEMA": service_prompt_review_schemas,
+        "VERIFIER_SCHEMA": service_prompt_review_schemas,
+        "CHALLENGER_SCHEMA": service_prompt_guidance_schemas,
+        "CUSTOM_SCHEMA": service_prompt_guidance_schemas,
+        "BUILDER_SCHEMA": service_prompt_builder_schemas,
+        "INSPECTOR_SCHEMA": service_prompt_review_schemas,
+        "GATEKEEPER_SCHEMA": service_prompt_review_schemas,
+        "GUIDE_SCHEMA": service_prompt_guidance_schemas,
+    }
+    for schema_name in (
+        "GENERATOR_SCHEMA",
+        "CHECK_PLANNER_SCHEMA",
+        "TESTER_SCHEMA",
+        "VERIFIER_SCHEMA",
+        "CHALLENGER_SCHEMA",
+        "CUSTOM_SCHEMA",
+        "BUILDER_SCHEMA",
+        "INSPECTOR_SCHEMA",
+        "GATEKEEPER_SCHEMA",
+        "GUIDE_SCHEMA",
+    ):
+        assert getattr(service_prompts, schema_name) is getattr(service_prompt_schemas, schema_name)
+        assert getattr(service_prompt_schemas, schema_name) is getattr(schema_sources[schema_name], schema_name)
+    assert service_prompts.GeneratorPromptRequest is service_prompt_requests.GeneratorPromptRequest
+    assert service_prompt_checks.normalize_generated_checks("not a list") == []
+
+
+def test_service_prompt_helpers_stay_out_of_prompt_mixin_source() -> None:
+    repo_root = Path(__file__).resolve().parents[3]
+    prompts_source = (repo_root / "src" / "loopora" / "service_prompts.py").read_text(encoding="utf-8")
+    schemas_source = (repo_root / "src" / "loopora" / "service_prompt_schemas.py").read_text(encoding="utf-8")
+    builder_schemas_source = (repo_root / "src" / "loopora" / "service_prompt_builder_schemas.py").read_text(
+        encoding="utf-8"
+    )
+    review_schemas_source = (repo_root / "src" / "loopora" / "service_prompt_review_schemas.py").read_text(
+        encoding="utf-8"
+    )
+    guidance_schemas_source = (repo_root / "src" / "loopora" / "service_prompt_guidance_schemas.py").read_text(
+        encoding="utf-8"
+    )
+    request_source = (repo_root / "src" / "loopora" / "service_prompt_requests.py").read_text(encoding="utf-8")
+    checks_source = (repo_root / "src" / "loopora" / "service_prompt_checks.py").read_text(encoding="utf-8")
+    contracts_source = (repo_root / "design" / "contracts.md").read_text(encoding="utf-8")
+
+    assert "from loopora.service_prompt_builder_schemas import" in schemas_source
+    assert "from loopora.service_prompt_review_schemas import" in schemas_source
+    assert "from loopora.service_prompt_guidance_schemas import" in schemas_source
+    assert "GENERATOR_SCHEMA = {" in builder_schemas_source
+    assert "TESTER_SCHEMA = {" in review_schemas_source
+    assert "CHALLENGER_SCHEMA = {" in guidance_schemas_source
+    assert "GENERATOR_SCHEMA = {" not in schemas_source
+    assert "TESTER_SCHEMA = {" not in schemas_source
+    assert "CHALLENGER_SCHEMA = {" not in schemas_source
+    assert "class GeneratorPromptRequest" in request_source
+    assert "def generator_prompt_request_from_args" in request_source
+    assert "def normalize_generated_checks" in checks_source
+    assert "class GeneratorPromptRequest" not in prompts_source
+    assert "def generator_prompt_request_from_args" not in prompts_source
+    assert "def normalize_generated_checks" not in prompts_source
+    assert "service_prompt_requests.py" in contracts_source
+    assert "service_prompt_checks.py" in contracts_source
+    assert "service_prompt_builder_schemas.py" in contracts_source
+    assert "service_prompt_review_schemas.py" in contracts_source
+    assert "service_prompt_guidance_schemas.py" in contracts_source
+
+
+def test_context_evidence_schemas_have_dedicated_boundary() -> None:
+    repo_root = Path(__file__).resolve().parents[3]
+    evidence_source = (repo_root / "src" / "loopora" / "context_schema_evidence.py").read_text(encoding="utf-8")
+    shared_source = (repo_root / "src" / "loopora" / "context_schema_shared.py").read_text(encoding="utf-8")
+    step_source = (repo_root / "src" / "loopora" / "context_schema_step_instruction.py").read_text(encoding="utf-8")
+    iteration_source = (repo_root / "src" / "loopora" / "context_schema_iteration_state.py").read_text(encoding="utf-8")
+    schemas_source = (repo_root / "src" / "loopora" / "context_schemas.py").read_text(encoding="utf-8")
+    contracts_source = (repo_root / "design" / "contracts.md").read_text(encoding="utf-8")
+
+    for marker in (
+        "ARTIFACT_REF_SCHEMA = {",
+        "EVIDENCE_ITEM_SCHEMA = {",
+        "EVIDENCE_MANIFEST_CLAIM_SCHEMA = {",
+    ):
+        assert marker in evidence_source
+        assert marker not in shared_source
+    assert "from loopora.context_schema_evidence import" in shared_source
+    assert "from loopora.context_schema_evidence import" in step_source
+    assert "from loopora.context_schema_evidence import" in iteration_source
+    assert "from loopora.context_schema_evidence import" in schemas_source
+    assert context_schema_shared.EVIDENCE_ITEM_SCHEMA is context_schema_evidence.EVIDENCE_ITEM_SCHEMA
+    assert context_schemas.EVIDENCE_MANIFEST_CLAIM_SCHEMA is context_schema_evidence.EVIDENCE_MANIFEST_CLAIM_SCHEMA
+    assert "context_schema_evidence.py" in contracts_source
 
 
 def test_builder_schema_and_prompt_expose_proof_artifact_fields() -> None:

@@ -20,8 +20,8 @@ from loopora.service_alignment_decision_options import (
     not_fit_alignment_decision_options,
     visible_alignment_decision_options,
 )
-from loopora.service_alignment_stage import alignment_clarifying_question_issues
-import loopora.service_alignment as alignment_module
+from loopora.service_alignment_requests import ALIGNMENT_MISSING_ITEM_IDS
+from loopora.service_alignment_clarifying_questions import alignment_clarifying_question_issues
 
 from alignment_test_support import (
     _wait_for_status,
@@ -47,6 +47,28 @@ def test_alignment_prompt_assets_separate_run_status_from_task_verdict() -> None
         source = path.read_text(encoding="utf-8")
         assert "evidence verdict and result" not in source, path.name
         assert "The evidence verdict should" not in source, path.name
+
+
+def test_alignment_event_artifact_io_has_dedicated_boundary() -> None:
+    root = Path(__file__).resolve().parents[3]
+    records_source = (root / "src/loopora/db_alignment_records.py").read_text(encoding="utf-8")
+    event_records_source = (root / "src/loopora/db_alignment_event_records.py").read_text(encoding="utf-8")
+    artifact_source = (root / "src/loopora/db_alignment_event_artifacts.py").read_text(encoding="utf-8")
+    design_source = (root / "design/contracts.md").read_text(encoding="utf-8")
+
+    assert "from loopora.db_alignment_event_records import RepositoryAlignmentEventRecordsMixin" in records_source
+    assert "class RepositoryAlignmentRecordsMixin(RepositoryAlignmentEventRecordsMixin)" in records_source
+    assert "def append_alignment_event" not in records_source
+    assert "from loopora.db_alignment_event_artifacts import append_alignment_event_artifact" in event_records_source
+    assert "def append_alignment_event" in event_records_source
+    assert "def list_alignment_events_for_redaction_audit" in event_records_source
+    assert "def append_alignment_event_artifact" in artifact_source
+    assert "def alignment_event_artifact_root" in artifact_source
+    assert "events.jsonl" in artifact_source
+    assert "events.jsonl" not in records_source
+    assert "db_alignment_event_records.py" in design_source
+    assert "db_alignment_event_artifacts.py" in design_source
+
 
 def test_alignment_fake_bundle_keeps_runtime_judgment_surfaces_visible(sample_workdir: Path) -> None:
     bundle_text = alignment_bundle_yaml(str(sample_workdir.resolve()))
@@ -663,7 +685,7 @@ def test_alignment_missing_items_are_stable_ids_only() -> None:
             "raw model prose should not become a chip",
             {"bad": "shape"},
         ],
-        allowed_item_ids=alignment_module.ALIGNMENT_MISSING_ITEM_IDS,
+        allowed_item_ids=ALIGNMENT_MISSING_ITEM_IDS,
     )
 
     assert missing == ["success_surface", "role_posture"]

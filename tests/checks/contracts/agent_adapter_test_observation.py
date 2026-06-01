@@ -300,8 +300,11 @@ def _assert_agent_native_cli_output(
     assert "step_instruction_context.json" in stdout
     assert "known_evidence_count: 3" in stdout
     assert "known_evidence_ids:" not in stdout
-    assert "result_template_contract: Write one wrapper JSON object with loopora_host_dispatch and a schema-shaped result; replace null placeholders before submit." in stdout
-    assert "result_template_fill: open the template, replace null placeholders in result, keep loopora_host_dispatch, then submit the filled copy" in stdout
+    assert "result_template_contract: Write one wrapper JSON object with loopora_host_dispatch" in stdout
+    assert "schema-shaped result" in stdout
+    assert "replace null placeholders before submit" in stdout
+    assert "result_template_fill: open the template, replace null placeholders in result" in stdout
+    assert "keep loopora_host_dispatch, then submit the filled copy" in stdout
     _assert_cli_handoff_contract_paths(
         stdout,
         step_contract_fragment="step_contract.json",

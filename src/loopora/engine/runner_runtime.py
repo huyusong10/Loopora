@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from loopora.engine.run_requests import RunEngineClaimRunnerStepRequest
 from loopora.engine.runner_context import RunnerIterationState, RunnerRunContext
 
 
@@ -27,3 +28,4 @@ class RunnerStepRunRequest:
     step: dict
     state_snapshot: dict[str, object]
     is_control: bool = False
+    claim_request: RunEngineClaimRunnerStepRequest | None = None

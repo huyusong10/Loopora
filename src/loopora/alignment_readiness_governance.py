@@ -1,0 +1,60 @@
+from __future__ import annotations
+
+import re
+
+from loopora.service_alignment_workdir_snapshot import alignment_workdir_snapshot_has_governance_markers
+
+
+GOVERNANCE_MARKER_PATTERN = r"agents\.md|design/readme\.md|design/|tests/|project-local|project local|项目本地|本地治理"
+
+
+def local_governance_evidence_issue(text: str, *, workdir_snapshot: str = "") -> bool:
+    if not re.search(GOVERNANCE_MARKER_PATTERN, text, re.I) and not alignment_workdir_snapshot_has_governance_markers(
+        workdir_snapshot
+    ):
+        return False
+    return not alignment_governance_marker_responsibilities_present(text)
+
+
+def alignment_governance_marker_responsibilities_present(text: str) -> bool:
+    builder_reads = alignment_governance_marker_responsibility_present(
+        text,
+        actor_pattern=r"\b(?:builder|generator)\b|构建者|构建",
+        action_pattern=r"\b(?:read|reads|consult|consults|follow|follows|respect|respects)\b|读取|查阅|遵守|遵循",
+    )
+    review_checks = alignment_governance_marker_responsibility_present(
+        text,
+        actor_pattern=r"\b(?:inspector|custom|review|reviewer)\b|检查者|巡检|检查|审查|验证",
+        action_pattern=r"\b(?:verify|verifies|check|checks|review|reviews|validate|validates|test|tests)\b|检查|审查|验证|测试",
+    )
+    gatekeeper_gates = alignment_governance_marker_responsibility_present(
+        text,
+        actor_pattern=r"\b(?:gatekeeper|gate keeper|verifier)\b|守门|裁决",
+        action_pattern=(
+            r"\b(?:weak|unproven|blocking|block|blocks|missing|skipped|fail closed|reject|rejects)\b"
+            r"|弱证据|未证明|阻断|缺少|跳过|拒绝"
+        ),
+    )
+    return builder_reads and review_checks and gatekeeper_gates
+
+
+def alignment_governance_marker_responsibility_present(
+    text: str,
+    *,
+    actor_pattern: str,
+    action_pattern: str,
+) -> bool:
+    segments = re.split(r"[\n.;。；]+", text)
+    marker_windows: list[str] = []
+    for match in re.finditer(GOVERNANCE_MARKER_PATTERN, text, flags=re.I):
+        start = max(0, match.start() - 180)
+        end = min(len(text), match.end() + 180)
+        marker_windows.append(text[start:end])
+    for segment in [*segments, *marker_windows]:
+        if (
+            re.search(GOVERNANCE_MARKER_PATTERN, segment, flags=re.I)
+            and re.search(actor_pattern, segment, flags=re.I)
+            and re.search(action_pattern, segment, flags=re.I)
+        ):
+            return True
+    return False

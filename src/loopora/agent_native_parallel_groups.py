@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from loopora.run_artifacts import read_jsonl
+from loopora.structured_numbers import coerced_non_negative_int
 
 
 @dataclass(frozen=True)
@@ -69,10 +70,10 @@ def agent_native_parallel_group_snapshot(  # noqa: PLR0913 - snapshot inputs mir
     existing = state.get("parallel_group_snapshot") if isinstance(state.get("parallel_group_snapshot"), dict) else {}
     if (
         existing
-        and _agent_native_int(existing.get("iter_id"), default=-1) == iteration.iter_id
+        and coerced_non_negative_int(existing.get("iter_id"), default=-1) == iteration.iter_id
         and str(existing.get("parallel_group") or "") == parallel_group
-        and _agent_native_int(existing.get("group_start"), default=-1) == group_start
-        and _agent_native_int(existing.get("group_end"), default=-1) == group_end
+        and coerced_non_negative_int(existing.get("group_start"), default=-1) == group_start
+        and coerced_non_negative_int(existing.get("group_end"), default=-1) == group_end
     ):
         return existing
 
@@ -108,7 +109,7 @@ def agent_native_parallel_group_snapshot(  # noqa: PLR0913 - snapshot inputs mir
             for item in read_jsonl(context.layout.evidence_ledger_path)
             if not (
                 isinstance(item, dict)
-                and _agent_native_int(item.get("iter"), default=-1) == iteration.iter_id
+                and coerced_non_negative_int(item.get("iter"), default=-1) == iteration.iter_id
                 and str(item.get("step_id") or "") in group_step_id_set
             )
         ],
@@ -170,13 +171,6 @@ def agent_native_parallel_group_bounds(steps: list[dict], step_order: int, paral
     while group_end < len(steps) and str(steps[group_end].get("parallel_group") or "").strip() == parallel_group:
         group_end += 1
     return group_start, group_end, [str(step["id"]) for step in steps[group_start:group_end]]
-
-
-def _agent_native_int(value: object, *, default: int) -> int:
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        return default
 
 
 def _handoff_step_id(handoff: object) -> str:

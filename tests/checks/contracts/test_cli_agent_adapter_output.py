@@ -1,12 +1,63 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from loopora.agent_native_adapter_contracts import agent_adapter_native_surface_summary
-from loopora.cli_agent_adapter_output import print_adapter_mutation_result
+from loopora.cli_agent_adapter_output import adapter_label, print_adapter_mutation_result
 
 
 def _assert_output_contains(output: str, *snippets: str) -> None:
     missing = [snippet for snippet in snippets if snippet not in output]
     assert not missing, f"missing output snippets: {missing[:5]}"
+
+
+def test_adapter_output_reuses_shared_adapter_labels() -> None:
+    root = Path(__file__).resolve().parents[3]
+    output_source = (root / "src" / "loopora" / "cli_agent_adapter_output.py").read_text(encoding="utf-8")
+    design_source = (root / "design" / "contracts.md").read_text(encoding="utf-8")
+
+    assert adapter_label("claude") == "Claude Code"
+    assert adapter_label("") == "Agent"
+    assert "from loopora.agent_adapter_check_utils import adapter_label as _adapter_label" in output_source
+    assert '"claude": "Claude Code"' not in output_source
+    assert "agent_adapter_check_utils.py" in design_source
+
+
+def test_adapter_check_output_has_dedicated_boundary() -> None:
+    root = Path(__file__).resolve().parents[3]
+    output_source = (root / "src" / "loopora" / "cli_agent_adapter_output.py").read_text(encoding="utf-8")
+    check_output_source = (root / "src" / "loopora" / "cli_agent_adapter_check_output.py").read_text(
+        encoding="utf-8"
+    )
+    design_source = (root / "design" / "contracts.md").read_text(encoding="utf-8")
+
+    assert "from loopora import cli_agent_adapter_check_output as _adapter_check_output" in output_source
+    for marker in (
+        "def adapter_check_json_payload",
+        "def adapter_check_summary",
+        "def print_adapter_check_recovery",
+    ):
+        assert marker in check_output_source
+        assert marker not in output_source
+    assert "agent_v3_envelope(" in check_output_source
+    assert "agent_v3_envelope(" not in output_source
+    assert "cli_agent_adapter_check_output.py" in design_source
+
+
+def test_adapter_install_conflict_output_has_dedicated_boundary() -> None:
+    root = Path(__file__).resolve().parents[3]
+    output_source = (root / "src" / "loopora" / "cli_agent_adapter_output.py").read_text(encoding="utf-8")
+    conflict_output_source = (root / "src" / "loopora" / "cli_agent_adapter_conflict_output.py").read_text(
+        encoding="utf-8"
+    )
+    design_source = (root / "design" / "contracts.md").read_text(encoding="utf-8")
+
+    assert "from loopora import cli_agent_adapter_conflict_output as _adapter_conflict_output" in output_source
+    assert "def handle_adapter_install_conflict" in conflict_output_source
+    assert "def adapter_conflict_paths" in conflict_output_source
+    assert "def handle_adapter_install_conflict" not in output_source
+    assert "def _adapter_conflict_paths" not in output_source
+    assert "cli_agent_adapter_conflict_output.py" in design_source
 
 
 def test_adapter_output_keeps_native_surface_and_clean_fallback_steps(tmp_path, capsys) -> None:
@@ -47,11 +98,14 @@ def test_adapter_output_keeps_native_surface_and_clean_fallback_steps(tmp_path, 
     assert "first task message example:" in output
     assert "agent surface:" in output
     assert "- slash commands: plan=/loopora-plan run=/loopora-run" in output
-    assert (
-        "- capabilities: execution=current_host_agent; role_dispatch=host_native; "
-        "workspace=current_host_agent_workdir; worktree=not_created_or_switched_by_loopora; "
-        "proof=loopora_evidence_refs_and_task_verdict"
-    ) in output
+    _assert_output_contains(
+        output,
+        "- capabilities: execution=current_host_agent",
+        "role_dispatch=host_native",
+        "workspace=current_host_agent_workdir",
+        "worktree=not_created_or_switched_by_loopora",
+        "proof=loopora_evidence_refs_and_task_verdict",
+    )
     assert "- activation: explicit_loopora_command_or_cli_only" in output
     assert "- command namespace: loopora_plan_run_only_no_generic_host_command_aliases" in output
     assert "- references: .agents/skills/loopora-run/references/loopora-run-contract.md" in output

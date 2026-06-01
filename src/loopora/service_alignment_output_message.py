@@ -3,14 +3,14 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Protocol
 
-from loopora.service_alignment_context import alignment_generation_prefers_chinese, alignment_prefers_chinese
 from loopora.service_alignment_decision_options import (
     default_alignment_decision_options,
     normalize_alignment_missing_items,
     visible_alignment_decision_options,
 )
+from loopora.service_alignment_language import alignment_generation_prefers_chinese, alignment_prefers_chinese
 from loopora.service_alignment_output_stage import alignment_output_bundle_stage_error
-from loopora.service_alignment_stage import alignment_output_message_plan
+from loopora.service_alignment_stage_messages import alignment_output_message_plan
 
 
 class AlignmentOutputMessageRepository(Protocol):

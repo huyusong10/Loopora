@@ -10,13 +10,13 @@ from loopora.agent_native_task_proof import PASSING_TASK_VERDICT_STATUSES
 from loopora.agent_native_v3 import AgentWorkPanelV3
 from loopora.cli_summary_helpers import clip as _clip
 from loopora.cli_summary_helpers import clip_inline as _clip_inline
+from loopora.run_projection_fields import run_status_from_run, task_verdict_from_run
 
 
 def agent_work_panel(result: dict, *, summary: dict | None = None) -> AgentWorkPanelV3:
     run = result.get("run") if isinstance(result.get("run"), dict) else {}
     next_summary = _next_step_summary(result, summary=summary)
-    task_verdict = run.get("task_verdict") if isinstance(run.get("task_verdict"), dict) else run.get("task_verdict_json")
-    task_verdict = task_verdict if isinstance(task_verdict, dict) else {}
+    task_verdict = task_verdict_from_run(run)
     verdict_status = str(task_verdict.get("status") or "").strip()
     task_proven = verdict_status in PASSING_TASK_VERDICT_STATUSES
     task_outcome = _task_outcome(result, task_proven=task_proven, verdict_status=verdict_status, summary=summary)
@@ -111,7 +111,7 @@ def _panel_state(result: dict, *, task_proven: bool, next_summary: dict[str, obj
     if next_summary:
         return "awaiting_agent"
     run = result.get("run") if isinstance(result.get("run"), dict) else {}
-    return str(run.get("run_status") or run.get("status") or "unknown").strip()
+    return run_status_from_run(run) or "unknown"
 
 
 def _panel_next_action(result: dict, *, next_summary: dict[str, object], task_proven: bool) -> str:

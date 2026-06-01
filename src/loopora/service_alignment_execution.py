@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
-from loopora.executor import RoleRequest
+from loopora.executor_types import RoleRequest
 
 
 ALIGNMENT_NATIVE_RESUME_FALLBACK_EXECUTORS = frozenset({"codex", "claude", "opencode"})

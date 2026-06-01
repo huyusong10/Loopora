@@ -6,7 +6,10 @@ from pathlib import Path
 from typing import Protocol
 
 from loopora.bundles import BundleError, bundle_to_yaml, load_bundle_text, read_bundle_file_text
-from loopora.service_alignment_bundle_lifecycle import alignment_bundle_validation_failure, alignment_bundle_validation_success
+from loopora.service_alignment_bundle_validation_payloads import (
+    alignment_bundle_validation_failure,
+    alignment_bundle_validation_success,
+)
 from loopora.service_types import LooporaError
 from loopora.utils import utc_now
 

@@ -8,7 +8,7 @@ from loopora.run_takeaways import (
     empty_judgment_contract,
 )
 from loopora.providers import CLAUDE_DEFAULT_MODEL, OPENCODE_DEFAULT_MODEL
-import loopora.service_run_lifecycle as service_run_lifecycle
+import loopora.service_run_acceptance as service_run_acceptance
 from loopora.web import build_app
 
 from web_api_test_support import (
@@ -149,7 +149,7 @@ def test_run_accept_result_keeps_audit_shape_when_evidence_summary_is_unavailabl
     def fail_takeaways(_run: dict) -> dict:
         raise RuntimeError("raw artifact read failed")
 
-    monkeypatch.setattr(service_run_lifecycle, "build_run_key_takeaways", fail_takeaways)
+    monkeypatch.setattr(service_run_acceptance, "build_run_key_takeaways", fail_takeaways)
 
     response = client.post(f"/runs/{run_id}/accept", follow_redirects=False)
 

@@ -2,9 +2,25 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Protocol
 
+from loopora.engine.advance_policy import RunnerStepSelection, RunnerStepSelectionRequest, select_next_runner_step
+from loopora.engine.run_requests import RunEngineClaimRunnerStepRequest
+from loopora.engine.step_instruction import RunnerStepInstructionRequest, runner_step_instruction
+from loopora.kernel import ActorRef
 from loopora.recovery import RetryConfig
 from loopora.run_artifacts import read_jsonl
+
+
+class RunnerStepCursor(Protocol):
+    def runner_step_index(
+        self,
+        run_id: str,
+        *,
+        strategy_steps: list[dict],
+        iteration: int,
+        fallback_step_index: int = 0,
+    ) -> int: ...
 
 
 def evidence_context_with_canonical_items(step_instruction_context: dict, layout: object) -> dict:
@@ -18,6 +34,124 @@ def evidence_context_with_canonical_items(step_instruction_context: dict, layout
         return dict(evidence_context)
     canonical_items = [item for item in read_jsonl(layout.evidence_ledger_path) if isinstance(item, dict) and str(item.get("id") or "").strip() in known_ids]
     return {**dict(evidence_context), "items": canonical_items}
+
+
+def runner_step_claim_request(
+    context: RunnerRunContext,
+    iteration: RunnerIterationState,
+    *,
+    step: dict,
+    role: dict,
+    pending_actor: ActorRef,
+) -> RunEngineClaimRunnerStepRequest:
+    return RunEngineClaimRunnerStepRequest(
+        instruction=runner_step_instruction(
+            RunnerStepInstructionRequest(
+                run_id=context.run_id,
+                contract_ref=str(context.layout.run_contract_path),
+                compiled_spec=context.compiled_spec,
+                iteration=iteration.iter_id,
+                step=step,
+                role=role,
+            )
+        ),
+        pending_actor=pending_actor,
+    )
+
+
+@dataclass(frozen=True)
+class RunnerStepClaimPlan:
+    step_order: int
+    step: dict
+    role: dict
+    parallel_group: str
+    claim_request: RunEngineClaimRunnerStepRequest
+
+
+@dataclass(frozen=True)
+class RunnerParallelGroupClaimPlan:
+    parallel_group: str
+    group_start: int
+    next_step_index: int
+    steps: tuple[RunnerStepClaimPlan, ...]
+
+
+def runner_step_claim_plan(
+    run_engine: RunnerStepCursor,
+    context: RunnerRunContext,
+    iteration: RunnerIterationState,
+    *,
+    pending_actor: ActorRef,
+    fallback_step_index: int = 0,
+) -> RunnerStepClaimPlan | None:
+    step_index = run_engine.runner_step_index(
+        context.run_id,
+        strategy_steps=context.strategy_steps,
+        iteration=iteration.iter_id,
+        fallback_step_index=fallback_step_index,
+    )
+    selection = select_next_runner_step(RunnerStepSelectionRequest(context.strategy_steps, step_index))
+    if selection is None:
+        return None
+    return _runner_step_claim_plan_from_selection(context, iteration, selection, pending_actor=pending_actor)
+
+
+def runner_parallel_group_claim_plan(
+    context: RunnerRunContext,
+    iteration: RunnerIterationState,
+    *,
+    first_plan: RunnerStepClaimPlan,
+    pending_actor: ActorRef,
+) -> RunnerParallelGroupClaimPlan:
+    parallel_group = first_plan.parallel_group
+    step_index = first_plan.step_order
+    group_steps: list[RunnerStepClaimPlan] = []
+    while (
+        step_index < len(context.strategy_steps)
+        and str(context.strategy_steps[step_index].get("parallel_group") or "").strip() == parallel_group
+    ):
+        selection = select_next_runner_step(RunnerStepSelectionRequest(context.strategy_steps, step_index))
+        if selection is None:
+            break
+        group_steps.append(
+            _runner_step_claim_plan_from_selection(
+                context,
+                iteration,
+                selection,
+                pending_actor=pending_actor,
+            )
+        )
+        step_index = selection.step_order + 1
+    return RunnerParallelGroupClaimPlan(
+        parallel_group=parallel_group,
+        group_start=first_plan.step_order,
+        next_step_index=step_index,
+        steps=tuple(group_steps),
+    )
+
+
+def _runner_step_claim_plan_from_selection(
+    context: RunnerRunContext,
+    iteration: RunnerIterationState,
+    selection: RunnerStepSelection,
+    *,
+    pending_actor: ActorRef,
+) -> RunnerStepClaimPlan:
+    step = dict(selection.step)
+    role = context.role_by_id[str(step["role_id"])]
+    return RunnerStepClaimPlan(
+        step_order=selection.step_order,
+        step=step,
+        role=role,
+        parallel_group=selection.parallel_group,
+        claim_request=runner_step_claim_request(
+            context,
+            iteration,
+            step=step,
+            role=role,
+            pending_actor=pending_actor,
+        ),
+    )
 
 
 @dataclass

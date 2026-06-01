@@ -130,6 +130,48 @@ def test_workflow_asset_catalog_remains_legacy_import_alias() -> None:
     assert WorkflowAssetCatalog is StrategyTemplateAssetCatalog
 
 
+def test_asset_catalog_splits_pure_asset_helpers_from_repository_facade() -> None:
+    repo_root = Path(__file__).resolve().parents[3]
+    catalog_source = (repo_root / "src" / "loopora" / "asset_catalog.py").read_text(encoding="utf-8")
+    builtins_source = (repo_root / "src" / "loopora" / "asset_catalog_builtins.py").read_text(encoding="utf-8")
+    decoration_source = (repo_root / "src" / "loopora" / "asset_catalog_decoration.py").read_text(encoding="utf-8")
+    inputs_source = (repo_root / "src" / "loopora" / "asset_catalog_inputs.py").read_text(encoding="utf-8")
+    resolution_source = (repo_root / "src" / "loopora" / "asset_catalog_orchestration_resolution.py").read_text(encoding="utf-8")
+    role_facade_source = (repo_root / "src" / "loopora" / "asset_catalog_role_facade.py").read_text(encoding="utf-8")
+    role_payloads_source = (repo_root / "src" / "loopora" / "asset_catalog_role_payloads.py").read_text(encoding="utf-8")
+    role_snapshots_source = (repo_root / "src" / "loopora" / "asset_catalog_role_snapshots.py").read_text(encoding="utf-8")
+    contracts_source = (repo_root / "design" / "contracts.md").read_text(encoding="utf-8")
+
+    assert "class StrategyTemplateAssetCatalog" in catalog_source
+    assert "RoleDefinitionAssetCatalogMixin" in catalog_source
+    assert "class RoleDefinitionAssetCatalogMixin" in role_facade_source
+    assert "def build_builtin_orchestration_records" in builtins_source
+    assert "def decorate_orchestration_record" in decoration_source
+    assert "def decorate_role_definition_record" in decoration_source
+    assert "def sanitize_persisted_prompt_files" in decoration_source
+    assert "def role_definition_payload_input_from_args" in inputs_source
+    assert "def create_role_definition" in role_facade_source
+    assert "def update_role_definition" in role_facade_source
+    assert "def delete_role_definition" in role_facade_source
+    assert "def resolve_orchestration_input" in resolution_source
+    assert "def normalize_role_definition_payload" in role_payloads_source
+    assert "def hydrate_strategy_role_snapshots" in role_snapshots_source
+    assert "return _resolve_orchestration_input(" in catalog_source
+    assert "def create_role_definition" not in catalog_source
+    assert "hydrate_strategy_role_snapshots(" not in catalog_source
+    assert "def decorate_orchestration_record" not in catalog_source
+    assert "def sanitize_persisted_prompt_files" not in catalog_source
+    assert "def _normalize_role_definition_payload" not in catalog_source
+    assert "def _hydrate_strategy_role_snapshots" not in catalog_source
+    assert "asset_catalog_builtins.py" in contracts_source
+    assert "asset_catalog_decoration.py" in contracts_source
+    assert "asset_catalog_inputs.py" in contracts_source
+    assert "asset_catalog_orchestration_resolution.py" in contracts_source
+    assert "asset_catalog_role_facade.py" in contracts_source
+    assert "asset_catalog_role_payloads.py" in contracts_source
+    assert "asset_catalog_role_snapshots.py" in contracts_source
+
+
 def test_asset_catalog_lists_builtin_and_custom_assets_with_stable_flags(tmp_path: Path) -> None:
     catalog, role_definition, orchestration = _catalog_with_custom_assets(tmp_path)
 

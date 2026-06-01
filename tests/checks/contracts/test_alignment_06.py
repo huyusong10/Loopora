@@ -8,8 +8,9 @@ from fastapi.testclient import TestClient
 
 from loopora.service_alignment_prompting import AlignmentPromptBuildContext, build_alignment_prompt
 from loopora.web import build_app
-import loopora.service_alignment as alignment_module
+import loopora.service_alignment_context_factory as alignment_context_factory_module
 import loopora.service_alignment_legacy as alignment_legacy_module
+import loopora.service_alignment_session_layout_context as alignment_session_layout_context_module
 import loopora.service_cleanup_diagnostics as cleanup_diagnostics
 
 from alignment_test_support import (
@@ -206,7 +207,7 @@ def test_alignment_cancel_signal_failure_writes_structured_diagnostics(
     def fail_signal(_pid: int, _signal: int) -> None:
         raise OSError("signal denied")
 
-    monkeypatch.setattr(alignment_module.os, "kill", fail_signal)
+    monkeypatch.setattr(alignment_context_factory_module.os, "kill", fail_signal)
     with caplog.at_level(logging.WARNING, logger="loopora.service_alignment"):
         cancelled = service.cancel_alignment_session(session["id"])
 
@@ -251,7 +252,7 @@ def test_alignment_cancel_signal_diagnostic_event_failure_is_logged_without_mask
         raise OSError("signal denied")
 
     monkeypatch.setattr(service.repository, "append_alignment_event", fail_diagnostic_event)
-    monkeypatch.setattr(alignment_module.os, "kill", fail_signal)
+    monkeypatch.setattr(alignment_context_factory_module.os, "kill", fail_signal)
     with caplog.at_level(logging.WARNING, logger="loopora.service_alignment"):
         cancelled = service.cancel_alignment_session(session["id"])
 
@@ -366,11 +367,15 @@ def test_alignment_delete_logs_cleanup_diagnostic_callback_failure(
             raise OSError("alignment dir locked")
         raise AssertionError(f"unexpected cleanup target: {path}")
 
-    def fail_diagnostic_callback(_session: dict, _event_type: str, _payload: dict) -> None:
+    def fail_diagnostic_callback(*_args: object) -> None:
         raise RuntimeError("diagnostic callback down")
 
     monkeypatch.setattr(cleanup_diagnostics.shutil, "rmtree", fail_rmtree)
-    monkeypatch.setattr(service, "_append_alignment_local_diagnostic_event", fail_diagnostic_callback)
+    monkeypatch.setattr(
+        alignment_session_layout_context_module,
+        "append_alignment_local_diagnostic_event",
+        fail_diagnostic_callback,
+    )
     with caplog.at_level(logging.WARNING, logger="loopora.service_alignment"):
         deleted = service.delete_alignment_session(session["id"])
 
@@ -404,7 +409,11 @@ def test_alignment_delete_logs_local_diagnostic_event_write_failure(
 
     monkeypatch.setattr(cleanup_diagnostics.shutil, "rmtree", fail_rmtree)
     monkeypatch.setattr(service, "get_alignment_session", lambda _session_id: hydrated_session)
-    monkeypatch.setattr(service, "_ensure_alignment_artifact_dirs", fail_ensure_alignment_artifact_dirs)
+    monkeypatch.setattr(
+        alignment_session_layout_context_module,
+        "ensure_alignment_artifact_dirs",
+        fail_ensure_alignment_artifact_dirs,
+    )
     with caplog.at_level(logging.WARNING, logger="loopora.service_alignment"):
         deleted = service.delete_alignment_session(session["id"])
 

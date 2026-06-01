@@ -6,13 +6,13 @@ from pathlib import Path
 from typing import Protocol
 
 from loopora.event_redaction import redact_alignment_event_payload
-from loopora.executor import ExecutorError, RoleRequest
+from loopora.executor_types import ExecutorError, RoleRequest
 from loopora.service_alignment_artifacts import (
     alignment_session_root,
     finalize_alignment_invocation_files,
     write_alignment_invocation_input_files,
 )
-from loopora.service_alignment_context import alignment_generation_prefers_chinese
+from loopora.service_alignment_language import alignment_generation_prefers_chinese
 from loopora.service_alignment_execution import (
     alignment_executor_role_request,
     alignment_executor_session_ref_event_payload,

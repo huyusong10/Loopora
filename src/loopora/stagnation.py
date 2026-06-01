@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from loopora.structured_numbers import structured_optional_finite_number
+from loopora.score_history_values import structured_score_values
 
 
 @dataclass(frozen=True)
@@ -16,8 +16,8 @@ class StagnationUpdateRequest:
 
 
 def update_stagnation(request: StagnationUpdateRequest) -> dict:
-    recent = _score_values(request.stagnation.get("recent_composites"))
-    deltas = _score_values(request.stagnation.get("recent_deltas"))
+    recent = structured_score_values(request.stagnation.get("recent_composites"))
+    deltas = structured_score_values(request.stagnation.get("recent_deltas"))
 
     if recent:
         deltas.append(round(request.composite - recent[-1], 6))
@@ -47,9 +47,3 @@ def update_stagnation(request: StagnationUpdateRequest) -> dict:
         "consecutive_low_delta": consecutive_low,
         "stagnation_mode": mode,
     }
-
-
-def _score_values(value: object) -> list[float]:
-    if not isinstance(value, list):
-        return []
-    return [score for item in value if (score := structured_optional_finite_number(item)) is not None]

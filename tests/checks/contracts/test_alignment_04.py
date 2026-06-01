@@ -20,6 +20,10 @@ from alignment_test_support import (
     _create_alignment_improvement_source_bundle,
 )
 
+
+REPO_ROOT = Path(__file__).resolve().parents[3]
+
+
 def test_alignment_service_blocks_bundle_that_drops_confirmed_agreement_specifics(
     service_factory,
     sample_workdir: Path,
@@ -405,6 +409,22 @@ def test_alignment_api_start_immediately_false_keeps_new_session_idle(
     assert session["status"] == "idle"
     assert session["transcript"][-1]["content"] == "Create a bundle later."
     assert not any(event["event_type"] == "alignment_started" for event in service.list_alignment_events(session_id))
+
+
+def test_alignment_event_api_routes_have_dedicated_boundary() -> None:
+    alignment_api_source = (REPO_ROOT / "src" / "loopora" / "web_route_alignment_api.py").read_text(encoding="utf-8")
+    alignment_event_api_source = (REPO_ROOT / "src" / "loopora" / "web_alignment_event_api.py").read_text(
+        encoding="utf-8"
+    )
+    design_source = (REPO_ROOT / "design" / "contracts.md").read_text(encoding="utf-8")
+
+    assert "from loopora.web_alignment_event_api import register_alignment_event_api_routes" in alignment_api_source
+    assert "def register_alignment_event_api_routes" in alignment_event_api_source
+    assert '"/api/alignments/sessions/{session_id}/events"' in alignment_event_api_source
+    assert '"/api/alignments/sessions/{session_id}/stream"' in alignment_event_api_source
+    assert "ALIGNMENT_ACTIVE_STATUSES" in alignment_event_api_source
+    assert "web_alignment_event_api.py" in design_source
+
 
 def test_alignment_stream_emits_redacted_stream_error_on_backend_failure(caplog) -> None:
     class FlakyService:

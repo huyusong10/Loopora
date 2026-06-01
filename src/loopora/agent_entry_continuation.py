@@ -4,8 +4,10 @@ from pathlib import Path
 from typing import Any
 
 from loopora.agent_native_task_proof import PASSING_TASK_VERDICT_STATUSES
-from loopora.evidence_coverage import summarize_evidence_coverage_projection
+from loopora.evidence_coverage_summary import summarize_evidence_coverage_projection
+from loopora.run_projection_fields import task_verdict_from_run
 from loopora.service_types import TERMINAL_RUN_STATUSES
+from loopora.structured_numbers import coerced_non_negative_int as non_negative_int
 from loopora.task_verdicts import normalize_task_verdict
 from loopora.utils import read_json
 
@@ -71,7 +73,7 @@ def agent_native_continuation_context_for_terminal_run(previous_run: dict[str, A
 
 
 def task_verdict_context_for_run(run: dict[str, Any], layout: Any) -> dict[str, Any]:
-    task_verdict = normalize_task_verdict(run.get("task_verdict") or run.get("task_verdict_json"))
+    task_verdict = normalize_task_verdict(task_verdict_from_run(run))
     if not task_verdict and layout.task_verdict_path.exists():
         task_verdict = normalize_task_verdict(read_json_object(layout.task_verdict_path))
     buckets = task_verdict.get("buckets") if isinstance(task_verdict.get("buckets"), dict) else {}
@@ -130,10 +132,7 @@ def agent_native_continuation_focus(task_verdict: dict[str, Any], coverage: dict
 
 
 def task_verdict_status_for_run(run: dict[str, Any]) -> str:
-    verdict = run.get("task_verdict") if isinstance(run.get("task_verdict"), dict) else run.get("task_verdict_json")
-    if not isinstance(verdict, dict):
-        return ""
-    return str(verdict.get("status") or "").strip()
+    return str(task_verdict_from_run(run).get("status") or "").strip()
 
 
 def terminal_agent_run_needs_next_pass(run: dict[str, Any]) -> bool:
@@ -173,16 +172,6 @@ def list_of_dicts(value: object, *, limit: int | None = None) -> list[dict[str, 
         return []
     items = [dict(item) for item in value if isinstance(item, dict)]
     return items[:limit] if limit is not None else items
-
-
-def non_negative_int(value: object) -> int:
-    if isinstance(value, bool):
-        return 0
-    try:
-        integer = int(value)
-    except (TypeError, ValueError):
-        return 0
-    return max(0, integer)
 
 
 def dedupe_strings(values: list[str], *, limit: int) -> list[str]:

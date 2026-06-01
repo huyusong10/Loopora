@@ -9,7 +9,8 @@ from typing import Any
 
 from loopora.asset_catalog import AssetCatalogError, AssetCatalogNotFoundError, StrategyTemplateAssetCatalog
 from loopora.db import LooporaRepository
-from loopora.executor import CodexExecutor, executor_from_environment
+from loopora.executor_environment import executor_from_environment
+from loopora.executor_types import CodexExecutor
 from loopora.service_agent_adapters import ServiceAgentAdapterMixin
 from loopora.service_agent_native import ServiceAgentNativeMixin
 from loopora.service_alignment import ServiceAlignmentMixin
@@ -178,9 +179,13 @@ class AssetRegistryService(_RuntimeComponent):
 
 class ProjectionService(_RuntimeComponent):
     def web_run_detail(self, run: dict[str, Any]) -> dict[str, Any]:
+        from loopora.events.projection_cache import run_projection_bundle_for_run
         from loopora.web_projection import web_run_detail_projection
 
-        return web_run_detail_projection(run)
+        return web_run_detail_projection(
+            run,
+            event_projections=run_projection_bundle_for_run(self.runtime.repository, str(run.get("id") or "")),
+        )
 
 
 @dataclass(frozen=True, slots=True)

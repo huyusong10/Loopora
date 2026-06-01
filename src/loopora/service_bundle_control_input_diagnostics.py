@@ -1,0 +1,229 @@
+from __future__ import annotations
+
+"""Workflow input-chain diagnostics for bundle control summaries."""
+
+from loopora.service_bundle_control_diagnostic_entries import (
+    append_bundle_control_diagnostic as _append_diagnostic,
+)
+from loopora.service_bundle_control_input_state import (
+    advance_strategy_diagnostic_state,
+    initial_strategy_input_diagnostic_state,
+    input_missing_evidence_archetypes,
+    input_missing_handoffs,
+    input_names_any_handoff,
+    input_queries_any_archetype,
+    unique_in_order,
+)
+
+
+def append_strategy_input_diagnostics(
+    diagnostics: list[dict],
+    step_contexts: list[dict],
+) -> None:
+    state = initial_strategy_input_diagnostic_state()
+    for step_context in step_contexts:
+        _diagnose_guide_step(diagnostics, step_context, state)
+        _diagnose_review_step(diagnostics, step_context, state)
+        _diagnose_builder_step(diagnostics, step_context, state)
+        _diagnose_gatekeeper_step(diagnostics, step_context, state)
+        advance_strategy_diagnostic_state(step_context, state)
+
+
+def _diagnose_guide_step(diagnostics: list[dict], step_context: dict, state: dict) -> None:
+    if step_context["archetype"] != "guide" or not state["prior_step_ids"]:
+        return
+    state["guide_steps_since_builder"].append(step_context["step_id"])
+    if not input_names_any_handoff(step_context["inputs"], state["prior_step_ids"]):
+        _append_diagnostic(
+            diagnostics,
+            {
+                "code": "guide_missing_upstream_handoff",
+                "severity": "warning",
+                "title_en": "Guide does not read upstream handoff",
+                "title_zh": "Guide 没有读取上游交接",
+                "message_en": "An explicit Guide step should be grounded in the handoff it is redirecting, not only in latent chat context.",
+                "message_zh": "显式 Guide 步骤应读取它要重定向的上游 handoff，而不是只依赖隐含上下文。",
+                "surfaces": ["workflow.steps[].inputs.handoffs_from"],
+                "step_ids": [step_context["step_id"]],
+            },
+        )
+    if not input_queries_any_archetype(step_context["inputs"], state["prior_archetypes"]):
+        _append_diagnostic(
+            diagnostics,
+            {
+                "code": "guide_missing_upstream_evidence",
+                "severity": "warning",
+                "title_en": "Guide does not query upstream evidence",
+                "title_zh": "Guide 没有查询上游证据",
+                "message_en": "A Guide can be a normal workflow step, but it should read the evidence behind the gap or shift.",
+                "message_zh": "Guide 可以是普通工作流步骤，但应读取造成缺口或转向的证据。",
+                "surfaces": ["workflow.steps[].inputs.evidence_query"],
+                "step_ids": [step_context["step_id"]],
+            },
+        )
+
+
+def _diagnose_review_step(diagnostics: list[dict], step_context: dict, state: dict) -> None:
+    if step_context["archetype"] not in {"inspector", "custom"} or not state["latest_builder_step"]:
+        return
+    if not input_names_any_handoff(step_context["inputs"], [state["latest_builder_step"]]):
+        _append_diagnostic(
+            diagnostics,
+            {
+                "code": "review_missing_builder_handoff",
+                "severity": "warning",
+                "title_en": "Review step does not read Builder handoff",
+                "title_zh": "检视步骤没有读取 Builder 交接",
+                "message_en": "A review after Builder should consume the Builder handoff so the evidence checks the actual produced slice.",
+                "message_zh": "Builder 之后的检视应读取 Builder handoff，确保取证针对真实产出。",
+                "surfaces": ["workflow.steps[].inputs.handoffs_from"],
+                "step_ids": [step_context["step_id"]],
+            },
+        )
+    if not input_queries_any_archetype(step_context["inputs"], {"builder"}):
+        _append_diagnostic(
+            diagnostics,
+            {
+                "code": "review_missing_builder_evidence",
+                "severity": "warning",
+                "title_en": "Review step does not query Builder evidence",
+                "title_zh": "检视步骤没有查询 Builder 证据",
+                "message_en": "Without a Builder evidence query, review can drift into general advice instead of proof checking.",
+                "message_zh": "缺少 Builder evidence query 时，检视容易变成泛泛建议，而不是证明检查。",
+                "surfaces": ["workflow.steps[].inputs.evidence_query"],
+                "step_ids": [step_context["step_id"]],
+            },
+        )
+    state["review_steps_since_builder"].append(step_context["step_id"])
+
+
+def _diagnose_builder_step(diagnostics: list[dict], step_context: dict, state: dict) -> None:
+    if step_context["archetype"] != "builder":
+        return
+    if state["guide_steps_since_builder"] and not input_names_any_handoff(
+        step_context["inputs"],
+        state["guide_steps_since_builder"],
+    ):
+        _append_diagnostic(
+            diagnostics,
+            {
+                "code": "builder_missing_guide_handoff",
+                "severity": "warning",
+                "title_en": "Builder after Guide does not read Guide handoff",
+                "title_zh": "Guide 后的 Builder 没有读取 Guide 交接",
+                "message_en": "A Builder that follows explicit guidance should consume the Guide handoff that narrowed the next move.",
+                "message_zh": "跟在显式 Guide 后面的 Builder 应读取 Guide handoff，承接被收窄的下一步。",
+                "surfaces": ["workflow.steps[].inputs.handoffs_from"],
+                "step_ids": [step_context["step_id"]],
+            },
+        )
+    if state["review_steps_since_builder"] and not input_names_any_handoff(
+        step_context["inputs"],
+        state["review_steps_since_builder"],
+    ):
+        _append_diagnostic(
+            diagnostics,
+            {
+                "code": "builder_missing_review_handoff",
+                "severity": "warning",
+                "title_en": "Builder after review does not read review handoff",
+                "title_zh": "检视后的 Builder 没有读取检视交接",
+                "message_en": "Repair or second-phase Builder steps should consume the review or Guide handoff that shaped the next move.",
+                "message_zh": "修复或第二阶段 Builder 应读取塑造下一步的检视或 Guide handoff。",
+                "surfaces": ["workflow.steps[].inputs.handoffs_from"],
+                "step_ids": [step_context["step_id"]],
+            },
+        )
+    state["latest_builder_step"] = step_context["step_id"]
+    state["review_steps_since_builder"] = []
+    state["guide_steps_since_builder"] = []
+
+
+def _diagnose_gatekeeper_step(diagnostics: list[dict], step_context: dict, state: dict) -> None:
+    if step_context["archetype"] != "gatekeeper" or step_context["on_pass"] != "finish_run":
+        return
+    if state["prior_step_ids"] and not input_names_any_handoff(step_context["inputs"], state["prior_step_ids"]):
+        _append_diagnostic(
+            diagnostics,
+            {
+                "code": "gatekeeper_missing_handoff_fan_in",
+                "severity": "warning",
+                "title_en": "GateKeeper lacks handoff fan-in",
+                "title_zh": "GateKeeper 缺少 handoff 汇入",
+                "message_en": "A finishing GateKeeper should name upstream handoffs so the final verdict is traceable.",
+                "message_zh": "负责收束的 GateKeeper 应明确读取上游 handoff，让最终裁决可追溯。",
+                "surfaces": ["workflow.steps[].inputs.handoffs_from"],
+                "step_ids": [step_context["step_id"]],
+            },
+        )
+    if not input_queries_any_archetype(step_context["inputs"], state["prior_archetypes"]):
+        _append_diagnostic(
+            diagnostics,
+            {
+                "code": "gatekeeper_missing_evidence_fan_in",
+                "severity": "warning",
+                "title_en": "GateKeeper lacks evidence fan-in",
+                "title_zh": "GateKeeper 缺少证据汇入",
+                "message_en": "A finishing GateKeeper should query upstream evidence instead of judging from role narrative alone.",
+                "message_zh": "负责收束的 GateKeeper 应查询上游 evidence，而不是只看角色叙述。",
+                "surfaces": ["workflow.steps[].inputs.evidence_query"],
+                "step_ids": [step_context["step_id"]],
+            },
+        )
+    _diagnose_gatekeeper_parallel_review_fan_in(diagnostics, step_context, state)
+
+def _diagnose_gatekeeper_parallel_review_fan_in(diagnostics: list[dict], step_context: dict, state: dict) -> None:
+    groups = [group for group in list(state.get("parallel_review_groups") or []) if group.get("step_ids")]
+    if not groups:
+        return
+    parallel_step_ids = unique_in_order(
+        step_id
+        for group in groups
+        for step_id in list(group.get("step_ids") or [])
+    )
+    missing_handoffs = input_missing_handoffs(step_context["inputs"], parallel_step_ids)
+    if missing_handoffs:
+        _append_diagnostic(
+            diagnostics,
+            {
+                "code": "gatekeeper_missing_parallel_review_handoff",
+                "severity": "warning",
+                "title_en": "GateKeeper misses parallel review handoffs",
+                "title_zh": "GateKeeper 缺少并行检视交接",
+                "message_en": "A finishing GateKeeper after parallel review should name every peer review handoff, not only the last branch.",
+                "message_zh": "并行检视后的收束 GateKeeper 应读取每条 peer review handoff，而不是只读取最后一支。",
+                "surfaces": ["workflow.steps[].inputs.handoffs_from"],
+                "step_ids": [step_context["step_id"]],
+                "details": {
+                    "missing_handoffs": missing_handoffs,
+                    "parallel_groups": [group["parallel_group"] for group in groups],
+                },
+            },
+        )
+    expected_archetypes = {
+        archetype
+        for group in groups
+        for archetype in set(group.get("archetypes") or set())
+        if archetype
+    }
+    if "builder" in set(state.get("prior_archetypes") or set()):
+        expected_archetypes.add("builder")
+    missing_archetypes = input_missing_evidence_archetypes(step_context["inputs"], expected_archetypes)
+    if missing_archetypes:
+        _append_diagnostic(
+            diagnostics,
+            {
+                "code": "gatekeeper_missing_parallel_review_evidence",
+                "severity": "warning",
+                "title_en": "GateKeeper misses parallel review evidence",
+                "title_zh": "GateKeeper 缺少并行检视证据",
+                "message_en": "A finishing GateKeeper after parallel review should query Builder and peer review evidence before closing.",
+                "message_zh": "并行检视后的收束 GateKeeper 应查询 Builder 和 peer review 证据后再收口。",
+                "surfaces": ["workflow.steps[].inputs.evidence_query"],
+                "step_ids": [step_context["step_id"]],
+                "details": {
+                    "missing_archetypes": missing_archetypes,
+                    "parallel_groups": [group["parallel_group"] for group in groups],
+                },
+            },
+        )

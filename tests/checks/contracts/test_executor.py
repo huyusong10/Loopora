@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import json
 import os
 import sys
@@ -15,6 +16,217 @@ from loopora.executor import (
     build_command_event_payload,
 )
 from loopora.executor_session_refs import extract_session_ref, infer_codex_session_ref_from_rollouts
+
+
+REPO_ROOT = Path(__file__).resolve().parents[3]
+
+
+def test_executor_facade_is_public_compatibility_layer_only() -> None:
+    offenders: list[tuple[str, str]] = []
+    for path in sorted((REPO_ROOT / "src" / "loopora").rglob("*.py")):
+        if path.name == "executor.py":
+            continue
+        relative = str(path.relative_to(REPO_ROOT))
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom) and node.module == "loopora.executor":
+                offenders.extend((relative, alias.name) for alias in node.names)
+            if isinstance(node, ast.Import):
+                offenders.extend(
+                    (relative, alias.name)
+                    for alias in node.names
+                    if alias.name == "loopora.executor" or alias.name.startswith("loopora.executor.")
+                )
+
+    assert offenders == []
+
+
+def test_fake_alignment_fixtures_keep_payload_data_and_bundle_base_dedicated() -> None:
+    payloads_source = (REPO_ROOT / "src" / "loopora" / "executor_alignment_payloads.py").read_text(encoding="utf-8")
+    preconfirmation_source = (
+        REPO_ROOT / "src" / "loopora" / "executor_alignment_preconfirmation_payloads.py"
+    ).read_text(encoding="utf-8")
+    responses_source = (REPO_ROOT / "src" / "loopora" / "executor_alignment_responses.py").read_text(encoding="utf-8")
+    agreement_responses_source = (
+        REPO_ROOT / "src" / "loopora" / "executor_alignment_agreement_responses.py"
+    ).read_text(encoding="utf-8")
+    readiness_responses_source = (
+        REPO_ROOT / "src" / "loopora" / "executor_alignment_readiness_responses.py"
+    ).read_text(encoding="utf-8")
+    base_bundle_source = (REPO_ROOT / "src" / "loopora" / "executor_alignment_bundle_base_fixture.py").read_text(
+        encoding="utf-8"
+    )
+    governance_bundle_source = (
+        REPO_ROOT / "src" / "loopora" / "executor_alignment_bundle_governance_fixture.py"
+    ).read_text(encoding="utf-8")
+    bundle_variants_source = (REPO_ROOT / "src" / "loopora" / "executor_alignment_bundle_fixtures.py").read_text(
+        encoding="utf-8"
+    )
+    readiness_source = (REPO_ROOT / "src" / "loopora" / "executor_alignment_readiness_payloads.py").read_text(
+        encoding="utf-8"
+    )
+    contracts_source = (REPO_ROOT / "design" / "contracts.md").read_text(encoding="utf-8")
+
+    assert "from loopora.executor_alignment_readiness_payloads import" in payloads_source
+    assert "def alignment_readiness_issue_for_scenario" in readiness_source
+    assert "alignment_vague_loop_fit_readiness_evidence" in readiness_source
+    assert "alignment_vague_loop_fit_readiness_evidence" not in payloads_source
+    assert "from loopora.executor_alignment_preconfirmation_payloads import" in payloads_source
+    assert "def alignment_preconfirmation_payload_for_scenario" in preconfirmation_source
+    assert "def _alignment_preconfirmation_scenario_payload" in preconfirmation_source
+    assert "def _alignment_preconfirmation_scenario_payload" not in payloads_source
+    assert "from loopora.executor_alignment_readiness_responses import" in responses_source
+    assert "def alignment_readiness_evidence" in readiness_responses_source
+    assert "def alignment_improvement_readiness_evidence" in readiness_responses_source
+    assert "def alignment_readiness_evidence" not in responses_source
+    assert "from loopora.executor_alignment_agreement_responses import" in responses_source
+    assert "from loopora.executor_alignment_agreement_responses import" in preconfirmation_source
+    for marker in (
+        "def alignment_agreement_response",
+        "def alignment_improvement_agreement_response",
+        "def alignment_refund_agreement_response",
+    ):
+        assert marker in agreement_responses_source
+        assert marker not in responses_source
+    assert "from loopora.executor_alignment_bundle_base_fixture import" in bundle_variants_source
+    assert "from loopora.executor_alignment_bundle_governance_fixture import" in base_bundle_source
+    assert "from loopora.executor_alignment_bundle_governance_fixture import" in bundle_variants_source
+    assert "def alignment_bundle_yaml" in base_bundle_source
+    assert "def alignment_bundle_governance_sentence" in governance_bundle_source
+    assert "def alignment_bundle_governance_role_snippet" in governance_bundle_source
+    assert "def _governance_markers_for_workdir" in governance_bundle_source
+    assert "def alignment_bundle_governance_sentence" not in base_bundle_source
+    assert "def alignment_bundle_governance_role_snippet" not in base_bundle_source
+    assert "def alignment_chinese_bundle_yaml" not in base_bundle_source
+    assert "def alignment_chinese_bundle_yaml" in bundle_variants_source
+    assert "executor_alignment_agreement_responses.py" in contracts_source
+    assert "executor_alignment_preconfirmation_payloads.py" in contracts_source
+    assert "executor_alignment_bundle_governance_fixture.py" in contracts_source
+
+
+def test_fake_executor_role_payloads_have_dedicated_boundary() -> None:
+    fake_payloads_source = (REPO_ROOT / "src" / "loopora" / "executor_fake_payloads.py").read_text(encoding="utf-8")
+    role_payloads_source = (REPO_ROOT / "src" / "loopora" / "executor_fake_role_payloads.py").read_text(
+        encoding="utf-8"
+    )
+    builder_payloads_source = (REPO_ROOT / "src" / "loopora" / "executor_fake_builder_payloads.py").read_text(
+        encoding="utf-8"
+    )
+    verifier_payloads_source = (REPO_ROOT / "src" / "loopora" / "executor_fake_verifier_payloads.py").read_text(
+        encoding="utf-8"
+    )
+    contracts_source = (REPO_ROOT / "design" / "contracts.md").read_text(encoding="utf-8")
+
+    assert "from loopora.executor_fake_role_payloads import" in fake_payloads_source
+    assert "from loopora.executor_fake_builder_payloads import" in role_payloads_source
+    assert "from loopora.executor_fake_verifier_payloads import" in role_payloads_source
+    for marker in (
+        "def fake_payload_context",
+        "def fake_role_payload",
+    ):
+        assert marker in role_payloads_source
+        assert marker not in fake_payloads_source
+    for marker in ("def fake_builder_payload", "def fake_check_planner_payload", "def fake_tester_payload"):
+        assert marker in builder_payloads_source
+        assert marker not in fake_payloads_source + role_payloads_source + verifier_payloads_source
+    for marker in ("def fake_verifier_payload", "def fake_challenger_payload", "def fake_custom_payload"):
+        assert marker in verifier_payloads_source
+        assert marker not in fake_payloads_source + role_payloads_source + builder_payloads_source
+    for marker in (
+        "def build_fake_payload",
+        "def _clear_workdir_for_destructive_fake",
+    ):
+        assert marker in fake_payloads_source
+        assert marker not in role_payloads_source
+    assert "executor_fake_role_payloads.py" in contracts_source
+    assert "executor_fake_builder_payloads.py" in contracts_source
+    assert "executor_fake_verifier_payloads.py" in contracts_source
+
+
+def test_real_executor_uses_dedicated_session_and_output_helpers() -> None:
+    real_source = (REPO_ROOT / "src" / "loopora" / "executor_real.py").read_text(encoding="utf-8")
+    session_source = (REPO_ROOT / "src" / "loopora" / "executor_session_refs.py").read_text(encoding="utf-8")
+    output_source = (REPO_ROOT / "src" / "loopora" / "executor_output_parsing.py").read_text(encoding="utf-8")
+    command_args_source = (REPO_ROOT / "src" / "loopora" / "executor_command_args.py").read_text(encoding="utf-8")
+    command_events_source = (REPO_ROOT / "src" / "loopora" / "executor_command_events.py").read_text(
+        encoding="utf-8"
+    )
+    result_files_source = (REPO_ROOT / "src" / "loopora" / "executor_result_files.py").read_text(encoding="utf-8")
+    process_runner_source = (REPO_ROOT / "src" / "loopora" / "executor_process_runner.py").read_text(
+        encoding="utf-8"
+    )
+    opencode_stream_source = (REPO_ROOT / "src" / "loopora" / "executor_opencode_stream.py").read_text(
+        encoding="utf-8"
+    )
+    contracts_source = (REPO_ROOT / "design" / "contracts.md").read_text(encoding="utf-8")
+
+    assert "from loopora.executor_session_refs import" in real_source
+    assert "from loopora.executor_provider_flows import RealExecutorProviderFlowMixin" in real_source
+    assert "class RealCodexExecutor(RealExecutorProviderFlowMixin, CodexExecutor)" in real_source
+    assert "def ensure_resume_session_ref" in session_source
+    assert "def write_executor_schema_file" in result_files_source
+    assert "def read_executor_json_object_output" in result_files_source
+    assert "read_executor_output_text" in result_files_source
+    assert "read_executor_output_text" not in real_source
+    assert "from loopora.executor_output_parsing import parse_structured_output_from_text" in real_source
+    assert "def parse_structured_output_from_text" in output_source
+    assert "from loopora.executor_opencode_stream import" in real_source
+    assert "def handle_opencode_record" in opencode_stream_source
+    assert "from loopora.executor_process_runner import" in real_source
+    assert "def run_executor_process" in process_runner_source
+    assert "from loopora.executor_command_events import build_command_event_payload" in process_runner_source
+    assert "def build_command_event_payload" in command_events_source
+    assert "COMMAND_EVENT_PREVIEW_LIMIT" in command_events_source
+    assert "def build_command_event_payload" not in command_args_source
+    assert "build_command_event_payload" in process_runner_source
+    assert "ProcessStreamStopped" in process_runner_source
+    assert "build_command_event_payload" not in real_source
+    assert "ProcessStreamContext" not in real_source
+    assert "def read_executor_output_text" in result_files_source
+    assert "def read_executor_output_text" not in command_args_source
+    assert "from loopora.executor_result_files import EXECUTOR_OUTPUT_MAX_BYTES" in opencode_stream_source
+    assert "EXECUTOR_OUTPUT_MAX_BYTES" in opencode_stream_source
+    assert "EXECUTOR_OUTPUT_MAX_BYTES" not in real_source
+    assert "write_text(json.dumps(request.output_schema" not in real_source
+    assert "request.output_path.write_text" not in real_source
+    assert "candidate.find" not in real_source
+    assert "executor_result_files.py" in contracts_source
+    assert "executor_output_parsing.py" in contracts_source
+    assert "executor_opencode_stream.py" in contracts_source
+    assert "executor_provider_flows.py" in contracts_source
+    assert "executor_process_runner.py" in contracts_source
+    assert "executor_command_events.py" in contracts_source
+
+
+def test_real_executor_provider_flows_have_dedicated_boundary() -> None:
+    real_source = (REPO_ROOT / "src" / "loopora" / "executor_real.py").read_text(encoding="utf-8")
+    provider_flows_source = (REPO_ROOT / "src" / "loopora" / "executor_provider_flows.py").read_text(encoding="utf-8")
+    result_files_source = (REPO_ROOT / "src" / "loopora" / "executor_result_files.py").read_text(encoding="utf-8")
+    contracts_source = (REPO_ROOT / "design" / "contracts.md").read_text(encoding="utf-8")
+
+    assert "class RealExecutorProviderFlowMixin" in provider_flows_source
+    for marker in ("def _execute_codex", "def _execute_claude", "def _execute_opencode", "def _execute_custom"):
+        assert marker in provider_flows_source
+        assert marker not in real_source
+    assert "from loopora.executor_result_files import" in provider_flows_source
+    assert "ensure_resume_session_ref" in provider_flows_source
+    assert "write_executor_json_output" in provider_flows_source
+    assert "read_executor_json_object_output" in provider_flows_source
+    assert "def read_executor_json_object_output" in result_files_source
+    assert "executor_provider_flows.py" in contracts_source
+
+
+def test_executor_command_validation_has_dedicated_boundary() -> None:
+    command_args_source = (REPO_ROOT / "src" / "loopora" / "executor_command_args.py").read_text(encoding="utf-8")
+    validation_source = (REPO_ROOT / "src" / "loopora" / "executor_command_validation.py").read_text(encoding="utf-8")
+    contracts_source = (REPO_ROOT / "design" / "contracts.md").read_text(encoding="utf-8")
+
+    assert "from loopora.executor_command_validation import" in command_args_source
+    for marker in ("def validate_command_args_text", "def parse_extra_cli_args_text"):
+        assert marker in validation_source
+        assert marker not in command_args_source
+    assert "COMMAND_PLACEHOLDERS = frozenset" in validation_source
+    assert "executor_command_validation.py" in contracts_source
 
 
 def test_real_executor_times_out_after_idle_period(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

@@ -27,6 +27,9 @@ from web_api_test_support import (
     _assert_key_takeaway_judgment_contract,
 )
 
+REPO_ROOT = Path(__file__).resolve().parents[3]
+
+
 def test_streaming_cursor_helpers_require_strict_integer_boundaries() -> None:
     assert parse_sse_last_event_id("42") == 42
     assert parse_sse_last_event_id(" 42 ") == 42
@@ -38,6 +41,20 @@ def test_streaming_cursor_helpers_require_strict_integer_boundaries() -> None:
     assert stream_error_payload(owner_key="run_id", owner_id="run_test", after_id="42")["after_id"] == 0
     assert stream_error_payload(owner_key="run_id", owner_id="run_test", after_id=True)["after_id"] == 0
     assert stream_error_payload(owner_key="run_id", owner_id="run_test", after_id=MAX_EVENT_CURSOR_ID + 1)["after_id"] == 0
+
+
+def test_run_event_api_routes_have_dedicated_boundary() -> None:
+    run_api_source = (REPO_ROOT / "src" / "loopora" / "web_route_run_api.py").read_text(encoding="utf-8")
+    run_event_api_source = (REPO_ROOT / "src" / "loopora" / "web_run_event_api.py").read_text(encoding="utf-8")
+    design_source = (REPO_ROOT / "design" / "contracts.md").read_text(encoding="utf-8")
+
+    assert "from loopora.web_run_event_api import register_run_event_api_routes" in run_api_source
+    assert "def register_run_event_api_routes" in run_event_api_source
+    assert '"/api/runs/{run_id}/events"' in run_event_api_source
+    assert '"/api/runs/{run_id}/stream"' in run_event_api_source
+    assert "stream_error_payload" in run_event_api_source
+    assert "web_run_event_api.py" in design_source
+
 
 def test_run_detail_progress_projection_keeps_run_closure_language_neutral() -> None:
     stages = web_run_detail_progress_stages({"workflow_json": {"roles": [], "steps": []}})
@@ -401,7 +418,8 @@ def test_api_run_detail_includes_v4_web_projection(
     assert "summary_md" in projection["display"]
     assert {"queued_at", "started_at", "finished_at", "updated_at", "created_at"} <= set(projection["timing"])
     assert projection["technical_handoff"]["run_url"] == f"/runs/{run_id}"
-    assert projection["diagnostics"]["source_shape"] == "run_record"
+    assert projection["diagnostics"]["source_shape"] == "projection_bundle"
+    assert projection["diagnostics"]["projection_source_sequence"] >= 1
     assert "raw" not in projection
 
 def test_run_artifact_download_rejects_symlink_escaping_loopora_root(
@@ -494,6 +512,19 @@ def test_file_preview_reports_unreadable_directory(monkeypatch, tmp_path: Path) 
     assert payload["kind"] == "directory"
     assert payload["entries"] == []
     assert payload["preview_error"] == "directory could not be read"
+
+
+def test_run_file_access_has_dedicated_service_boundary() -> None:
+    lifecycle_source = (REPO_ROOT / "src" / "loopora" / "service_run_lifecycle.py").read_text(encoding="utf-8")
+    file_access_source = (REPO_ROOT / "src" / "loopora" / "service_run_file_access.py").read_text(encoding="utf-8")
+    design_source = (REPO_ROOT / "design" / "contracts.md").read_text(encoding="utf-8")
+
+    assert "from loopora.service_run_file_access import ServiceRunFileAccessMixin" in lifecycle_source
+    assert "def preview_file" not in lifecycle_source
+    assert "def download_file_path" in file_access_source
+    assert "requested path is outside the allowed root" in file_access_source
+    assert "service_run_file_access.py" in design_source
+
 
 def test_run_event_api_rejects_out_of_range_query_params(service_factory) -> None:
     service = service_factory(scenario="success")

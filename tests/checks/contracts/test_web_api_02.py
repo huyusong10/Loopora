@@ -17,6 +17,8 @@ from loopora.run_takeaways import (
 )
 from loopora.web import build_app
 
+REPO_ROOT = Path(__file__).resolve().parents[3]
+
 
 def test_takeaway_evidence_manifest_does_not_promote_boolean_manifest_counts(tmp_path: Path) -> None:
     runs_dir = tmp_path / "run"
@@ -541,6 +543,32 @@ def test_api_run_observation_snapshot_normalizes_legacy_takeaway_projection_shap
     assert key_takeaways["evidence_manifest"]["manifest_path"] == ""
     assert key_takeaways["evidence_manifest"]["claim_count"] == 0
     assert key_takeaways["evidence_count"] == 0
+
+
+def test_run_takeaway_projection_has_dedicated_service_boundary() -> None:
+    lifecycle_source = (REPO_ROOT / "src" / "loopora" / "service_run_lifecycle.py").read_text(encoding="utf-8")
+    projection_source = (REPO_ROOT / "src" / "loopora" / "service_run_takeaway_projection.py").read_text(encoding="utf-8")
+    design_source = (REPO_ROOT / "design" / "contracts.md").read_text(encoding="utf-8")
+
+    assert "from loopora.service_run_takeaway_projection import ServiceRunTakeawayProjectionMixin" in lifecycle_source
+    assert "ServiceRunTakeawayProjectionMixin" in lifecycle_source
+    assert "def _backfill_missing_run_takeaway_projections" not in lifecycle_source
+    assert "def _record_run_takeaway_projection_for_event" in projection_source
+    assert "def _backfill_missing_run_takeaway_projections" in projection_source
+    assert "service_run_takeaway_projection.py" in design_source
+
+
+def test_run_observation_has_dedicated_service_boundary() -> None:
+    lifecycle_source = (REPO_ROOT / "src" / "loopora" / "service_run_lifecycle.py").read_text(encoding="utf-8")
+    observation_source = (REPO_ROOT / "src" / "loopora" / "service_run_observation.py").read_text(encoding="utf-8")
+    design_source = (REPO_ROOT / "design" / "contracts.md").read_text(encoding="utf-8")
+
+    assert "from loopora.service_run_observation import ServiceRunObservationMixin" in lifecycle_source
+    assert "def run_observation_snapshot" not in lifecycle_source
+    assert "def run_observation_snapshot" in observation_source
+    assert "def get_runtime_activity" in observation_source
+    assert "service_run_observation.py" in design_source
+
 
 @pytest.mark.parametrize("event_type", ("control_completed", "control_failed"))
 def test_control_events_refresh_persisted_takeaway_projection(

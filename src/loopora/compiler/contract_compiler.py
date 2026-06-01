@@ -3,8 +3,9 @@ from __future__ import annotations
 from collections.abc import Mapping
 
 from loopora.compiler._coercion import strings, text
-from loopora.evidence_coverage import build_coverage_targets
+from loopora.evidence_coverage_targets import build_coverage_targets
 from loopora.kernel.contract import DoneCriterion, EvidenceExpectation, EvidenceTarget, LoopContract, ResidualRiskPolicy
+from loopora.residual_risk_support import residual_risk_policy_disallows_acceptance
 
 
 def compile_loop_contract(
@@ -57,6 +58,8 @@ def compile_residual_risk_policy(value: object) -> ResidualRiskPolicy:
             return ResidualRiskPolicy.DISALLOW
         if raw in {"allow_any", "allow"}:
             return ResidualRiskPolicy.ALLOW_ANY
+    if residual_risk_policy_disallows_acceptance(value):
+        return ResidualRiskPolicy.DISALLOW
     if text(value).lower() in {"disallow", "none", "forbid"}:
         return ResidualRiskPolicy.DISALLOW
     return ResidualRiskPolicy.ALLOW_MANAGED

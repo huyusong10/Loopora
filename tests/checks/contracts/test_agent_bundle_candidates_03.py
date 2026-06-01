@@ -257,7 +257,8 @@ def test_cli_agent_loop_reports_candidate_repair_state_after_failed_gen(
     assert "preview_plan_copy:" in output_text
     assert "repair_focus:" in output_text
     assert "preview_url: /loops/new/bundle?alignment_session_id=" in output_text
-    assert "next_repair_step: repair the candidate plan file so it preserves repair_task_message and repair_focus" in output_text
+    assert "next_repair_step: repair the candidate plan file" in output_text
+    assert "preserves repair_task_message and repair_focus" in output_text
     assert "project the task objects from --message" in output_text
 
 
@@ -298,7 +299,8 @@ def test_cli_agent_gen_with_candidate_not_fit_reports_reframe_before_loop(
     assert "not_fit:" in loop_result.output
     assert "one-off, direct-answer, no-new-evidence, or benchmark/test-harness-only" in loop_result.output
     assert "GateKeeper value" in loop_result.output
-    assert "next_repair_step: repair the candidate plan file so it preserves repair_task_message and repair_focus" in loop_result.output
+    assert "next_repair_step: repair the candidate plan file" in loop_result.output
+    assert "preserves repair_task_message and repair_focus" in loop_result.output
 
 
 def test_cli_agent_gen_uses_repair_flag_when_candidate_status_is_not_failed(

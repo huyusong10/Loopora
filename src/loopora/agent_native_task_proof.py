@@ -3,7 +3,8 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
-from loopora.run_takeaways import build_judgment_contract
+from loopora.run_takeaway_judgment import build_judgment_contract
+from loopora.run_projection_fields import run_status_from_run, task_verdict_from_run
 from loopora.service_types import TERMINAL_RUN_STATUSES
 from loopora.task_verdicts import PASSING_TASK_VERDICT_STATUSES
 
@@ -24,11 +25,10 @@ def agent_native_task_next_action(result: dict[str, Any]) -> dict[str, Any]:
     if result.get("complete") is not True:
         return {}
     run = result.get("run") if isinstance(result.get("run"), dict) else {}
-    run_status = str(run.get("run_status") or run.get("status") or "").strip()
+    run_status = run_status_from_run(run)
     if run_status not in TERMINAL_RUN_STATUSES:
         return {}
-    task_verdict = run.get("task_verdict") if isinstance(run.get("task_verdict"), dict) else run.get("task_verdict_json")
-    task_verdict = task_verdict if isinstance(task_verdict, dict) else {}
+    task_verdict = task_verdict_from_run(run)
     status = str(task_verdict.get("status") or "").strip() or "not_evaluated"
     summary = str(task_verdict.get("summary") or "").strip()
     if status in PASSING_TASK_VERDICT_STATUSES:

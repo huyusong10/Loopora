@@ -7,9 +7,9 @@ from loopora.service_cleanup_diagnostics import cleanup_diagnostic_payload, log_
 from loopora.utils import utc_now
 
 
-def append_alignment_diagnostic_event(service, logger, session_id: str, event_type: str, payload: dict) -> dict:
+def append_alignment_diagnostic_event(repository, logger, session_id: str, event_type: str, payload: dict) -> dict:
     try:
-        return service.repository.append_alignment_event(session_id, event_type, payload)
+        return repository.append_alignment_event(session_id, event_type, payload)
     except Exception as exc:  # noqa: BLE001 - diagnostic event writes must not mask the original operation.
         log_alignment_diagnostic_event_failure(
             logger,
@@ -21,10 +21,10 @@ def append_alignment_diagnostic_event(service, logger, session_id: str, event_ty
         return {}
 
 
-def append_alignment_local_diagnostic_event(service, logger, session: dict, event_type: str, payload: dict) -> None:
+def append_alignment_local_diagnostic_event(ensure_artifact_dirs, logger, session: dict, event_type: str, payload: dict) -> None:
     try:
         paths = alignment_artifact_paths(session)
-        service._ensure_alignment_artifact_dirs(paths["root"])
+        ensure_artifact_dirs(paths["root"])
         event = {
             "id": None,
             "session_id": session["id"],

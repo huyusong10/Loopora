@@ -9,12 +9,14 @@ from loopora.engine import (
     RepositoryRunEngine,
     RunEngineCompleteIterationRequest,
 )
-from loopora.evidence_coverage import summarize_evidence_coverage_projection
 from loopora.kernel import ActorRef
 from loopora.run_artifacts import append_jsonl_with_mirrors, write_json_with_mirrors
+from loopora.runner_evidence_progress_stagnation import (
+    RunnerEvidenceProgressStagnationRequest,
+    runner_evidence_progress_stagnation,
+)
 from loopora.service_run_finalization import TerminalRunFinalizationRequest
 from loopora.stagnation import StagnationUpdateRequest, update_stagnation
-from loopora.structured_numbers import structured_non_negative_int
 from loopora.utils import append_jsonl, read_json, utc_now
 from loopora.runner_run_requests import RunnerIterationCheckpointRequest
 from loopora.runner_support_requests import IterationContextPersistRequest, RunnerSummaryRequest
@@ -160,38 +162,14 @@ class ServiceRunnerIterationStateMixin:
             coverage = read_json(request.layout.evidence_coverage_path)
         except (OSError, UnicodeError, ValueError):
             coverage = {}
-        if not isinstance(coverage, dict):
-            coverage = {}
-        coverage_summary = summarize_evidence_coverage_projection(
-            coverage,
-            coverage_path_available=request.layout.evidence_coverage_path.exists(),
+        return runner_evidence_progress_stagnation(
+            RunnerEvidenceProgressStagnationRequest(
+                stagnation=stagnation,
+                coverage=coverage,
+                coverage_path_available=request.layout.evidence_coverage_path.exists(),
+                trigger_window=request.run.get("trigger_window"),
+            )
         )
-        covered_checks = structured_non_negative_int(coverage_summary.get("covered_check_count"))
-        missing_checks = structured_non_negative_int(coverage_summary.get("missing_check_count"))
-        raw_recent_counts = stagnation.get("recent_covered_check_counts", [])
-        recent_counts = (
-            [structured_non_negative_int(item) for item in raw_recent_counts]
-            if isinstance(raw_recent_counts, list)
-            else []
-        )
-        previous_covered_checks = structured_non_negative_int(recent_counts[-1]) if recent_counts else 0
-        no_progress = bool(recent_counts) and covered_checks <= previous_covered_checks
-        consecutive_no_progress = structured_non_negative_int(stagnation.get("consecutive_no_required_coverage_delta"))
-        consecutive_no_progress = consecutive_no_progress + 1 if no_progress and missing_checks > 0 else 0
-        trigger_window = structured_non_negative_int(request.run.get("trigger_window"), default=1) or 1
-        evidence_progress_mode = "stalled" if missing_checks > 0 and consecutive_no_progress >= trigger_window else "none"
-        return {
-            **stagnation,
-            "recent_covered_check_counts": [*recent_counts, covered_checks][-20:],
-            "latest_coverage_status": str(coverage_summary.get("status") or "pending"),
-            "latest_covered_check_count": covered_checks,
-            "latest_missing_check_count": missing_checks,
-            "latest_covered_check_ids": list(coverage_summary.get("covered_check_ids") or [])[:20],
-            "latest_missing_check_ids": list(coverage_summary.get("missing_check_ids") or [])[:20],
-            "latest_coverage_top_gaps": list(coverage_summary.get("top_gaps") or [])[:5],
-            "consecutive_no_required_coverage_delta": consecutive_no_progress,
-            "evidence_progress_mode": evidence_progress_mode,
-        }
 
     def _finish_runner_gatekeeper_success(
         self,

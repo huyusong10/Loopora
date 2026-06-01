@@ -7,7 +7,7 @@ from loopora.agent_native_submit_flow import (
     agent_native_advance_state_after_submit,
     agent_native_record_control_completion,
 )
-from loopora.context_flow import evidence_entry_id
+from loopora.context_step_results import evidence_entry_id
 
 
 def test_agent_native_submit_flow_records_control_completion_event() -> None:
@@ -48,6 +48,29 @@ def test_agent_native_submit_flow_records_control_completion_event() -> None:
     ]
 
 
+def test_agent_native_submit_flow_rejects_bool_control_completion_identity() -> None:
+    events: list[tuple] = []
+
+    recorded = agent_native_record_control_completion(
+        {"id": "run_control_bool_identity"},
+        {
+            "iter_id": True,
+            "step_order": True,
+            "step": {
+                "id": "control_step",
+                "control_id": "ctrl_1",
+                "control": {"id": "ctrl_1", "role_id": "guide"},
+            },
+            "runtime_role": "fallback-role",
+            "normalized_output": {"status": "completed"},
+        },
+        append_run_event=lambda *args, **kwargs: events.append((args, kwargs)),
+    )
+
+    assert recorded is True
+    assert events[0][0][2]["evidence_refs"] == ["ev_000_00_control_step"]
+
+
 def test_agent_native_submit_flow_advances_control_queue_without_main_step_progression() -> None:
     events: list[tuple] = []
     state = {"control_queue": [{"step": {"id": "control_step"}}], "control_queue_index": 0, "step_index": 1}
@@ -68,6 +91,31 @@ def test_agent_native_submit_flow_advances_control_queue_without_main_step_progr
 
     assert state["control_queue_index"] == 1
     assert state["step_index"] == 2
+    assert events == []
+
+
+def test_agent_native_submit_flow_rejects_bool_parallel_group_identity() -> None:
+    events: list[tuple] = []
+    state: dict = {"step_index": True}
+    steps = [
+        {"id": "builder_a", "parallel_group": "peer_review"},
+        {"id": "builder_b", "parallel_group": "peer_review"},
+    ]
+
+    agent_native_advance_state_after_submit(
+        AgentNativeStepAdvanceRequest(
+            run={"id": "run_parallel_bool_identity"},
+            state=state,
+            context=SimpleNamespace(strategy_steps=steps),
+            iter_id=True,
+            step=steps[0],
+            step_order=True,
+            is_control_step=False,
+        ),
+        append_run_event=lambda *args, **kwargs: events.append((args, kwargs)),
+    )
+
+    assert state["step_index"] == 1
     assert events == []
 
 

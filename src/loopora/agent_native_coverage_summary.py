@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from loopora.cli_summary_helpers import clip_inline, non_bool_int
+from loopora.summary_projection_helpers import clip_inline, non_bool_int
 
 
 def required_coverage_summary(required_coverage: object) -> str:

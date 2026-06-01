@@ -1,29 +1,40 @@
 from __future__ import annotations
 
-from loopora.service_alignment_run_recovery import (
-    agent_candidate_events_include_yaml,
+from pathlib import Path
+
+from loopora.service_alignment_agent_entry_review import (
     agent_entry_candidate_adapter,
     agent_entry_candidate_payload,
     agent_entry_launch_projection,
     agent_entry_review_projection,
+)
+from loopora.service_alignment_run_context_choices import (
+    agent_run_context_choice_payload,
+    agent_run_context_choice_summary,
+    agent_run_context_next_action,
+)
+from loopora.service_alignment_run_context_recovery_fields import (
     agent_exact_binding_recovery_action,
     agent_failed_preview_choice_repair_fields,
     agent_redacted_context_binding,
+)
+from loopora.service_alignment_run_recovery import (
+    agent_candidate_events_include_yaml,
     agent_recovery_agent_entry_candidate_event,
     agent_recovery_agent_entry_ready_event,
     agent_recovery_alignment_sessions,
     agent_recovery_bundle_sync_failed_event,
     agent_recovery_session_has_candidate_yaml,
     agent_run_context_choice_from_session,
-    agent_run_context_choice_payload,
     agent_run_context_choices,
-    agent_run_context_choice_summary,
-    agent_run_context_next_action,
     agent_run_context_source_entries,
     latest_agent_entry_event,
     latest_alignment_bundle_sync_failed_event,
 )
 from loopora.service_types import LooporaError
+
+
+REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
 class _AgentRecoveryRepository:
@@ -62,6 +73,70 @@ class _FallbackAgentRecoveryRepository:
 
     def list_alignment_events(self, session_id: str, *, limit: int = 200) -> list[dict]:
         return self.events_by_session.get(session_id, [])[:limit]
+
+
+def test_agent_entry_review_projection_has_dedicated_boundary() -> None:
+    recovery_source = (REPO_ROOT / "src" / "loopora" / "service_alignment_run_recovery.py").read_text(
+        encoding="utf-8"
+    )
+    review_source = (REPO_ROOT / "src" / "loopora" / "service_alignment_agent_entry_review.py").read_text(
+        encoding="utf-8"
+    )
+    session_projection_source = (
+        REPO_ROOT / "src" / "loopora" / "service_alignment_session_projection.py"
+    ).read_text(encoding="utf-8")
+    design_source = (REPO_ROOT / "design" / "contracts.md").read_text(encoding="utf-8")
+
+    assert "from loopora.service_alignment_agent_entry_review import" in recovery_source
+    assert "from loopora.service_alignment_agent_entry_review import" in session_projection_source
+    for marker in (
+        "def agent_entry_review_projection",
+        "def agent_entry_launch_projection",
+        "def agent_entry_review_decision_options",
+    ):
+        assert marker in review_source
+        assert marker not in recovery_source
+    assert "service_alignment_agent_entry_review.py" in design_source
+
+
+def test_agent_run_context_choice_projection_has_dedicated_boundary() -> None:
+    recovery_source = (REPO_ROOT / "src" / "loopora" / "service_alignment_run_recovery.py").read_text(
+        encoding="utf-8"
+    )
+    choices_source = (REPO_ROOT / "src" / "loopora" / "service_alignment_run_context_choices.py").read_text(
+        encoding="utf-8"
+    )
+    recovery_fields_source = (
+        REPO_ROOT / "src" / "loopora" / "service_alignment_run_context_recovery_fields.py"
+    ).read_text(encoding="utf-8")
+    resolver_source = (REPO_ROOT / "src" / "loopora" / "service_alignment_run_context.py").read_text(
+        encoding="utf-8"
+    )
+    design_source = (REPO_ROOT / "design" / "contracts.md").read_text(encoding="utf-8")
+
+    assert "from loopora.service_alignment_run_context_choices import" in recovery_source
+    assert "from loopora.service_alignment_run_context_choices import" in resolver_source
+    assert "from loopora.service_alignment_run_context_recovery_fields import" in recovery_source
+    assert "from loopora.service_alignment_run_context_recovery_fields import" in resolver_source
+    for marker in (
+        "def agent_run_context_choice_summary",
+        "def agent_run_context_next_action",
+        "def agent_run_context_choice_payload",
+    ):
+        assert marker in choices_source
+        assert marker not in recovery_source
+    for marker in (
+        "def agent_exact_binding_recovery_action",
+        "def agent_failed_preview_choice_repair_fields",
+        "def agent_redacted_context_binding",
+    ):
+        assert marker in recovery_fields_source
+        assert marker not in choices_source
+        assert marker not in recovery_source
+    assert "AGENT_CONTEXT_BINDING_RECOVERY_KEYS = {" in recovery_fields_source
+    assert "AGENT_CONTEXT_BINDING_RECOVERY_KEYS = {" not in choices_source
+    assert "service_alignment_run_context_choices.py" in design_source
+    assert "service_alignment_run_context_recovery_fields.py" in design_source
 
 
 def test_agent_recovery_alignment_sessions_prefers_full_repository_lookup() -> None:

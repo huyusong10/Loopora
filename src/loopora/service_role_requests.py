@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from loopora.executor import RoleRequest
+from loopora.executor_types import RoleRequest
 from loopora.step_instruction_context import STEP_INSTRUCTION_CONTEXT_KEY, step_instruction_context_from_mapping
 from loopora.utils import append_jsonl, utc_now
 

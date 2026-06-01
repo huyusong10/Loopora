@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from loopora.diagnostics import log_exception
-from loopora.executor import ExecutionStopped
+from loopora.executor_types import ExecutionStopped
 from loopora.service_alignment_execution import (
     AlignmentExecutionState,
     AlignmentSessionTransitionPlan,

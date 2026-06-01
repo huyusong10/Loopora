@@ -40,7 +40,8 @@ from loopora.diagnostics import log_event
 from loopora.service import LooporaError
 from loopora.settings import configure_logging
 from loopora.specs import SpecError
-from loopora.web import _is_loopback_host, build_app
+from loopora.web import build_app
+from loopora.web_request_context import _is_loopback_host
 
 
 def register_root_commands(app: typer.Typer) -> None:

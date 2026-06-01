@@ -3,10 +3,10 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from loopora.agent_native_result_schema import agent_native_result_scaffold_from_schema
 from loopora.agent_native_role_dispatch import agent_native_template_role_dispatch
 from loopora.agent_native_step_view_paths import agent_native_step_view_artifact_path_texts
-from loopora.service_agent_native_contracts import (
-    _agent_native_result_scaffold_from_schema,
+from loopora.agent_native_evidence_contracts import (
     _agent_native_step_view_coverage_targets,
 )
 from loopora.service_types import LooporaError
@@ -44,7 +44,7 @@ def agent_native_step_view_result_template(step_view: dict[str, Any]) -> dict[st
     return {
         "loopora_host_dispatch": _agent_native_template_host_dispatch(step_view, target_agent=target_agent),
         "loopora_result_contract": _agent_native_result_contract(step_view, dispatch=dispatch, output_schema=output_schema),
-        "result": _agent_native_result_scaffold_from_schema(output_schema),
+        "result": agent_native_result_scaffold_from_schema(output_schema),
     }
 
 

@@ -12,7 +12,8 @@ from loopora.service_alignment_artifacts import (
     alignment_user_message_record,
     write_alignment_transcript_log,
 )
-from loopora.service_alignment_requests import AlignmentSessionCreateRequest, normalize_alignment_executor_settings
+from loopora.service_alignment_executor_settings import normalize_alignment_executor_settings
+from loopora.service_alignment_requests import AlignmentSessionCreateRequest
 from loopora.service_types import LooporaError
 from loopora.utils import make_id, utc_now
 

@@ -8,17 +8,16 @@ from pathlib import Path
 from loopora.branding import state_dir_for_workdir
 from loopora.service_alignment_context import (
     add_alignment_context_option,
-    alignment_bundle_file_has_ready_validation,
     alignment_bundle_context_option,
     alignment_file_bundle_context_option,
     alignment_loop_context_option,
     alignment_run_context_option,
-    alignment_same_workdir,
     alignment_session_context_options,
     alignment_spec_file_context_option,
-    alignment_workdir_spec_candidates,
     bounded_alignment_context_options,
 )
+from loopora.service_alignment_ready_bundle_validation import alignment_bundle_file_has_ready_validation
+from loopora.service_alignment_workdir_snapshot import alignment_same_workdir, alignment_workdir_spec_candidates
 from loopora.service_types import LooporaError
 
 

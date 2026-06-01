@@ -3,7 +3,7 @@ from pathlib import Path
 
 from loopora.bundles import load_bundle_text
 from loopora.executor_fake_payloads import alignment_bundle_yaml
-from loopora.service_alignment_context import redact_alignment_source_value
+from loopora.service_alignment_source_seed import redact_alignment_source_value
 from loopora.service_alignment_requests import (
     AlignmentExecutorSettingsRequest,
     RevisionAlignmentSessionRequest,
@@ -52,6 +52,10 @@ def revision_context(repo: FakeAlignmentRevisionRepository):
         repository=repo,
         create_session=create_session,
         get_session=get_session,
+        export_bundle=lambda _bundle_id: {},
+        get_run=lambda _run_id: {},
+        get_loop=lambda _loop_id: {},
+        run_source_bundle=lambda _run, _loop: ("", {}),
         start_session_async=start_session_async,
         redact_source_value=redact_alignment_source_value,
         write_transcript_log=lambda session: logged_sessions.append(dict(session)),

@@ -2,28 +2,24 @@ from __future__ import annotations
 
 import re
 
+from loopora.alignment_readiness_improvement import (
+    alignment_improvement_readiness_issues as alignment_improvement_readiness_issues,
+)
+from loopora.alignment_readiness_governance import (
+    alignment_governance_marker_responsibilities_present as alignment_governance_marker_responsibilities_present,
+    alignment_governance_marker_responsibility_present as alignment_governance_marker_responsibility_present,
+    local_governance_evidence_issue as local_governance_evidence_issue,
+)
+from loopora.alignment_readiness_shared import (
+    ALIGNMENT_READINESS_EVIDENCE_KEYS as ALIGNMENT_READINESS_EVIDENCE_KEYS,
+    has_any_marker as has_any_marker,
+)
+from loopora.alignment_readiness_workdir_facts import (
+    workdir_facts_claims_unsupported_observed_stack as workdir_facts_claims_unsupported_observed_stack,
+    workdir_facts_evidence_issue as workdir_facts_evidence_issue,
+)
 from loopora.alignment_semantics import semantic_antipattern_match_is_negated, text_mentions_loop_fit_contradiction
 from loopora.residual_risk_support import residual_risk_is_unmanaged
-from loopora.service_alignment_context import alignment_workdir_snapshot_has_governance_markers
-
-ALIGNMENT_READINESS_EVIDENCE_KEYS = (
-    "loop_fit",
-    "task_scope",
-    "success_surface",
-    "fake_done_risks",
-    "evidence_preferences",
-    "execution_strategy",
-    "residual_risk_policy",
-    "judgment_tradeoffs",
-    "local_governance",
-    "role_posture",
-    "workflow_shape",
-    "workdir_facts",
-)
-
-
-def has_any_marker(text: str, markers: tuple[str, ...]) -> bool:
-    return any(marker in text for marker in markers)
 
 
 def readiness_evidence_issues(output: dict, *, workdir_snapshot: str = "") -> list[str]:
@@ -108,7 +104,6 @@ def readiness_evidence_task_scoped_issue(evidence: dict) -> bool:
                 continue
             return True
     return False
-
 
 def open_questions_readiness_issue(evidence: dict) -> bool:
     text = str(evidence.get("open_questions", "") or "").strip()
@@ -237,229 +232,3 @@ def role_posture_without_gatekeeper_judgment_issue(value: str) -> bool:
         re.I,
     )
     return gatekeeper_judgment is None
-
-
-def local_governance_evidence_issue(text: str, *, workdir_snapshot: str = "") -> bool:
-    marker_pattern = r"agents\.md|design/readme\.md|design/|tests/|project-local|project local|项目本地|本地治理"
-    if not re.search(marker_pattern, text, re.I) and not alignment_workdir_snapshot_has_governance_markers(
-        workdir_snapshot
-    ):
-        return False
-    return not alignment_governance_marker_responsibilities_present(text)
-
-
-def alignment_governance_marker_responsibilities_present(text: str) -> bool:
-    builder_reads = _alignment_governance_marker_responsibility_present(
-        text,
-        actor_pattern=r"\b(?:builder|generator)\b|构建者|构建",
-        action_pattern=r"\b(?:read|reads|consult|consults|follow|follows|respect|respects)\b|读取|查阅|遵守|遵循",
-    )
-    review_checks = _alignment_governance_marker_responsibility_present(
-        text,
-        actor_pattern=r"\b(?:inspector|custom|review|reviewer)\b|检查者|巡检|检查|审查|验证",
-        action_pattern=r"\b(?:verify|verifies|check|checks|review|reviews|validate|validates|test|tests)\b|检查|审查|验证|测试",
-    )
-    gatekeeper_gates = _alignment_governance_marker_responsibility_present(
-        text,
-        actor_pattern=r"\b(?:gatekeeper|gate keeper|verifier)\b|守门|裁决",
-        action_pattern=(
-            r"\b(?:weak|unproven|blocking|block|blocks|missing|skipped|fail closed|reject|rejects)\b"
-            r"|弱证据|未证明|阻断|缺少|跳过|拒绝"
-        ),
-    )
-    return builder_reads and review_checks and gatekeeper_gates
-
-
-def _alignment_governance_marker_responsibility_present(text: str, *, actor_pattern: str, action_pattern: str) -> bool:
-    marker_pattern = r"agents\.md|design/readme\.md|design/|tests/|project-local|project local|项目本地|本地治理"
-    segments = re.split(r"[\n.;。；]+", text)
-    marker_windows: list[str] = []
-    for match in re.finditer(marker_pattern, text, flags=re.I):
-        start = max(0, match.start() - 180)
-        end = min(len(text), match.end() + 180)
-        marker_windows.append(text[start:end])
-    for segment in [*segments, *marker_windows]:
-        if (
-            re.search(marker_pattern, segment, flags=re.I)
-            and re.search(actor_pattern, segment, flags=re.I)
-            and re.search(action_pattern, segment, flags=re.I)
-        ):
-            return True
-    return False
-
-
-def alignment_improvement_readiness_issues(session: dict, output: dict) -> list[str]:
-    previous_agreement = session.get("working_agreement") if isinstance(session.get("working_agreement"), dict) else {}
-    if str(previous_agreement.get("mode") or "") != "improvement":
-        return []
-    evidence = output.get("readiness_evidence") if isinstance(output.get("readiness_evidence"), dict) else {}
-    combined = " ".join(
-        [
-            str(output.get("agreement_summary", "") or ""),
-            *(str(evidence.get(key, "") or "") for key in ALIGNMENT_READINESS_EVIDENCE_KEYS),
-        ]
-    ).lower()
-    issues: list[str] = []
-    if not has_any_marker(
-        combined,
-        (
-            "preserve",
-            "keep",
-            "stable",
-            "unchanged",
-            "existing intent",
-            "保留",
-            "保持",
-            "稳定",
-            "不变",
-            "既有意图",
-        ),
-    ):
-        issues.append("improvement_preservation")
-    if not has_any_marker(
-        combined,
-        (
-            "change",
-            "revise",
-            "improve",
-            "adjust",
-            "feedback-driven",
-            "source feedback",
-            "user feedback",
-            "review feedback",
-            "run feedback",
-            "feedback shows",
-            "feedback proves",
-            "evidence gap",
-            "改进",
-            "修订",
-            "调整",
-            "反馈驱动",
-            "来源反馈",
-            "用户反馈",
-            "评审反馈",
-            "运行反馈",
-            "反馈证明",
-            "证据缺口",
-        ),
-    ):
-        issues.append("improvement_delta")
-    if not has_any_marker(
-        combined,
-        (
-            "spec",
-            "role",
-            "workflow",
-            "evidence",
-            "gatekeeper",
-            "surface",
-            "roles",
-            "证据",
-            "角色",
-            "裁决",
-            "治理面",
-        ),
-    ):
-        issues.append("improvement_surface")
-    source = previous_agreement.get("source") if isinstance(previous_agreement.get("source"), dict) else {}
-    has_run_context = str(source.get("source_type") or "") == "run" and (
-        source.get("coverage_summary") or source.get("evidence_summary") or source.get("task_verdict") or source.get("gatekeeper_verdict")
-    )
-    if has_run_context and not has_any_marker(
-        combined,
-        (
-            "run evidence",
-            "coverage",
-            "verdict",
-            "gatekeeper verdict",
-            "evidence summary",
-            "运行证据",
-            "覆盖",
-            "裁决",
-            "证据摘要",
-        ),
-    ):
-        issues.append("run_evidence_translation")
-    source_completion_mode = str(source.get("source_completion_mode") or "").strip().lower()
-    if source_completion_mode and source_completion_mode != "gatekeeper":
-        has_source_completion_mode_delta = has_any_marker(
-            combined,
-            (
-                "completion mode",
-                "completion_mode",
-                "`rounds`",
-                "rounds completion",
-                "source uses rounds",
-                "run lifecycle",
-                "lifecycle completion",
-                "source completion",
-                "完成模式",
-                "运行生命周期",
-                "生命周期收束",
-            ),
-        ) and has_any_marker(
-            combined,
-            (
-                "gatekeeper",
-                "task verdict",
-                "evidence-based verdict",
-                "证据裁决",
-                "loop 裁决",
-                "任务裁决",
-                "守门",
-            ),
-        )
-        if not has_source_completion_mode_delta:
-            issues.append("improvement_completion_mode_delta")
-    return issues
-
-
-def workdir_facts_evidence_issue(text: str, *, workdir_snapshot: str = "") -> bool:
-    has_grounding_marker = has_any_marker(
-        text,
-        (
-            "observed",
-            "snapshot",
-            "appears",
-            "assumption",
-            "assumed",
-            "unknown",
-            "uncertain",
-            "cannot confirm",
-            "empty",
-            "观察",
-            "看到",
-            "快照",
-            "看起来",
-            "假设",
-            "未知",
-            "不确定",
-            "无法确认",
-            "空目录",
-        ),
-    )
-    if not has_grounding_marker:
-        return True
-    return workdir_facts_claims_unsupported_observed_stack(text, workdir_snapshot=workdir_snapshot)
-
-
-def workdir_facts_claims_unsupported_observed_stack(text: str, *, workdir_snapshot: str = "") -> bool:
-    if not has_any_marker(text, ("observed", "snapshot", "appears", "观察", "看到", "快照", "看起来")):
-        return False
-    if has_any_marker(text, ("unknown", "uncertain", "assumption", "无法确认", "未知", "不确定", "假设")):
-        return False
-    snapshot = str(workdir_snapshot or "").lower()
-    support_markers = {
-        "package.json": ("react", "vue", "svelte", "next", "vite", "node", "npm", "pnpm", "yarn", "javascript", "typescript", "frontend", "前端"),
-        "pyproject.toml": ("python", "pytest", "ruff", "uv", "fastapi", "django", "flask"),
-        "requirements.txt": ("python", "pytest", "fastapi", "django", "flask"),
-        "cargo.toml": ("rust", "cargo"),
-        "go.mod": ("go ", "golang"),
-        "tests/ exists: yes": ("test", "tests", "testing", "测试"),
-    }
-    unsupported_terms = []
-    for marker, terms in support_markers.items():
-        if marker in snapshot:
-            continue
-        unsupported_terms.extend(term for term in terms if term in text)
-    return bool(unsupported_terms)

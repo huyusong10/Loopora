@@ -6,11 +6,12 @@ from loopora.projections._event_replay_support import EVENT_REPLAY_PROJECTION_SC
 
 def replay_coverage_projection(events: list[EventEnvelope]) -> dict:
     event = latest_event(events, "CoverageRecomputed")
+    source_sequence = latest_sequence(events)
     if event is None:
         return {
             "schema_version": EVENT_REPLAY_PROJECTION_SCHEMA_VERSION,
             "kind": "event_replayed_coverage",
-            "source_sequence": latest_sequence(events),
+            "source_sequence": source_sequence,
             "status": "pending",
             "target_count": 0,
             "covered_target_count": 0,
@@ -23,7 +24,7 @@ def replay_coverage_projection(events: list[EventEnvelope]) -> dict:
     return {
         "schema_version": EVENT_REPLAY_PROJECTION_SCHEMA_VERSION,
         "kind": "event_replayed_coverage",
-        "source_sequence": event.sequence,
+        "source_sequence": source_sequence,
         "status": str(payload.get("status") or "pending"),
         "target_count": safe_int(payload.get("target_count")),
         "covered_target_count": safe_int(payload.get("covered_target_count")),

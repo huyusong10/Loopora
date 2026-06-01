@@ -12,16 +12,6 @@ from loopora.providers import list_executor_profiles
 from loopora.service import LooporaError
 from loopora.settings import load_recent_workdirs
 from loopora.specs import render_spec_template_for_strategy_source
-from loopora.web_inputs import (
-    _loop_form_is_pristine,
-    _normalize_bundle_import_form,
-    _normalize_loop_form,
-    _normalize_orchestration_form,
-    _orchestration_form_values_from_record,
-    _preferred_request_locale,
-    _strategy_source_for_spec_template,
-)
-from loopora.web_url_utils import safe_local_return_path
 from loopora.strategy_source import (
     StrategySourceError,
     available_strategy_prompt_templates,
@@ -30,6 +20,18 @@ from loopora.strategy_source import (
     strategy_source_preset_copy,
     strategy_source_preset_names,
 )
+from loopora.web_bundle_inputs import _normalize_bundle_import_form
+from loopora.web_loop_inputs import (
+    _loop_form_is_pristine,
+    _normalize_loop_form,
+)
+from loopora.web_request_context import _preferred_request_locale
+from loopora.web_strategy_inputs import (
+    _normalize_orchestration_form,
+    _orchestration_form_values_from_record,
+    _strategy_source_for_spec_template,
+)
+from loopora.web_url_utils import safe_local_return_path
 
 
 @dataclass(frozen=True, kw_only=True)

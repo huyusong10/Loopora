@@ -1,35 +1,61 @@
 from __future__ import annotations
 
-from loopora.service_alignment_stage import (
-    AlignmentAgreementBlockCandidate,
-    AlignmentBundleStageGate,
-    alignment_agreement_block_plan,
-    alignment_agreement_language_issues,
+from pathlib import Path
+
+from loopora.alignment_readiness_rules import alignment_governance_marker_responsibilities_present
+from loopora.service_alignment_agreement_stage import (
     alignment_agreement_ready_stage_plan,
     alignment_agreement_readiness_checklist_issues,
     alignment_agreement_text_snippet,
     alignment_agreement_working_agreement,
-    alignment_bundle_agreement_projection_text,
+    alignment_merge_improvement_context,
+    alignment_message_confirms_agreement,
+    alignment_user_message_stage_plan,
+    alignment_visible_agreement_message,
+)
+from loopora.service_alignment_language import (
+    alignment_agreement_language_issues,
     alignment_assistant_message_language_issue,
-    alignment_block_message,
-    alignment_governance_marker_responsibilities_present,
-    alignment_governance_marker_responsibility_issues,
     alignment_bundle_language_issues,
-    alignment_bundle_runtime_responsibility_projection_text,
+)
+from loopora.service_alignment_stage import (
+    AlignmentAgreementBlockCandidate,
+    AlignmentBundleStageGate,
+    alignment_agreement_block_plan,
+    alignment_block_message,
     alignment_bundle_stage_error,
     alignment_bundle_workdir_fact_issues,
     alignment_clarifying_reframe_message,
     alignment_clarifying_stage_plan,
     alignment_fallback_assistant_message,
-    alignment_merge_improvement_context,
-    alignment_message_confirms_agreement,
+    alignment_improvement_bundle_issues,
     alignment_output_message_plan,
+)
+from loopora.service_alignment_traceability_projection import (
+    alignment_bundle_agreement_projection_text,
+    alignment_bundle_runtime_responsibility_projection_text,
+    alignment_governance_marker_responsibility_issues,
     alignment_session_user_task_text,
     alignment_traceability_term_is_present,
     normalize_alignment_traceability_text,
-    alignment_user_message_stage_plan,
-    alignment_visible_agreement_message,
 )
+
+
+REPO_ROOT = Path(__file__).resolve().parents[3]
+
+
+def test_alignment_stage_bundle_issue_selectors_have_dedicated_boundary() -> None:
+    design_source = (REPO_ROOT / "design" / "contracts.md").read_text(encoding="utf-8")
+
+    assert alignment_bundle_workdir_fact_issues.__module__ == "loopora.service_alignment_stage_bundle_issues"
+    assert alignment_improvement_bundle_issues.__module__ == "loopora.service_alignment_stage_bundle_issues"
+    assert alignment_output_message_plan.__module__ == "loopora.service_alignment_stage_messages"
+    assert AlignmentAgreementBlockCandidate.__module__ == "loopora.service_alignment_stage_messages"
+    assert alignment_clarifying_stage_plan.__module__ == "loopora.service_alignment_stage_messages"
+    assert alignment_governance_marker_responsibilities_present.__module__ == "loopora.alignment_readiness_governance"
+    assert "service_alignment_stage_bundle_issues.py" in design_source
+    assert "service_alignment_stage_messages.py" in design_source
+    assert "alignment_readiness_governance.py" in design_source
 
 
 def test_alignment_agreement_working_agreement_projects_stable_ready_payload() -> None:
@@ -179,6 +205,7 @@ def test_alignment_agreement_text_snippet_collapses_space_and_truncates() -> Non
 
 def test_alignment_message_confirmation_allows_no_change_clause() -> None:
     assert alignment_message_confirms_agreement("可以，不需要修改，继续。") is True
+    assert alignment_message_confirms_agreement("可以，但是不需要修改，继续。") is True
     assert alignment_message_confirms_agreement("Approved, no changes, proceed.") is True
 
 

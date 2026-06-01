@@ -10,7 +10,7 @@ from loopora.engine.run_iteration_commands import (
     append_iteration_start_if_absent_and_rebuild_projection_cache,
 )
 from loopora.engine.run_lifecycle import RunEngineAdvanceOutcome
-from loopora.engine.run_lifecycle_commands import advance_run, start_run
+from loopora.engine.run_lifecycle_commands import advance_run, fail_run, start_run, stop_run
 from loopora.engine.run_requests import (
     RunEngineAcceptEvidenceRequest,
     RunEngineClaimStepRequest,
@@ -18,11 +18,14 @@ from loopora.engine.run_requests import (
     RunEngineClaimRunnerStepResult,
     RunEngineCompleteIterationRequest,
     RunEngineCoverageRecomputedRequest,
+    RunEngineFailRunRequest,
     RunEngineIssueStepRequest,
     RunEngineIssueVerdictRequest,
+    RunEngineIssueVerdictResult,
     RunEngineRecordStepEvidenceRequest,
     RunEngineRecordStepEvidenceResult,
     RunEngineStartIterationRequest,
+    RunEngineStopRunRequest,
     RunEngineSubmitStepRequest,
     RunEngineSubmitStepResult,
 )
@@ -31,10 +34,12 @@ from loopora.engine.run_step_commands import (
     append_step_instruction_and_rebuild_projection_cache,
     append_step_submission_and_rebuild_projection_cache,
     append_runner_step_instruction_and_rebuild_projection_cache,
+    validate_step_submission_against_event_stream,
 )
 from loopora.engine.run_verdict_commands import append_verdict_issue_and_rebuild_projection_cache
 from loopora.engine.run_step_cursor import runner_step_index_for_run
 from loopora.events.replay import RunSnapshot
+from loopora.kernel.step import StepInstruction
 
 
 class RepositoryRunEngine:
@@ -46,11 +51,18 @@ class RepositoryRunEngine:
     def start(self, run_id: str) -> RunEngineAdvanceOutcome:
         return start_run(self.repository, run_id)
 
-    def claim_step(self, request: RunEngineClaimStepRequest):
-        return append_step_instruction_and_rebuild_projection_cache(
+    def stop(self, request: RunEngineStopRunRequest) -> RunEngineAdvanceOutcome:
+        return stop_run(self.repository, request)
+
+    def fail(self, request: RunEngineFailRunRequest) -> RunEngineAdvanceOutcome:
+        return fail_run(self.repository, request)
+
+    def claim_step(self, request: RunEngineClaimStepRequest) -> StepInstruction:
+        append_step_instruction_and_rebuild_projection_cache(
             self.repository,
             request,
         )
+        return request.instruction
 
     def claim_runner_step(self, request: RunEngineClaimRunnerStepRequest) -> RunEngineClaimRunnerStepResult:
         return append_runner_step_instruction_and_rebuild_projection_cache(
@@ -75,10 +87,19 @@ class RepositoryRunEngine:
         )
 
     def issue_step_instruction(self, request: RunEngineIssueStepRequest):
-        return self.claim_step(request)
+        return append_step_instruction_and_rebuild_projection_cache(
+            self.repository,
+            request,
+        )
 
     def submit_step(self, request: RunEngineSubmitStepRequest) -> RunEngineSubmitStepResult:
         return append_step_submission_and_rebuild_projection_cache(
+            self.repository,
+            request,
+        )
+
+    def validate_step_submission(self, request: RunEngineSubmitStepRequest) -> None:
+        validate_step_submission_against_event_stream(
             self.repository,
             request,
         )
@@ -101,7 +122,7 @@ class RepositoryRunEngine:
             request,
         )
 
-    def issue_verdict(self, request: RunEngineIssueVerdictRequest):
+    def issue_verdict(self, request: RunEngineIssueVerdictRequest) -> RunEngineIssueVerdictResult:
         return append_verdict_issue_and_rebuild_projection_cache(
             self.repository,
             request,

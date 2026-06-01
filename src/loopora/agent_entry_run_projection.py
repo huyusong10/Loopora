@@ -4,10 +4,11 @@ from pathlib import Path
 from typing import Any
 
 from loopora.agent_adapters import agent_loop_command, agent_loop_json_command
-from loopora.agent_native_next_step_summary import agent_next_step_continuation_summary
+from loopora.agent_native_next_step_sections import agent_next_step_continuation_summary
 from loopora.agent_native_surface import attach_native_run_surface
 from loopora.agent_native_task_proof import agent_task_proof_summary
-from loopora.run_takeaways import build_judgment_contract
+from loopora.run_takeaway_judgment import build_judgment_contract
+from loopora.run_projection_fields import run_status_from_run, task_verdict_from_run
 from loopora.utils import utc_now
 
 
@@ -93,8 +94,7 @@ def agent_loop_result(adapter: str, root: Path, session: dict[str, Any], binding
 def agent_loop_summary(adapter: str, run: dict[str, Any], run_result: dict[str, Any]) -> dict[str, Any]:
     next_step = run_result.get("next_step") if isinstance(run_result.get("next_step"), dict) else {}
     role_dispatch = next_step.get("role_dispatch") if isinstance(next_step.get("role_dispatch"), dict) else {}
-    task_verdict = run.get("task_verdict") if isinstance(run.get("task_verdict"), dict) else run.get("task_verdict_json")
-    task_verdict = task_verdict if isinstance(task_verdict, dict) else {}
+    task_verdict = task_verdict_from_run(run)
     task_next_action = run_result.get("task_next_action") if isinstance(run_result.get("task_next_action"), dict) else {}
     run_id = str(run.get("id") or "").strip()
     task_verdict_status = str(task_verdict.get("status") or "").strip()
@@ -103,7 +103,7 @@ def agent_loop_summary(adapter: str, run: dict[str, Any], run_result: dict[str, 
     summary = {
         "schema_version": 1,
         "run_id": run_id,
-        "run_status": str(run.get("status") or run.get("run_status") or "").strip(),
+        "run_status": run_status_from_run(run),
         "started_new_run": bool(run_result.get("started_new_run")),
         "complete": bool(run_result.get("complete", False)),
         "next_step_id": str(next_step.get("step_id") or "").strip(),

@@ -2,8 +2,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from loopora.run_takeaways import build_judgment_contract
-from loopora.service_agent_native_contracts import _agent_native_role_posture_list, _agent_native_string_list
+from loopora.agent_native_evidence_contracts import _agent_native_string_list
+from loopora.run_takeaway_judgment import build_judgment_contract
+from loopora.service_agent_native_contracts import _agent_native_role_posture_list
 from loopora.structured_numbers import structured_non_negative_int
 
 

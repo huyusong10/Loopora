@@ -8,6 +8,7 @@ from loopora.recovery import RetryConfig
 from loopora.run_artifacts import INITIAL_STAGNATION_STATE
 from loopora.service_types import normalize_completion_mode
 from loopora.strategy_source import normalize_strategy_source, strategy_source_from_record
+from loopora.structured_numbers import coerced_non_negative_int
 from loopora.utils import read_json
 
 
@@ -51,7 +52,7 @@ def agent_native_run_context(
 
 def agent_native_iteration_state(state: dict[str, Any]) -> RunnerIterationState:
     return RunnerIterationState(
-        iter_id=int(state.get("iter_id") or 0),
+        iter_id=coerced_non_negative_int(state.get("iter_id")),
         previous_composite=state.get("previous_composite"),
         stagnation=dict(state.get("stagnation") or INITIAL_STAGNATION_STATE),
         previous_outputs_by_step=dict(state.get("previous_outputs_by_step") or {}),

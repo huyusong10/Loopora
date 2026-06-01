@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from loopora.cli_summary_helpers import clip_inline, set_summary_text
+from loopora.summary_projection_helpers import clip_inline, set_summary_text
 from loopora.run_artifacts import RunArtifactLayout, read_jsonl
 
 

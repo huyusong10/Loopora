@@ -4,6 +4,7 @@ from collections.abc import Mapping
 from dataclasses import asdict
 
 from loopora.kernel import ActionPolicy, EvidenceScope, RoleSpec, StepInstruction, StepOutputContract
+from loopora.structured_numbers import coerced_int
 
 
 def step_instruction_event_payload(instruction: StepInstruction) -> dict:
@@ -32,7 +33,7 @@ def step_instruction_from_event_payload(
     return StepInstruction(
         run_id=str(payload.get("run_id") or fallback_run_id),
         step_id=str(payload.get("step_id") or ""),
-        iteration=_safe_int(payload.get("iteration")),
+        iteration=coerced_int(payload.get("iteration")),
         role=RoleSpec(
             id=str(role.get("id") or ""),
             name=str(role.get("name") or ""),
@@ -60,12 +61,3 @@ def step_instruction_from_event_payload(
 
 def _mapping(value: object) -> Mapping[str, object]:
     return value if isinstance(value, Mapping) else {}
-
-
-def _safe_int(value: object) -> int:
-    if isinstance(value, bool):
-        return 0
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        return 0

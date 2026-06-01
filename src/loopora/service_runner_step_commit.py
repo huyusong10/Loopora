@@ -8,6 +8,7 @@ from loopora.engine import (
     runner_step_result,
 )
 from loopora.kernel import ActorRef
+from loopora.context_step_results import StepResultContext, build_step_handoff
 from loopora.service_runner_step_artifacts import (
     RunnerStepCompletionLogRequest,
     RunnerStepResultEntryRequest,
@@ -18,10 +19,31 @@ from loopora.service_runner_iteration_state import (
     RunnerGatekeeperSuccessRequest,
 )
 from loopora.step_instruction_context import required_step_instruction_context_from_mapping
+from loopora.structured_numbers import coerced_non_negative_int
 
 
 class ServiceRunnerStepCommitMixin:
-    def commit_runner_step_result(
+    def require_runner_step_result_submittable(
+        self,
+        context,
+        iteration,
+        result: dict,
+    ) -> None:
+        if result.get("skipped"):
+            return
+        run_engine = RepositoryRunEngine(self.repository)
+        run_engine.validate_step_submission(
+            RunEngineSubmitStepRequest(
+                result=self._runner_step_result_for_engine(
+                    context,
+                    iteration,
+                    result,
+                    handoff=self._runner_step_handoff_preview(context, iteration, result),
+                )
+            )
+        )
+
+    def submit_runner_step_result(
         self,
         context,
         iteration,
@@ -31,7 +53,7 @@ class ServiceRunnerStepCommitMixin:
             return None
         step = result["step"]
         is_control_step = bool(step.get("control_id"))
-        step_order = int(result["step_order"])
+        step_order = coerced_non_negative_int(result["step_order"])
         role = result["role"]
         runtime_role = result["runtime_role"]
         normalized_output = result["normalized_output"]
@@ -52,16 +74,7 @@ class ServiceRunnerStepCommitMixin:
         run_engine = RepositoryRunEngine(self.repository)
         submit_result = run_engine.submit_step(
             RunEngineSubmitStepRequest(
-                result=runner_step_result(
-                    RunnerStepResultRequest(
-                        run_id=context.run_id,
-                        iteration=iteration.iter_id,
-                        step=step,
-                        actor=actor,
-                        output=normalized_output,
-                        handoff=handoff,
-                    )
-                )
+                result=self._runner_step_result_for_engine(context, iteration, result, handoff=handoff, actor=actor)
             )
         )
         submitted_event = submit_result.submitted_event
@@ -106,7 +119,7 @@ class ServiceRunnerStepCommitMixin:
                 step=step,
                 runtime_role=runtime_role,
                 role=role,
-                duration_ms=int(result["duration_ms"]),
+                duration_ms=coerced_non_negative_int(result["duration_ms"]),
                 normalized_output=normalized_output,
             )
         )
@@ -165,3 +178,36 @@ class ServiceRunnerStepCommitMixin:
                 role=runtime_role,
             )
         return None
+
+    def _runner_step_handoff_preview(self, context, iteration, result: dict) -> dict:
+        return build_step_handoff(
+            StepResultContext(
+                layout=context.layout,
+                iter_id=iteration.iter_id,
+                step=result["step"],
+                step_order=coerced_non_negative_int(result["step_order"]),
+                role=result["role"],
+                runtime_role=result["runtime_role"],
+                output=result["normalized_output"],
+            )
+        )
+
+    def _runner_step_result_for_engine(
+        self,
+        context,
+        iteration,
+        result: dict,
+        *,
+        handoff: dict,
+        actor: ActorRef | None = None,
+    ):
+        return runner_step_result(
+            RunnerStepResultRequest(
+                run_id=context.run_id,
+                iteration=iteration.iter_id,
+                step=result["step"],
+                actor=actor or ActorRef.from_dict(result.get("actor_ref")),
+                output=result["normalized_output"],
+                handoff=handoff,
+            )
+        )

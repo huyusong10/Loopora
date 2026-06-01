@@ -6,6 +6,13 @@ from loopora.agent_native_iteration_transition import (
     AgentNativeNextIterationStateRequest,
     agent_native_next_iteration_state_update,
 )
+from loopora.agent_native_runtime_context import agent_native_iteration_state
+
+
+def test_agent_native_iteration_state_rejects_bool_iteration_identity() -> None:
+    iteration = agent_native_iteration_state({"iter_id": True})
+
+    assert iteration.iter_id == 0
 
 
 def test_agent_native_next_iteration_state_carries_previous_outputs_and_resets_current_work() -> None:

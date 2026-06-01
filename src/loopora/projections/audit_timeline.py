@@ -28,15 +28,25 @@ def replay_audit_timeline_projection(events: list[EventEnvelope]) -> dict:
 def _event_summary(event: EventEnvelope) -> str:
     payload = event.payload
     summary_fields = {
+        "EvidenceSubmitted": ("claim", "evidence_id"),
         "EvidenceAccepted": ("claim", "evidence_id"),
+        "EvidenceLinkedToTarget": ("evidence_id",),
         "CoverageRecomputed": ("status",),
+        "VerdictRequested": ("requested_status",),
         "VerdictIssued": ("summary", "status"),
+        "VerdictAllowedClosure": ("verdict_status",),
+        "VerdictBlockedClosure": ("verdict_status",),
+        "ResidualRiskAccepted": ("risk_count",),
+        "StepPlanned": ("step_id",),
+        "StepClaimed": ("step_id",),
         "StepInstructionIssued": ("step_id",),
         "StepSubmitted": ("summary", "status"),
         "StepAccepted": ("result_status", "step_id"),
         "StepCommitted": ("result_status", "step_id"),
         "IterationStarted": ("iteration",),
         "IterationCompleted": ("reason", "iteration"),
+        "NextGapSelected": ("target_id", "status"),
+        "StrategyAdvanced": ("step_id", "reason"),
     }
     for field in summary_fields.get(event.event_type, ("status", "reason")):
         value = str(payload.get(field) or "").strip()

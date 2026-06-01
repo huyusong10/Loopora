@@ -165,7 +165,7 @@ if (rawNormalized.strategy_source.steps[0].id !== "inspector_step") throw new Er
 
 
 def test_run_detail_routes_use_projection_service_as_primary_boundary() -> None:
-    pages = (REPO_ROOT / "src" / "loopora" / "web_route_pages.py").read_text(encoding="utf-8")
+    pages = (REPO_ROOT / "src" / "loopora" / "web_route_loop_run_pages.py").read_text(encoding="utf-8")
     api = (REPO_ROOT / "src" / "loopora" / "web_route_run_api.py").read_text(encoding="utf-8")
 
     assert "app_services.projection.web_run_detail(run)" in pages

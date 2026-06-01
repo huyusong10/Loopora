@@ -9,20 +9,23 @@ from fastapi.responses import JSONResponse, RedirectResponse
 from loopora.service import LooporaError
 from loopora.service_types import LooporaConflictError
 from loopora.specs import SpecError
-from loopora.web_inputs import (
-    _coerce_bool,
-    _loop_payload_from_mapping,
+from loopora.strategy_source import StrategySourceError
+from loopora.web_bundle_inputs import (
     _normalize_bundle_derive_form,
     _normalize_bundle_import_form,
+)
+from loopora.web_common_inputs import _coerce_bool
+from loopora.web_loop_inputs import (
+    _loop_payload_from_mapping,
     _normalize_loop_form,
-    _normalize_orchestration_form,
+)
+from loopora.web_role_inputs import (
     _normalize_role_definition_form,
-    _orchestration_payload_from_mapping,
     _role_definition_payload_from_mapping,
 )
 from loopora.web_route_context import WebRouteContext
+from loopora.web_strategy_inputs import _normalize_orchestration_form, _orchestration_payload_from_mapping
 from loopora.web_url_utils import safe_local_return_path, with_query_params
-from loopora.strategy_source import StrategySourceError
 
 
 def register_form_routes(app: FastAPI, ctx: WebRouteContext) -> None:

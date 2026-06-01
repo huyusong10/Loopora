@@ -9,7 +9,7 @@ from loopora.service_alignment_artifacts import (
     alignment_user_message_record,
     write_alignment_transcript_log,
 )
-from loopora.service_alignment_context import alignment_prefers_chinese
+from loopora.service_alignment_language import alignment_prefers_chinese
 from loopora.utils import utc_now
 
 

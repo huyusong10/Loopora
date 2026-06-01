@@ -8,11 +8,11 @@ from loopora.agent_native_iteration_repair import agent_native_step_view_iterati
 from loopora.agent_native_judgment_contract import agent_native_step_view_judgment_contract
 from loopora.agent_native_step_continuation import agent_native_step_view_continuation_context
 from loopora.agent_native_required_coverage import agent_native_required_coverage
-from loopora.service_agent_native_contracts import (
-    _agent_native_compact_known_evidence_refs,
-    _agent_native_submit_hint_with_scoped_result_paths,
+from loopora.agent_native_submit_hints import (
     agent_native_submit_command,
+    agent_native_submit_hint_with_scoped_result_paths,
 )
+from loopora.agent_native_known_evidence_refs import _agent_native_compact_known_evidence_refs
 from loopora.service_types import LooporaError
 
 
@@ -61,7 +61,7 @@ def _refresh_agent_native_submit_hint(step_view: dict[str, Any]) -> None:
     step_id = str(step_view.get("step_id") or "").strip()
     if not adapter or not run_id or not step_id:
         return
-    submit_hint = _agent_native_submit_hint_with_scoped_result_paths(submit_hint, step_view, run_id=run_id, step_id=step_id)
+    submit_hint = agent_native_submit_hint_with_scoped_result_paths(submit_hint, step_view, run_id=run_id, step_id=step_id)
     result_file = str(submit_hint.get("result_file_absolute_path") or submit_hint.get("result_file_path") or "").strip()
     if not result_file:
         template_path = str(submit_hint.get("result_template_absolute_path") or submit_hint.get("result_template_path") or "").strip()

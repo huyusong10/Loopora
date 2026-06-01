@@ -73,6 +73,20 @@ def merge_session_ref(current: object, ref: dict[str, str]) -> dict:
     return merged
 
 
+def ensure_resume_session_ref(request: object) -> None:
+    if not getattr(request, "inherit_session", False):
+        return
+    resume_session_id = str(getattr(request, "resume_session_id", "") or "").strip()
+    if not resume_session_id:
+        return
+    extra_context = getattr(request, "extra_context", None)
+    if not isinstance(extra_context, dict):
+        return
+    current = extra_context.get("session_ref")
+    if not isinstance(current, dict) or not current.get("session_id"):
+        extra_context["session_ref"] = {"session_id": resume_session_id}
+
+
 def infer_codex_session_ref_from_rollouts(
     *,
     workdir: Path,

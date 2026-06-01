@@ -8,6 +8,8 @@ from loopora.service_alignment_requests import AlignmentSessionCreateRequest
 from loopora.service_alignment_session_creation import AlignmentSessionCreationContext, alignment_session_dir, create_alignment_session
 from loopora.service_types import LooporaError
 
+REPO_ROOT = Path(__file__).resolve().parents[3]
+
 
 class FakeAlignmentSessionCreationRepository:
     def __init__(self) -> None:
@@ -131,3 +133,27 @@ def test_alignment_session_creation_rejects_missing_workdir(tmp_path: Path) -> N
 
     with pytest.raises(LooporaError, match="workdir does not exist"):
         create_alignment_session(context, AlignmentSessionCreateRequest(workdir=tmp_path / "missing"))
+
+
+def test_alignment_executor_settings_have_dedicated_boundary() -> None:
+    requests_source = (REPO_ROOT / "src" / "loopora" / "service_alignment_requests.py").read_text(encoding="utf-8")
+    settings_source = (REPO_ROOT / "src" / "loopora" / "service_alignment_executor_settings.py").read_text(
+        encoding="utf-8"
+    )
+    session_creation_source = (
+        REPO_ROOT / "src" / "loopora" / "service_alignment_session_creation.py"
+    ).read_text(encoding="utf-8")
+    contracts_source = (REPO_ROOT / "design" / "contracts.md").read_text(encoding="utf-8")
+
+    assert "from loopora.service_alignment_executor_settings import" in requests_source
+    assert "from loopora.service_alignment_executor_settings import normalize_alignment_executor_settings" in session_creation_source
+    for marker in (
+        "class AlignmentExecutorSettingsRequest",
+        "def default_alignment_executor_settings",
+        "def alignment_executor_settings_from_raw",
+        "def normalize_alignment_executor_settings",
+        "validate_command_args_text",
+    ):
+        assert marker in settings_source
+        assert marker not in requests_source
+    assert "service_alignment_executor_settings.py" in contracts_source

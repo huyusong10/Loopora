@@ -1,6 +1,11 @@
 from __future__ import annotations
 
-from loopora.events.run_event_payloads import coverage_recomputed_payload, evidence_accepted_payload
+from loopora.events.run_event_payloads import (
+    coverage_recomputed_payload,
+    evidence_accepted_payload,
+    evidence_linked_to_target_payload,
+    evidence_submitted_payload,
+)
 from loopora.engine.run_requests import (
     RunEngineAcceptEvidenceRequest,
     RunEngineCoverageRecomputedRequest,
@@ -10,7 +15,8 @@ from loopora.engine.run_requests import (
 from loopora.events.append_requests import RunEventAppend
 from loopora.events.envelope import EventEnvelope
 from loopora.events.run_event_commands import append_run_event_and_rebuild_projection_cache
-from loopora.events.run_event_transactions import (
+from loopora.events.run_evidence_event_transactions import (
+    StepEvidenceEventAppendRequest,
     append_evidence_acceptance_event_and_rebuild_projection_cache,
     append_step_evidence_events_and_rebuild_projection_cache,
 )
@@ -56,24 +62,45 @@ def append_step_evidence_and_rebuild_projection_cache(
     repository,
     request: RunEngineRecordStepEvidenceRequest,
 ) -> RunEngineRecordStepEvidenceResult:
+    linked_payload = evidence_linked_to_target_payload(request.run_id, request.evidence_entry)
     return append_step_evidence_events_and_rebuild_projection_cache(
         repository,
-        run_id=request.run_id,
-        evidence_request=RunEventAppend(
+        StepEvidenceEventAppendRequest(
             run_id=request.run_id,
-            event_type="EvidenceAccepted",
-            actor=request.actor,
-            payload=evidence_accepted_payload(request.run_id, request.evidence_entry),
-            correlation_id=request.correlation_id,
-            causation_id=request.causation_id,
-        ),
-        coverage_request=RunEventAppend(
-            run_id=request.run_id,
-            event_type="CoverageRecomputed",
-            actor=request.actor,
-            payload=coverage_recomputed_payload(request.run_id, request.coverage_projection),
-            correlation_id=request.correlation_id,
-            causation_id=None,
+            submitted_request=RunEventAppend(
+                run_id=request.run_id,
+                event_type="EvidenceSubmitted",
+                actor=request.actor,
+                payload=evidence_submitted_payload(request.run_id, request.evidence_entry),
+                correlation_id=request.correlation_id,
+                causation_id=request.causation_id,
+            ),
+            evidence_request=RunEventAppend(
+                run_id=request.run_id,
+                event_type="EvidenceAccepted",
+                actor=request.actor,
+                payload=evidence_accepted_payload(request.run_id, request.evidence_entry),
+                correlation_id=request.correlation_id,
+                causation_id=request.causation_id,
+            ),
+            coverage_request=RunEventAppend(
+                run_id=request.run_id,
+                event_type="CoverageRecomputed",
+                actor=request.actor,
+                payload=coverage_recomputed_payload(request.run_id, request.coverage_projection),
+                correlation_id=request.correlation_id,
+                causation_id=None,
+            ),
+            linked_request=RunEventAppend(
+                run_id=request.run_id,
+                event_type="EvidenceLinkedToTarget",
+                actor=request.actor,
+                payload=linked_payload,
+                correlation_id=request.correlation_id,
+                causation_id=None,
+            )
+            if linked_payload["target_refs"]
+            else None,
         ),
     )
 

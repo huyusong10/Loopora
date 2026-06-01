@@ -245,11 +245,15 @@ def test_cli_agent_next_prints_run_contract_for_intermediate_step_view(monkeypat
     assert "known_evidence_count: 4" in result.stdout
     assert "known_evidence_scope: filtered by evidence_query archetypes=builder limit=12" in result.stdout
     assert "iteration_repair_source: gatekeeper_step (GateKeeper)" in result.stdout
-    assert "iteration_repair_next_action: Produce direct project-owned proof before asking GateKeeper to pass again." in result.stdout
+    assert "iteration_repair_next_action: Produce direct project-owned proof" in result.stdout
+    assert "before asking GateKeeper to pass again." in result.stdout
     assert "known_evidence_refs:" in result.stdout
     assert "ev_contract result=blocked support=non_supporting reason=result is blocked" in result.stdout
-    assert "result_template_contract: Write one wrapper JSON object with loopora_host_dispatch and a schema-shaped result; replace null placeholders before submit." in result.stdout
-    assert "result_template_fill: open the template, replace null placeholders in result, keep loopora_host_dispatch, then submit the filled copy" in result.stdout
+    assert "result_template_contract: Write one wrapper JSON object with loopora_host_dispatch" in result.stdout
+    assert "schema-shaped result" in result.stdout
+    assert "replace null placeholders before submit" in result.stdout
+    assert "result_template_fill: open the template, replace null placeholders in result" in result.stdout
+    assert "keep loopora_host_dispatch, then submit the filled copy" in result.stdout
     _assert_cli_handoff_contract_paths(
         result.stdout,
         step_contract_fragment="iterations/iter_000/steps/01__inspector_step/step_contract.json",
@@ -415,7 +419,8 @@ def test_cli_agent_submit_prints_terminal_task_verdict(monkeypatch, tmp_path: Pa
     assert "task_next_action: run lifecycle is complete but the task is not proven" in result.stdout
     assert "run /loopora-run again in this Agent session to start the next evidence pass" in result.stdout
     assert "next_loop_command: /loopora-run" in result.stdout
-    assert "next_plan_action: open run_url and use Improve plan with evidence if the Loop itself needs adjustment" in result.stdout
+    assert "next_plan_action: open run_url and use Improve plan with evidence" in result.stdout
+    assert "if the Loop itself needs adjustment" in result.stdout
     assert "next_evidence_focus: Required coverage still lacks direct evidence." in result.stdout
     assert "agent_runner: lifecycle_closed_task_unproven" in result.stdout
     assert "agent_runner_task_verdict: insufficient_evidence" in result.stdout

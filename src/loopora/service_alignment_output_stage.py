@@ -9,24 +9,28 @@ from loopora.alignment_readiness_rules import (
     alignment_improvement_readiness_issues,
     readiness_evidence_issues,
 )
-from loopora.service_alignment_context import (
-    alignment_generation_prefers_chinese,
-    alignment_prefers_chinese,
-    alignment_workdir_snapshot,
-)
-from loopora.service_alignment_stage import (
-    AlignmentAgreementBlockCandidate,
-    AlignmentBundleStageGate,
-    alignment_agreement_block_plan,
-    alignment_agreement_language_issues,
+from loopora.service_alignment_agreement_stage import (
     alignment_agreement_ready_stage_plan,
     alignment_agreement_readiness_checklist_issues,
     alignment_agreement_working_agreement,
-    alignment_bundle_stage_error,
-    alignment_clarifying_stage_plan,
     alignment_merge_improvement_context,
     alignment_visible_agreement_message,
 )
+from loopora.service_alignment_language import (
+    alignment_agreement_language_issues,
+    alignment_generation_prefers_chinese,
+    alignment_prefers_chinese,
+)
+from loopora.service_alignment_stage import (
+    AlignmentBundleStageGate,
+    alignment_bundle_stage_error,
+)
+from loopora.service_alignment_stage_messages import (
+    AlignmentAgreementBlockCandidate,
+    alignment_agreement_block_plan,
+    alignment_clarifying_stage_plan,
+)
+from loopora.service_alignment_workdir_snapshot import alignment_workdir_snapshot
 from loopora.utils import utc_now
 
 

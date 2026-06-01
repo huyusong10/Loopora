@@ -1,26 +1,22 @@
 from __future__ import annotations
 
-from pathlib import Path
-
-from loopora.branding import state_dir_for_workdir
-from loopora.run_artifacts import RunArtifactLayout
+from loopora.events.projection_cache import run_projection_bundle_for_run
+from loopora.run_projection_fields import projection_first_run_record_fields
 from loopora.service_asset_common import normalize_role_models
+from loopora.service_loop_prompt_files import ServiceLoopPromptFileMixin
 from loopora.service_types import LooporaNotFoundError
 from loopora.strategy_source import (
     DEFAULT_STRATEGY_SOURCE_PRESET,
     StrategySourceError,
     build_preset_strategy_source,
-    load_strategy_prompt_file,
     normalize_strategy_source,
-    resolve_strategy_prompt_files,
-    strategy_prompt_asset_path,
     strategy_source_from_record,
     strategy_source_warnings,
 )
 from loopora.task_verdicts import hydrate_run_status_and_task_verdict
 
 
-class ServiceLoopRecordMixin:
+class ServiceLoopRecordMixin(ServiceLoopPromptFileMixin):
     def _legacy_strategy_source_from_loop(self, loop_or_run: dict) -> dict:
         role_models = normalize_role_models(
             loop_or_run.get("role_models_json") or loop_or_run.get("role_models") or {}
@@ -41,48 +37,6 @@ class ServiceLoopRecordMixin:
             return normalize_strategy_source(strategy_source)
         except StrategySourceError:
             return strategy_source
-
-    def _prompt_dir(self, base_dir: Path) -> Path:
-        return base_dir / "prompts"
-
-    def _run_artifact_layout(self, run_dir: Path) -> RunArtifactLayout:
-        return RunArtifactLayout(run_dir)
-
-    def _persist_prompt_files(self, base_dir: Path, prompt_files: dict[str, str]) -> None:
-        prompt_dir = self._prompt_dir(base_dir)
-        prompt_dir.mkdir(parents=True, exist_ok=True)
-        for prompt_ref, markdown_text in sorted(prompt_files.items()):
-            path = strategy_prompt_asset_path(prompt_dir, prompt_ref)
-            path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(str(markdown_text), encoding="utf-8")
-
-    def _read_prompt_files(self, base_dir: Path, strategy_source: dict) -> dict[str, str]:
-        prompt_files: dict[str, str] = {}
-        for role in strategy_source.get("roles", []):
-            prompt_ref = str(role.get("prompt_ref", "")).strip()
-            if not prompt_ref or prompt_ref in prompt_files:
-                continue
-            path = strategy_prompt_asset_path(self._prompt_dir(base_dir), prompt_ref)
-            try:
-                prompt_exists = path.exists()
-                if prompt_exists:
-                    prompt_files[prompt_ref] = load_strategy_prompt_file(path)
-            except StrategySourceError as exc:
-                if "could not be read" in str(exc):
-                    raise StrategySourceError(f"prompt artifact {prompt_ref} could not be read") from exc
-                raise StrategySourceError(f"prompt artifact {prompt_ref}: {exc}") from exc
-            except OSError as exc:
-                raise StrategySourceError(f"prompt artifact {prompt_ref} could not be read") from exc
-        return resolve_strategy_prompt_files(strategy_source, prompt_files)
-
-    def _read_prompt_files_for_loop(self, workdir: str, loop_id: str, strategy_source: dict) -> dict[str, str]:
-        loop_dir = state_dir_for_workdir(workdir) / "loops" / loop_id
-        return self._read_prompt_files(loop_dir, strategy_source)
-
-    def _read_prompt_files_for_run(self, run: dict) -> dict[str, str]:
-        strategy_source = self._normalized_strategy_source_from_record(run)
-        layout = self._run_artifact_layout(Path(run["runs_dir"]))
-        return self._read_prompt_files(layout.contract_dir, strategy_source)
 
     def _hydrate_loop_files(self, loop: dict) -> dict:
         if not loop:
@@ -114,6 +68,10 @@ class ServiceLoopRecordMixin:
             return run
         self._reap_terminal_thread_handle(run.get("id"), status=run.get("status"))
         hydrate_run_status_and_task_verdict(run)
+        run_id = str(run.get("id") or "").strip()
+        if run_id:
+            projections = run_projection_bundle_for_run(self.repository, run_id)
+            run.update(projection_first_run_record_fields(projections, run=run))
         strategy_source = self._normalized_strategy_source_from_record(run)
         run["strategy_source"] = strategy_source
         run["workflow_json"] = strategy_source

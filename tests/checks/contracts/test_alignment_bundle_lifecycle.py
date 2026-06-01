@@ -62,6 +62,30 @@ def test_alignment_bundle_validation_payloads_preserve_semantic_lint(tmp_path: P
     assert failure["semantic_lint"] == {"ok": False, "issues": ["spec.markdown"]}
 
 
+def test_alignment_bundle_validation_payloads_have_dedicated_boundary() -> None:
+    root = Path(__file__).resolve().parents[3]
+    lifecycle_source = (root / "src" / "loopora" / "service_alignment_bundle_lifecycle.py").read_text(
+        encoding="utf-8"
+    )
+    validation_payloads_source = (
+        root / "src" / "loopora" / "service_alignment_bundle_validation_payloads.py"
+    ).read_text(encoding="utf-8")
+    preview_source = (root / "src" / "loopora" / "service_alignment_bundle_preview.py").read_text(encoding="utf-8")
+    design_source = (root / "design" / "contracts.md").read_text(encoding="utf-8")
+
+    assert "from loopora.service_alignment_bundle_validation_payloads import" in lifecycle_source
+    assert "from loopora.service_alignment_bundle_validation_payloads import" in preview_source
+    for marker in (
+        "def alignment_bundle_validation_success",
+        "def alignment_bundle_validation_failure",
+        "def alignment_bundle_missing_file_validation",
+        "alignment_bundle_content_fingerprint",
+    ):
+        assert marker in validation_payloads_source
+        assert marker not in lifecycle_source
+    assert "service_alignment_bundle_validation_payloads.py" in design_source
+
+
 def test_alignment_bundle_sync_payloads_keep_status_and_result_shape(tmp_path: Path) -> None:
     bundle_path = tmp_path / "missing.yml"
     validation = alignment_bundle_missing_file_validation(bundle_path, checked_at="now")

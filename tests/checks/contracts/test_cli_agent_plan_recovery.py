@@ -32,7 +32,10 @@ def test_agent_plan_message_required_recovery_keeps_single_question_and_native_s
     assert output.count("required_inputs:") == 1
     assert "ask_user: What long-running task should Loopora govern?" in output
     assert "question_action: Use the host's official user-question or follow-up capability" in output
-    assert "recommended_reply_shape: Goal: ...; Fake-done risks: ...; Required evidence: ...; Judgment tradeoffs: ..." in output
+    assert "recommended_reply_shape: Goal: ..." in output
+    assert "Fake-done risks: ..." in output
+    assert "Required evidence: ..." in output
+    assert "Judgment tradeoffs: ..." in output
     assert "decision_impact: This answer decides the Loop's task contract" in output
     assert "example_user_reply: Build the account-deletion audit flow;" in output
     assert "first_task_message_example:" not in output

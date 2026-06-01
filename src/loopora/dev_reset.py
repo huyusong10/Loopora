@@ -5,14 +5,16 @@ from pathlib import Path
 from typing import Any
 
 from loopora.agent_adapter_managed_files import (
+    remove_empty_parents,
+    sha256_text,
+)
+from loopora.agent_adapter_manifest import (
     manifest_hash_for_path,
     manifest_paths,
     manifest_relative_path,
     managed_marker,
     obsolete_managed_paths,
     read_manifest,
-    remove_empty_parents,
-    sha256_text,
 )
 from loopora.agent_adapter_templates import managed_templates
 from loopora.branding import state_dir_for_workdir

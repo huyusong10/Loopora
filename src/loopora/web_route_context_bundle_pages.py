@@ -7,7 +7,7 @@ from fastapi import Request
 from fastapi.responses import HTMLResponse
 
 from loopora.markdown_tools import render_safe_markdown_html
-from loopora.web_inputs import (
+from loopora.web_bundle_inputs import (
     _normalize_bundle_derive_form,
     _normalize_bundle_import_form,
 )

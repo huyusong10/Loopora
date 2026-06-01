@@ -2,9 +2,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from loopora.context_flow import (
+from loopora.context_prompt_contracts import (
     _combine_role_guidance,
     output_contract_prompt,
+    render_role_note_section,
+    render_run_contract_section,
+    system_prompt_prefix,
+)
+from loopora.context_prompt_sections import (
     render_artifact_refs,
     render_continuation_section,
     render_evidence_section,
@@ -12,9 +17,6 @@ from loopora.context_flow import (
     render_handoff_section,
     render_iteration_section,
     render_previous_iteration_summary,
-    render_role_note_section,
-    render_run_contract_section,
-    system_prompt_prefix,
 )
 from loopora.specs import resolve_role_note
 

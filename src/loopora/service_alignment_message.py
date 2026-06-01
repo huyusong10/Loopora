@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from loopora.service_alignment_stage import alignment_user_message_stage_plan
+from loopora.service_alignment_agreement_stage import alignment_user_message_stage_plan
 from loopora.service_alignment_transcript import (
     AlignmentTranscriptContext,
     AlignmentUserMessageEffect,

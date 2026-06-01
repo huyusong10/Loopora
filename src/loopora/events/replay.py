@@ -7,6 +7,8 @@ from loopora.events.envelope import EventEnvelope
 from loopora.kernel.actors import ActorRef
 from loopora.kernel.run_state import RunLifecycleStatus, RunState
 from loopora.kernel.verdict import VerdictStatus
+from loopora.structured_numbers import coerced_int
+from loopora.task_verdict_aliases import verdict_status_from_task_status
 
 
 @dataclass(frozen=True, slots=True)
@@ -53,18 +55,6 @@ def replay_run_snapshot(events: list[EventEnvelope]) -> RunSnapshot:
     )
 
 
-def _coerce_verdict_status(value: object) -> VerdictStatus:
-    legacy_status = str(value or "not_evaluated")
-    if legacy_status == "insufficient_evidence":
-        return VerdictStatus.CONTINUE_REQUIRED
-    if legacy_status == "failed":
-        return VerdictStatus.BLOCKED
-    try:
-        return VerdictStatus(legacy_status)
-    except ValueError:
-        return VerdictStatus.NOT_EVALUATED
-
-
 def _apply_run_created(state: _ReplayState, event: EventEnvelope) -> None:
     if _is_terminal_lifecycle(state):
         return
@@ -91,14 +81,14 @@ def _apply_step_instruction(state: _ReplayState, event: EventEnvelope) -> None:
         return
     state.lifecycle_status = RunLifecycleStatus.AWAITING_ACTOR
     state.current_step_id = str(event.payload.get("step_id") or state.current_step_id or "")
-    state.current_iteration = _event_payload_int(event, "iteration", default=state.current_iteration)
+    state.current_iteration = coerced_int(event.payload.get("iteration"), default=state.current_iteration)
     state.pending_actor = ActorRef.from_dict(event.payload.get("pending_actor"))
 
 
 def _apply_iteration_started(state: _ReplayState, event: EventEnvelope) -> None:
     if _is_terminal_lifecycle(state):
         return
-    state.current_iteration = _event_payload_int(event, "iteration", default=state.current_iteration)
+    state.current_iteration = coerced_int(event.payload.get("iteration"), default=state.current_iteration)
 
 
 def _apply_step_committed(state: _ReplayState, _event: EventEnvelope) -> None:
@@ -109,7 +99,7 @@ def _apply_step_committed(state: _ReplayState, _event: EventEnvelope) -> None:
 
 
 def _apply_verdict(state: _ReplayState, event: EventEnvelope) -> None:
-    state.verdict_status = _coerce_verdict_status(event.payload.get("status"))
+    state.verdict_status = verdict_status_from_task_status(event.payload.get("status"))
 
 
 def _apply_terminal(status: RunLifecycleStatus, *, stop_requested: bool = False) -> Callable[[_ReplayState, EventEnvelope], None]:
@@ -130,16 +120,6 @@ def _is_terminal_lifecycle(state: _ReplayState) -> bool:
         RunLifecycleStatus.STOPPED,
         RunLifecycleStatus.FAILED,
     }
-
-
-def _event_payload_int(event: EventEnvelope, key: str, *, default: int) -> int:
-    value = event.payload.get(key)
-    if isinstance(value, bool):
-        return default
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        return default
 
 
 _HANDLERS: dict[str, Callable[[_ReplayState, EventEnvelope], None]] = {

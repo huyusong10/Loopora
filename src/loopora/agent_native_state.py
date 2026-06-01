@@ -6,7 +6,7 @@ import fcntl
 from pathlib import Path
 from typing import Any
 
-from loopora.context_flow import evidence_entry_id
+from loopora.context_step_results import evidence_entry_id
 from loopora.run_artifacts import INITIAL_STAGNATION_STATE, read_jsonl
 from loopora.service_types import LooporaError
 from loopora.utils import read_json, write_json

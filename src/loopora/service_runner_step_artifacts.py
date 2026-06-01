@@ -3,13 +3,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 import logging
 
-from loopora.context_flow import StepEvidenceEntryRequest, StepResultContext, build_step_evidence_entry, build_step_handoff
+from loopora.context_step_results import StepEvidenceEntryRequest, StepResultContext, build_step_evidence_entry, build_step_handoff
 from loopora.diagnostics import get_logger, log_event
-from loopora.evidence_coverage import write_evidence_coverage_projection
-from loopora.evidence_manifest import write_evidence_manifest_projection
+from loopora.engine import RunnerStepEvidenceArtifactsRequest, write_runner_step_evidence_artifacts
 from loopora.run_artifacts import append_jsonl_with_mirrors
 from loopora.runner_support_requests import StepOutputsWriteRequest
 from loopora.step_instruction_context import STEP_INSTRUCTION_CONTEXT_KEY
+from loopora.structured_numbers import coerced_non_negative_int
 
 logger = get_logger(__name__)
 
@@ -62,11 +62,13 @@ class ServiceRunnerStepArtifactsMixin:
         self,
         request: RunnerStepWriteRequest,
     ) -> RunnerStepWriteResult:
+        iter_id = coerced_non_negative_int(request.iter_id)
+        step_order = coerced_non_negative_int(request.step_order)
         step_result = StepResultContext(
             layout=request.layout,
-            iter_id=request.iter_id,
+            iter_id=iter_id,
             step=request.step,
-            step_order=request.step_order,
+            step_order=step_order,
             role=request.role,
             runtime_role=request.runtime_role,
             output=request.normalized_output,
@@ -77,9 +79,9 @@ class ServiceRunnerStepArtifactsMixin:
         self._write_step_outputs(
             StepOutputsWriteRequest(
                 layout=request.layout,
-                iter_id=request.iter_id,
+                iter_id=iter_id,
                 step=request.step,
-                step_order=request.step_order,
+                step_order=step_order,
                 role=request.role,
                 runtime_role=request.runtime_role,
                 output=request.normalized_output,
@@ -87,21 +89,21 @@ class ServiceRunnerStepArtifactsMixin:
             )
         )
         append_jsonl_with_mirrors(request.layout.evidence_ledger_path, evidence_entry)
-        coverage_projection = write_evidence_coverage_projection(request.layout)
-        manifest_projection = write_evidence_manifest_projection(
-            request.layout,
-            coverage_projection=coverage_projection,
+        evidence_artifacts = write_runner_step_evidence_artifacts(
+            RunnerStepEvidenceArtifactsRequest(layout=request.layout)
         )
+        coverage_projection = evidence_artifacts.coverage_projection
+        manifest_projection = evidence_artifacts.manifest_projection
         self.append_run_event(
             request.run_id,
             "step_handoff_written",
             {
-                "iter": request.iter_id,
+                "iter": iter_id,
                 "step_id": request.step["id"],
-                "step_order": request.step_order,
+                "step_order": step_order,
                 "role_name": request.role["name"],
                 "archetype": request.role["archetype"],
-                "handoff_path": request.layout.relative(request.layout.step_handoff_path(request.iter_id, request.step_order, request.step["id"])),
+                "handoff_path": request.layout.relative(request.layout.step_handoff_path(iter_id, step_order, request.step["id"])),
                 "evidence_ledger_path": request.layout.relative(request.layout.evidence_ledger_path),
                 "evidence_coverage_path": coverage_projection.get("coverage_path", ""),
                 "evidence_manifest_path": manifest_projection.get("manifest_path", ""),

@@ -2,9 +2,7 @@ from __future__ import annotations
 
 import typer
 
-from loopora.agent_native_guidance import actionable_blocking_item as _shared_actionable_blocking_item
-from loopora.agent_native_guidance import actionable_next_action as _shared_actionable_next_action
-from loopora.agent_native_guidance import coverage_target_blocker_explanation as _shared_coverage_target_blocker_explanation
+from loopora.agent_native_guidance import actionable_blocking_item, actionable_next_action
 from loopora.cli_summary_helpers import clip as _clip
 from loopora.cli_summary_helpers import clip_inline as _clip_inline
 
@@ -23,10 +21,10 @@ def _print_agent_submitted_step(submitted_step: object) -> None:
     _print_agent_submitted_coverage_results(submitted_step.get("coverage_results"))
     if _submitted_step_is_blocked(status):
         blocking_items = [
-            _actionable_blocking_item(str(item).strip()) for item in list(submitted_step.get("blocking_items") or []) if str(item).strip()
+            actionable_blocking_item(str(item).strip()) for item in list(submitted_step.get("blocking_items") or []) if str(item).strip()
         ]
         _print_agent_submitted_step_list("submitted_blocking_items", blocking_items, limit=6, clip_items=True)
-        next_action = _actionable_next_action(str(submitted_step.get("recommended_next_action") or "").strip(), blocking_items)
+        next_action = actionable_next_action(str(submitted_step.get("recommended_next_action") or "").strip(), blocking_items)
         if next_action:
             typer.echo(f"submitted_next_action: {_clip(next_action, 220)}")
     handoff_path = str(submitted_step.get("handoff_absolute_path") or submitted_step.get("handoff_path") or "").strip()
@@ -53,18 +51,6 @@ def _print_agent_submitted_native_trace(submitted_step: dict[str, object]) -> No
 
 def _submitted_step_is_blocked(status: str) -> bool:
     return status.strip().lower() in {"blocked", "failed", "errored", "rejected"}
-
-
-def _actionable_blocking_item(item: str) -> str:
-    return _shared_actionable_blocking_item(item)
-
-
-def _coverage_target_blocker_explanation(cleaned: str) -> str:
-    return _shared_coverage_target_blocker_explanation(cleaned)
-
-
-def _actionable_next_action(action: str, blocking_items: list[str]) -> str:
-    return _shared_actionable_next_action(action, blocking_items)
 
 
 def _print_agent_submitted_step_list(label: str, items: list[str], *, limit: int, clip_items: bool = False) -> None:

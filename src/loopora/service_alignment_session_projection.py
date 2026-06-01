@@ -5,9 +5,9 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from loopora.event_redaction import redact_sensitive_text
+from loopora.service_alignment_agent_entry_review import agent_entry_launch_projection, agent_entry_review_projection
 from loopora.service_alignment_artifacts import alignment_session_root
-from loopora.service_alignment_run_recovery import agent_entry_launch_projection, agent_entry_review_projection
-from loopora.service_alignment_stage import alignment_session_user_task_text
+from loopora.service_alignment_traceability_projection import alignment_session_user_task_text
 from loopora.service_types import LooporaNotFoundError
 
 

@@ -20,6 +20,7 @@ from loopora.events.projection_cache import (
     current_step_projection_for_run,
     rebuild_run_projection_cache,
     replay_run_projections,
+    run_projection_bundle_for_run,
 )
 from loopora.events.store import DomainEventAppendRequest
 from loopora.kernel import ActorRef
@@ -131,28 +132,50 @@ def test_run_engine_replays_evidence_coverage_verdict_and_audit_projections(tmp_
     assert projections["task_verdict"] == {
         "schema_version": 1,
         "kind": "event_replayed_task_verdict",
-        "source_sequence": 4,
+        "source_sequence": 6,
         "status": "passed",
         "source": "gatekeeper",
         "summary": "Replay says pass.",
     }
-    assert cached_coverage["source_sequence"] == 3
-    assert cached_coverage["payload"]["source_sequence"] == 3
-    assert cached_verdict["source_sequence"] == 4
+    assert cached_coverage["source_sequence"] == 6
+    assert cached_coverage["payload"]["source_sequence"] == 6
+    assert cached_verdict["source_sequence"] == 6
     assert cached_verdict["payload"]["status"] == "passed"
     assert projections["audit_timeline"]["events"][2]["event_type"] == "CoverageRecomputed"
     events = repository.list_domain_events(run_stream_id(run["id"]))
     coverage_event = events[2]
     evidence_event = events[1]
-    verdict_event = events[3]
+    requested_event = events[3]
+    verdict_event = events[4]
+    closure_event = events[5]
     assert coverage_event.causation_id == evidence_event.event_id
-    assert verdict_event.causation_id == coverage_event.event_id
+    assert requested_event.causation_id == coverage_event.event_id
+    assert verdict_event.causation_id == requested_event.event_id
+    assert closure_event.causation_id == verdict_event.event_id
     assert [event["event_type"] for event in projections["audit_timeline"]["events"]] == [
         "RunCreated",
         "EvidenceAccepted",
         "CoverageRecomputed",
+        "VerdictRequested",
         "VerdictIssued",
+        "VerdictAllowedClosure",
     ]
+
+
+def test_run_projection_bundle_prefers_fresh_projection_store_without_rebuild(tmp_path: Path, monkeypatch) -> None:
+    repository = LooporaRepository(tmp_path / "app.db")
+    run = _create_run(repository, tmp_path)
+
+    def fail_rebuild(_run_id: str) -> dict:
+        raise AssertionError("fresh projection_store records should be used without rebuilding")
+
+    monkeypatch.setattr(repository, "refresh_run_projection_cache", fail_rebuild)
+
+    projections = run_projection_bundle_for_run(repository, run["id"])
+
+    assert projections["run_snapshot"]["run_id"] == run["id"]
+    assert projections["coverage"]["source_sequence"] == 1
+    assert projections["task_verdict"]["source_sequence"] == 1
 
 
 def test_loop_events_replay_loop_definition_projection(tmp_path: Path) -> None:
@@ -268,7 +291,7 @@ def test_run_engine_replays_current_step_projection_from_claim_events(tmp_path: 
     assert projections["current_step"] == {
         "schema_version": 1,
         "kind": "event_replayed_current_step",
-        "source_sequence": 2,
+        "source_sequence": 4,
         "run_id": run["id"],
         "step_id": "builder",
         "iteration": 1,
@@ -347,7 +370,7 @@ def test_run_engine_current_step_projection_replays_when_cache_missing(tmp_path:
     refreshed_cache = repository.get_projection_record("current_step", run["id"])
 
     assert projection["kind"] == "event_replayed_current_step"
-    assert projection["source_sequence"] == 2
+    assert projection["source_sequence"] == 4
     assert projection["step_id"] == "builder"
     assert projection["claimable"] is True
     assert refreshed_cache["payload"] == projection
@@ -433,11 +456,11 @@ def test_run_engine_current_step_projection_replays_when_cache_is_stale(tmp_path
     projection = current_step_projection_for_run(repository, run["id"])
     refreshed_cache = repository.get_projection_record("current_step", run["id"])
 
-    assert cached_current_step["payload"]["source_sequence"] == 2
-    assert projection["source_sequence"] == 5
+    assert cached_current_step["payload"]["source_sequence"] == 4
+    assert projection["source_sequence"] == 7
     assert projection["step_id"] is None
     assert projection["claimable"] is False
-    assert refreshed_cache["source_sequence"] == 5
+    assert refreshed_cache["source_sequence"] == 7
     assert refreshed_cache["payload"] == projection
 
 
@@ -457,7 +480,7 @@ def test_run_engine_rebuilds_projection_store_from_event_replay(tmp_path: Path) 
     rebuild_run_projection_cache(repository, run["id"])
     cached = repository.get_projection_record("task_verdict", run["id"])
 
-    assert cached["source_sequence"] == 2
+    assert cached["source_sequence"] == repository.latest_domain_event_sequence(run_stream_id(run["id"]))
     assert cached["payload"]["status"] == "continue_required"
 
 

@@ -10,6 +10,103 @@ import loopora.web as web_module
 from loopora.web import build_app
 
 
+REPO_ROOT = Path(__file__).resolve().parents[3]
+
+
+def test_web_input_request_and_role_boundaries_have_dedicated_owner_modules() -> None:
+    web_inputs_source = (REPO_ROOT / "src" / "loopora" / "web_inputs.py").read_text(encoding="utf-8")
+    web_request_source = (REPO_ROOT / "src" / "loopora" / "web_request_context.py").read_text(encoding="utf-8")
+    web_role_source = (REPO_ROOT / "src" / "loopora" / "web_role_inputs.py").read_text(encoding="utf-8")
+    web_strategy_source = (REPO_ROOT / "src" / "loopora" / "web_strategy_inputs.py").read_text(encoding="utf-8")
+    web_loop_source = (REPO_ROOT / "src" / "loopora" / "web_loop_inputs.py").read_text(encoding="utf-8")
+    web_bundle_source = (REPO_ROOT / "src" / "loopora" / "web_bundle_inputs.py").read_text(encoding="utf-8")
+    web_common_source = (REPO_ROOT / "src" / "loopora" / "web_common_inputs.py").read_text(encoding="utf-8")
+    web_spec_documents_source = (REPO_ROOT / "src" / "loopora" / "web_spec_documents.py").read_text(
+        encoding="utf-8"
+    )
+    web_source = (REPO_ROOT / "src" / "loopora" / "web.py").read_text(encoding="utf-8")
+    role_pages_source = (REPO_ROOT / "src" / "loopora" / "web_route_context_role_pages.py").read_text(
+        encoding="utf-8"
+    )
+    forms_source = (REPO_ROOT / "src" / "loopora" / "web_route_forms.py").read_text(encoding="utf-8")
+    loop_pages_source = (REPO_ROOT / "src" / "loopora" / "web_route_context_loop_pages.py").read_text(
+        encoding="utf-8"
+    )
+    spec_source = (REPO_ROOT / "src" / "loopora" / "web_spec_api.py").read_text(encoding="utf-8")
+
+    assert "def _preferred_request_locale" not in web_inputs_source
+    assert "def _build_access_state" not in web_inputs_source
+    assert "def _normalize_role_definition_form" not in web_inputs_source
+    assert "def _role_definition_payload_from_mapping" not in web_inputs_source
+    assert "def _decorate_role_definition_overview" not in web_inputs_source
+    assert "def _strategy_source_from_mapping" not in web_inputs_source
+    assert "def _normalize_orchestration_form" not in web_inputs_source
+    assert "def _loop_payload_from_mapping" not in web_inputs_source
+    assert "def _normalize_loop_form" not in web_inputs_source
+    assert "def _normalize_bundle_import_form" not in web_inputs_source
+    assert "def _coerce_bool" not in web_inputs_source
+    assert "def _spec_document_payload" not in web_inputs_source
+    assert "def _preferred_request_locale" in web_request_source
+    assert "def _build_access_state" in web_request_source
+    assert "def _normalize_role_definition_form" in web_role_source
+    assert "def _role_definition_payload_from_mapping" in web_role_source
+    assert "def _decorate_role_definition_overview" in web_role_source
+    assert "def _strategy_source_from_mapping" in web_strategy_source
+    assert "def _normalize_orchestration_form" in web_strategy_source
+    assert "def _loop_payload_from_mapping" in web_loop_source
+    assert "def _normalize_loop_form" in web_loop_source
+    assert "def _normalize_bundle_import_form" in web_bundle_source
+    assert "def _coerce_bool" in web_common_source
+    assert all(
+        marker in web_spec_documents_source
+        for marker in ("def _load_spec_markdown_document", "def _resolve_spec_markdown_path")
+    )
+    assert "def _spec_document_payload" in web_spec_documents_source
+    assert all(marker not in spec_source for marker in ("def _load_spec_markdown_document", "def _resolve_spec_markdown_path"))
+    assert "from loopora.web_request_context import" in web_source
+    assert "from loopora.web_role_inputs import" in role_pages_source
+    assert "from loopora.web_role_inputs import" in forms_source
+    assert "from loopora.web_loop_inputs import" in forms_source
+    assert "from loopora.web_bundle_inputs import" in forms_source
+    assert "from loopora.web_common_inputs import" in forms_source
+    assert "from loopora.web_strategy_inputs import" in forms_source
+    assert "from loopora.web_loop_inputs import" in loop_pages_source
+    assert "from loopora.web_bundle_inputs import" in loop_pages_source
+    assert "from loopora.web_strategy_inputs import" in loop_pages_source
+    assert "from loopora.web_spec_documents import" in spec_source
+
+
+def test_web_spec_api_routes_have_dedicated_boundary() -> None:
+    editor_source = (REPO_ROOT / "src" / "loopora" / "web_route_editor_api.py").read_text(encoding="utf-8")
+    spec_source = (REPO_ROOT / "src" / "loopora" / "web_spec_api.py").read_text(encoding="utf-8")
+    design_source = (REPO_ROOT / "design" / "contracts.md").read_text(encoding="utf-8")
+
+    assert "from loopora.web_spec_api import register_spec_api_routes" in editor_source
+    assert "register_spec_api_routes(app, ctx)" in editor_source
+    for marker in (
+        "def _register_spec_validation_api_routes",
+        "def _register_spec_document_api_routes",
+        "def _register_markdown_prompt_api_routes",
+        "def _register_spec_template_api_routes",
+        "def _role_note_sections_from_strategy_source",
+    ):
+        assert marker in spec_source
+        assert marker not in editor_source
+    assert "web_spec_api.py" in design_source
+
+
+def test_web_app_auth_middleware_has_dedicated_boundary() -> None:
+    web_source = (REPO_ROOT / "src" / "loopora" / "web.py").read_text(encoding="utf-8")
+    auth_source = (REPO_ROOT / "src" / "loopora" / "web_auth_middleware.py").read_text(encoding="utf-8")
+    design_source = (REPO_ROOT / "design" / "contracts.md").read_text(encoding="utf-8")
+
+    assert "from loopora.web_auth_middleware import install_auth_middleware" in web_source
+    assert "def install_auth_middleware" in auth_source
+    assert "def _auth_token_matches" in auth_source
+    assert "def _auth_token_matches" not in web_source
+    assert "web_auth_middleware.py" in design_source
+
+
 def test_api_role_definition_rejects_custom_executor_preset_mode(service_factory) -> None:
     service = service_factory(scenario="success")
     client = TestClient(build_app(service=service))

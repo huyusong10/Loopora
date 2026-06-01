@@ -3,6 +3,9 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any, Literal, TypedDict
 
+from loopora.run_status_aliases import public_run_status_from_lifecycle
+from loopora.run_projection_fields import event_projection_payload, task_verdict_from_run
+from loopora.structured_numbers import coerced_optional_non_negative_int
 from loopora.strategy_source import (
     normalize_strategy_role_display_name,
     strategy_archetype_display_name,
@@ -65,21 +68,18 @@ class WebRunDetailProjectionV4(TypedDict):
     diagnostics: dict[str, Any]
 
 
-def web_run_detail_projection(run: dict[str, Any]) -> WebRunDetailProjectionV4:
+def web_run_detail_projection(run: dict[str, Any], event_projections: Mapping[str, Any] | None = None) -> WebRunDetailProjectionV4:
     run_id = str(run.get("id") or "").strip()
+    projections = event_projections if isinstance(event_projections, Mapping) else {}
+    run_snapshot = event_projection_payload(projections.get("run_snapshot"), kind="event_replayed_run_snapshot")
     strategy_source = _projection_strategy_source(run)
-    task_verdict = run.get("task_verdict") if isinstance(run.get("task_verdict"), dict) else run.get("task_verdict_json")
-    task_verdict = task_verdict if isinstance(task_verdict, dict) else {}
-    task_verdict = {
-        **task_verdict,
-        "status": str(task_verdict.get("status") or "not_evaluated").strip() or "not_evaluated",
-    }
+    task_verdict = task_verdict_from_run({**run, "event_projections": projections}) or {"status": "not_evaluated"}
     summary: WebRunDetailSummaryV4 = {
         "run_id": run_id,
         "loop_id": str(run.get("loop_id") or "").strip(),
         "run_status": str(run.get("run_status") or run.get("status") or "").strip(),
         "task_verdict_status": str(task_verdict["status"]),
-        "current_iter": _optional_int(run.get("current_iter")),
+        "current_iter": coerced_optional_non_negative_int(run.get("current_iter")),
         "active_role": str(run.get("active_role") or "").strip(),
         "workdir": str(run.get("workdir") or "").strip(),
     }
@@ -94,11 +94,11 @@ def web_run_detail_projection(run: dict[str, Any]) -> WebRunDetailProjectionV4:
     return {
         "schema_version": WEB_PROJECTION_SCHEMA_VERSION,
         "kind": "web_run_detail",
-        "status": summary["run_status"] or "unknown",
+        "status": _run_status_from_projection_or_record(run_snapshot, run),
         "strategy_source": strategy_source,
         "progress_stages": web_run_detail_progress_stages({"strategy_source": strategy_source}),
-        "summary": summary,
-        "lifecycle": lifecycle,
+        "summary": _summary_from_projection_or_record(summary, run_snapshot, task_verdict),
+        "lifecycle": _lifecycle_from_projection_or_record(lifecycle, run_snapshot),
         "task_verdict": task_verdict,
         "display": {
             "summary_md": str(run.get("summary_md") or ""),
@@ -116,8 +116,11 @@ def web_run_detail_projection(run: dict[str, Any]) -> WebRunDetailProjectionV4:
             "observation_snapshot_url": f"/api/runs/{run_id}/observation-snapshot" if run_id else "",
         },
         "diagnostics": {
-            "source_shape": "run_record",
+            "source_shape": "projection_bundle" if run_snapshot else "run_record",
             "projection_role": "web_run_detail",
+            "projection_source_sequence": (
+                coerced_optional_non_negative_int(run_snapshot.get("source_sequence")) if run_snapshot else None
+            ),
         },
     }
 
@@ -169,19 +172,53 @@ def web_run_detail_progress_stages(source: Mapping[str, object] | None) -> list[
     return stages
 
 
+def _summary_from_projection_or_record(
+    summary: WebRunDetailSummaryV4,
+    run_snapshot: Mapping[str, object],
+    task_verdict: Mapping[str, object],
+) -> WebRunDetailSummaryV4:
+    if not run_snapshot:
+        return summary
+    return {
+        **summary,
+        "run_id": str(run_snapshot.get("run_id") or summary["run_id"]),
+        "loop_id": str(run_snapshot.get("loop_id") or summary["loop_id"]),
+        "run_status": public_run_status_from_lifecycle(run_snapshot.get("lifecycle_status")) or summary["run_status"],
+        "task_verdict_status": str(task_verdict.get("status") or summary["task_verdict_status"]),
+        "current_iter": coerced_optional_non_negative_int(run_snapshot.get("current_iteration")),
+        "active_role": _pending_actor_label(run_snapshot.get("pending_actor")) or summary["active_role"],
+    }
+
+
+def _lifecycle_from_projection_or_record(
+    lifecycle: WebRunDetailLifecycleV4,
+    run_snapshot: Mapping[str, object],
+) -> WebRunDetailLifecycleV4:
+    if not run_snapshot:
+        return lifecycle
+    return {
+        **lifecycle,
+        "run_id": str(run_snapshot.get("run_id") or lifecycle["run_id"]),
+        "loop_id": str(run_snapshot.get("loop_id") or lifecycle["loop_id"]),
+        "run_status": public_run_status_from_lifecycle(run_snapshot.get("lifecycle_status")) or lifecycle["run_status"],
+        "current_iter": coerced_optional_non_negative_int(run_snapshot.get("current_iteration")),
+        "active_role": _pending_actor_label(run_snapshot.get("pending_actor")) or lifecycle["active_role"],
+    }
+
+
+def _run_status_from_projection_or_record(run_snapshot: Mapping[str, object], run: Mapping[str, object]) -> str:
+    return (
+        public_run_status_from_lifecycle(run_snapshot.get("lifecycle_status"))
+        if run_snapshot
+        else str(run.get("run_status") or run.get("status") or "unknown").strip()
+    ) or "unknown"
+
+
+def _pending_actor_label(value: object) -> str:
+    if not isinstance(value, Mapping):
+        return ""
+    return str(value.get("id") or value.get("kind") or "").strip()
+
+
 def _projection_strategy_source(source: Mapping[str, object] | None) -> dict[str, Any]:
     return strategy_source_from_record(source) or {}
-
-
-def _optional_int(value: object) -> int | None:
-    if isinstance(value, bool):
-        return None
-    if isinstance(value, int):
-        return value
-    text = str(value).strip()
-    if not text:
-        return None
-    try:
-        return int(text)
-    except ValueError:
-        return None

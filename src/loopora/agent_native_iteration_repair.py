@@ -2,11 +2,11 @@ from __future__ import annotations
 
 from typing import Any
 
+from loopora.agent_native_evidence_contracts import _agent_native_string_list
 from loopora.service_agent_native_contracts import (
     _agent_native_current_gap_repair_next_action,
     _agent_native_previous_blocked_handoff,
     _agent_native_repair_blockers_still_current,
-    _agent_native_string_list,
     agent_native_actionable_blocking_item,
     agent_native_actionable_repair_next_action,
 )

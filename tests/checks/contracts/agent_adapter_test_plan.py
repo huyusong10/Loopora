@@ -53,12 +53,11 @@ def _assert_web_review_plain_output(output: str, *, task_message: str) -> None:
     assert "Loopora Loop preview needs Web review" in output
     assert "not_fit:" not in output
     assert "review_status: not runnable; no candidate plan file was submitted" in output
-    assert (
-        "task_anchor_status: task anchor preserved from /loopora-plan; "
-        "no candidate plan has projected it into a runnable Loop yet"
-    ) in output
+    assert "task_anchor_status: task anchor preserved from /loopora-plan" in output
+    assert "no candidate plan has projected it into a runnable Loop yet" in output
     assert f"task_anchor_preview: {task_message}" in output
-    assert "review_scope: review_focus lists Loop surfaces to compile from the task anchor, not missing chat input" in output
+    assert "review_scope: review_focus lists Loop surfaces to compile" in output
+    assert "not missing chat input" in output
     for expected in ("review_focus:", "Success surface:", "Fake-done risks:", "Evidence expectations:"):
         assert expected in output
     assert "review_recommended_action: Continue evidence-first review (Recommended)" in output

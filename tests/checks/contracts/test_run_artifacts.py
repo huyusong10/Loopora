@@ -5,14 +5,18 @@ from pathlib import Path
 
 import pytest
 
+from loopora.run_artifact_catalog import list_run_artifacts
 from loopora.run_artifacts import (
+    RunArtifactLayout,
     append_jsonl_with_mirrors,
-    list_run_artifacts,
     read_jsonl,
     read_stagnation_state,
     write_json_with_mirrors,
     write_text_with_mirrors,
 )
+
+
+REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
 def test_jsonl_legacy_mirror_failure_does_not_block_canonical_write(tmp_path: Path) -> None:
@@ -66,6 +70,16 @@ def test_read_stagnation_state_recovers_corrupt_json(tmp_path: Path) -> None:
     }
 
 
+def test_run_artifact_layout_rejects_bool_iteration_and_step_identity(tmp_path: Path) -> None:
+    layout = RunArtifactLayout(tmp_path / "run")
+    bool_iter_id = True
+    bool_step_order = True
+
+    assert layout.step_output_raw_path(bool_iter_id, bool_step_order, "builder").relative_to(layout.run_dir).as_posix() == (
+        "iterations/iter_000/steps/00__builder/output.raw.json"
+    )
+
+
 def test_list_run_artifacts_does_not_mark_symlink_escaping_run_dir_available(tmp_path: Path) -> None:
     run_dir = tmp_path / "run"
     outside_artifact = tmp_path / "outside.md"
@@ -87,3 +101,47 @@ def test_list_run_artifacts_does_not_mark_symlink_escaping_run_dir_available(tmp
     assert artifacts_by_id["summary"]["available"] is False
     assert all(artifact.get("relative_path") != "contract/prompts/builder.md" for artifact in artifacts)
     assert all(artifact.get("relative_path") != "iterations/iter_001/steps/01__builder/prompt.md" for artifact in artifacts)
+
+
+def test_run_artifact_catalog_has_dedicated_boundary() -> None:
+    facade_source = (REPO_ROOT / "src" / "loopora" / "run_artifacts.py").read_text(encoding="utf-8")
+    layout_source = (REPO_ROOT / "src" / "loopora" / "run_artifact_layout.py").read_text(encoding="utf-8")
+    io_source = (REPO_ROOT / "src" / "loopora" / "run_artifact_io.py").read_text(encoding="utf-8")
+    layout_setup_source = (REPO_ROOT / "src" / "loopora" / "run_artifact_layout_setup.py").read_text(encoding="utf-8")
+    catalog_source = (REPO_ROOT / "src" / "loopora" / "run_artifact_catalog.py").read_text(encoding="utf-8")
+    web_overviews_source = (REPO_ROOT / "src" / "loopora" / "web_overviews.py").read_text(encoding="utf-8")
+    web_run_artifact_api_source = (REPO_ROOT / "src" / "loopora" / "web_run_artifact_api.py").read_text(
+        encoding="utf-8"
+    )
+    contracts_source = (REPO_ROOT / "design" / "contracts.md").read_text(encoding="utf-8")
+
+    assert "from loopora.run_artifact_layout import" in facade_source
+    assert "class RunArtifactLayout" in layout_source
+    assert "def artifact_ref" in layout_source
+    assert "def list_run_artifacts" not in facade_source
+    assert "def artifact_slug" not in facade_source
+    assert "from loopora.run_artifact_io import" in facade_source
+    for marker in (
+        "def read_stagnation_state",
+        "def append_jsonl_with_mirrors",
+        "def read_jsonl",
+        "def _log_mirror_write_failure",
+    ):
+        assert marker in io_source
+        assert marker not in facade_source
+    assert "def initialize_run_artifact_layout" in layout_setup_source
+    assert "def legacy_role_output_alias_paths" in layout_setup_source
+    assert "builder_output.json" in layout_setup_source
+    assert "dict(INITIAL_LATEST_STATE)" not in layout_source
+    assert "builder_output.json" not in facade_source
+    assert "RUN_ARTIFACT_SPECS" in catalog_source
+    assert "STEP_ARTIFACT_FILENAMES" in catalog_source
+    assert "def list_run_artifacts" in catalog_source
+    assert "from loopora.run_artifact_catalog import list_run_artifacts" in web_overviews_source
+    assert "from loopora.run_artifact_catalog import list_run_artifacts as _list_run_artifacts" in web_run_artifact_api_source
+    assert "def register_run_artifact_api_routes" in web_run_artifact_api_source
+    assert "run_artifact_layout.py" in contracts_source
+    assert "run_artifact_layout_setup.py" in contracts_source
+    assert "run_artifact_catalog.py" in contracts_source
+    assert "run_artifact_io.py" in contracts_source
+    assert "web_run_artifact_api.py" in contracts_source

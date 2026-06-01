@@ -4,6 +4,7 @@ from loopora.events.envelope import EventEnvelope
 from loopora.events.replay import RunSnapshot, replay_run_snapshot
 from loopora.kernel import ActorRef, RunLifecycleStatus, RunState, VerdictStatus
 from loopora.projections._event_replay_support import EVENT_REPLAY_PROJECTION_SCHEMA_VERSION
+from loopora.structured_numbers import coerced_int
 
 
 def replay_run_snapshot_projection(events: list[EventEnvelope]) -> dict:
@@ -31,7 +32,7 @@ def run_snapshot_projection(snapshot: RunSnapshot) -> dict:
 def run_snapshot_from_projection(payload: object) -> RunSnapshot | None:
     if not isinstance(payload, dict):
         return None
-    if _safe_int(payload.get("schema_version"), default=0) != EVENT_REPLAY_PROJECTION_SCHEMA_VERSION:
+    if coerced_int(payload.get("schema_version"), default=0) != EVENT_REPLAY_PROJECTION_SCHEMA_VERSION:
         return None
     if payload.get("kind") != "event_replayed_run_snapshot":
         return None
@@ -54,12 +55,12 @@ def run_snapshot_from_projection(payload: object) -> RunSnapshot | None:
             id=run_id,
             loop_id=str(payload.get("loop_id") or ""),
             lifecycle_status=lifecycle_status,
-            current_iteration=_safe_int(payload.get("current_iteration"), default=0),
+            current_iteration=coerced_int(payload.get("current_iteration"), default=0),
             current_step_id=current_step_id,
             pending_actor=pending_actor,
             stop_requested=bool(payload.get("stop_requested")),
         ),
-        latest_event_sequence=_safe_int(payload.get("source_sequence"), default=0),
+        latest_event_sequence=coerced_int(payload.get("source_sequence"), default=0),
         verdict_status=verdict_status,
     )
 
@@ -67,12 +68,3 @@ def run_snapshot_from_projection(payload: object) -> RunSnapshot | None:
 def _optional_text(value: object) -> str | None:
     text = str(value or "").strip()
     return text or None
-
-
-def _safe_int(value: object, *, default: int) -> int:
-    if isinstance(value, bool):
-        return default
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        return default

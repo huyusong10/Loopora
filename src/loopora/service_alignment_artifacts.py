@@ -7,7 +7,7 @@ from pathlib import Path
 
 from loopora.event_redaction import redact_sensitive_text
 from loopora.service_alignment_decision_options import normalize_alignment_decision_options
-from loopora.service_alignment_context import redact_alignment_source_value
+from loopora.service_alignment_source_context import redact_alignment_source_value
 from loopora.structured_numbers import structured_non_negative_int
 
 

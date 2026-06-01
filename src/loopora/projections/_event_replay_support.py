@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from loopora.events.envelope import EventEnvelope
+from loopora.structured_numbers import coerced_int
 
 
 EVENT_REPLAY_PROJECTION_SCHEMA_VERSION = 1
@@ -19,9 +20,4 @@ def ordered(events: list[EventEnvelope]) -> list[EventEnvelope]:
 
 
 def safe_int(value: object) -> int:
-    if isinstance(value, bool):
-        return 0
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        return 0
+    return coerced_int(value)

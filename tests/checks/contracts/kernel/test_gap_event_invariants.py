@@ -153,6 +153,71 @@ def test_passed_with_residual_risk_verdict_cannot_select_next_gap(tmp_path: Path
         )
 
 
+def test_next_gap_selected_requires_blocked_closure_causation(tmp_path: Path) -> None:
+    repository = LooporaRepository(tmp_path / "app.db")
+    run_id = "run_next_gap_selected_boundary"
+    stream_id = run_stream_id(run_id)
+    _append_run_created(repository, stream_id, run_id)
+    verdict_event = repository.append_domain_event(
+        DomainEventAppendRequest(
+            stream_id=stream_id,
+            aggregate_type="run",
+            aggregate_id=run_id,
+            event_type="VerdictIssued",
+            payload={
+                "run_id": run_id,
+                "status": "continue_required",
+                "next_gap": [{"target_id": "done_when.proof", "status": "missing"}],
+            },
+        )
+    )
+    closure_event = repository.append_domain_event(
+        DomainEventAppendRequest(
+            stream_id=stream_id,
+            aggregate_type="run",
+            aggregate_id=run_id,
+            event_type="VerdictBlockedClosure",
+            payload={"run_id": run_id, "verdict_status": "continue_required", "allowed": False},
+            causation_id=verdict_event.event_id,
+        )
+    )
+
+    with pytest.raises(ValueError, match="causation_id to reference latest VerdictBlockedClosure"):
+        repository.append_domain_event(
+            DomainEventAppendRequest(
+                stream_id=stream_id,
+                aggregate_type="run",
+                aggregate_id=run_id,
+                event_type="NextGapSelected",
+                payload={
+                    "run_id": run_id,
+                    "target_id": "done_when.proof",
+                    "status": "missing",
+                    "next_gap": [{"target_id": "done_when.proof", "status": "missing"}],
+                },
+                causation_id=verdict_event.event_id,
+            )
+        )
+
+    selected_event = repository.append_domain_event(
+        DomainEventAppendRequest(
+            stream_id=stream_id,
+            aggregate_type="run",
+            aggregate_id=run_id,
+            event_type="NextGapSelected",
+            payload={
+                "run_id": run_id,
+                "target_id": "done_when.proof",
+                "status": "missing",
+                "next_gap": [{"target_id": "done_when.proof", "status": "missing"}],
+            },
+            causation_id=closure_event.event_id,
+        )
+    )
+
+    assert selected_event.payload["target_id"] == "done_when.proof"
+
+
 def _append_run_created(repository: LooporaRepository, stream_id: str, run_id: str) -> None:
     repository.append_domain_event(
         DomainEventAppendRequest(

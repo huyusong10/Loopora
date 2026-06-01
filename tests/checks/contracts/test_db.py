@@ -87,6 +87,20 @@ def test_repository_initializes_schema_user_version(tmp_path: Path) -> None:
     assert _schema_user_version(target) == CURRENT_SCHEMA_VERSION
 
 
+def test_repository_schema_mixin_delegates_v3_schema_assets() -> None:
+    repo_root = Path(__file__).resolve().parents[3]
+    schema_source = (repo_root / "src/loopora/db_schema.py").read_text(encoding="utf-8")
+    v3_schema_source = (repo_root / "src/loopora/db_schema_v3.py").read_text(encoding="utf-8")
+    design_source = (repo_root / "design/contracts.md").read_text(encoding="utf-8")
+
+    assert "from loopora.db_schema_v3 import" in schema_source
+    assert "connection.executescript(V3_SCHEMA_SQL)" in schema_source
+    assert "CREATE TABLE IF NOT EXISTS" not in schema_source
+    assert "V3_SCHEMA_SQL" in v3_schema_source
+    assert "def schema_has_current_v3_shape" in v3_schema_source
+    assert "db_schema_v3.py" in design_source
+
+
 def test_repository_rejects_legacy_schema_for_v3_development_reset(tmp_path: Path) -> None:
     target = tmp_path / "app.db"
     with sqlite3.connect(target) as connection:
@@ -206,6 +220,26 @@ def test_append_event_tolerates_jsonl_mirror_failures(tmp_path: Path, monkeypatc
     stored = repository.list_events("run_test")
     assert len(stored) == 1
     assert stored[0]["payload"]["status"] == "running"
+
+
+def test_run_event_jsonl_mirror_io_has_dedicated_boundary() -> None:
+    repo_root = Path(__file__).resolve().parents[3]
+    records_source = (repo_root / "src/loopora/db_event_records.py").read_text(encoding="utf-8")
+    mirror_source = (repo_root / "src/loopora/db_event_mirrors.py").read_text(encoding="utf-8")
+    observation_source = (repo_root / "src/loopora/db_run_event_observations.py").read_text(encoding="utf-8")
+    design_source = (repo_root / "design/contracts.md").read_text(encoding="utf-8")
+
+    assert "from loopora.db_event_mirrors import mirror_run_event_record" in records_source
+    assert "from loopora.db_run_event_observations import" in records_source
+    assert "class RepositoryEventRecordsMixin(RepositoryRunEventObservationMixin)" in records_source
+    assert "def run_observation_snapshot_rows" not in records_source
+    assert "class RunObservationSnapshotRowsRequest" in observation_source
+    assert "def run_observation_snapshot_rows" in observation_source
+    assert "def mirror_run_event_record" in mirror_source
+    assert "append_jsonl_with_mirrors" in mirror_source
+    assert "RunArtifactLayout" not in records_source
+    assert "db_run_event_observations.py" in design_source
+    assert "db_event_mirrors.py" in design_source
 
 
 def test_append_event_tolerates_runtime_jsonl_mirror_failures(tmp_path: Path, monkeypatch) -> None:

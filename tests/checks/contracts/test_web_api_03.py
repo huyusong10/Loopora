@@ -22,6 +22,27 @@ from web_api_test_support import (
     _wait_for_run_terminal_status,
 )
 
+REPO_ROOT = Path(__file__).resolve().parents[3]
+
+
+def test_system_api_guard_has_dedicated_route_boundary() -> None:
+    editor_source = (REPO_ROOT / "src" / "loopora" / "web_route_editor_api.py").read_text(encoding="utf-8")
+    system_source = (REPO_ROOT / "src" / "loopora" / "web_system_api.py").read_text(encoding="utf-8")
+    design_source = (REPO_ROOT / "design" / "contracts.md").read_text(encoding="utf-8")
+
+    assert "from loopora.web_system_api import register_system_api_routes" in editor_source
+    assert "register_system_api_routes(app, ctx)" in editor_source
+    for marker in (
+        "def _guard_system_api_request",
+        "def _system_request_is_same_origin",
+        '"/api/system/pick-directory"',
+        '"/api/system/reveal-path"',
+    ):
+        assert marker in system_source
+        assert marker not in editor_source
+    assert "web_system_api.py" in design_source
+
+
 def test_api_run_observation_snapshot_uses_consistent_event_cutoff(
     monkeypatch,
     service_factory,
@@ -439,6 +460,24 @@ def test_api_local_asset_diagnostics_reports_orphans_and_missing_dirs(
     assert any(item["resource_type"] == "bundle" and item["resource_id"] == "bundle_missing_dir" for item in payload["record_without_dir"])
     assert any(item["resource_type"] == "run" and item["resource_id"] == run["id"] for item in payload["record_without_dir"])
     assert any(item["resource_type"] == "run" and item["resource_id"] == "run_registry_missing" for item in payload["record_without_dir"])
+
+
+def test_local_asset_diagnostics_delegate_orphan_dir_projection() -> None:
+    diagnostics_source = (REPO_ROOT / "src" / "loopora" / "service_local_asset_diagnostics.py").read_text(
+        encoding="utf-8"
+    )
+    orphans_source = (REPO_ROOT / "src" / "loopora" / "service_local_asset_orphans.py").read_text(
+        encoding="utf-8"
+    )
+    design_source = (REPO_ROOT / "design" / "contracts.md").read_text(encoding="utf-8")
+
+    assert "from loopora.service_local_asset_orphans import" in diagnostics_source
+    for marker in ("def orphan_bundle_dirs", "def orphan_run_dirs", "def orphan_alignment_dirs"):
+        assert marker in orphans_source
+        assert marker not in diagnostics_source
+    assert "def _records_without_dirs" in diagnostics_source
+    assert "service_local_asset_orphans.py" in design_source
+
 
 def test_api_run_stream_emits_redacted_stream_error_on_backend_failure() -> None:
     configure_logging()

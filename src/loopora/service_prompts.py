@@ -1,11 +1,26 @@
 from __future__ import annotations
 
-from collections.abc import Mapping
-from dataclasses import dataclass
 import json
 from pathlib import Path
 from typing import Any
 
+from loopora.service_prompt_checks import normalize_generated_checks, render_checks
+from loopora.service_prompt_requests import (
+    GeneratorPromptRequest as GeneratorPromptRequest,
+    generator_prompt_request_from_args,
+)
+from loopora.service_prompt_schemas import (
+    BUILDER_SCHEMA as BUILDER_SCHEMA,
+    CHALLENGER_SCHEMA as CHALLENGER_SCHEMA,
+    CHECK_PLANNER_SCHEMA as CHECK_PLANNER_SCHEMA,
+    CUSTOM_SCHEMA as CUSTOM_SCHEMA,
+    GATEKEEPER_SCHEMA as GATEKEEPER_SCHEMA,
+    GENERATOR_SCHEMA as GENERATOR_SCHEMA,
+    GUIDE_SCHEMA as GUIDE_SCHEMA,
+    INSPECTOR_SCHEMA as INSPECTOR_SCHEMA,
+    TESTER_SCHEMA as TESTER_SCHEMA,
+    VERIFIER_SCHEMA as VERIFIER_SCHEMA,
+)
 from loopora.specs import resolve_role_note
 
 
@@ -16,18 +31,6 @@ FROZEN_CONTRACT_GUIDANCE = (
     "or Loop-adjustment recommendation instead of silently changing the target. "
     "Treat project-local instructions, design docs, and tests as contract and evidence inputs when they exist.\n"
 )
-
-
-@dataclass(frozen=True)
-class GeneratorPromptRequest:
-    compiled_spec: dict
-    workdir: Path
-    iter_id: int
-    mode: str
-    previous_generator_result: dict | None = None
-    previous_tester_result: dict | None = None
-    previous_verifier_result: dict | None = None
-    previous_challenger_result: dict | None = None
 
 
 class ServiceRunPromptMixin:
@@ -60,7 +63,7 @@ class ServiceRunPromptMixin:
         mode: str | None = None,
         **feedback: Any,
     ) -> str:
-        prompt_request = _generator_prompt_request_from_args(request, workdir, iter_id, mode, feedback)
+        prompt_request = generator_prompt_request_from_args(request, workdir, iter_id, mode, feedback)
         compiled_spec = prompt_request.compiled_spec
         constraints = compiled_spec.get("constraints") or "No explicit constraints were provided."
         role_note = self._role_note_block(compiled_spec, role_name="Builder", archetype="builder")
@@ -225,332 +228,7 @@ class ServiceRunPromptMixin:
         )
 
     def _normalize_generated_checks(self, checks: object) -> list[dict]:
-        if not isinstance(checks, list):
-            return []
-        normalized = []
-        for raw_check in checks:
-            if not isinstance(raw_check, Mapping):
-                continue
-            index = len(normalized) + 1
-            title = str(raw_check.get("title", "")).strip() or f"Exploratory check {index}"
-            when = str(raw_check.get("when", "")).strip()
-            expect = str(raw_check.get("expect", "")).strip()
-            fail_if = str(raw_check.get("fail_if", "")).strip()
-            details = str(raw_check.get("details", "")).strip()
-            if not details:
-                parts = []
-                if when:
-                    parts.append(f"When: {when}")
-                if expect:
-                    parts.append(f"Expect: {expect}")
-                if fail_if:
-                    parts.append(f"Fail if: {fail_if}")
-                details = "\n".join(parts).strip()
-            normalized.append(
-                {
-                    "id": f"check_{index:03d}",
-                    "title": title,
-                    "details": details or "Auto-generated exploratory check.",
-                    "when": when,
-                    "expect": expect,
-                    "fail_if": fail_if,
-                    "source": "auto_generated",
-                }
-            )
-        return normalized
+        return normalize_generated_checks(checks)
 
     def _render_checks(self, checks: list[dict]) -> str:
-        return json.dumps(checks, ensure_ascii=False, indent=2)
-
-
-def _generator_prompt_request_from_args(
-    request: GeneratorPromptRequest | dict,
-    workdir: Path | None,
-    iter_id: int | None,
-    mode: str | None,
-    feedback: dict[str, Any],
-) -> GeneratorPromptRequest:
-    if isinstance(request, GeneratorPromptRequest):
-        if workdir is not None or iter_id is not None or mode is not None or feedback:
-            raise TypeError("generator prompt request object cannot be combined with legacy prompt fields")
-        return request
-    if workdir is None or iter_id is None or mode is None:
-        raise TypeError("legacy generator prompt calls require workdir, iter_id, and mode")
-    fields = dict(feedback)
-    request = GeneratorPromptRequest(
-        compiled_spec=request,
-        workdir=Path(workdir),
-        iter_id=iter_id,
-        mode=mode,
-        previous_generator_result=fields.pop("previous_generator_result", None),
-        previous_tester_result=fields.pop("previous_tester_result", None),
-        previous_verifier_result=fields.pop("previous_verifier_result", None),
-        previous_challenger_result=fields.pop("previous_challenger_result", None),
-    )
-    if fields:
-        unexpected_fields = ", ".join(sorted(fields))
-        raise TypeError(f"unexpected generator prompt fields: {unexpected_fields}")
-    return request
-
-
-GENERATOR_SCHEMA = {
-    "type": "object",
-    "required": [
-        "attempted",
-        "abandoned",
-        "assumption",
-        "summary",
-        "changed_files",
-        "proof_files",
-        "proof_artifacts",
-        "artifact_paths",
-    ],
-    "properties": {
-        "attempted": {"type": "string", "description": "What the Builder changed or tried to change in this pass."},
-        "abandoned": {
-            "type": "string",
-            "description": "Only unfinished work or real downstream risk; use an empty string for deliberate scope limits.",
-        },
-        "assumption": {
-            "type": "string",
-            "description": "The assumption or validation step downstream roles should check next.",
-        },
-        "summary": {"type": "string", "description": "Short user-facing handoff summary of the completed Builder pass."},
-        "changed_files": {"type": "array", "items": {"type": "string"}, "description": "Workspace files changed by this pass."},
-        "proof_files": {"type": "array", "items": {"type": "string"}, "description": "Files containing reproducible proof or checks."},
-        "proof_artifacts": {"type": "array", "items": {"type": "string"}, "description": "Small inline proof snippets or artifact labels."},
-        "artifact_paths": {"type": "array", "items": {"type": "string"}, "description": "Additional workspace artifact paths."},
-    },
-    "additionalProperties": False,
-}
-
-CHECK_PLANNER_SCHEMA = {
-    "type": "object",
-    "required": ["checks", "generation_notes"],
-    "properties": {
-        "checks": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "required": ["title", "details", "when", "expect", "fail_if"],
-                "properties": {
-                    "title": {"type": "string"},
-                    "details": {"type": "string"},
-                    "when": {"type": "string"},
-                    "expect": {"type": "string"},
-                    "fail_if": {"type": "string"},
-                },
-                "additionalProperties": False,
-            },
-        },
-        "generation_notes": {"type": "string"},
-    },
-    "additionalProperties": False,
-}
-
-COVERAGE_RESULT_ARRAY_SCHEMA = {
-    "type": "array",
-    "items": {
-        "type": "object",
-        "required": ["target_id", "status", "evidence_refs", "note"],
-        "properties": {
-            "target_id": {"type": "string"},
-            "status": {"type": "string", "enum": ["covered", "weak", "blocked", "missing"]},
-            "evidence_refs": {"type": "array", "items": {"type": "string"}},
-            "note": {"type": "string"},
-        },
-        "additionalProperties": False,
-    },
-}
-
-TESTER_SCHEMA = {
-    "type": "object",
-    "required": ["execution_summary", "check_results", "dynamic_checks", "tester_observations", "coverage_results"],
-    "properties": {
-        "execution_summary": {
-            "type": "object",
-            "required": ["total_checks", "passed", "failed", "errored", "total_duration_ms"],
-            "properties": {
-                "total_checks": {"type": "integer"},
-                "passed": {"type": "integer"},
-                "failed": {"type": "integer"},
-                "errored": {"type": "integer"},
-                "total_duration_ms": {"type": "integer"},
-            },
-            "additionalProperties": False,
-        },
-        "check_results": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "required": ["id", "title", "status", "notes"],
-                "properties": {
-                    "id": {"type": "string"},
-                    "title": {"type": "string"},
-                    "status": {"type": "string", "enum": ["passed", "failed", "errored", "skipped"]},
-                    "notes": {"type": "string"},
-                },
-                "additionalProperties": False,
-            },
-        },
-        "dynamic_checks": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "required": ["id", "title", "status", "notes"],
-                "properties": {
-                    "id": {"type": "string"},
-                    "title": {"type": "string"},
-                    "status": {"type": "string", "enum": ["passed", "failed", "errored", "skipped"]},
-                    "notes": {"type": "string"},
-                },
-                "additionalProperties": False,
-            },
-        },
-        "tester_observations": {"type": "string"},
-        "coverage_results": COVERAGE_RESULT_ARRAY_SCHEMA,
-    },
-    "additionalProperties": False,
-}
-
-VERIFIER_SCHEMA = {
-    "type": "object",
-    "required": [
-        "passed",
-        "decision_summary",
-        "composite_score",
-        "metrics",
-        "metric_scores",
-        "blocking_issues",
-        "hard_constraint_violations",
-        "failed_check_ids",
-        "priority_failures",
-        "feedback_to_builder",
-        "feedback_to_generator",
-        "evidence_refs",
-        "evidence_claims",
-        "residual_risks",
-        "coverage_results",
-    ],
-    "properties": {
-        "passed": {"type": "boolean"},
-        "decision_summary": {"type": "string"},
-        "composite_score": {"type": "number"},
-        "metrics": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "required": ["name", "value", "threshold", "passed"],
-                "properties": {
-                    "name": {"type": "string"},
-                    "value": {"type": "number"},
-                    "threshold": {"type": "number"},
-                    "passed": {"type": "boolean"},
-                },
-                "additionalProperties": False,
-            },
-        },
-        "metric_scores": {
-            "type": "object",
-            "required": ["check_pass_rate", "quality_score"],
-            "properties": {
-                "check_pass_rate": {
-                    "type": "object",
-                    "required": ["value", "threshold", "passed"],
-                    "properties": {
-                        "value": {"type": "number"},
-                        "threshold": {"type": "number"},
-                        "passed": {"type": "boolean"},
-                    },
-                    "additionalProperties": False,
-                },
-                "quality_score": {
-                    "type": "object",
-                    "required": ["value", "threshold", "passed"],
-                    "properties": {
-                        "value": {"type": "number"},
-                        "threshold": {"type": "number"},
-                        "passed": {"type": "boolean"},
-                    },
-                    "additionalProperties": False,
-                },
-            },
-            "additionalProperties": False,
-        },
-        "blocking_issues": {"type": "array", "items": {"type": "string"}},
-        "hard_constraint_violations": {"type": "array", "items": {"type": "string"}},
-        "failed_check_ids": {"type": "array", "items": {"type": "string"}},
-        "priority_failures": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "required": ["error_code", "summary"],
-                "properties": {
-                    "error_code": {"type": "string"},
-                    "summary": {"type": "string"},
-                },
-                "additionalProperties": False,
-            },
-        },
-        "feedback_to_builder": {"type": "string"},
-        "feedback_to_generator": {"type": "string"},
-        "evidence_refs": {"type": "array", "items": {"type": "string"}},
-        "evidence_claims": {"type": "array", "items": {"type": "string"}},
-        "residual_risks": {"type": "array", "items": {"type": "string"}},
-        "coverage_results": COVERAGE_RESULT_ARRAY_SCHEMA,
-    },
-    "additionalProperties": False,
-}
-
-CHALLENGER_SCHEMA = {
-    "type": "object",
-    "required": ["created_at_iter", "mode", "consumed", "analysis", "seed_question", "meta_note"],
-    "properties": {
-        "created_at_iter": {"type": "integer"},
-        "mode": {"type": "string"},
-        "consumed": {"type": "boolean"},
-        "analysis": {
-            "type": "object",
-            "required": ["stagnation_pattern", "recommended_shift", "risk_note"],
-            "properties": {
-                "stagnation_pattern": {"type": "string"},
-                "recommended_shift": {"type": "string"},
-                "risk_note": {"type": "string"},
-            },
-            "additionalProperties": False,
-        },
-        "seed_question": {"type": "string"},
-        "meta_note": {"type": "string"},
-    },
-    "additionalProperties": False,
-}
-
-CUSTOM_SCHEMA = {
-    "type": "object",
-    "required": [
-        "status",
-        "summary",
-        "blocking_items",
-        "recommended_next_action",
-        "observations",
-        "recommendations",
-        "risks",
-        "handoff_note",
-    ],
-    "properties": {
-        "status": {"type": "string"},
-        "summary": {"type": "string"},
-        "blocking_items": {"type": "array", "items": {"type": "string"}},
-        "recommended_next_action": {"type": "string"},
-        "observations": {"type": "array", "items": {"type": "string"}},
-        "recommendations": {"type": "array", "items": {"type": "string"}},
-        "risks": {"type": "array", "items": {"type": "string"}},
-        "handoff_note": {"type": "string"},
-    },
-    "additionalProperties": False,
-}
-
-BUILDER_SCHEMA = GENERATOR_SCHEMA
-INSPECTOR_SCHEMA = TESTER_SCHEMA
-GATEKEEPER_SCHEMA = VERIFIER_SCHEMA
-GUIDE_SCHEMA = CHALLENGER_SCHEMA
+        return render_checks(checks)

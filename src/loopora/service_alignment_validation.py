@@ -14,18 +14,15 @@ from loopora.bundles import (
     lint_alignment_bundle_semantics,
     load_bundle_text,
 )
-from loopora.service_alignment_context import (
-    alignment_assert_bundle_workdir,
-    alignment_generation_prefers_chinese,
-    alignment_workdir_snapshot,
-)
 from loopora.service_alignment_execution import alignment_bundle_executor_settings_issues
+from loopora.service_alignment_language import alignment_bundle_language_issues, alignment_generation_prefers_chinese
+from loopora.service_alignment_ready_bundle_validation import alignment_assert_bundle_workdir
 from loopora.service_alignment_stage import (
-    alignment_bundle_language_issues,
     alignment_bundle_workdir_fact_issues,
     alignment_improvement_bundle_issues,
-    alignment_session_user_task_text,
 )
+from loopora.service_alignment_traceability_projection import alignment_session_user_task_text
+from loopora.service_alignment_workdir_snapshot import alignment_workdir_snapshot
 from loopora.service_types import LooporaError
 
 

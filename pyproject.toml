@@ -96,9 +96,12 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 # Typer command modules expose the public CLI flag surface in callback
 # signatures; internal helpers must keep using structured request objects.
-"src/loopora/cli_agent_adapter_commands.py" = ["FBT002", "PLR0913"]
-"src/loopora/cli_agent_native.py" = ["PLR0913"]
+"src/loopora/cli_agent_adapter_lifecycle_commands.py" = ["FBT002"]
+"src/loopora/cli_agent_recovery.py" = ["PLR0913"]
+"src/loopora/cli_agent_recovery_results.py" = ["PLR0913"]
+"src/loopora/cli_agent_runtime_commands.py" = ["FBT002", "PLR0913"]
 "src/loopora/cli_agent_submit_repair.py" = ["PLR0913"]
+"src/loopora/cli_agent_submit_repair_results.py" = ["PLR0913"]
 "src/loopora/cli_diagnose_commands.py" = ["FBT001", "FBT003"]
 "src/loopora/cli_loop_commands.py" = ["FBT002", "PLR0913"]
 "src/loopora/cli_orchestration_commands.py" = ["PLR0913"]

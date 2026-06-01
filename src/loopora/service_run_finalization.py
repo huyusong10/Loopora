@@ -4,8 +4,12 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from loopora.diagnostics import get_logger, log_exception
-from loopora.engine import RepositoryRunEngine, RunEngineIssueVerdictRequest
+from loopora.engine import (
+    RepositoryRunEngine,
+    RunEngineIssueVerdictRequest,
+)
 from loopora.kernel import ActorRef
+from loopora.run_finalization_verdicts import event_verdict_for_finalization, kernel_event_verdict_for_finalization
 from loopora.run_artifacts import RunArtifactLayout
 from loopora.task_verdicts import build_task_verdict
 from loopora.utils import utc_now, write_json
@@ -116,6 +120,23 @@ class ServiceRunFinalizationMixin:
             final_reason=request.final_reason,
         )
         self._persist_task_verdict_file(request.run_dir, task_verdict)
+        kernel_event_verdict = kernel_event_verdict_for_finalization(
+            run_id=request.run_id,
+            existing_run=existing_run,
+            run_dir=request.run_dir,
+            last_verdict=request.last_verdict if request.last_verdict is not None else existing_run.get("last_verdict_json"),
+        )
+        event_verdict = event_verdict_for_finalization(
+            public_task_verdict=task_verdict,
+            kernel_event_verdict=kernel_event_verdict,
+        )
+        RepositoryRunEngine(self.repository).issue_verdict(
+            RunEngineIssueVerdictRequest(
+                run_id=request.run_id,
+                verdict=event_verdict,
+                actor=ActorRef.verdict_engine(),
+            )
+        )
         result = self.repository.update_run(
             request.run_id,
             status=request.status,
@@ -124,13 +145,6 @@ class ServiceRunFinalizationMixin:
             last_verdict=request.last_verdict,
             task_verdict=task_verdict,
             summary_md=request.summary,
-        )
-        RepositoryRunEngine(self.repository).issue_verdict(
-            RunEngineIssueVerdictRequest(
-                run_id=request.run_id,
-                verdict=task_verdict,
-                actor=ActorRef.verdict_engine(),
-            )
         )
         return self._hydrate_run_files(result) if request.hydrate else result
 

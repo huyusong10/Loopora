@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import os
-import shutil
 import threading
 import time
 from pathlib import Path
@@ -10,7 +9,8 @@ from pathlib import Path
 import pytest
 
 from loopora.executor import CodexExecutor, ExecutorError
-from loopora.run_artifacts import RunArtifactLayout
+from loopora.engine import RepositoryRunEngine, RunEngineIssueVerdictRequest, RunEngineRecordStepEvidenceRequest
+from loopora.kernel import ActorRef
 from loopora.service import LooporaError, LooporaService
 
 from runner_helpers import (
@@ -19,6 +19,8 @@ from runner_helpers import (
     _join_async_run,
     _wait_for_terminal_run,
 )
+
+REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
 def test_failed_run_without_verdict_is_not_evaluated(
@@ -36,6 +38,58 @@ def test_failed_run_without_verdict_is_not_evaluated(
     assert refreshed["run_status"] == "failed"
     assert refreshed["task_verdict"]["status"] == "not_evaluated"
     assert refreshed["task_verdict"]["source"] == "run_status"
+
+
+def _issue_minimal_passing_verdict(service: LooporaService, run_id: str) -> None:
+    engine = RepositoryRunEngine(service.repository)
+    actor = ActorRef.verdict_engine()
+    engine.record_step_evidence(
+        RunEngineRecordStepEvidenceRequest(
+            run_id=run_id,
+            actor=actor,
+            evidence_entry={
+                "id": "ev_thread_reap_fixture",
+                "step_id": "fixture",
+                "role_id": "fixture",
+                "claim": "The run completed before the thread handle was reaped.",
+                "result": "passed",
+                "verifies": ["target:done_when.thread_reaped:covered"],
+            },
+            coverage_projection={"status": "covered", "target_count": 1, "covered_target_count": 1},
+        )
+    )
+    engine.issue_verdict(
+        RunEngineIssueVerdictRequest(
+            run_id=run_id,
+            actor=actor,
+            verdict={"status": "passed", "source": "gatekeeper", "summary": "Thread reap fixture completed."},
+        )
+    )
+
+
+def test_run_result_acceptance_has_dedicated_service_boundary() -> None:
+    lifecycle_source = (REPO_ROOT / "src" / "loopora" / "service_run_lifecycle.py").read_text(encoding="utf-8")
+    acceptance_source = (REPO_ROOT / "src" / "loopora" / "service_run_acceptance.py").read_text(encoding="utf-8")
+    design_source = (REPO_ROOT / "design" / "contracts.md").read_text(encoding="utf-8")
+
+    assert "from loopora.service_run_acceptance import ServiceRunAcceptanceMixin" in lifecycle_source
+    assert "ServiceRunAcceptanceMixin" in lifecycle_source
+    assert "def accept_run_result" not in lifecycle_source
+    assert "def run_result_acceptance_state" in acceptance_source
+    assert "def _latest_run_result_acceptance_for_source" in acceptance_source
+    assert "service_run_acceptance.py" in design_source
+
+
+def test_run_recovery_has_dedicated_service_boundary() -> None:
+    lifecycle_source = (REPO_ROOT / "src" / "loopora" / "service_run_lifecycle.py").read_text(encoding="utf-8")
+    recovery_source = (REPO_ROOT / "src" / "loopora" / "service_run_recovery.py").read_text(encoding="utf-8")
+    design_source = (REPO_ROOT / "design" / "contracts.md").read_text(encoding="utf-8")
+
+    assert "from loopora.service_run_recovery import ServiceRunRecoveryMixin" in lifecycle_source
+    assert "def _recover_local_orphaned_run" not in lifecycle_source
+    assert "def _reconcile_stale_runs" in recovery_source
+    assert "def _try_mark_run_active" in recovery_source
+    assert "service_run_recovery.py" in design_source
 
 
 def test_iteration_interval_emits_wait_events_between_rounds(
@@ -69,128 +123,6 @@ def test_iteration_interval_emits_wait_events_between_rounds(
     events = service.stream_events(run["id"], limit=200)
     assert any(event["event_type"] == "iteration_wait_started" for event in events)
     assert any(event["event_type"] == "iteration_wait_finished" for event in events)
-
-
-def test_destructive_generator_is_blocked_by_workspace_guard(
-    service_factory,
-    sample_spec_file: Path,
-    sample_workdir: Path,
-) -> None:
-    (sample_workdir / "notes.txt").write_text("keep me\n", encoding="utf-8")
-    (sample_workdir / "src").mkdir()
-    (sample_workdir / "src" / "app.js").write_text("console.log('hi')\n", encoding="utf-8")
-
-    service = service_factory(scenario="destructive_generator")
-    loop = _create_loop(service, sample_spec_file, sample_workdir, name="Guarded Loop")
-
-    run = service.rerun(loop["id"])
-
-    run_dir = Path(run["runs_dir"])
-    guard = json.loads((run_dir / "workspace_guard.json").read_text(encoding="utf-8"))
-
-    assert run["status"] == "failed"
-    assert "workspace safety guard" in (run["error_message"] or "")
-    assert guard["baseline_file_count"] == 3
-    assert guard["remaining_original_file_count"] == 0
-    assert guard["deleted_original_count"] == 3
-    assert "progress.md" in guard["deleted_original_paths"]
-    assert "Execution stopped by the workspace safety guard." in (run_dir / "summary.md").read_text(encoding="utf-8")
-    events = service.stream_events(run["id"], limit=200)
-    assert any(event["event_type"] == "run_aborted" for event in events)
-    assert any(
-        event["event_type"] == "run_finished"
-        and event["payload"]["status"] == "failed"
-        and event["payload"]["reason"] == "workspace_safety_guard"
-        and event["payload"]["task_verdict_status"] == "failed"
-        and event["payload"].get("task_verdict_summary")
-        for event in events
-    )
-
-
-def test_workspace_guard_ignores_generated_cache_deletions(
-    service_factory,
-    sample_spec_file: Path,
-    sample_workdir: Path,
-) -> None:
-    (sample_workdir / "src").mkdir()
-    (sample_workdir / "src" / "app.py").write_text("print('keep')\n", encoding="utf-8")
-    (sample_workdir / ".pytest_cache" / "v" / "cache").mkdir(parents=True)
-    (sample_workdir / ".pytest_cache" / "v" / "cache" / "nodeids").write_text("[]\n", encoding="utf-8")
-    (sample_workdir / ".ruff_cache").mkdir()
-    (sample_workdir / ".ruff_cache" / "metadata.json").write_text("{}\n", encoding="utf-8")
-    (sample_workdir / ".coverage").write_text("coverage data\n", encoding="utf-8")
-
-    service = service_factory(scenario="success")
-    loop = _create_loop(service, sample_spec_file, sample_workdir, name="Cache Cleanup Loop")
-    run = service.start_run(loop["id"])
-    run_dir = Path(run["runs_dir"])
-    baseline = json.loads((run_dir / "contract" / "workspace_baseline.json").read_text(encoding="utf-8"))
-
-    assert "src/app.py" in baseline["files"]
-    assert "progress.md" in baseline["files"]
-    assert not any(path.startswith(".pytest_cache/") for path in baseline["files"])
-    assert not any(path.startswith(".ruff_cache/") for path in baseline["files"])
-    assert ".coverage" not in baseline["files"]
-
-    shutil.rmtree(sample_workdir / ".pytest_cache")
-    shutil.rmtree(sample_workdir / ".ruff_cache")
-    (sample_workdir / ".coverage").unlink()
-
-    service._enforce_workspace_safety(run, run_dir, 0, role="builder")
-
-    assert not (run_dir / "workspace_guard.json").exists()
-    assert not (run_dir / "timeline" / "workspace_guard.json").exists()
-    assert not any(event["event_type"] == "workspace_guard_triggered" for event in service.stream_events(run["id"], limit=10))
-
-
-def test_workspace_guard_fails_closed_when_baseline_is_missing_or_malformed(
-    service_factory,
-    sample_spec_file: Path,
-    sample_workdir: Path,
-) -> None:
-    (sample_workdir / "src").mkdir()
-    (sample_workdir / "src" / "app.py").write_text("print('keep')\n", encoding="utf-8")
-
-    service = service_factory(scenario="success")
-    loop = _create_loop(service, sample_spec_file, sample_workdir, name="Missing Baseline Loop")
-    run = service.start_run(loop["id"])
-    run_dir = Path(run["runs_dir"])
-    baseline_path = RunArtifactLayout(run_dir).workspace_baseline_path
-
-    baseline_path.unlink()
-    with pytest.raises(LooporaError, match="workspace safety baseline"):
-        service._enforce_workspace_safety(run, run_dir, 0, role="builder")
-
-    baseline_path.write_text("{not json}\n", encoding="utf-8")
-    with pytest.raises(LooporaError, match="workspace safety baseline"):
-        service._enforce_workspace_safety(run, run_dir, 0, role="builder")
-
-    baseline_path.write_text('{"files": [42]}\n', encoding="utf-8")
-    with pytest.raises(LooporaError, match="workspace safety baseline"):
-        service._enforce_workspace_safety(run, run_dir, 0, role="builder")
-
-
-def test_destructive_tester_is_blocked_by_workspace_guard(
-    service_factory,
-    sample_spec_file: Path,
-    sample_workdir: Path,
-) -> None:
-    (sample_workdir / "notes.txt").write_text("keep me\n", encoding="utf-8")
-    (sample_workdir / "src").mkdir()
-    (sample_workdir / "src" / "app.js").write_text("console.log('hi')\n", encoding="utf-8")
-
-    service = service_factory(scenario="destructive_tester")
-    loop = _create_loop(service, sample_spec_file, sample_workdir, name="Guarded Tester Loop")
-
-    run = service.rerun(loop["id"])
-
-    run_dir = Path(run["runs_dir"])
-    guard = json.loads((run_dir / "workspace_guard.json").read_text(encoding="utf-8"))
-
-    assert run["status"] == "failed"
-    assert "workspace safety guard" in (run["error_message"] or "")
-    assert guard["role"] in {"tester", "inspector"}
-    assert guard["deleted_original_count"] == 3
 
 
 def test_exploratory_run_generates_and_freezes_checks(
@@ -487,6 +419,7 @@ def test_get_run_reaps_finished_thread_handle(service_factory, sample_spec_file:
     service = service_factory(scenario="success")
     loop = _create_loop(service, sample_spec_file, sample_workdir, name="Reap Thread Loop")
     run = service.start_run(loop["id"])
+    _issue_minimal_passing_verdict(service, run["id"])
     service.repository.update_run(
         run["id"],
         status="succeeded",

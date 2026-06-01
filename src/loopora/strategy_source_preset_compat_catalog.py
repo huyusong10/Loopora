@@ -1,0 +1,263 @@
+from __future__ import annotations
+
+from collections.abc import Callable, Mapping
+from typing import Any
+
+
+def build_strategy_source_compat_presets(
+    *,
+    preset_definition: Callable[..., dict[str, Any]],
+    preset_role: Callable[..., dict[str, str]],
+    preset_step: Callable[..., dict[str, Any]],
+    prompt_files: Mapping[str, str],
+) -> dict[str, dict[str, Any]]:
+    return {
+        "build_first": preset_definition(
+            label_zh="先构建，再验收",
+            label_en="Build First",
+            description_zh="构建者 -> 巡检者 -> 守门者 -> 引导者",
+            description_en="Builder -> Inspector -> GateKeeper -> Guide",
+            scenario_zh="适合端到端目标已经明确，但如果没有 Loop，人类会在每接上一层之后都回来确认“第一条完整路径到底能不能作为基线”的长期工作。",
+            scenario_en="Best for long tasks where the end-to-end target is already clear, but without a loop humans would keep coming back after every partial hookup to decide whether the first full path is finally baseline-worthy.",
+            choice_zh="选它，而不是先巡检或先诊断，因为现在真正稀缺的不是更多诊断，而是第一条能让人少回来确认的完整路径。",
+            choice_en="Choose this over Inspect First or Triage First when the scarce thing is not more diagnosis, but the first complete path that can spare humans repeated check-ins.",
+            decision_zh="先让构建者跑出第一条完整路径，别让人类在每一层接通后都回来确认。",
+            decision_en="Let Builder land the first complete path before humans have to re-check every newly connected layer.",
+            visible=False,
+            roles=[
+                preset_role(role_id="builder", archetype="builder", prompt_ref=prompt_files["builder"], role_definition_id="builtin:builder"),
+                preset_role(role_id="inspector", archetype="inspector", prompt_ref=prompt_files["inspector"], role_definition_id="builtin:inspector"),
+                preset_role(role_id="gatekeeper", archetype="gatekeeper", prompt_ref=prompt_files["gatekeeper"], role_definition_id="builtin:gatekeeper"),
+                preset_role(role_id="guide", archetype="guide", prompt_ref=prompt_files["guide"], role_definition_id="builtin:guide"),
+            ],
+            steps=[
+                preset_step(step_id="builder_step", role_id="builder", archetype="builder"),
+                preset_step(step_id="inspector_step", role_id="inspector", archetype="inspector"),
+                preset_step(step_id="gatekeeper_step", role_id="gatekeeper", archetype="gatekeeper", on_pass="finish_run"),
+                preset_step(
+                    step_id="guide_step",
+                    role_id="guide",
+                    archetype="guide",
+                    inputs={
+                        "handoffs_from": ["builder_step", "inspector_step", "gatekeeper_step"],
+                        "evidence_query": {"archetypes": ["builder", "inspector", "gatekeeper"], "limit": 24},
+                        "iteration_memory": "summary_only",
+                    },
+                ),
+            ],
+        ),
+        "inspect_first": preset_definition(
+            label_zh="先巡检，再构建",
+            label_en="Inspect First",
+            description_zh="巡检者 -> 构建者 -> 守门者 -> 引导者",
+            description_en="Inspector -> Builder -> GateKeeper -> Guide",
+            scenario_zh="适合失败面已经出现，但如果没有 Loop，人类会反复回来追问“你到底在修哪一层”的长期排障。",
+            scenario_en="Best for long debugging work where the failure shape is visible, but without a loop humans would keep coming back to ask which layer the repair is actually targeting.",
+            choice_zh="选它，而不是先构建，因为现在真正稀缺的是证据，不是更多代码；也不是先诊断，因为失败路径已经收敛，只差把根因钉住。",
+            choice_en="Choose this over Build First when the scarce thing is evidence rather than more code, and over Triage First when the failing path is already narrowed but the root cause still is not.",
+            decision_zh="先让巡检者把根因证据钉住，别让人类反复回来纠正构建者在修哪一层。",
+            decision_en="Let Inspector pin down root-cause evidence before humans have to keep correcting which layer Builder is touching.",
+            visible=False,
+            roles=[
+                preset_role(role_id="inspector", archetype="inspector", prompt_ref=prompt_files["inspector"], role_definition_id="builtin:inspector"),
+                preset_role(role_id="builder", archetype="builder", prompt_ref=prompt_files["builder"], role_definition_id="builtin:builder"),
+                preset_role(role_id="gatekeeper", archetype="gatekeeper", prompt_ref=prompt_files["gatekeeper"], role_definition_id="builtin:gatekeeper"),
+                preset_role(role_id="guide", archetype="guide", prompt_ref=prompt_files["guide"], role_definition_id="builtin:guide"),
+            ],
+            steps=[
+                preset_step(step_id="inspector_step", role_id="inspector", archetype="inspector"),
+                preset_step(step_id="builder_step", role_id="builder", archetype="builder"),
+                preset_step(step_id="gatekeeper_step", role_id="gatekeeper", archetype="gatekeeper", on_pass="finish_run"),
+                preset_step(
+                    step_id="guide_step",
+                    role_id="guide",
+                    archetype="guide",
+                    inputs={
+                        "handoffs_from": ["inspector_step", "builder_step", "gatekeeper_step"],
+                        "evidence_query": {"archetypes": ["inspector", "builder", "gatekeeper"], "limit": 24},
+                        "iteration_memory": "summary_only",
+                    },
+                ),
+            ],
+        ),
+        "benchmark_loop": preset_definition(
+            label_zh="基准先行",
+            label_en="Benchmark Loop",
+            description_zh="守门者（基准）-> 构建者",
+            description_en="GateKeeper (benchmark) -> Builder",
+            scenario_zh="适合下一步必须由最新基准决定，否则人类会在每次评测后重新回来分配优化方向的长期工作。",
+            scenario_en="Best when the next move must come from the latest benchmark, otherwise humans end up returning after every evaluation to reassign the optimization direction.",
+            choice_zh="选它，而不是先构建或修复回路，因为这里真正稀缺的是最新测量结果，而不是人的直觉判断。",
+            choice_en="Choose this over Build First or Repair Loop when the scarce thing is the newest measured result, not another round of human intuition.",
+            decision_zh="先读基准，再决定下一步，好让人类不用在每轮评测后手动重排方向。",
+            decision_en="Read the benchmark first so humans do not have to manually reshuffle the next move after every evaluation.",
+            visible=False,
+            roles=[
+                preset_role(
+                    role_id="gatekeeper", archetype="gatekeeper", prompt_ref=prompt_files["gatekeeper-benchmark"], role_definition_id="builtin:gatekeeper"
+                ),
+                preset_role(role_id="builder", archetype="builder", prompt_ref=prompt_files["builder"], role_definition_id="builtin:builder"),
+            ],
+            steps=[
+                preset_step(step_id="gatekeeper_step", role_id="gatekeeper", archetype="gatekeeper", on_pass="finish_run"),
+                preset_step(step_id="builder_step", role_id="builder", archetype="builder"),
+            ],
+        ),
+        "triage_first": preset_definition(
+            label_zh="先诊断再推进",
+            label_en="Triage First",
+            description_zh="巡检者 -> 引导者 -> 构建者 -> 守门者（收束）",
+            description_en="Inspector -> Guide -> Builder -> GateKeeper(finish)",
+            scenario_zh="适合现象很多、方向还散，如果没有 Loop，人类会不断回来决定这轮到底在解决什么的长期工作。",
+            scenario_en="Best for long tasks where symptoms are numerous and direction is still diffuse, so without a loop humans would keep returning just to decide what this round is actually solving.",
+            choice_zh="选它，而不是先巡检，因为现在连本轮主问题都还没定义清楚；先让巡检者和引导者把这轮该修的切片收出来，才能减少人类反复定方向。",
+            choice_en="Choose this over Inspect First when this round's main problem is still undefined and Inspector plus Guide must first carve out the slice worth fixing, so humans do not have to keep redefining the direction.",
+            decision_zh="先把本轮问题收窄成一个切片，别让人类反复回来决定“这轮到底修什么”。",
+            decision_en="Narrow this round to one repair slice before humans have to keep returning to decide what the round is even about.",
+            visible=False,
+            roles=[
+                preset_role(role_id="inspector", archetype="inspector", prompt_ref=prompt_files["inspector"], role_definition_id="builtin:inspector"),
+                preset_role(role_id="guide", archetype="guide", prompt_ref=prompt_files["guide"], role_definition_id="builtin:guide"),
+                preset_role(role_id="builder", archetype="builder", prompt_ref=prompt_files["builder"], role_definition_id="builtin:builder"),
+                preset_role(role_id="gatekeeper", archetype="gatekeeper", prompt_ref=prompt_files["gatekeeper"], role_definition_id="builtin:gatekeeper"),
+            ],
+            steps=[
+                preset_step(step_id="inspector_step", role_id="inspector", archetype="inspector"),
+                preset_step(
+                    step_id="guide_step",
+                    role_id="guide",
+                    archetype="guide",
+                    inputs={
+                        "handoffs_from": ["inspector_step"],
+                        "evidence_query": {"archetypes": ["inspector"], "limit": 12},
+                        "iteration_memory": "summary_only",
+                    },
+                ),
+                preset_step(
+                    step_id="builder_step",
+                    role_id="builder",
+                    archetype="builder",
+                    inputs={"handoffs_from": ["guide_step"], "iteration_memory": "summary_only"},
+                ),
+                preset_step(
+                    step_id="gatekeeper_step",
+                    role_id="gatekeeper",
+                    archetype="gatekeeper",
+                    on_pass="finish_run",
+                    inputs={
+                        "handoffs_from": ["inspector_step", "guide_step", "builder_step"],
+                        "evidence_query": {"archetypes": ["inspector", "guide", "builder"], "limit": 24},
+                    },
+                ),
+            ],
+        ),
+        "repair_loop": preset_definition(
+            label_zh="修复回路",
+            label_en="Repair Loop",
+            description_zh="构建者 -> 回归巡检者 -> 契约巡检者 -> 引导者 -> 构建者 -> 守门者",
+            description_en="Builder -> Regression Inspector -> Contract Inspector -> Guide -> Builder -> GateKeeper",
+            scenario_zh="适合从一开始就知道一轮修复不够，如果没有 Loop，人类会在每轮后重新进来判断第二轮怎么修的长期工作。",
+            scenario_en="Best for long tasks where you already know one repair pass will not be enough, so without a loop humans would have to re-enter after each round to decide how the next repair should change.",
+            choice_zh="当你已经预期一轮修复不够，而且第一轮改动本身就是下一轮证据来源时选择它。",
+            choice_en="Choose this when you already expect one pass not to be enough, and when the first code change is itself the only way to surface the next evidence.",
+            decision_zh="先打一轮，再用复查结果决定第二轮，减少人类在每轮后重新指路。",
+            decision_en="Ship the first repair, then let fresh evidence shape the second one so humans do not have to keep stepping back in to redirect it.",
+            visible=False,
+            roles=[
+                preset_role(role_id="builder", archetype="builder", prompt_ref=prompt_files["builder"], role_definition_id="builtin:builder"),
+                preset_role(
+                    role_id="regression_inspector",
+                    name="Regression Inspector",
+                    archetype="inspector",
+                    prompt_ref=prompt_files["inspector"],
+                    role_definition_id="builtin:inspector",
+                    posture_notes="Compare the latest attempt against the pre-repair evidence and identify the strongest remaining regression.",
+                ),
+                preset_role(
+                    role_id="contract_inspector",
+                    name="Contract Inspector",
+                    archetype="inspector",
+                    prompt_ref=prompt_files["inspector"],
+                    role_definition_id="builtin:inspector",
+                    posture_notes="Check whether the repair still respects the task contract, guardrails, and fake-done risks.",
+                ),
+                preset_role(role_id="guide", archetype="guide", prompt_ref=prompt_files["guide"], role_definition_id="builtin:guide"),
+                preset_role(role_id="gatekeeper", archetype="gatekeeper", prompt_ref=prompt_files["gatekeeper"], role_definition_id="builtin:gatekeeper"),
+            ],
+            steps=[
+                preset_step(step_id="builder_step", role_id="builder", archetype="builder"),
+                preset_step(
+                    step_id="regression_inspection_step",
+                    role_id="regression_inspector",
+                    archetype="inspector",
+                    parallel_group="repair_review",
+                    inputs={
+                        "handoffs_from": ["builder_step"],
+                        "evidence_query": {"archetypes": ["builder"], "limit": 12},
+                        "iteration_memory": "summary_only",
+                    },
+                ),
+                preset_step(
+                    step_id="contract_inspection_step",
+                    role_id="contract_inspector",
+                    archetype="inspector",
+                    parallel_group="repair_review",
+                    inputs={
+                        "handoffs_from": ["builder_step"],
+                        "evidence_query": {"archetypes": ["builder"], "limit": 12},
+                        "iteration_memory": "summary_only",
+                    },
+                ),
+                preset_step(
+                    step_id="guide_step",
+                    role_id="guide",
+                    archetype="guide",
+                    inputs={
+                        "handoffs_from": ["regression_inspection_step", "contract_inspection_step"],
+                        "evidence_query": {"archetypes": ["inspector"], "limit": 12},
+                        "iteration_memory": "summary_only",
+                    },
+                ),
+                preset_step(
+                    step_id="builder_repair_step",
+                    role_id="builder",
+                    archetype="builder",
+                    inputs={"handoffs_from": ["guide_step"], "iteration_memory": "summary_only"},
+                ),
+                preset_step(
+                    step_id="gatekeeper_step",
+                    role_id="gatekeeper",
+                    archetype="gatekeeper",
+                    on_pass="finish_run",
+                    inputs={
+                        "handoffs_from": [
+                            "regression_inspection_step",
+                            "contract_inspection_step",
+                            "guide_step",
+                            "builder_repair_step",
+                        ],
+                        "evidence_query": {"archetypes": ["inspector", "guide", "builder"], "limit": 24},
+                    },
+                ),
+            ],
+        ),
+        "fast_lane": preset_definition(
+            label_zh="快速通道",
+            label_en="Fast Lane",
+            description_zh="构建者 -> 守门者（收束）",
+            description_en="Builder -> GateKeeper(finish)",
+            scenario_zh="适合范围不大但很紧急的热修：让构建者快速修掉，再由守门者立刻判断，同时把证据链留下来。",
+            scenario_en="Best for narrow but urgent hotfixes where Builder can patch quickly, GateKeeper can judge immediately, and the team still wants the evidence trail.",
+            choice_zh="它更像兼容旧用法的短回路，不再作为默认核心流程推荐；如果 Loop 真这么短，很多时候直接单次执行更合适。",
+            choice_en="This stays mainly as a compatibility short loop, not a default core flow. If the task is really that short, a one-shot run is often better.",
+            visible=False,
+            roles=[
+                preset_role(role_id="builder", archetype="builder", prompt_ref=prompt_files["builder"], role_definition_id="builtin:builder"),
+                preset_role(role_id="gatekeeper", archetype="gatekeeper", prompt_ref=prompt_files["gatekeeper"], role_definition_id="builtin:gatekeeper"),
+            ],
+            steps=[
+                preset_step(step_id="builder_step", role_id="builder", archetype="builder"),
+                preset_step(step_id="gatekeeper_step", role_id="gatekeeper", archetype="gatekeeper", on_pass="finish_run"),
+            ],
+        ),
+    }

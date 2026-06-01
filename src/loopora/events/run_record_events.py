@@ -56,6 +56,8 @@ def append_run_lifecycle_event_for_connection(
                 "status": next_status,
                 "current_iter": int(row["current_iter"] or 0),
                 "active_role": row["active_role"] or "",
+                **_non_success_terminal_reason(event_type, updates),
+                **({"legacy_compat": True} if event_type == "RunClosed" and not causation_id else {}),
             },
             causation_id=causation_id,
         ),
@@ -73,6 +75,13 @@ def _domain_event_type_for_transition(*, previous_status: str, next_status: str)
         "stopped": "RunStopped",
         "failed": "RunFailed",
     }.get(next_status, "")
+
+
+def _non_success_terminal_reason(event_type: str, updates: Mapping[str, object]) -> dict:
+    if event_type not in {"RunStopped", "RunFailed"}:
+        return {}
+    reason = str(updates.get("error_message") or event_type.removeprefix("Run").lower()).strip()
+    return {"reason": reason}
 
 
 def _run_lifecycle_causation_id_for_connection(connection, *, stream_id: str, event_type: str) -> str | None:

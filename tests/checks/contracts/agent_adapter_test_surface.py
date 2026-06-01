@@ -92,15 +92,23 @@ def _assert_codex_native_surface_ownership(surface: dict) -> None:
 
 def _assert_codex_native_surface_plain(output: str) -> None:
     assert "agent surface:" in output
-    assert "- entry: project_skill plan=.agents/skills/loopora-plan/SKILL.md run=.agents/skills/loopora-run/SKILL.md" in output
+    _assert_output_contains(
+        output,
+        "- entry: project_skill",
+        "plan=.agents/skills/loopora-plan/SKILL.md",
+        "run=.agents/skills/loopora-run/SKILL.md",
+    )
     assert "- slash commands: plan=/loopora-plan run=/loopora-run" in output
     assert "- dispatch: loopora-orchestrator -> loopora-builder" in output
     assert "nested provider CLI=not_used" in output
-    assert (
-        "- capabilities: execution=current_host_agent; role_dispatch=host_native; "
-        "workspace=current_host_agent_workdir; worktree=not_created_or_switched_by_loopora; "
-        "proof=loopora_evidence_refs_and_task_verdict"
-    ) in output
+    _assert_output_contains(
+        output,
+        "- capabilities: execution=current_host_agent",
+        "role_dispatch=host_native",
+        "workspace=current_host_agent_workdir",
+        "worktree=not_created_or_switched_by_loopora",
+        "proof=loopora_evidence_refs_and_task_verdict",
+    )
     assert "- activation: explicit_loopora_command_or_cli_only" in output
     assert "- command namespace: loopora_plan_run_only_no_generic_host_command_aliases" in output
     assert "- host dispatch: Codex spawn_agent with agent_type=<role_dispatch.target_agent>" in output
@@ -141,7 +149,11 @@ def _assert_codex_native_surface_plain(output: str) -> None:
     assert "ambiguous=list_recoverable_contexts_before_running" in output
     assert "provider_resume=not_used_for_loopora_work" in output
     assert "host_sessions=not_auto_discovered_or_taken_over_by_loopora" in output
-    assert "checkpoints=host_checkpoints_rewinds_and_session_archives_are_recovery_hints_not_loopora_context_or_proof" in output
+    _assert_output_contains(
+        output,
+        "checkpoints=host_checkpoints_rewinds_and_session_archives",
+        "are_recovery_hints_not_loopora_context_or_proof",
+    )
     _assert_output_contains(
         output,
         "- handoff: channel=host_native_role_agent",

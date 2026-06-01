@@ -6,6 +6,18 @@ from loopora.events.envelope import EventEnvelope
 from loopora.events.streams import loop_stream_id, run_stream_id
 from loopora.projections._event_replay_support import EVENT_REPLAY_PROJECTION_SCHEMA_VERSION
 from loopora.projections import replay_loop_projection_bundle, replay_run_projection_bundle
+from loopora.structured_numbers import coerced_int, coerced_non_negative_int
+
+RUN_PROJECTION_KINDS = {
+    "run_snapshot": "event_replayed_run_snapshot",
+    "current_step": "event_replayed_current_step",
+    "evidence_ledger": "event_replayed_evidence_ledger",
+    "coverage": "event_replayed_coverage",
+    "task_verdict": "event_replayed_task_verdict",
+    "step_surfaces": "event_replayed_step_surfaces",
+    "audit_timeline": "event_replayed_audit_timeline",
+}
+RUN_IDENTITY_PROJECTION_NAMES = frozenset({"run_snapshot", "current_step"})
 
 
 def replay_run_projections(repository, run_id: str) -> dict:
@@ -14,6 +26,27 @@ def replay_run_projections(repository, run_id: str) -> dict:
 
 def rebuild_run_projection_cache(repository, run_id: str) -> dict:
     return repository.refresh_run_projection_cache(run_id)
+
+
+def run_projection_bundle_for_run(repository, run_id: str) -> dict:
+    latest_sequence = repository.latest_domain_event_sequence(run_stream_id(run_id))
+    if latest_sequence <= 0:
+        return {}
+    bundle: dict[str, dict] = {}
+    for projection_name, kind in RUN_PROJECTION_KINDS.items():
+        cached = repository.get_projection_record(projection_name, run_id)
+        payload = cached.get("payload") if isinstance(cached, dict) else {}
+        if not (
+            _is_fresh_run_projection_payload(cached, payload, kind=kind, latest_sequence=latest_sequence)
+            and _has_expected_run_identity(
+                payload,
+                run_id=run_id,
+                require_run_id=projection_name in RUN_IDENTITY_PROJECTION_NAMES,
+            )
+        ):
+            return rebuild_run_projection_cache(repository, run_id)
+        bundle[projection_name] = payload
+    return bundle
 
 
 def current_step_projection_for_run(repository, run_id: str) -> dict:
@@ -52,7 +85,16 @@ def _fresh_cached_run_projection_payload(
     latest_sequence = repository.latest_domain_event_sequence(run_stream_id(run_id))
     cached = repository.get_projection_record(projection_name, run_id)
     payload = cached.get("payload") if isinstance(cached, dict) else {}
-    if _is_fresh_run_projection_payload(cached, payload, run_id, kind=kind, latest_sequence=latest_sequence):
+    if _is_fresh_run_projection_payload(
+        cached,
+        payload,
+        kind=kind,
+        latest_sequence=latest_sequence,
+    ) and _has_expected_run_identity(
+        payload,
+        run_id=run_id,
+        require_run_id=True,
+    ):
         return payload, latest_sequence
     return None, latest_sequence
 
@@ -60,23 +102,26 @@ def _fresh_cached_run_projection_payload(
 def _is_fresh_run_projection_payload(
     cached: object,
     payload: object,
-    run_id: str,
     *,
     kind: str,
     latest_sequence: int,
 ) -> bool:
-    cached_record_sequence = _safe_int(cached.get("source_sequence") if isinstance(cached, dict) else None, default=0)
-    cached_payload_sequence = _safe_int(payload.get("source_sequence") if isinstance(payload, dict) else None, default=0)
+    cached_record_sequence = coerced_int(cached.get("source_sequence") if isinstance(cached, dict) else None, default=0)
+    cached_payload_sequence = coerced_int(payload.get("source_sequence") if isinstance(payload, dict) else None, default=0)
     return (
         isinstance(payload, dict)
-        and _safe_int(payload.get("schema_version"), default=0) == EVENT_REPLAY_PROJECTION_SCHEMA_VERSION
+        and coerced_int(payload.get("schema_version"), default=0) == EVENT_REPLAY_PROJECTION_SCHEMA_VERSION
         and payload.get("kind") == kind
-        and str(payload.get("run_id") or "") == run_id
         and cached_record_sequence > 0
         and cached_payload_sequence > 0
         and cached_record_sequence == latest_sequence
         and cached_payload_sequence == latest_sequence
     )
+
+
+def _has_expected_run_identity(payload: object, *, run_id: str, require_run_id: bool) -> bool:
+    payload_run_id = str(payload.get("run_id") or "").strip() if isinstance(payload, dict) else ""
+    return (not payload_run_id and not require_run_id) or payload_run_id == run_id
 
 
 def _rebuilt_run_projection_payload(repository, run_id: str, projection_name: str) -> dict:
@@ -119,16 +164,7 @@ def rebuild_projection_cache_for_connection(
             connection,
             name,
             projection_key,
-            source_sequence=int(payload.get("source_sequence") or 0) if isinstance(payload, dict) else 0,
+            source_sequence=coerced_non_negative_int(payload.get("source_sequence")) if isinstance(payload, dict) else 0,
             payload=payload,
         )
     return projections
-
-
-def _safe_int(value: object, *, default: int) -> int:
-    if isinstance(value, bool):
-        return default
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        return default

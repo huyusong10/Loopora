@@ -1,27 +1,19 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass
 from pathlib import Path
 
 from loopora.bundles import load_bundle_file, load_bundle_text, normalize_bundle
-from loopora.compiler._coercion import integer, mapping, mapping_list, text
-from loopora.compiler.contract_compiler import compile_loop_contract, compile_residual_risk_policy
+from loopora.compiler._coercion import mapping, mapping_list, text
+from loopora.compiler.loop_definition_builder import (
+    LoopDefinitionParts,
+    compile_loop_definition,
+    runtime_defaults_from_payload,
+)
 from loopora.compiler.sources import LoopSource, LoopSourceKind
-from loopora.compiler.strategy_compiler import compile_loop_strategy
-from loopora.kernel.definition import LoopDefinition, LoopMetadata, RuntimeDefaults
+from loopora.kernel.definition import LoopDefinition, LoopMetadata
 from loopora.specs import compile_markdown_spec
 from loopora.strategy_source import build_preset_strategy_source, strategy_source_from_record
-
-
-@dataclass(frozen=True, kw_only=True)
-class _LoopDefinitionParts:
-    loop_id: str
-    name: str
-    compiled_spec: Mapping[str, object]
-    strategy_source: Mapping[str, object]
-    runtime_defaults: RuntimeDefaults
-    metadata: LoopMetadata
 
 
 class LoopCompiler:
@@ -49,11 +41,8 @@ class ExistingLoopRecordCompiler:
 def compile_agent_message_source(source: LoopSource) -> LoopDefinition:
     payload = source.payload
     loop_id = text(payload.get("id") or source.id, fallback="loop")
-    completion_mode = text(payload.get("completion_mode"), fallback="gatekeeper")
-    max_iterations = integer(payload.get("max_iters"), fallback=1)
-    max_step_retries = integer(payload.get("max_role_retries"), fallback=1)
-    return _compile_loop_definition(
-        _LoopDefinitionParts(
+    return compile_loop_definition(
+        LoopDefinitionParts(
             loop_id=loop_id,
             name=text(payload.get("name"), fallback=loop_id),
             compiled_spec=_compiled_spec_from_payload(
@@ -61,15 +50,7 @@ def compile_agent_message_source(source: LoopSource) -> LoopDefinition:
                 fallback_task=text(payload.get("message") or payload.get("task") or payload.get("goal")),
             ),
             strategy_source={},
-            runtime_defaults=RuntimeDefaults(
-                executor_kind=text(payload.get("executor_kind"), fallback="codex"),
-                executor_mode=text(payload.get("executor_mode"), fallback="preset"),
-                model=text(payload.get("model")),
-                reasoning_effort=text(payload.get("reasoning_effort")),
-                max_iterations=max_iterations,
-                max_step_retries=max_step_retries,
-                completion_mode=completion_mode,
-            ),
+            runtime_defaults=runtime_defaults_from_payload(payload),
             metadata=LoopMetadata(
                 workdir=text(payload.get("workdir")),
                 spec_path=text(payload.get("spec_path")),
@@ -84,24 +65,13 @@ def compile_existing_loop_record(record: Mapping[str, object]) -> LoopDefinition
     loop_id = text(record.get("id"), fallback="loop")
     compiled_spec = mapping(record.get("compiled_spec") or record.get("compiled_spec_json"))
     strategy_source = _existing_loop_record_strategy_source(record)
-    completion_mode = text(record.get("completion_mode"), fallback="gatekeeper")
-    max_iterations = integer(record.get("max_iters"), fallback=1)
-    max_step_retries = integer(record.get("max_role_retries"), fallback=1)
-    return _compile_loop_definition(
-        _LoopDefinitionParts(
+    return compile_loop_definition(
+        LoopDefinitionParts(
             loop_id=loop_id,
             name=text(record.get("name"), fallback=loop_id),
             compiled_spec=compiled_spec,
             strategy_source=strategy_source,
-            runtime_defaults=RuntimeDefaults(
-                executor_kind=text(record.get("executor_kind"), fallback="codex"),
-                executor_mode=text(record.get("executor_mode"), fallback="preset"),
-                model=text(record.get("model")),
-                reasoning_effort=text(record.get("reasoning_effort")),
-                max_iterations=max_iterations,
-                max_step_retries=max_step_retries,
-                completion_mode=completion_mode,
-            ),
+            runtime_defaults=runtime_defaults_from_payload(record),
             metadata=LoopMetadata(
                 workdir=text(record.get("workdir")),
                 spec_path=text(record.get("spec_path")),
@@ -122,50 +92,17 @@ def _existing_loop_record_strategy_source(record: Mapping[str, object]) -> Mappi
     return mapping(strategy_source_from_record(record))
 
 
-def _compile_loop_definition(parts: _LoopDefinitionParts) -> LoopDefinition:
-    residual_risk_policy = compile_residual_risk_policy(parts.compiled_spec.get("residual_risk"))
-    return LoopDefinition(
-        id=parts.loop_id,
-        name=parts.name,
-        contract=compile_loop_contract(
-            parts.loop_id,
-            parts.compiled_spec,
-            completion_mode=parts.runtime_defaults.completion_mode,
-        ),
-        strategy=compile_loop_strategy(
-            parts.loop_id,
-            parts.strategy_source,
-            max_iterations=parts.runtime_defaults.max_iterations,
-            max_step_retries=parts.runtime_defaults.max_step_retries,
-            residual_risk_policy=residual_risk_policy,
-        ),
-        runtime_defaults=parts.runtime_defaults,
-        metadata=parts.metadata,
-    )
-
-
 def compile_markdown_contract_source(source: LoopSource) -> LoopDefinition:
     payload = source.payload
     loop_id = text(payload.get("id") or source.id, fallback="loop")
-    completion_mode = text(payload.get("completion_mode"), fallback="gatekeeper")
     compiled_spec = compile_markdown_spec(text(payload.get("markdown") or payload.get("spec_markdown")))
-    max_iterations = integer(payload.get("max_iters"), fallback=1)
-    max_step_retries = integer(payload.get("max_role_retries"), fallback=1)
-    return _compile_loop_definition(
-        _LoopDefinitionParts(
+    return compile_loop_definition(
+        LoopDefinitionParts(
             loop_id=loop_id,
             name=text(payload.get("name"), fallback=loop_id),
             compiled_spec=compiled_spec,
             strategy_source={},
-            runtime_defaults=RuntimeDefaults(
-                executor_kind=text(payload.get("executor_kind"), fallback="codex"),
-                executor_mode=text(payload.get("executor_mode"), fallback="preset"),
-                model=text(payload.get("model")),
-                reasoning_effort=text(payload.get("reasoning_effort")),
-                max_iterations=max_iterations,
-                max_step_retries=max_step_retries,
-                completion_mode=completion_mode,
-            ),
+            runtime_defaults=runtime_defaults_from_payload(payload),
             metadata=LoopMetadata(
                 workdir=text(payload.get("workdir")),
                 spec_path=text(payload.get("spec_path")),
@@ -191,25 +128,14 @@ def _compile_bundle_source(source: LoopSource, *, source_kind: LoopSourceKind) -
     loop = mapping(bundle.get("loop"))
     spec = mapping(bundle.get("spec"))
     loop_id = text(payload.get("id") or metadata.get("bundle_id") or source.id, fallback="loop")
-    completion_mode = text(loop.get("completion_mode"), fallback="gatekeeper")
     compiled_spec = compile_markdown_spec(text(spec.get("markdown")))
-    max_iterations = integer(loop.get("max_iters"), fallback=1)
-    max_step_retries = integer(loop.get("max_role_retries"), fallback=1)
-    return _compile_loop_definition(
-        _LoopDefinitionParts(
+    return compile_loop_definition(
+        LoopDefinitionParts(
             loop_id=loop_id,
             name=text(loop.get("name") or metadata.get("name"), fallback=loop_id),
             compiled_spec=compiled_spec,
             strategy_source=_loopfile_strategy_source(bundle),
-            runtime_defaults=RuntimeDefaults(
-                executor_kind=text(loop.get("executor_kind"), fallback="codex"),
-                executor_mode=text(loop.get("executor_mode"), fallback="preset"),
-                model=text(loop.get("model")),
-                reasoning_effort=text(loop.get("reasoning_effort")),
-                max_iterations=max_iterations,
-                max_step_retries=max_step_retries,
-                completion_mode=completion_mode,
-            ),
+            runtime_defaults=runtime_defaults_from_payload(loop),
             metadata=LoopMetadata(
                 workdir=text(loop.get("workdir")),
                 spec_path=text(payload.get("spec_path") or payload.get("path")),
@@ -224,24 +150,13 @@ def compile_strategy_template_source(source: LoopSource) -> LoopDefinition:
     payload = source.payload
     loop_id = text(payload.get("id") or source.id, fallback="loop")
     preset = text(payload.get("preset") or payload.get("strategy_template"), fallback="build_first")
-    completion_mode = text(payload.get("completion_mode"), fallback="gatekeeper")
-    max_iterations = integer(payload.get("max_iters"), fallback=1)
-    max_step_retries = integer(payload.get("max_role_retries"), fallback=1)
-    return _compile_loop_definition(
-        _LoopDefinitionParts(
+    return compile_loop_definition(
+        LoopDefinitionParts(
             loop_id=loop_id,
             name=text(payload.get("name"), fallback=loop_id),
             compiled_spec=_compiled_spec_from_payload(payload),
             strategy_source=build_preset_strategy_source(preset),
-            runtime_defaults=RuntimeDefaults(
-                executor_kind=text(payload.get("executor_kind"), fallback="codex"),
-                executor_mode=text(payload.get("executor_mode"), fallback="preset"),
-                model=text(payload.get("model")),
-                reasoning_effort=text(payload.get("reasoning_effort")),
-                max_iterations=max_iterations,
-                max_step_retries=max_step_retries,
-                completion_mode=completion_mode,
-            ),
+            runtime_defaults=runtime_defaults_from_payload(payload),
             metadata=LoopMetadata(
                 workdir=text(payload.get("workdir")),
                 spec_path=text(payload.get("spec_path")),

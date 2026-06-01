@@ -3,7 +3,8 @@ from __future__ import annotations
 from collections.abc import Callable
 
 from loopora.db import LooporaRepository
-from loopora.executor import CodexExecutor, executor_from_environment
+from loopora.executor_environment import executor_from_environment
+from loopora.executor_types import CodexExecutor
 from loopora.service_app import LooporaAppServices, LooporaServiceRuntime
 from loopora.service_prompts import (
     CHALLENGER_SCHEMA,

@@ -309,7 +309,8 @@ def test_cli_agent_gen_reports_auto_started_web_review_url(sample_workdir: Path,
     assert "Loopora Loop preview needs Web review" in result.stdout
     assert "review_status: not runnable; no candidate plan file was submitted" in result.stdout
     assert "task_anchor_status: task anchor preserved from /loopora-plan" in result.stdout
-    assert "review_scope: review_focus lists Loop surfaces to compile from the task anchor, not missing chat input" in result.stdout
+    assert "review_scope: review_focus lists Loop surfaces to compile" in result.stdout
+    assert "not missing chat input" in result.stdout
     assert "review_recommended_action: Continue evidence-first review (Recommended)" in result.stdout
     assert "review_focus:" in result.stdout
     assert "preview_url: http://127.0.0.1:9876/loops/new/bundle?alignment_session_id=" in result.stdout
@@ -350,7 +351,8 @@ def test_cli_agent_loop_after_web_review_fallback_reprints_review_url_and_focus(
     assert "loop_recovery: finish the current Web review before /loopora-run can start" in output_text
     assert "review_status: not runnable; no candidate plan file was submitted" in output_text
     assert "task_anchor_status: task anchor preserved from /loopora-plan" in output_text
-    assert "review_scope: review_focus lists Loop surfaces to compile from the task anchor, not missing chat input" in output_text
+    assert "review_scope: review_focus lists Loop surfaces to compile" in output_text
+    assert "not missing chat input" in output_text
     assert "review_focus:" in output_text
     assert "Success surface:" in output_text
     assert "Fake-done risks:" in output_text

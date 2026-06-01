@@ -1,24 +1,22 @@
 from __future__ import annotations
 
-import hmac
 import json
 import logging
 import time
-from collections.abc import Callable, Mapping
+from collections.abc import Mapping
 from pathlib import Path
 
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from loopora.branding import APP_AUTH_COOKIE, APP_NAME
-from loopora.diagnostics import get_logger, log_event, log_exception
+from loopora.branding import APP_NAME
+from loopora.diagnostics import get_logger, log_event
 from loopora.service import LooporaError, create_service
 from loopora.system_dialogs import pick_directory, pick_file, pick_save_file, reveal_path
-from loopora.web_inputs import (
+from loopora.web_auth_middleware import install_auth_middleware
+from loopora.web_request_context import (
     _build_access_state,
-    _extract_request_token,
     _is_loopback_host,
     _preferred_locale_from_accept_language,
     _preferred_request_locale,
@@ -28,9 +26,6 @@ from loopora.web_routes import register_web_routes
 from loopora.web_streaming import parse_sse_last_event_id
 
 logger = get_logger(__name__)
-
-AUTH_COOKIE_NAME = APP_AUTH_COOKIE
-INTERNAL_API_ERROR_MESSAGE = "internal server error"
 
 __all__ = [
     "_is_loopback_host",
@@ -60,7 +55,7 @@ def build_app(service=None, *, bind_host: str = "127.0.0.1", bind_port: int = 87
         app,
         dependencies=_web_route_dependencies(templates, access_state),
     )
-    _install_auth_middleware(app, access_state, auth_required_response)
+    install_auth_middleware(app, access_state, auth_required_response, logger=logger)
     return app
 
 
@@ -124,109 +119,6 @@ def _web_route_dependencies(
         pick_file_dialog=lambda start_path=None: pick_file(start_path),
         pick_save_file_dialog=lambda start_path=None, **kwargs: pick_save_file(start_path, **kwargs),
         reveal_path_callback=lambda target: reveal_path(target),  # noqa: PLW0108 - keep late binding for host shortcut overrides.
-    )
-
-
-def _install_auth_middleware(
-    app: FastAPI,
-    access_state: Mapping[str, object],
-    auth_required_response: Callable[[Request], Response],
-) -> None:
-    @app.middleware("http")
-    async def auth_middleware(request: Request, call_next):
-        start_time = time.perf_counter()
-        expected_token = access_state["auth_token"]
-        if not expected_token:
-            try:
-                response = await call_next(request)
-            except Exception as exc:
-                log_exception(
-                    logger,
-                    "web.request.failed",
-                    "HTTP request failed before authentication was required",
-                    error=exc,
-                    method=request.method,
-                    request_path=request.url.path,
-                    status_code=500,
-                    client_ip=request.client.host if request.client else "",
-                )
-                response = _internal_api_error_response(request)
-                if response is not None:
-                    return response
-                raise
-            _log_web_response(request, response.status_code, start_time)
-            return response
-
-        if request.url.path.startswith(("/static/", "/logo/")):
-            return await call_next(request)
-
-        provided_token = _extract_request_token(request)
-        if not _auth_token_matches(provided_token, expected_token):
-            response = auth_required_response(request)
-            log_event(
-                logger,
-                logging.WARNING,
-                "web.auth.rejected",
-                "Rejected request with a missing or invalid auth token",
-                method=request.method,
-                request_path=request.url.path,
-                status_code=response.status_code,
-                client_ip=request.client.host if request.client else "",
-            )
-            _log_web_response(request, response.status_code, start_time)
-            return response
-
-        try:
-            response = await call_next(request)
-        except Exception as exc:
-            log_exception(
-                logger,
-                "web.request.failed",
-                "HTTP request failed",
-                error=exc,
-                method=request.method,
-                request_path=request.url.path,
-                status_code=500,
-                client_ip=request.client.host if request.client else "",
-            )
-            response = _internal_api_error_response(request)
-            if response is not None:
-                return response
-            raise
-        if request.cookies.get(APP_AUTH_COOKIE) != expected_token:
-            response.set_cookie(AUTH_COOKIE_NAME, expected_token, httponly=True, samesite="lax")
-        _log_web_response(request, response.status_code, start_time)
-        return response
-
-
-def _auth_token_matches(provided_token: str | None, expected_token: object) -> bool:
-    expected = str(expected_token or "")
-    provided = str(provided_token or "")
-    return bool(expected and provided) and hmac.compare_digest(provided, expected)
-
-
-def _internal_api_error_response(request: Request) -> Response | None:
-    if not request.url.path.startswith("/api/"):
-        return None
-    return JSONResponse({"error": INTERNAL_API_ERROR_MESSAGE}, status_code=500)
-
-
-def _log_web_response(request: Request, status_code: int, started_at: float) -> None:
-    path = request.url.path
-    if path.startswith(("/static/", "/logo/")):
-        return
-    level = logging.ERROR if status_code >= 500 else (logging.WARNING if status_code >= 400 else logging.INFO)
-    event = "web.request.failed" if status_code >= 500 else ("web.request.rejected" if status_code >= 400 else "web.request.completed")
-    log_event(
-        logger,
-        level,
-        event,
-        "HTTP request completed",
-        method=request.method,
-        request_path=path,
-        status_code=status_code,
-        duration_ms=int((time.perf_counter() - started_at) * 1000),
-        client_ip=request.client.host if request.client else "",
     )
 
 

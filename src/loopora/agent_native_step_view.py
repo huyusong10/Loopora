@@ -11,12 +11,9 @@ from loopora.agent_native_evidence_refs import agent_native_step_view_known_evid
 from loopora.agent_native_required_coverage import agent_native_required_coverage
 from loopora.agent_native_role_dispatch import agent_native_role_dispatch
 from loopora.agent_native_step_view_refresh import refresh_agent_native_step_view_with_judgment_contract as refresh_agent_native_step_view_with_judgment_contract
+from loopora.agent_native_submit_hints import agent_native_result_artifact_stem, agent_native_submit_command
+from loopora.agent_native_known_evidence_refs import _agent_native_compact_known_evidence_refs
 from loopora.run_artifacts import RunArtifactLayout
-from loopora.service_agent_native_contracts import (
-    _agent_native_compact_known_evidence_refs,
-    _agent_native_result_artifact_stem,
-    agent_native_submit_command,
-)
 
 
 @dataclass(frozen=True)
@@ -42,7 +39,7 @@ def agent_native_step_view(request: AgentNativeStepViewRequest) -> dict[str, Any
     step_contract_path = request.layout.step_contract_path(request.iter_id, request.step_order, request.step["id"])
     output_path = request.layout.step_output_raw_path(request.iter_id, request.step_order, request.step["id"])
     result_outbox_dir = request.layout.workdir_path / ".loopora" / "agent_outbox" / request.adapter
-    result_artifact_stem = _agent_native_result_artifact_stem(
+    result_artifact_stem = agent_native_result_artifact_stem(
         run_id=str(request.run["id"]),
         iter_id=request.iter_id,
         step_order=request.step_order,

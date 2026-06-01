@@ -3,6 +3,8 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
+from loopora.structured_numbers import coerced_int, coerced_non_negative_int
+
 
 @dataclass(frozen=True, slots=True)
 class RunnerStepSelectionRequest:
@@ -27,7 +29,7 @@ class RunnerStepCursorFromEventsRequest:
 
 
 def select_next_runner_step(request: RunnerStepSelectionRequest) -> RunnerStepSelection | None:
-    step_order = max(int(request.step_index or 0), 0)
+    step_order = coerced_non_negative_int(request.step_index)
     if step_order >= len(request.strategy_steps):
         return None
     step = request.strategy_steps[step_order]
@@ -49,21 +51,21 @@ def runner_step_index_from_events(request: RunnerStepCursorFromEventsRequest) ->
         if _event_type(event) != "StepCommitted":
             continue
         payload = _event_payload(event)
-        if _safe_int(payload.get("iteration"), default=-1) != request.iteration:
+        if coerced_int(payload.get("iteration"), default=-1) != request.iteration:
             continue
         step_index = step_index_by_id.get(str(payload.get("step_id") or ""))
         if step_index is not None:
             last_committed_index = max(last_committed_index, step_index)
     if last_committed_index >= 0:
         return last_committed_index + 1
-    return max(int(request.fallback_step_index or 0), 0)
+    return coerced_non_negative_int(request.fallback_step_index)
 
 
 def _projected_current_step_index(request: RunnerStepCursorFromEventsRequest) -> int | None:
     projection = request.current_step_projection or {}
     if not projection.get("claimable"):
         return None
-    if _safe_int(projection.get("iteration"), default=-1) != request.iteration:
+    if coerced_int(projection.get("iteration"), default=-1) != request.iteration:
         return None
     step_id = str(projection.get("step_id") or "")
     return _step_index_by_id(request.strategy_steps).get(step_id)
@@ -84,12 +86,3 @@ def _event_type(event: object) -> str:
 def _event_payload(event: object) -> Mapping[str, object]:
     payload = getattr(event, "payload", {})
     return payload if isinstance(payload, Mapping) else {}
-
-
-def _safe_int(value: object, *, default: int) -> int:
-    if isinstance(value, bool):
-        return default
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        return default

@@ -9,7 +9,8 @@ from pathlib import Path
 from loopora.alignment_guidance import load_alignment_guidance_assets
 from loopora.bundles import BundleError, read_bundle_file_text
 from loopora.event_redaction import redact_sensitive_text
-from loopora.service_alignment_context import alignment_user_language_hint, alignment_workdir_snapshot
+from loopora.service_alignment_language import alignment_user_language_hint
+from loopora.service_alignment_workdir_snapshot import alignment_workdir_snapshot
 from loopora.service_types import LooporaError
 
 

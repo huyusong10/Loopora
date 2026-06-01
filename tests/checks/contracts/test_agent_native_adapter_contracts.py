@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from loopora.agent_adapters import normalize_agent_adapter_kind as legacy_normalize_agent_adapter_kind
@@ -13,6 +15,9 @@ from loopora.agent_native_adapter_contracts import (
 from loopora.service_types import LooporaError
 
 
+REPO_ROOT = Path(__file__).resolve().parents[3]
+
+
 def test_agent_native_adapter_contracts_normalize_host_aliases_without_installer_state() -> None:
     assert normalize_agent_adapter_kind("openai-codex") == "codex"
     assert normalize_agent_adapter_kind("claude-code") == "claude"
@@ -21,6 +26,103 @@ def test_agent_native_adapter_contracts_normalize_host_aliases_without_installer
 
     with pytest.raises(LooporaError, match="unsupported agent adapter"):
         normalize_agent_adapter_kind("unknown-agent")
+
+
+def test_agent_native_adapter_policy_details_have_dedicated_boundary() -> None:
+    contracts_source = (REPO_ROOT / "src" / "loopora" / "agent_native_adapter_contracts.py").read_text(
+        encoding="utf-8"
+    )
+    policies_source = (REPO_ROOT / "src" / "loopora" / "agent_native_adapter_policies.py").read_text(
+        encoding="utf-8"
+    )
+    dispatch_source = (REPO_ROOT / "src" / "loopora" / "agent_native_adapter_dispatch_policies.py").read_text(
+        encoding="utf-8"
+    )
+    identity_source = (REPO_ROOT / "src" / "loopora" / "agent_native_adapter_identity.py").read_text(
+        encoding="utf-8"
+    )
+    host_mappings_source = (REPO_ROOT / "src" / "loopora" / "agent_native_adapter_host_mappings.py").read_text(
+        encoding="utf-8"
+    )
+    design_source = (REPO_ROOT / "design" / "contracts.md").read_text(encoding="utf-8")
+
+    assert "from loopora.agent_native_adapter_policies import" in contracts_source
+    assert "from loopora.agent_native_adapter_dispatch_policies import" in contracts_source
+    assert "from loopora.agent_native_adapter_identity import" in contracts_source
+    for marker in (
+        "def agent_adapter_packaging_policy",
+        "def agent_adapter_context_loading_policy",
+    ):
+        assert marker in policies_source
+        assert marker not in contracts_source
+    for marker in (
+        "NATIVE_SUBMIT_CONTRACT =",
+        "NATIVE_RUN_ENTRY_CONTRACT_BULLETS =",
+        "def agent_adapter_accepted_native_tools",
+        "def agent_adapter_native_dispatch_mechanism",
+    ):
+        assert marker in dispatch_source
+        assert marker not in policies_source
+        assert marker not in contracts_source
+    assert "def normalize_agent_adapter_kind" in identity_source
+    assert "def normalize_agent_adapter_kind" not in policies_source
+    assert "def normalize_agent_adapter_kind" not in contracts_source
+    for marker in (
+        "def agent_adapter_entry_paths",
+        "def agent_adapter_role_agent_paths",
+        "def agent_adapter_context_identity_env",
+    ):
+        assert marker in host_mappings_source
+        assert marker not in contracts_source
+    for marker in (
+        "def agent_adapter_native_surface_summary",
+        "def agent_adapter_native_run_surface_summary",
+    ):
+        assert marker in contracts_source
+        assert marker not in policies_source
+    assert "agent_native_adapter_policies.py" in design_source
+    assert "agent_native_adapter_dispatch_policies.py" in design_source
+    assert "agent_native_adapter_identity.py" in design_source
+    assert "agent_native_adapter_host_mappings.py" in design_source
+
+
+def test_agent_adapter_static_entry_checks_have_dedicated_boundary() -> None:
+    static_source = (REPO_ROOT / "src" / "loopora" / "agent_adapter_static_checks.py").read_text(encoding="utf-8")
+    entry_checks_source = (REPO_ROOT / "src" / "loopora" / "agent_adapter_entry_static_checks.py").read_text(
+        encoding="utf-8"
+    )
+    design_source = (REPO_ROOT / "design" / "contracts.md").read_text(encoding="utf-8")
+
+    assert "from loopora.agent_adapter_entry_static_checks import" in static_source
+    for marker in (
+        "def adapter_entry_reference_map",
+        "def adapter_supporting_files_checks",
+        "def adapter_entry_shape_checks",
+        "def entry_has_native_run_contract",
+    ):
+        assert marker in entry_checks_source
+        assert marker not in static_source
+    assert "def adapter_static_checks" in static_source
+    assert "def adapter_static_checks" not in entry_checks_source
+    assert "agent_adapter_entry_static_checks.py" in design_source
+
+
+def test_claude_hook_assets_have_dedicated_boundary() -> None:
+    host_config_source = (REPO_ROOT / "src" / "loopora" / "agent_adapter_host_config.py").read_text(encoding="utf-8")
+    hook_source = (REPO_ROOT / "src" / "loopora" / "agent_adapter_claude_hook.py").read_text(encoding="utf-8")
+    design_source = (REPO_ROOT / "design" / "contracts.md").read_text(encoding="utf-8")
+
+    assert "from loopora.agent_adapter_claude_hook import" in host_config_source
+    for marker in (
+        "CLAUDE_SESSION_HOOK_COMMAND",
+        "CLAUDE_SESSION_HOOK_GROUP",
+        "def claude_session_hook_script",
+    ):
+        assert marker in hook_source
+    assert "def claude_session_hook_script" not in host_config_source
+    assert "def install_host_config" in host_config_source
+    assert "def install_host_config" not in hook_source
+    assert "agent_adapter_claude_hook.py" in design_source
 
 
 def test_agent_native_adapter_surface_exposes_host_native_contract() -> None:

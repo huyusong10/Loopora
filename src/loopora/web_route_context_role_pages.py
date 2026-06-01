@@ -8,14 +8,14 @@ from fastapi.responses import HTMLResponse
 
 from loopora.markdown_tools import render_safe_markdown_html
 from loopora.providers import list_executor_profiles
-from loopora.web_inputs import (
+from loopora.web_role_inputs import (
     _archetype_options,
     _builtin_role_templates,
     _decorate_role_definition_overview,
     _normalize_role_definition_form,
-    _preferred_request_locale,
     _role_definition_form_values_from_record,
 )
+from loopora.web_request_context import _preferred_request_locale
 from loopora.web_url_utils import safe_local_return_path
 
 

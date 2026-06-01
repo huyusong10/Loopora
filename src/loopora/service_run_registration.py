@@ -1,48 +1,19 @@
 from __future__ import annotations
 
 import logging
-import math
-from dataclasses import dataclass, replace
-from hashlib import sha256
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from loopora.context_flow import RunContractSnapshotRequest, build_run_contract_snapshot
 from loopora.diagnostics import log_event
-from loopora.evidence_coverage import with_coverage_targets, write_evidence_coverage_projection
-from loopora.executor import coerce_reasoning_effort, normalize_reasoning_effort, validate_command_args_text
-from loopora.numeric_inputs import coerce_integral_number
-from loopora.providers import executor_profile, normalize_executor_kind, normalize_executor_mode
-from loopora.run_artifacts import INITIAL_STAGNATION_STATE, write_json_with_mirrors, write_text_with_mirrors
+from loopora.evidence_coverage_targets import with_coverage_targets
+from loopora.run_artifacts import write_json_with_mirrors
 from loopora.service_asset_common import logger, normalize_role_models
-from loopora.service_cleanup_diagnostics import best_effort_rmtree
-from loopora.service_types import LooporaConflictError, LooporaError, LooporaNotFoundError, normalize_completion_mode
-from loopora.strategy_source import StrategySourceError, strategy_source_has_finish_gatekeeper_step
+from loopora.service_loop_create_inputs import LoopCreateRequest, coerce_loop_create_request, normalize_loop_create_request
+from loopora.service_run_start import ServiceRunStartMixin
+from loopora.service_types import LooporaError
+from loopora.strategy_source import strategy_source_has_finish_gatekeeper_step
 from loopora.utils import make_id, write_json
-
-
-@dataclass(frozen=True, kw_only=True)
-class LoopCreateRequest:
-    name: str
-    spec_path: Path
-    workdir: Path
-    model: str
-    reasoning_effort: str
-    max_iters: int
-    max_role_retries: int
-    delta_threshold: float
-    trigger_window: int
-    regression_window: int
-    executor_kind: str = "codex"
-    executor_mode: str = "preset"
-    command_cli: str = ""
-    command_args_text: str = ""
-    workflow: dict | None = None
-    prompt_files: dict | None = None
-    orchestration_id: str | None = None
-    role_models: dict | None = None
-    completion_mode: str = "gatekeeper"
-    iteration_interval_seconds: float = 0.0
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -63,117 +34,6 @@ class ResolvedLoopCreate:
     compiled_spec: dict
     resolved_orchestration: dict
     strategy_source: dict
-
-
-def _coerce_loop_create_request(
-    request: LoopCreateRequest | None,
-    raw_request: dict[str, Any],
-) -> LoopCreateRequest:
-    if request is not None and raw_request:
-        raise TypeError("loop create request cannot mix object and keyword fields")
-    return request or LoopCreateRequest(**raw_request)
-
-
-def _normalize_loop_create_request(request: LoopCreateRequest) -> LoopCreateRequest:
-    workdir, spec_path = _normalize_loop_paths(request.workdir, request.spec_path)
-    runtime_limits = _normalize_loop_limits(request)
-    return replace(
-        request,
-        workdir=workdir,
-        spec_path=spec_path,
-        **runtime_limits,
-        **_normalize_loop_executor_settings(request),
-    )
-
-
-def _normalize_loop_paths(workdir: Path, spec_path: Path) -> tuple[Path, Path]:
-    normalized_workdir = workdir.expanduser().resolve()
-    normalized_spec_path = spec_path.expanduser()
-    if normalized_spec_path.exists():
-        normalized_spec_path = normalized_spec_path.resolve()
-    if not normalized_workdir.exists() or not normalized_workdir.is_dir():
-        raise LooporaError(f"workdir does not exist: {normalized_workdir}")
-    if not normalized_spec_path.exists():
-        raise LooporaError(f"spec does not exist: {normalized_spec_path}")
-    return normalized_workdir, normalized_spec_path
-
-
-def _normalize_loop_limits(request: LoopCreateRequest) -> dict[str, int | float]:
-    for field_name in (
-        "iteration_interval_seconds",
-        "max_iters",
-        "max_role_retries",
-        "delta_threshold",
-        "trigger_window",
-        "regression_window",
-    ):
-        _validate_finite_loop_number(getattr(request, field_name), field_name=field_name)
-    try:
-        max_iters = coerce_integral_number(request.max_iters, field_name="max_iters")
-        max_role_retries = coerce_integral_number(request.max_role_retries, field_name="max_role_retries")
-        trigger_window = coerce_integral_number(request.trigger_window, field_name="trigger_window")
-        regression_window = coerce_integral_number(request.regression_window, field_name="regression_window")
-    except ValueError as exc:
-        raise LooporaError(str(exc)) from exc
-    iteration_interval_seconds = float(request.iteration_interval_seconds)
-    delta_threshold = float(request.delta_threshold)
-    if max_iters < 0:
-        raise LooporaError("max_iters must be >= 0")
-    if max_role_retries < 0:
-        raise LooporaError("max_role_retries must be >= 0")
-    if iteration_interval_seconds < 0:
-        raise LooporaError("iteration_interval_seconds must be >= 0")
-    if delta_threshold < 0:
-        raise LooporaError("delta_threshold must be >= 0")
-    if trigger_window < 1:
-        raise LooporaError("trigger_window must be >= 1")
-    if regression_window < 1:
-        raise LooporaError("regression_window must be >= 1")
-    return {
-        "iteration_interval_seconds": iteration_interval_seconds,
-        "max_iters": max_iters,
-        "max_role_retries": max_role_retries,
-        "delta_threshold": delta_threshold,
-        "trigger_window": trigger_window,
-        "regression_window": regression_window,
-    }
-
-
-def _validate_finite_loop_number(value: object, *, field_name: str) -> None:
-    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
-        raise LooporaError(f"{field_name} must be a finite number")
-
-
-def _normalize_loop_executor_settings(request: LoopCreateRequest) -> dict[str, str]:
-    try:
-        executor_kind = normalize_executor_kind(request.executor_kind)
-        executor_mode = normalize_executor_mode(request.executor_mode)
-        profile = executor_profile(executor_kind)
-        if profile.command_only and executor_mode != "command":
-            raise ValueError(f"{profile.label} only supports command mode")
-        if executor_mode == "preset":
-            return {
-                "executor_kind": executor_kind,
-                "executor_mode": executor_mode,
-                "command_cli": "",
-                "command_args_text": "",
-                "model": request.model.strip() if request.model.strip() else profile.default_model,
-                "reasoning_effort": normalize_reasoning_effort(request.reasoning_effort, executor_kind),
-                "completion_mode": normalize_completion_mode(request.completion_mode),
-            }
-        command_cli = request.command_cli.strip() or profile.cli_name
-        validate_command_args_text(request.command_args_text, executor_kind=executor_kind)
-        return {
-            "executor_kind": executor_kind,
-            "executor_mode": executor_mode,
-            "command_cli": command_cli,
-            "command_args_text": request.command_args_text,
-            "model": request.model.strip(),
-            "reasoning_effort": request.reasoning_effort.strip(),
-            "completion_mode": normalize_completion_mode(request.completion_mode),
-        }
-    except ValueError as exc:
-        raise LooporaError(str(exc)) from exc
 
 
 def _loop_create_payload(resolved: ResolvedLoopCreate) -> dict:
@@ -205,15 +65,15 @@ def _loop_create_payload(resolved: ResolvedLoopCreate) -> dict:
     }
 
 
-class ServiceRunRegistrationMixin:
+class ServiceRunRegistrationMixin(ServiceRunStartMixin):
     def create_loop(
         self,
         request: LoopCreateRequest | None = None,
         **raw_request: Any,
     ) -> dict:
-        loop_request = _coerce_loop_create_request(request, raw_request)
+        loop_request = coerce_loop_create_request(request, raw_request)
         self._log_loop_create_requested(loop_request)
-        normalized_request = _normalize_loop_create_request(loop_request)
+        normalized_request = normalize_loop_create_request(loop_request)
         resolved_orchestration = self._resolve_loop_orchestration(normalized_request)
         strategy_source = resolved_orchestration["workflow"]
         self._validate_loop_completion_strategy_source(
@@ -308,171 +168,3 @@ class ServiceRunRegistrationMixin:
         from loopora.specs import read_and_compile
 
         return read_and_compile(spec_path)
-
-    def start_run(self, loop_id: str) -> dict:
-        loop = self.repository.get_loop(loop_id)
-        if not loop:
-            raise LooporaNotFoundError(f"unknown loop: {loop_id}")
-        log_event(
-            logger,
-            logging.INFO,
-            "service.run.start.requested",
-            "Received run start request",
-            **self._loop_log_context(loop),
-        )
-        if self.repository.has_active_run_for_workdir(loop["workdir"]):
-            raise LooporaConflictError(f"another active run is already using {loop['workdir']}")
-
-        strategy_source = self._normalized_strategy_source_from_record(loop)
-        try:
-            prompt_files = self._read_prompt_files_for_loop(loop["workdir"], loop["id"], strategy_source)
-        except StrategySourceError as exc:
-            raise LooporaError(str(exc)) from exc
-        run_id = make_id("run")
-        run_dir = self._ensure_run_dir(Path(loop["workdir"]), run_id)
-        layout = self._run_artifact_layout(run_dir)
-        layout.initialize()
-        queued_summary = "# Loopora Run Summary\n\nQueued.\n"
-        workspace_baseline = self._capture_workspace_manifest(Path(loop["workdir"]))
-        write_text_with_mirrors(layout.summary_path, queued_summary)
-        write_json_with_mirrors(layout.workspace_baseline_path, workspace_baseline)
-        write_json_with_mirrors(
-            layout.timeline_stagnation_path,
-            dict(INITIAL_STAGNATION_STATE),
-            mirror_paths=[layout.run_dir / "stagnation.json"],
-        )
-        compiled_spec = with_coverage_targets(
-            loop["compiled_spec_json"],
-            completion_mode=str(loop.get("completion_mode", "gatekeeper")),
-        )
-        source_bundle = self._loop_source_bundle_snapshot(loop_id)
-        write_json_with_mirrors(layout.contract_compiled_spec_path, compiled_spec)
-        write_text_with_mirrors(layout.contract_spec_path, loop["spec_markdown"])
-        write_json_with_mirrors(layout.contract_strategy_source_path, strategy_source, mirror_paths=[layout.contract_workflow_path])
-        self._persist_prompt_files(layout.contract_dir, prompt_files)
-
-        run_contract = build_run_contract_snapshot(
-            RunContractSnapshotRequest(
-                run={
-                    "id": run_id,
-                    "loop_id": loop_id,
-                    "workdir": loop["workdir"],
-                    "completion_mode": loop.get("completion_mode", "gatekeeper"),
-                    "max_iters": loop["max_iters"],
-                    "max_role_retries": loop["max_role_retries"],
-                    "delta_threshold": loop["delta_threshold"],
-                    "trigger_window": loop["trigger_window"],
-                    "regression_window": loop["regression_window"],
-                    "iteration_interval_seconds": loop.get("iteration_interval_seconds", 0.0),
-                    "executor_kind": loop.get("executor_kind", "codex"),
-                    "executor_mode": loop.get("executor_mode", "preset"),
-                    "model": loop["model"],
-                    "reasoning_effort": coerce_reasoning_effort(
-                        loop["reasoning_effort"],
-                        loop.get("executor_kind", "codex"),
-                    ),
-                },
-                compiled_spec=compiled_spec,
-                strategy_source=strategy_source,
-                prompt_files=prompt_files,
-                workspace_baseline=workspace_baseline,
-                layout=layout,
-                collaboration_summary=str(source_bundle.get("collaboration_summary") or "").strip(),
-                source_bundle=source_bundle,
-            )
-        )
-        write_json_with_mirrors(layout.run_contract_path, run_contract)
-        write_evidence_coverage_projection(layout)
-
-        try:
-            run = self.repository.create_run(
-                {
-                    "id": run_id,
-                    "loop_id": loop_id,
-                    "workdir": loop["workdir"],
-                    "spec_path": loop["spec_path"],
-                    "spec_markdown": loop["spec_markdown"],
-                    "compiled_spec": compiled_spec,
-                    "executor_kind": loop.get("executor_kind", "codex"),
-                    "executor_mode": loop.get("executor_mode", "preset"),
-                    "command_cli": loop.get("command_cli", ""),
-                    "command_args_text": loop.get("command_args_text", ""),
-                    "model": loop["model"],
-                    "reasoning_effort": coerce_reasoning_effort(
-                        loop["reasoning_effort"],
-                        loop.get("executor_kind", "codex"),
-                    ),
-                    "completion_mode": loop.get("completion_mode", "gatekeeper"),
-                    "iteration_interval_seconds": loop.get("iteration_interval_seconds", 0.0),
-                    "max_iters": loop["max_iters"],
-                    "max_role_retries": loop["max_role_retries"],
-                    "delta_threshold": loop["delta_threshold"],
-                    "trigger_window": loop["trigger_window"],
-                    "regression_window": loop["regression_window"],
-                    "orchestration_id": loop.get("orchestration_id", ""),
-                    "orchestration_name": loop.get("orchestration_name", ""),
-                    "role_models": loop["role_models_json"],
-                    "workflow": strategy_source,
-                    "status": "queued",
-                    "runs_dir": str(run_dir),
-                    "summary_md": queued_summary,
-                }
-            )
-        except Exception:
-            best_effort_rmtree(
-                run_dir,
-                logger,
-                operation="run_registration_failed_cleanup",
-                owner_id=loop_id,
-                workdir=loop["workdir"],
-            )
-            raise
-        self.append_run_event(run_id, "run_registered", {"loop_id": loop_id, "status": "queued"})
-        log_event(
-            logger,
-            logging.INFO,
-            "service.run.registered",
-            "Registered queued run",
-            **self._run_log_context(run, status=run["status"]),
-        )
-        return self._hydrate_run_files(run)
-
-    def _loop_bundle_collaboration_summary(self, loop_id: str) -> str:
-        return str(self._loop_source_bundle_snapshot(loop_id).get("collaboration_summary") or "").strip()
-
-    def _loop_source_bundle_snapshot(self, loop_id: str) -> dict:
-        try:
-            bundle = self.repository.get_bundle_by_loop_id(loop_id)
-        except AttributeError:
-            return {}
-        if not bundle:
-            return {}
-        bundle_id = str(bundle.get("id") or "").strip()
-        return {
-            **self._loop_source_bundle_fingerprint(bundle_id),
-            "id": str(bundle.get("id") or "").strip(),
-            "name": str(bundle.get("name") or "").strip(),
-            "revision": bundle.get("revision", 0),
-            "source_bundle_id": str(bundle.get("source_bundle_id") or "").strip(),
-            "imported_from_path": str(bundle.get("imported_from_path") or "").strip(),
-            "collaboration_summary": str(bundle.get("collaboration_summary") or "").strip(),
-        }
-
-    def _loop_source_bundle_fingerprint(self, bundle_id: str) -> dict[str, Any]:
-        fingerprint: dict[str, Any] = {"bundle_sha256": "", "bundle_bytes": 0, "bundle_yaml_path": ""}
-        if not bundle_id:
-            return fingerprint
-        bundle_yaml_path = getattr(self, "_bundle_yaml_path", None)
-        if callable(bundle_yaml_path):
-            fingerprint["bundle_yaml_path"] = str(bundle_yaml_path(bundle_id))
-        export_bundle_yaml = getattr(self, "export_bundle_yaml", None)
-        if not callable(export_bundle_yaml):
-            return fingerprint
-        try:
-            bundle_yaml = str(export_bundle_yaml(bundle_id) or "")
-        except (LooporaError, OSError, UnicodeError, ValueError):
-            return fingerprint
-        data = bundle_yaml.encode("utf-8")
-        fingerprint["bundle_sha256"] = sha256(data).hexdigest()
-        fingerprint["bundle_bytes"] = len(data)
-        return fingerprint
