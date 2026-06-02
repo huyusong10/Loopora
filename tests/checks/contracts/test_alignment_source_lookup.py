@@ -41,43 +41,7 @@ class _SourceLookupService:
 
 
 def test_resolve_alignment_source_option_seed_looks_up_run_and_linked_bundle(tmp_path: Path) -> None:
-    service = _SourceLookupService()
-    service.context = {
-        "options": [
-            {
-                "option_id": "run:run_1",
-                "source_type": "run",
-                "source_run_id": "run_1",
-            }
-        ]
-    }
-    service.runs["run_1"] = {
-        "id": "run_1",
-        "loop_id": "loop_1",
-        "status": "succeeded",
-        "runs_dir": str(tmp_path / "runs" / "run_1"),
-        "task_verdict": {"status": "insufficient_evidence"},
-    }
-    run_dir = Path(service.runs["run_1"]["runs_dir"])
-    (run_dir / "contract").mkdir(parents=True)
-    (run_dir / "evidence").mkdir(parents=True)
-    (run_dir / "contract" / "run_contract.json").write_text(
-        json.dumps({"goal": "Evidence exists.", "check_count": 1}, ensure_ascii=False),
-        encoding="utf-8",
-    )
-    (run_dir / "evidence" / "ledger.jsonl").write_text(
-        json.dumps({"id": "ev_1", "claim": "Builder produced a result"}, ensure_ascii=False) + "\n",
-        encoding="utf-8",
-    )
-    service.loops["loop_1"] = {
-        "id": "loop_1",
-        "name": "Loop One",
-        "bundle": {"id": "bundle_1"},
-    }
-    service.bundles["bundle_1"] = {
-        "metadata": {"bundle_id": "bundle_1", "source_bundle_id": "source_1", "revision": 3},
-        "loop": {"completion_mode": "all_checks_pass"},
-    }
+    service = source_service_with_linked_run(tmp_path)
 
     seed = resolve_alignment_source_option_seed(service, tmp_path, "run:run_1")
 
@@ -116,15 +80,7 @@ def test_resolve_alignment_source_option_seed_looks_up_run_and_linked_bundle(tmp
 
 def test_resolve_alignment_source_option_seed_rejects_continue_session_and_missing_option(tmp_path: Path) -> None:
     service = _SourceLookupService()
-    service.context = {
-        "options": [
-            {
-                "option_id": "session:active",
-                "action": "continue_session",
-                "source_type": "alignment_session",
-            }
-        ]
-    }
+    service.context = {"options": [{"option_id": "session:active", "action": "continue_session", "source_type": "alignment_session"}]}
 
     with pytest.raises(LooporaConflictError, match="continue_session"):
         resolve_alignment_source_option_seed(service, tmp_path, "session:active")
@@ -137,10 +93,7 @@ def test_alignment_run_source_bundle_derives_when_loop_has_no_imported_bundle() 
     service = _SourceLookupService()
 
     bundle_id, bundle = alignment_run_source_bundle(
-        service,
-        {"loop_id": "loop_1"},
-        {"id": "loop_1", "name": "Loop One"},
-        fallback_description="Derived from test run.",
+        service, {"loop_id": "loop_1"}, {"id": "loop_1", "name": "Loop One"}, fallback_description="Derived from test run."
     )
 
     assert bundle_id == ""
@@ -148,3 +101,35 @@ def test_alignment_run_source_bundle_derives_when_loop_has_no_imported_bundle() 
     assert bundle["metadata"]["description"] == "Derived from test run."
     assert bundle["collaboration_summary"] == "Improvement base derived from the current loop."
     assert service.derived_loop_ids == ["loop_1"]
+
+
+def source_service_with_linked_run(tmp_path: Path) -> _SourceLookupService:
+    service = _SourceLookupService()
+    service.context = {"options": [{"option_id": "run:run_1", "source_type": "run", "source_run_id": "run_1"}]}
+    service.runs["run_1"] = {
+        "id": "run_1",
+        "loop_id": "loop_1",
+        "status": "succeeded",
+        "runs_dir": str(tmp_path / "runs" / "run_1"),
+        "task_verdict": {"status": "insufficient_evidence"},
+    }
+    write_run_source_artifacts(Path(service.runs["run_1"]["runs_dir"]))
+    service.loops["loop_1"] = {"id": "loop_1", "name": "Loop One", "bundle": {"id": "bundle_1"}}
+    service.bundles["bundle_1"] = {
+        "metadata": {"bundle_id": "bundle_1", "source_bundle_id": "source_1", "revision": 3},
+        "loop": {"completion_mode": "all_checks_pass"},
+    }
+    return service
+
+
+def write_run_source_artifacts(run_dir: Path) -> None:
+    (run_dir / "contract").mkdir(parents=True)
+    (run_dir / "evidence").mkdir(parents=True)
+    (run_dir / "contract" / "run_contract.json").write_text(
+        json.dumps({"goal": "Evidence exists.", "check_count": 1}, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    (run_dir / "evidence" / "ledger.jsonl").write_text(
+        json.dumps({"id": "ev_1", "claim": "Builder produced a result"}, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )

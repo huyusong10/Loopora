@@ -31,12 +31,12 @@ def display_iter(iter_value: object | None) -> int | None:
 
 def strip_markdown(value: str | None) -> str:
     text = str(value or "")
-    text = re.sub(r"```.*?```", " ", text, flags=re.S)
+    text = re.sub(r"```.*?```", " ", text, flags=re.DOTALL)
     text = re.sub(r"`([^`]+)`", r"\1", text)
     text = re.sub(r"\[(.*?)\]\((.*?)\)", r"\1", text)
-    text = re.sub(r"^#{1,6}\s*", "", text, flags=re.M)
-    text = re.sub(r"^\s*[-*+]\s*", "", text, flags=re.M)
-    text = re.sub(r"^\s*\d+\.\s*", "", text, flags=re.M)
+    text = re.sub(r"^#{1,6}\s*", "", text, flags=re.MULTILINE)
+    text = re.sub(r"^\s*[-*+]\s*", "", text, flags=re.MULTILINE)
+    text = re.sub(r"^\s*\d+\.\s*", "", text, flags=re.MULTILINE)
     return re.sub(r"\s+", " ", text).strip()
 
 

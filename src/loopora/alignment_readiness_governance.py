@@ -9,7 +9,7 @@ GOVERNANCE_MARKER_PATTERN = r"agents\.md|design/readme\.md|design/|tests/|projec
 
 
 def local_governance_evidence_issue(text: str, *, workdir_snapshot: str = "") -> bool:
-    if not re.search(GOVERNANCE_MARKER_PATTERN, text, re.I) and not alignment_workdir_snapshot_has_governance_markers(
+    if not re.search(GOVERNANCE_MARKER_PATTERN, text, re.IGNORECASE) and not alignment_workdir_snapshot_has_governance_markers(
         workdir_snapshot
     ):
         return False
@@ -46,15 +46,15 @@ def alignment_governance_marker_responsibility_present(
 ) -> bool:
     segments = re.split(r"[\n.;。；]+", text)
     marker_windows: list[str] = []
-    for match in re.finditer(GOVERNANCE_MARKER_PATTERN, text, flags=re.I):
+    for match in re.finditer(GOVERNANCE_MARKER_PATTERN, text, flags=re.IGNORECASE):
         start = max(0, match.start() - 180)
         end = min(len(text), match.end() + 180)
         marker_windows.append(text[start:end])
     for segment in [*segments, *marker_windows]:
         if (
-            re.search(GOVERNANCE_MARKER_PATTERN, segment, flags=re.I)
-            and re.search(actor_pattern, segment, flags=re.I)
-            and re.search(action_pattern, segment, flags=re.I)
+            re.search(GOVERNANCE_MARKER_PATTERN, segment, flags=re.IGNORECASE)
+            and re.search(actor_pattern, segment, flags=re.IGNORECASE)
+            and re.search(action_pattern, segment, flags=re.IGNORECASE)
         ):
             return True
     return False

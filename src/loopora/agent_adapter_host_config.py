@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import os
 from pathlib import Path
 from typing import Any
 
@@ -217,7 +216,7 @@ def _read_text_or_empty(path: Path) -> str:
 def _atomic_write_text(path: Path, content: str) -> None:
     tmp = path.with_name(path.name + ".tmp")
     tmp.write_text(content, encoding="utf-8")
-    os.replace(tmp, path)
+    tmp.replace(path)
 
 
 def _remove_empty_parents(root: Path, directory: Path) -> None:

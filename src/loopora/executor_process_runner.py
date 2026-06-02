@@ -8,8 +8,8 @@ from loopora.executor_command_events import build_command_event_payload
 from loopora.executor_process_stream import (
     ProcessStreamCallbacks,
     ProcessStreamContext,
-    ProcessStreamIdleTimeout,
-    ProcessStreamStopped,
+    ProcessStreamIdleTimeoutError,
+    ProcessStreamStoppedError,
     stream_process,
 )
 from loopora.executor_types import ExecutionStopped, ExecutorError, ExecutorProcessRequest
@@ -36,9 +36,9 @@ def run_executor_process(process_request: ExecutorProcessRequest) -> int:
                 terminate_process=terminate_executor_process,
             ),
         )
-    except ProcessStreamStopped as exc:
+    except ProcessStreamStoppedError as exc:
         raise ExecutionStopped(str(exc)) from exc
-    except ProcessStreamIdleTimeout as exc:
+    except ProcessStreamIdleTimeoutError as exc:
         raise ExecutorError(str(exc)) from exc
 
 

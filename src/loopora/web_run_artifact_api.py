@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Annotated
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse, JSONResponse
@@ -63,7 +64,7 @@ def register_file_api_routes(app: FastAPI, ctx: WebRouteContext) -> None:
     @app.get("/api/files")
     async def api_preview_file(
         run_id: str,
-        root: str = Query(default="workdir", pattern=FILE_ROOT_QUERY_PATTERN),
+        root: Annotated[str, Query(pattern=FILE_ROOT_QUERY_PATTERN)] = "workdir",
         path: str = "",
     ) -> JSONResponse:
         return JSONResponse(ctx.svc().preview_file(run_id, root=root, relative_path=path))
@@ -71,7 +72,7 @@ def register_file_api_routes(app: FastAPI, ctx: WebRouteContext) -> None:
     @app.get("/api/files/download")
     async def api_download_file(
         run_id: str,
-        root: str = Query(default="workdir", pattern=FILE_ROOT_QUERY_PATTERN),
+        root: Annotated[str, Query(pattern=FILE_ROOT_QUERY_PATTERN)] = "workdir",
         path: str = "",
     ) -> FileResponse:
         return _attachment_file_response(ctx.svc().download_file_path(run_id, root=root, relative_path=path))

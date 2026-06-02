@@ -90,7 +90,7 @@ def _write_phase_report_fixture(module, tmp_path: Path) -> tuple[dict, Path]:
     _write_json(run_dir / "evidence" / "coverage.json", {"status": "covered", "covered_check_count": 3, "missing_check_ids": []})
     _write_json(run_dir / "evidence" / "task_verdict.json", {"status": "passed", "source": "gatekeeper", "summary": "passed"})
     _write_json(
-        run_dir / "iterations" / "iter_000" / "steps" / "00__builder_step" / "capsule.json",
+        run_dir / "iterations" / "iter_000" / "steps" / "00__builder_step" / "agent_step_view.json",
         {
             "step_id": "builder_step",
             "role_dispatch": {"target_agent": "loopora-builder"},

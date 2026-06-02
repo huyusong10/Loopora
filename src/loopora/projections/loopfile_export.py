@@ -162,7 +162,7 @@ def _role_snapshot_value(
 def _loop_runtime_number(
     loop: Mapping[str, object],
     key: str,
-    default: int | float,
+    default: float,
     *,
     integer_only: bool,
 ) -> int | float:

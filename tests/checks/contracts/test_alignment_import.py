@@ -1,4 +1,5 @@
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -11,11 +12,9 @@ class FakeAlignmentImportRepository:
     def __init__(self, session: dict) -> None:
         self.session = dict(session)
         self.events: list[dict] = []
-        self.updates: list[dict] = []
 
     def update_alignment_session(self, session_id: str, **fields: object) -> dict:
         assert session_id == self.session["id"]
-        self.updates.append(fields)
         self.session.update(fields)
         return dict(self.session)
 
@@ -26,11 +25,12 @@ class FakeAlignmentImportRepository:
         return event
 
 
-def import_context(repo: FakeAlignmentImportRepository, *, agent_candidate: bool = False, import_error: Exception | None = None):
-    imported_yamls: list[str] = []
-    started_runs: list[str] = []
-    async_started_runs: list[str] = []
-    validation_logs: list[dict] = []
+def import_case(tmp_path: Path, *, session: dict | None = None, agent_candidate: bool = False, import_error: Exception | None = None):
+    repo = FakeAlignmentImportRepository(session if session is not None else ready_session(tmp_path))
+    yamls: list[str] = []
+    runs: list[str] = []
+    async_runs: list[str] = []
+    validations: list[dict] = []
 
     def get_session(session_id: str) -> dict:
         assert session_id == repo.session["id"]
@@ -44,23 +44,18 @@ def import_context(repo: FakeAlignmentImportRepository, *, agent_candidate: bool
         return {"loop": {"name": "Imported Loop"}}, normalized_yaml
 
     def import_bundle_text(normalized_yaml: str) -> dict:
-        imported_yamls.append(normalized_yaml)
+        yamls.append(normalized_yaml)
         return {"id": "bundle_1", "loop_id": "loop_1", "loop": {"id": "loop_1"}}
 
     def start_run(loop_id: str) -> dict:
-        started_runs.append(loop_id)
+        runs.append(loop_id)
         return {"id": "run_1", "loop_id": loop_id}
-
-    def start_run_async(run_id: str) -> None:
-        async_started_runs.append(run_id)
 
     def lifecycle_context() -> AlignmentBundleLifecycleContext:
         return AlignmentBundleLifecycleContext(
             repository=repo,
             get_session=get_session,
-            write_validation_log=lambda session, validation: validation_logs.append(
-                {"session": session, "validation": validation}
-            ),
+            write_validation_log=lambda _session, validation: validations.append(validation),
         )
 
     context = AlignmentImportContext(
@@ -70,11 +65,23 @@ def import_context(repo: FakeAlignmentImportRepository, *, agent_candidate: bool
         load_validated_bundle_text=load_validated_bundle_text,
         import_bundle_text=import_bundle_text,
         start_run=start_run,
-        start_run_async=start_run_async,
+        start_run_async=async_runs.append,
         bundle_lifecycle_context=lifecycle_context,
         now=lambda: "2026-05-30T00:00:00Z",
     )
-    return context, imported_yamls, started_runs, async_started_runs, validation_logs
+    return SimpleNamespace(
+        repo=repo,
+        context=context,
+        yamls=yamls,
+        runs=runs,
+        async_runs=async_runs,
+        validations=validations,
+        event_types=lambda: [event["event_type"] for event in repo.events],
+    )
+
+
+def linked_session_ids(case: SimpleNamespace) -> tuple[object, object, object]:
+    return tuple(case.repo.session[key] for key in ("linked_bundle_id", "linked_loop_id", "linked_run_id"))
 
 
 def ready_session(tmp_path: Path, *, status: str = "ready") -> dict:
@@ -84,71 +91,59 @@ def ready_session(tmp_path: Path, *, status: str = "ready") -> dict:
 
 
 def test_alignment_import_command_imports_without_start_for_string_false(tmp_path: Path) -> None:
-    repo = FakeAlignmentImportRepository(ready_session(tmp_path))
-    context, imported_yamls, started_runs, async_started_runs, validation_logs = import_context(repo)
+    case = import_case(tmp_path)
 
-    result = import_alignment_bundle(context, "align_import", start_immediately="false")
+    result = import_alignment_bundle(case.context, "align_import", start_immediately="false")
 
     assert result["run"] is None
     assert result["redirect_url"] == "/loops/loop_1"
     assert result["session"]["status"] == "imported"
-    assert repo.session["linked_bundle_id"] == "bundle_1"
-    assert repo.session["linked_loop_id"] == "loop_1"
-    assert repo.session["linked_run_id"] == ""
-    assert imported_yamls == ["version: 1\n# normalized\n"]
-    assert started_runs == []
-    assert async_started_runs == []
-    assert validation_logs[0]["validation"]["ok"] is True
-    assert [event["event_type"] for event in repo.events] == ["alignment_imported"]
+    assert linked_session_ids(case) == ("bundle_1", "loop_1", "")
+    assert case.yamls == ["version: 1\n# normalized\n"]
+    assert case.runs == case.async_runs == []
+    assert case.validations[0]["ok"] is True
+    assert case.event_types() == ["alignment_imported"]
 
 
 def test_alignment_import_command_starts_run_and_records_run_event(tmp_path: Path) -> None:
-    repo = FakeAlignmentImportRepository(ready_session(tmp_path))
-    context, _imported_yamls, started_runs, async_started_runs, _validation_logs = import_context(repo)
+    case = import_case(tmp_path)
 
-    result = import_alignment_bundle(context, "align_import", start_immediately=True, execute_async=True)
+    result = import_alignment_bundle(case.context, "align_import", start_immediately=True, execute_async=True)
 
     assert result["run"] == {"id": "run_1", "loop_id": "loop_1"}
     assert result["redirect_url"] == "/runs/run_1"
-    assert started_runs == ["loop_1"]
-    assert async_started_runs == ["run_1"]
-    assert repo.session["status"] == "running_loop"
-    assert repo.session["linked_run_id"] == "run_1"
-    assert [event["event_type"] for event in repo.events] == ["alignment_imported", "alignment_run_started"]
+    assert case.runs == ["loop_1"]
+    assert case.async_runs == ["run_1"]
+    assert case.repo.session["status"] == "running_loop"
+    assert case.repo.session["linked_run_id"] == "run_1"
+    assert case.event_types() == ["alignment_imported", "alignment_run_started"]
 
 
 def test_alignment_import_command_rejects_non_ready_missing_file_and_agent_first(tmp_path: Path) -> None:
-    inactive_repo = FakeAlignmentImportRepository(ready_session(tmp_path, status="idle"))
-    inactive_context, *_ = import_context(inactive_repo)
+    inactive = import_case(tmp_path, session=ready_session(tmp_path, status="idle"))
     with pytest.raises(LooporaConflictError, match="not READY"):
-        import_alignment_bundle(inactive_context, "align_import")
+        import_alignment_bundle(inactive.context, "align_import")
 
     missing_bundle = tmp_path / "missing.yml"
-    missing_repo = FakeAlignmentImportRepository({"id": "align_import", "status": "ready", "bundle_path": str(missing_bundle)})
-    missing_context, *_ = import_context(missing_repo)
+    missing = import_case(tmp_path, session={"id": "align_import", "status": "ready", "bundle_path": str(missing_bundle)})
     with pytest.raises(LooporaNotFoundError, match="alignment bundle does not exist"):
-        import_alignment_bundle(missing_context, "align_import", start_immediately=False)
+        import_alignment_bundle(missing.context, "align_import", start_immediately=False)
 
-    agent_repo = FakeAlignmentImportRepository(ready_session(tmp_path))
-    agent_context, *_ = import_context(agent_repo, agent_candidate=True)
+    agent = import_case(tmp_path, agent_candidate=True)
     with pytest.raises(LooporaConflictError, match="agent-first Loop previews"):
-        import_alignment_bundle(agent_context, "align_import", start_immediately=True, execute_async=True)
-    assert agent_repo.events == []
+        import_alignment_bundle(agent.context, "align_import", start_immediately=True, execute_async=True)
+    assert agent.repo.events == []
 
 
 def test_alignment_import_command_records_validation_failure_and_reraises_loopora_error(tmp_path: Path) -> None:
-    repo = FakeAlignmentImportRepository(ready_session(tmp_path))
-    context, imported_yamls, started_runs, _async_started_runs, validation_logs = import_context(
-        repo,
-        import_error=LooporaError("bundle semantic lint failed"),
-    )
+    case = import_case(tmp_path, import_error=LooporaError("bundle semantic lint failed"))
 
     with pytest.raises(LooporaError, match="bundle semantic lint failed"):
-        import_alignment_bundle(context, "align_import", start_immediately=False)
+        import_alignment_bundle(case.context, "align_import", start_immediately=False)
 
-    assert imported_yamls == []
-    assert started_runs == []
-    assert repo.session["status"] == "ready"
-    assert repo.session["error_message"] == "bundle semantic lint failed"
-    assert validation_logs[0]["validation"]["semantic_lint"] == {"ok": False, "issues": ["semantic issue"]}
-    assert [event["event_type"] for event in repo.events] == ["alignment_import_failed"]
+    assert case.yamls == []
+    assert case.runs == []
+    assert case.repo.session["status"] == "ready"
+    assert case.repo.session["error_message"] == "bundle semantic lint failed"
+    assert case.validations[0]["semantic_lint"] == {"ok": False, "issues": ["semantic issue"]}
+    assert case.event_types() == ["alignment_import_failed"]

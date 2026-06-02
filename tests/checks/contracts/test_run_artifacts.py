@@ -7,6 +7,7 @@ import pytest
 
 from loopora.run_artifact_catalog import list_run_artifacts
 from loopora.run_artifacts import (
+    INITIAL_STAGNATION_STATE,
     RunArtifactLayout,
     append_jsonl_with_mirrors,
     read_jsonl,
@@ -19,34 +20,36 @@ from loopora.run_artifacts import (
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
-def test_jsonl_legacy_mirror_failure_does_not_block_canonical_write(tmp_path: Path) -> None:
-    canonical_path = tmp_path / "timeline" / "events.jsonl"
-    mirror_path = tmp_path / "events.jsonl"
+def _source(module_name: str) -> str:
+    return (REPO_ROOT / "src" / "loopora" / f"{module_name}.py").read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize(
+    ("relative_path", "payload", "expected"),
+    [
+        (Path("timeline/events.jsonl"), {"ok": True}, [{"ok": True}]),
+        (Path("timeline/stagnation.json"), {"mode": "none"}, {"mode": "none"}),
+        (Path("summary/summary.md"), "Summary\n", "Summary\n"),
+    ],
+)
+def test_legacy_mirror_failure_does_not_block_canonical_write(
+    tmp_path: Path, relative_path: Path, payload: object, expected: object
+) -> None:
+    canonical_path = tmp_path / relative_path
+    mirror_path = tmp_path / relative_path.name
     mirror_path.mkdir(parents=True)
 
-    append_jsonl_with_mirrors(canonical_path, {"ok": True}, mirror_paths=[mirror_path])
+    if relative_path.suffix == ".jsonl":
+        append_jsonl_with_mirrors(canonical_path, payload, mirror_paths=[mirror_path])
+        actual = [json.loads(line) for line in canonical_path.read_text(encoding="utf-8").splitlines()]
+    elif relative_path.suffix == ".json":
+        write_json_with_mirrors(canonical_path, payload, mirror_paths=[mirror_path])
+        actual = json.loads(canonical_path.read_text(encoding="utf-8"))
+    else:
+        write_text_with_mirrors(canonical_path, payload, mirror_paths=[mirror_path])
+        actual = canonical_path.read_text(encoding="utf-8")
 
-    assert [json.loads(line) for line in canonical_path.read_text(encoding="utf-8").splitlines()] == [{"ok": True}]
-
-
-def test_json_legacy_mirror_failure_does_not_block_canonical_write(tmp_path: Path) -> None:
-    canonical_path = tmp_path / "timeline" / "stagnation.json"
-    mirror_path = tmp_path / "stagnation.json"
-    mirror_path.mkdir(parents=True)
-
-    write_json_with_mirrors(canonical_path, {"mode": "none"}, mirror_paths=[mirror_path])
-
-    assert json.loads(canonical_path.read_text(encoding="utf-8")) == {"mode": "none"}
-
-
-def test_text_legacy_mirror_failure_does_not_block_canonical_write(tmp_path: Path) -> None:
-    canonical_path = tmp_path / "summary" / "summary.md"
-    mirror_path = tmp_path / "summary.md"
-    mirror_path.mkdir(parents=True)
-
-    write_text_with_mirrors(canonical_path, "Summary\n", mirror_paths=[mirror_path])
-
-    assert canonical_path.read_text(encoding="utf-8") == "Summary\n"
+    assert actual == expected
 
 
 def test_read_jsonl_tolerates_invalid_utf8_artifacts(tmp_path: Path) -> None:
@@ -62,12 +65,7 @@ def test_read_stagnation_state_recovers_corrupt_json(tmp_path: Path) -> None:
     artifact_path.parent.mkdir(parents=True)
     artifact_path.write_text("{", encoding="utf-8")
 
-    assert read_stagnation_state(artifact_path) == {
-        "stagnation_mode": "none",
-        "recent_composites": [],
-        "recent_deltas": [],
-        "consecutive_low_delta": 0,
-    }
+    assert read_stagnation_state(artifact_path) == INITIAL_STAGNATION_STATE
 
 
 def test_run_artifact_layout_rejects_bool_iteration_and_step_identity(tmp_path: Path) -> None:
@@ -104,22 +102,18 @@ def test_list_run_artifacts_does_not_mark_symlink_escaping_run_dir_available(tmp
 
 
 def test_run_artifact_catalog_has_dedicated_boundary() -> None:
-    facade_source = (REPO_ROOT / "src" / "loopora" / "run_artifacts.py").read_text(encoding="utf-8")
-    layout_source = (REPO_ROOT / "src" / "loopora" / "run_artifact_layout.py").read_text(encoding="utf-8")
-    io_source = (REPO_ROOT / "src" / "loopora" / "run_artifact_io.py").read_text(encoding="utf-8")
-    layout_setup_source = (REPO_ROOT / "src" / "loopora" / "run_artifact_layout_setup.py").read_text(encoding="utf-8")
-    catalog_source = (REPO_ROOT / "src" / "loopora" / "run_artifact_catalog.py").read_text(encoding="utf-8")
-    web_overviews_source = (REPO_ROOT / "src" / "loopora" / "web_overviews.py").read_text(encoding="utf-8")
-    web_run_artifact_api_source = (REPO_ROOT / "src" / "loopora" / "web_run_artifact_api.py").read_text(
-        encoding="utf-8"
-    )
+    facade_source = _source("run_artifacts")
+    layout_source = _source("run_artifact_layout")
+    io_source = _source("run_artifact_io")
+    layout_setup_source = _source("run_artifact_layout_setup")
+    catalog_source = _source("run_artifact_catalog")
+    web_overviews_source = _source("web_overviews")
+    web_run_artifact_api_source = _source("web_run_artifact_api")
     contracts_source = (REPO_ROOT / "design" / "contracts.md").read_text(encoding="utf-8")
 
     assert "from loopora.run_artifact_layout import" in facade_source
     assert "class RunArtifactLayout" in layout_source
     assert "def artifact_ref" in layout_source
-    assert "def list_run_artifacts" not in facade_source
-    assert "def artifact_slug" not in facade_source
     assert "from loopora.run_artifact_io import" in facade_source
     for marker in (
         "def read_stagnation_state",
@@ -129,19 +123,21 @@ def test_run_artifact_catalog_has_dedicated_boundary() -> None:
     ):
         assert marker in io_source
         assert marker not in facade_source
-    assert "def initialize_run_artifact_layout" in layout_setup_source
-    assert "def legacy_role_output_alias_paths" in layout_setup_source
-    assert "builder_output.json" in layout_setup_source
     assert "dict(INITIAL_LATEST_STATE)" not in layout_source
-    assert "builder_output.json" not in facade_source
-    assert "RUN_ARTIFACT_SPECS" in catalog_source
-    assert "STEP_ARTIFACT_FILENAMES" in catalog_source
-    assert "def list_run_artifacts" in catalog_source
+    for marker in ("def list_run_artifacts", "def artifact_slug", "builder_output.json"):
+        assert marker not in facade_source
+    for marker in ("def initialize_run_artifact_layout", "def legacy_role_output_alias_paths", "builder_output.json"):
+        assert marker in layout_setup_source
+    for marker in ("RUN_ARTIFACT_SPECS", "STEP_ARTIFACT_FILENAMES", "def list_run_artifacts"):
+        assert marker in catalog_source
     assert "from loopora.run_artifact_catalog import list_run_artifacts" in web_overviews_source
     assert "from loopora.run_artifact_catalog import list_run_artifacts as _list_run_artifacts" in web_run_artifact_api_source
     assert "def register_run_artifact_api_routes" in web_run_artifact_api_source
-    assert "run_artifact_layout.py" in contracts_source
-    assert "run_artifact_layout_setup.py" in contracts_source
-    assert "run_artifact_catalog.py" in contracts_source
-    assert "run_artifact_io.py" in contracts_source
-    assert "web_run_artifact_api.py" in contracts_source
+    for module_name in (
+        "run_artifact_layout.py",
+        "run_artifact_layout_setup.py",
+        "run_artifact_catalog.py",
+        "run_artifact_io.py",
+        "web_run_artifact_api.py",
+    ):
+        assert module_name in contracts_source

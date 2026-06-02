@@ -19,7 +19,7 @@ def agent_candidate_fake_done_categories(task_text: str, *, require_explicit_mar
         r"看起来.{0,12}(?:完成|可用|通过)",
         r"(?:不能|不可|不要|不得).{0,16}(?:通过|算完成|收尾)",
     )
-    if require_explicit_marker and not any(re.search(pattern, text, re.I) for pattern in explicit_fake_done_markers):
+    if require_explicit_marker and not any(re.search(pattern, text, re.IGNORECASE) for pattern in explicit_fake_done_markers):
         return []
     categories: list[tuple[str, str]] = [
         (
@@ -105,7 +105,7 @@ def agent_candidate_fake_done_categories(task_text: str, *, require_explicit_mar
     categories.extend(
         (label, bundle_pattern)
         for label, task_pattern, bundle_pattern in category_patterns
-        if re.search(task_pattern, text, re.I)
+        if re.search(task_pattern, text, re.IGNORECASE)
     )
     return categories
 
@@ -124,7 +124,7 @@ def agent_candidate_evidence_preference_categories(
         r"证据.{0,24}(?:必须|需要|优先|包括|包含)",
         r"(?:必须|需要|优先|包括|包含).{0,24}(?:证据|证明|验证)",
     )
-    if require_explicit_marker and not any(re.search(pattern, text, re.I) for pattern in explicit_evidence_markers):
+    if require_explicit_marker and not any(re.search(pattern, text, re.IGNORECASE) for pattern in explicit_evidence_markers):
         return []
     categories: list[tuple[str, str]] = [
         (
@@ -174,5 +174,5 @@ def agent_candidate_evidence_preference_categories(
             r"\b(?:screenshot|screenshots)\b|截图",
         ),
     )
-    categories.extend((label, pattern) for label, pattern in category_patterns if re.search(pattern, text, re.I))
+    categories.extend((label, pattern) for label, pattern in category_patterns if re.search(pattern, text, re.IGNORECASE))
     return categories

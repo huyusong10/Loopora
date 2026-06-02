@@ -14,6 +14,10 @@ from loopora.structured_booleans import structured_bool_is_true
 from loopora.structured_numbers import structured_finite_number
 
 
+BLOCKED_GATEKEEPER_COMPOSITE_SCORE = 0.89
+BLOCKED_GATEKEEPER_SCORE_ADJUSTMENT_THRESHOLD = 0.9
+
+
 def _string_list(value: object) -> list[str]:
     if isinstance(value, str):
         return [value.strip()] if value.strip() else []
@@ -101,8 +105,8 @@ def _coverage_result_evidence_refs(value: object) -> list[str]:
 
 def _adjust_blocked_composite_score(composite_score: object, result: dict, blocking_issues: list[str]) -> object:
     score = structured_finite_number(composite_score)
-    if not result["passed"] and score >= 0.9 and blocking_issues:
-        return 0.89
+    if not result["passed"] and score >= BLOCKED_GATEKEEPER_SCORE_ADJUSTMENT_THRESHOLD and blocking_issues:
+        return BLOCKED_GATEKEEPER_COMPOSITE_SCORE
     return score
 
 

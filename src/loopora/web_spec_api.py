@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Annotated
+
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import JSONResponse, Response
 
@@ -141,7 +143,7 @@ def _register_markdown_prompt_api_routes(app: FastAPI, ctx: WebRouteContext) -> 
         return JSONResponse({"ok": True, "metadata": metadata, "body": body})
 
     @app.get("/api/prompts/templates/{prompt_ref}")
-    async def api_prompt_template(prompt_ref: str, locale: str | None = Query(default=None)) -> Response:
+    async def api_prompt_template(prompt_ref: str, locale: Annotated[str | None, Query()] = None) -> Response:
         try:
             markdown_text = builtin_strategy_prompt_markdown(prompt_ref, locale=locale)
         except StrategySourceError as exc:

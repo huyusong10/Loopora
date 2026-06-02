@@ -74,6 +74,7 @@ def _register_loop_create_command(loops_app: typer.Typer) -> None:
         orchestration_id: OrchestrationIdOption = "",
         strategy_preset: StrategyPresetOption = "",
         strategy_file: StrategyFileOption = None,
+        *,
         start: StartOption = False,
         background: BackgroundOption = False,
     ) -> None:
@@ -169,6 +170,7 @@ def _register_loop_rerun_command(loops_app: typer.Typer) -> None:
     @loops_app.command("rerun")
     def rerun_loop(
         loop_id: str = typer.Argument(..., help="Loop definition ID."),
+        *,
         background: BackgroundOption = False,
     ) -> None:
         """Start a new run from a saved loop definition."""

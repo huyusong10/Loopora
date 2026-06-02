@@ -81,6 +81,7 @@ def _register_spec_template_command(spec_app: typer.Typer) -> None:
         orchestration_id: OrchestrationIdOption = "",
         strategy_preset: StrategyPresetOption = "",
         strategy_file: StrategyFileOption = None,
+        *,
         json_output: JsonOutputOption = False,
     ) -> None:
         """Render a spec template without writing it to disk."""

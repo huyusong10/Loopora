@@ -9,6 +9,11 @@ from loopora.agent_native_iteration_transition import (
 from loopora.agent_native_runtime_context import agent_native_iteration_state
 
 
+CURRENT_GATEKEEPER_COMPOSITE = 0.73
+NEXT_ITERATION_ID = 2
+PRIOR_COMPOSITE_WITHOUT_GATEKEEPER = 0.62
+
+
 def test_agent_native_iteration_state_rejects_bool_iteration_identity() -> None:
     iteration = agent_native_iteration_state({"iter_id": True})
 
@@ -19,12 +24,12 @@ def test_agent_native_next_iteration_state_carries_previous_outputs_and_resets_c
     update = agent_native_next_iteration_state_update(
         AgentNativeNextIterationStateRequest(
             iteration=SimpleNamespace(
-                current_gatekeeper_result={"composite_score": 0.73},
+                current_gatekeeper_result={"composite_score": CURRENT_GATEKEEPER_COMPOSITE},
                 previous_composite=0.41,
                 current_session_refs_by_step={"gatekeeper_step": {"session_id": "session-gatekeeper"}},
                 stagnation={"stagnation_mode": "coverage_gap"},
             ),
-            next_iter=2,
+            next_iter=NEXT_ITERATION_ID,
             previous_outputs_by_step={"builder_step": {"summary": "Built the first slice."}},
             previous_outputs_by_role={"builder": {"summary": "Built the first slice."}},
             previous_outputs_by_archetype={"builder": {"summary": "Built the first slice."}},
@@ -34,9 +39,9 @@ def test_agent_native_next_iteration_state_carries_previous_outputs_and_resets_c
         )
     )
 
-    assert update["iter_id"] == 2
+    assert update["iter_id"] == NEXT_ITERATION_ID
     assert update["step_index"] == 0
-    assert update["previous_composite"] == 0.73
+    assert update["previous_composite"] == CURRENT_GATEKEEPER_COMPOSITE
     assert update["previous_outputs_by_step"]["builder_step"]["summary"] == "Built the first slice."
     assert update["previous_handoffs_by_role"]["gatekeeper"]["status"] == "blocked"
     assert update["previous_iteration_summary"]["summary"] == "Needs stronger proof."
@@ -62,7 +67,7 @@ def test_agent_native_next_iteration_state_preserves_prior_composite_without_gat
         AgentNativeNextIterationStateRequest(
             iteration=SimpleNamespace(
                 current_gatekeeper_result=None,
-                previous_composite=0.62,
+                previous_composite=PRIOR_COMPOSITE_WITHOUT_GATEKEEPER,
                 current_session_refs_by_step={},
                 stagnation={},
             ),
@@ -76,4 +81,4 @@ def test_agent_native_next_iteration_state_preserves_prior_composite_without_gat
         )
     )
 
-    assert update["previous_composite"] == 0.62
+    assert update["previous_composite"] == PRIOR_COMPOSITE_WITHOUT_GATEKEEPER

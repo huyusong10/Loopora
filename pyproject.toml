@@ -8,6 +8,25 @@ version = "0.1.0"
 description = "Local-first platform for long-running AI Agent tasks."
 readme = "README.md"
 requires-python = ">=3.11"
+keywords = [
+  "ai-agents",
+  "agent-workflows",
+  "evidence",
+  "fastapi",
+  "local-first",
+]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Framework :: FastAPI",
+  "Intended Audience :: Developers",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Software Development :: Quality Assurance",
+  "Topic :: Software Development :: Testing",
+]
 dependencies = [
   "fastapi>=0.115.0",
   "jinja2>=3.1.0",
@@ -17,6 +36,12 @@ dependencies = [
   "typer>=0.12.0",
   "uvicorn>=0.30.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/huyusong10/Loopora"
+Repository = "https://github.com/huyusong10/Loopora"
+Issues = "https://github.com/huyusong10/Loopora/issues"
+Security = "https://github.com/huyusong10/Loopora/security/policy"
 
 [dependency-groups]
 dev = [
@@ -47,6 +72,7 @@ loopora = [
   "static/*.js",
   "static/pages/*.js",
   "static/pages/*.css",
+  "static/styles/*.css",
   "assets/logo/*.svg",
   "assets/prompts/*.md",
   "assets/spec_practices/*.md",
@@ -54,7 +80,11 @@ loopora = [
 ]
 
 [tool.pytest.ini_options]
+addopts = "--strict-config --strict-markers"
 testpaths = ["tests"]
+filterwarnings = [
+  "error::pytest.PytestUnraisableExceptionWarning",
+]
 markers = [
   "journey: local journey check coverage against in-process Loopora Web or local browser fixtures",
   "real_cli: opt-in real-environment probe that uses a real provider CLI for the minimal provider adapter boundary",
@@ -71,22 +101,51 @@ target-version = "py311"
 select = [
   "E9",
   "F",
+  "A",
+  "ASYNC",
   "B",
   "ARG",
   "BLE",
+  "C4",
   "C901",
+  "DTZ",
+  "ERA",
+  "EXE",
+  "FA",
+  "FAST",
   "FBT",
+  "FURB",
+  "G",
+  "ICN",
+  "ISC",
+  "LOG",
+  "N",
   "PERF",
   "PIE",
+  "PLC0206",
+  "PLR0402",
+  "PLE",
   "PLR0911",
   "PLR0912",
   "PLR0913",
   "PLR0915",
+  "PLR1711",
   "PLW",
+  "PGH",
+  "PT",
+  "PTH",
+  "PYI",
   "RET",
   "RUF",
+  "RUF100",
+  "RSE",
   "SIM",
+  "SLOT",
+  "T20",
+  "TID",
   "UP",
+  "W",
+  "YTT",
 ]
 ignore = [
   # Loopora intentionally includes Chinese product copy and examples.
@@ -94,25 +153,19 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-# Typer command modules expose the public CLI flag surface in callback
-# signatures; internal helpers must keep using structured request objects.
-"src/loopora/cli_agent_adapter_lifecycle_commands.py" = ["FBT002"]
+# Remaining PLR0913 exceptions are stable CLI callback or recovery projection
+# boundaries; new internal helpers should use structured request objects.
 "src/loopora/cli_agent_recovery.py" = ["PLR0913"]
 "src/loopora/cli_agent_recovery_results.py" = ["PLR0913"]
-"src/loopora/cli_agent_runtime_commands.py" = ["FBT002", "PLR0913"]
+"src/loopora/cli_agent_runtime_commands.py" = ["PLR0913"]
 "src/loopora/cli_agent_submit_repair.py" = ["PLR0913"]
 "src/loopora/cli_agent_submit_repair_results.py" = ["PLR0913"]
-"src/loopora/cli_diagnose_commands.py" = ["FBT001", "FBT003"]
-"src/loopora/cli_loop_commands.py" = ["FBT002", "PLR0913"]
+"src/loopora/cli_loop_commands.py" = ["PLR0913"]
 "src/loopora/cli_orchestration_commands.py" = ["PLR0913"]
 "src/loopora/cli_role_commands.py" = ["PLR0913"]
-"src/loopora/cli_root_commands.py" = ["FBT001", "FBT002", "FBT003", "PLR0913"]
-"src/loopora/cli_spec_commands.py" = ["FBT002"]
-"src/loopora/cli_shared.py" = ["F403"]
-"tests/checks/contracts/agent_adapter_helpers.py" = ["F401"]
-"tests/checks/contracts/test_agent_adapter_*.py" = ["F403", "F405"]
-"tests/checks/contracts/test_agent_bundle_candidates.py" = ["F403", "F405"]
-"tests/checks/contracts/test_agent_native_*.py" = ["F403", "F405"]
+"src/loopora/cli_root_commands.py" = ["PLR0913"]
+"tests/probes/real_environment/run_real_probes.py" = ["T201"]
+"tests/reviews/run.py" = ["T201"]
 
 [tool.uv]
 package = true

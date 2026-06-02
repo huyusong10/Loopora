@@ -6,13 +6,17 @@ from loopora.executor import ExecutionStopped
 from loopora.recovery import RetryConfig, execute_with_recovery
 
 
+ABORT_RETRY_ATTEMPT_LIMIT = 3
+FLAKY_SUCCESS_ATTEMPT = 4
+
+
 def test_zero_max_retries_retries_until_success() -> None:
     attempts = 0
 
     def flaky() -> str:
         nonlocal attempts
         attempts += 1
-        if attempts < 4:
+        if attempts < FLAKY_SUCCESS_ATTEMPT:
             raise ValueError("not yet")
         return "ok"
 
@@ -20,7 +24,7 @@ def test_zero_max_retries_retries_until_success() -> None:
 
     assert value == "ok"
     assert result.ok is True
-    assert result.attempts == 4
+    assert result.attempts == FLAKY_SUCCESS_ATTEMPT
 
 
 def test_before_attempt_can_abort_unbounded_retries() -> None:
@@ -32,7 +36,7 @@ def test_before_attempt_can_abort_unbounded_retries() -> None:
         raise RuntimeError("still failing")
 
     def stop_after_three_attempts() -> None:
-        if attempts >= 3:
+        if attempts >= ABORT_RETRY_ATTEMPT_LIMIT:
             raise ExecutionStopped("stop requested")
 
     with pytest.raises(ExecutionStopped):

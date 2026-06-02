@@ -144,7 +144,7 @@ def _agent_native_elapsed_seconds(run: dict[str, Any]) -> float:
     if not started_at:
         return 0.0
     try:
-        started = datetime.fromisoformat(started_at.replace("Z", "+00:00"))
+        started = datetime.fromisoformat(started_at)
     except ValueError:
         return 0.0
     if started.tzinfo is None:

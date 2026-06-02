@@ -23,7 +23,7 @@ def run_acceptance_evidence_payload_from_takeaways(takeaways: dict, *, evidence_
     judgment_contract = takeaways.get("judgment_contract") if isinstance(takeaways.get("judgment_contract"), dict) else empty_judgment_contract()
     source_bundle = judgment_contract.get("source_bundle") if isinstance(judgment_contract.get("source_bundle"), dict) else {}
     buckets = takeaways.get("evidence_buckets") if isinstance(takeaways.get("evidence_buckets"), dict) else {}
-    bucket_counts = {bucket: 0 for bucket in ACCEPTANCE_EVIDENCE_BUCKETS}
+    bucket_counts = dict.fromkeys(ACCEPTANCE_EVIDENCE_BUCKETS, 0)
     bucket_counts.update({bucket: len(items) for bucket, items in buckets.items() if isinstance(bucket, str) and isinstance(items, list)})
     return {
         "evidence_source_event_id": structured_non_negative_int(evidence_source_event_id),
@@ -83,7 +83,7 @@ def empty_run_acceptance_evidence_payload(*, evidence_source_event_id: int, evid
         "coverage_status": "",
         "manifest_path": "",
         "evidence_count": 0,
-        "evidence_bucket_counts": {bucket: 0 for bucket in ACCEPTANCE_EVIDENCE_BUCKETS},
+        "evidence_bucket_counts": dict.fromkeys(ACCEPTANCE_EVIDENCE_BUCKETS, 0),
     }
 
 

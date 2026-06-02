@@ -9,6 +9,7 @@ from loopora.agent_native_next_step_summary import (
 )
 from loopora.agent_native_surface import attach_native_run_surface
 from loopora.agent_native_task_proof import agent_task_proof_summary
+from loopora.agent_native_v3 import AGENT_NATIVE_V3_SCHEMA_VERSION
 from loopora.agent_native_v3 import agent_v3_envelope as _agent_v3_envelope
 from loopora.agent_native_v3 import agent_v3_legacy_raw as _agent_v3_legacy_raw
 from loopora.agent_native_v3 import agent_v3_status as _agent_v3_status
@@ -30,7 +31,7 @@ def _attach_agent_run_summary(result: dict) -> None:
     workdir = str(result.get("workdir") or run.get("workdir") or "").strip() or "$PWD"
     if not summary:
         summary = {
-            "schema_version": 3,
+            "schema_version": AGENT_NATIVE_V3_SCHEMA_VERSION,
             "run_id": str(run.get("id") or "").strip(),
             "run_status": run_status_from_run(run),
             "started_new_run": bool(result.get("started_new_run")),
@@ -120,7 +121,7 @@ def _agent_next_summary(result: dict) -> dict:
     workdir = str(result.get("workdir") or run.get("workdir") or "").strip() or "$PWD"
     task_verdict = task_verdict_from_run(run)
     summary: dict[str, object] = {
-        "schema_version": 3,
+        "schema_version": AGENT_NATIVE_V3_SCHEMA_VERSION,
         "run_id": str(run.get("id") or "").strip(),
         "run_status": run_status_from_run(run),
         "complete": bool(result.get("complete")),

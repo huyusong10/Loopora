@@ -125,8 +125,7 @@ def _assert_output_contains(output: str, *snippets: str) -> None:
 
     assert not missing, f"missing output snippets: {missing[:5]}"
 
-def _assert_native_context_loading(surface: dict, *, summary_key: str) -> None:
-    _ = summary_key
+def _assert_native_context_loading(surface: dict) -> None:
     context_loading = surface["context_loading"]
     assert context_loading["summary_first"] == ["agent_v3_envelope.summary"]
     _assert_expected_mapping_values(

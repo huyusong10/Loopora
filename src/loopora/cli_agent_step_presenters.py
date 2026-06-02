@@ -156,9 +156,7 @@ def _print_terminal_task_next_action(task_verdict: object, task_next_action: obj
     typer.echo(
         "task_next_action: "
         + (
-            guidance
-            if guidance
-            else "run lifecycle is complete but the task is not proven; run /loopora-run again in this Agent session to start the next evidence pass"
+            guidance or "run lifecycle is complete but the task is not proven; run /loopora-run again in this Agent session to start the next evidence pass"
         )
     )
     typer.echo(f"next_loop_command: {(action.get('next_loop_command') or '/loopora-run')!s}")

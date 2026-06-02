@@ -33,7 +33,7 @@ def _assert_codex_native_surface_summary(summary: dict) -> None:
     assert surface["host_mechanism"] == "Codex spawn_agent with agent_type=<role_dispatch.target_agent>"
     assert surface["accepted_native_tools"] == ["spawn_agent"]
     assert surface["packaging"] == EXPECTED_NATIVE_PACKAGING
-    _assert_native_context_loading(surface, summary_key="agent_run_summary")
+    _assert_native_context_loading(surface)
     assert surface["health_check"]["adapter_check"] == "loopora agent codex check --workdir <project>"
     assert surface["health_check"]["scope"] == "managed_entries_role_configs_and_loopora_state"
     assert surface["health_check"]["host_reload"] == "restart_or_new_host_session_may_be_required_for_entry_discovery"

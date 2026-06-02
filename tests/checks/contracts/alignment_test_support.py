@@ -7,6 +7,8 @@ from pathlib import Path
 
 from loopora.bundles import bundle_to_yaml
 
+RUN_REVISION_MISSING_CHECK_COUNT = 2
+
 def _wait_for_status(service, session_id: str, *statuses: str, timeout: float = 5.0) -> dict:
     deadline = time.time() + timeout
     expected = set(statuses)
@@ -22,14 +24,26 @@ def _confirm_alignment_agreement(service, session_id: str, *final_statuses: str)
     agreement = _wait_for_status(service, session_id, "waiting_user")
     assert agreement["alignment_stage"] == "agreement_ready"
     assert agreement["working_agreement"]["summary"]
-    assert agreement["working_agreement"]["readiness_evidence"]["loop_fit"]
-    assert agreement["working_agreement"]["readiness_evidence"]["task_scope"]
-    assert agreement["working_agreement"]["readiness_evidence"]["residual_risk_policy"]
-    assert agreement["working_agreement"]["readiness_evidence"]["local_governance"]
+    for evidence_key in ("loop_fit", "task_scope", "residual_risk_policy", "local_governance"):
+        assert agreement["working_agreement"]["readiness_evidence"][evidence_key]
     service.append_alignment_message(session_id, "确认")
     confirmed = _wait_for_status(service, session_id, *(final_statuses or ("ready",)))
     assert confirmed["working_agreement"]["readiness_checklist"]["explicit_confirmation"] is True
     return confirmed
+
+def _assert_alignment_stage_blocked(service, session_id: str) -> None:
+    assert any(
+        event["event_type"] == "alignment_stage_blocked"
+        for event in service.list_alignment_events(session_id)
+    )
+
+def _assert_alignment_stage_blocked_for_key(service, session_id: str, key: str) -> None:
+    events = service.list_alignment_events(session_id)
+    assert any(
+        event["event_type"] == "alignment_stage_blocked"
+        and key in event["payload"].get("error", "")
+        for event in events
+    )
 
 def _bundle_invocation_dir(artifact_root: Path) -> Path:
     bundle_invocations: list[Path] = []
@@ -67,12 +81,10 @@ def _assert_alignment_preview_control_summary(preview: dict) -> None:
     assert control_summary["coverage"]["check_count"] >= 1
     assert control_summary["coverage"]["target_count"] >= control_summary["coverage"]["check_count"]
     assert any(target["id"].startswith("done_when.") for target in control_summary["coverage"]["targets"])
-    assert (
-        any("fail closed" in item for item in control_summary["residual_risk_policy"])
-        and any("smaller proven flow" in item for item in control_summary["judgment_tradeoffs"])
-        and any("Focused Builder (builder): Keep implementation narrow" in item for item in control_summary["role_postures"])
-        and any("Future iterations stay anchored" in item for item in control_summary["loop_fit_reasons"])
-    )
+    assert any("fail closed" in item for item in control_summary["residual_risk_policy"])
+    assert any("smaller proven flow" in item for item in control_summary["judgment_tradeoffs"])
+    assert any("Focused Builder (builder): Keep implementation narrow" in item for item in control_summary["role_postures"])
+    assert any("Future iterations stay anchored" in item for item in control_summary["loop_fit_reasons"])
     assert preview["traceability"] == control_summary["traceability"]
     assert any(item["key"] == "loop_fit" and item["mapped"] for item in preview["traceability"]["items"])
     assert any(item["key"] == "coverage_targets" and item["mapped"] for item in preview["traceability"]["items"])
@@ -159,7 +171,7 @@ def _assert_run_revision_coverage_agreement(agreement: dict) -> None:
     assert coverage_summary["ledger_path"] == "evidence/ledger.jsonl"
     assert coverage_summary["coverage_path"] == "evidence/coverage.json"
     assert coverage_summary["covered_check_count"] == 1
-    assert coverage_summary["missing_check_count"] == 2
+    assert coverage_summary["missing_check_count"] == RUN_REVISION_MISSING_CHECK_COUNT
     assert coverage_summary["covered_check_ids"] == ["check_permission"]
     assert coverage_summary["missing_check_ids"] == ["check_payment_failure", "check_audit_trail"]
     assert coverage_summary["weak_target_count"] == 1
@@ -180,7 +192,7 @@ def _assert_run_revision_context_text(context_text: str, run: dict, agreement: d
     assert "GateKeeper treats skipped AGENTS.md evidence as Blocking." in context_text
     assert "`execution_strategy` should say what the next version should build" in context_text
     assert "`local_governance` should preserve or revise project-local governance responsibilities" in context_text
-    assert '"missing_check_count": 2' in context_text
+    assert f'"missing_check_count": {RUN_REVISION_MISSING_CHECK_COUNT}' in context_text
     assert "check_payment_failure" in context_text
     assert "Payment failure handoff has no direct proof." in context_text
     assert "Payment provider retry path remains visible." in context_text
@@ -191,6 +203,8 @@ def _assert_run_revision_context_text(context_text: str, run: dict, agreement: d
 
 __all__ = [
     '_assert_alignment_preview_control_summary',
+    '_assert_alignment_stage_blocked',
+    '_assert_alignment_stage_blocked_for_key',
     '_assert_run_revision_context_text',
     '_assert_run_revision_coverage_agreement',
     '_assert_run_succeeds_and_joins',

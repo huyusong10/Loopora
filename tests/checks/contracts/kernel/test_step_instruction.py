@@ -3,6 +3,9 @@ from __future__ import annotations
 from loopora.engine import RunnerStepInstructionRequest, runner_step_instruction
 
 
+KERNEL_STEP_ITERATION = 2
+
+
 def test_runner_step_instruction_is_core_next_step_not_surface_capsule() -> None:
     instruction = runner_step_instruction(
         RunnerStepInstructionRequest(
@@ -14,7 +17,7 @@ def test_runner_step_instruction_is_core_next_step_not_surface_capsule() -> None
                     {"id": "gatekeeper.finish", "required": True},
                 ]
             },
-            iteration=2,
+            iteration=KERNEL_STEP_ITERATION,
             step={
                 "id": "gatekeeper",
                 "role_id": "gatekeeper",
@@ -27,7 +30,7 @@ def test_runner_step_instruction_is_core_next_step_not_surface_capsule() -> None
 
     assert instruction.run_id == "run_kernel"
     assert instruction.step_id == "gatekeeper"
-    assert instruction.iteration == 2
+    assert instruction.iteration == KERNEL_STEP_ITERATION
     assert instruction.role.archetype == "gatekeeper"
     assert instruction.evidence_scope.target_ids == ("done_when.permission", "gatekeeper.finish")
     assert instruction.action_policy.can_finish_run is True

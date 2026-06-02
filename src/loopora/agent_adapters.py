@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any
 
 import loopora.agent_native_adapter_contracts as _agent_native_adapter_contracts
-import loopora.agent_native_task_proof as agent_native_task_proof
+from loopora import agent_native_task_proof
 from loopora import agent_adapter_context_binding as _agent_context_binding
 from loopora.agent_adapter_context_binding import (
     agent_context_binding_path as agent_context_binding_path,

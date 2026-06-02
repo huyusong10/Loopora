@@ -121,13 +121,14 @@ def _normalize_loop_executor_settings(request: LoopCreateRequest) -> dict[str, s
         profile = executor_profile(executor_kind)
         if profile.command_only and executor_mode != "command":
             raise ValueError(f"{profile.label} only supports command mode")
+        model = request.model.strip()
         if executor_mode == "preset":
             return {
                 "executor_kind": executor_kind,
                 "executor_mode": executor_mode,
                 "command_cli": "",
                 "command_args_text": "",
-                "model": request.model.strip() if request.model.strip() else profile.default_model,
+                "model": model or profile.default_model,
                 "reasoning_effort": normalize_reasoning_effort(request.reasoning_effort, executor_kind),
                 "completion_mode": normalize_completion_mode(request.completion_mode),
             }
@@ -138,7 +139,7 @@ def _normalize_loop_executor_settings(request: LoopCreateRequest) -> dict[str, s
             "executor_mode": executor_mode,
             "command_cli": command_cli,
             "command_args_text": request.command_args_text,
-            "model": request.model.strip(),
+            "model": model,
             "reasoning_effort": request.reasoning_effort.strip(),
             "completion_mode": normalize_completion_mode(request.completion_mode),
         }

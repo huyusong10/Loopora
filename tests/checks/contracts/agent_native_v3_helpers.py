@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 
+AGENT_V3_ENVELOPE_SCHEMA_VERSION = 3
+
+
 def assert_agent_v3_envelope(payload: dict, *, kind: str, summary_key: str, status: str | None = None) -> tuple[dict, dict]:
-    assert payload["schema_version"] == 3
+    assert payload["schema_version"] == AGENT_V3_ENVELOPE_SCHEMA_VERSION
     assert payload["kind"] == kind
     if status is not None:
         assert payload["status"] == status

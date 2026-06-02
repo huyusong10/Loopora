@@ -28,7 +28,7 @@ def agent_candidate_tradeoff_categories(task_text: str) -> list[tuple[str, str]]
         r"(?:先别|不要|别).{0,16}(?:美化|润色|打磨|漂亮|界面)",
         r"(?:阻断|拒绝).{0,20}(?:假完成|漂亮叙事|证据不足)",
     )
-    if not any(re.search(pattern, text, re.I) for pattern in explicit_tradeoff_markers):
+    if not any(re.search(pattern, text, re.IGNORECASE) for pattern in explicit_tradeoff_markers):
         return []
     category_patterns = (
         (
@@ -48,7 +48,7 @@ def agent_candidate_tradeoff_categories(task_text: str) -> list[tuple[str, str]]
             r"\b(?:pragmatic|pragmatism|progress)\b|务实|推进|进度",
         ),
     )
-    return [(label, pattern) for label, pattern in category_patterns if re.search(pattern, text, re.I)]
+    return [(label, pattern) for label, pattern in category_patterns if re.search(pattern, text, re.IGNORECASE)]
 
 
 def agent_candidate_has_labeled_execution_strategy(task_text: str) -> bool:
@@ -56,7 +56,7 @@ def agent_candidate_has_labeled_execution_strategy(task_text: str) -> bool:
         re.search(
             r"\b(?:execution strategy|priority|priorities|priority order|next round|next pass)\b|执行策略|优先级|下一轮|下一步",
             str(task_text or ""),
-            re.I,
+            re.IGNORECASE,
         )
     )
 
@@ -70,7 +70,7 @@ def agent_candidate_execution_strategy_categories(task_text: str, *, require_exp
         r"\b(?:first|before|then|after|defer|prioriti[sz]e|start with|do not start|don't start|avoid)\b",
         r"(?:执行策略|下一轮|下一步|优先级|优先|先|再|然后|之后|暂缓|推迟|先别|不要先|别先)",
     )
-    if require_explicit_marker and not any(re.search(pattern, text, re.I) for pattern in explicit_strategy_markers):
+    if require_explicit_marker and not any(re.search(pattern, text, re.IGNORECASE) for pattern in explicit_strategy_markers):
         return []
     category_patterns = (
         (
@@ -94,7 +94,7 @@ def agent_candidate_execution_strategy_categories(task_text: str, *, require_exp
             r"\b(?:polish|ui|visual|pretty|styling|copy|narrative|story)\b|美化|打磨|润色|界面|视觉|文案|叙事|漂亮",
         ),
     )
-    return [(label, pattern) for label, pattern in category_patterns if re.search(pattern, text, re.I)]
+    return [(label, pattern) for label, pattern in category_patterns if re.search(pattern, text, re.IGNORECASE)]
 
 
 def agent_candidate_residual_risk_policy_categories(
@@ -111,7 +111,7 @@ def agent_candidate_residual_risk_policy_categories(
         r"残余风险",
         r"剩余风险",
     )
-    if require_explicit_marker and not any(re.search(pattern, text, re.I) for pattern in explicit_policy_markers):
+    if require_explicit_marker and not any(re.search(pattern, text, re.IGNORECASE) for pattern in explicit_policy_markers):
         return []
     no_acceptance_pattern = (
         r"\b(?:no|none|zero)\b.{0,60}\b(?:accepted|acceptable|allowed)?\s*residual risks?\b"
@@ -122,7 +122,7 @@ def agent_candidate_residual_risk_policy_categories(
     categories: list[tuple[str, str]] = [
         ("residual-risk", r"\bresidual risks?\b|\bremaining risks?\b|残余风险|剩余风险"),
     ]
-    if re.search(no_acceptance_pattern, text, re.I):
+    if re.search(no_acceptance_pattern, text, re.IGNORECASE):
         categories.append(
             (
                 "no-accepted-residual-risk",
@@ -175,7 +175,7 @@ def agent_candidate_residual_risk_policy_categories(
     categories.extend(
         (label, bundle_pattern)
         for label, task_pattern, bundle_pattern in category_patterns
-        if re.search(task_pattern, text, re.I)
+        if re.search(task_pattern, text, re.IGNORECASE)
     )
     return categories
 
@@ -195,7 +195,7 @@ def agent_candidate_success_surface_categories(task_text: str, *, require_explic
         r"完成(?:标准|条件|时)",
         r"验收(?:标准|条件)",
     )
-    if require_explicit_marker and not any(re.search(pattern, text, re.I) for pattern in explicit_success_markers):
+    if require_explicit_marker and not any(re.search(pattern, text, re.IGNORECASE) for pattern in explicit_success_markers):
         return []
     categories: list[tuple[str, str]] = [
         (
@@ -237,6 +237,6 @@ def agent_candidate_success_surface_categories(task_text: str, *, require_explic
             r"\b(?:locale|locali[sz]ation|i18n|translation|language|chinese|english)\b|多语言|国际化|本地化|翻译|语言|中文|英文|英语",
         ),
     )
-    categories.extend((label, pattern) for label, pattern in category_patterns if re.search(pattern, text, re.I))
+    categories.extend((label, pattern) for label, pattern in category_patterns if re.search(pattern, text, re.IGNORECASE))
     return categories
 

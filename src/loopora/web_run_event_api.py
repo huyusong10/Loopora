@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import time
 from collections.abc import Iterator
+from typing import Annotated
 
 from fastapi import FastAPI, Query, Request
 from fastapi.responses import JSONResponse, Response, StreamingResponse
@@ -16,8 +17,8 @@ def register_run_event_api_routes(app: FastAPI, ctx: WebRouteContext) -> None:
     @app.get("/api/runs/{run_id}/events")
     async def api_run_events(
         run_id: str,
-        after_id: int = Query(default=0, ge=0, le=MAX_EVENT_CURSOR_ID),
-        limit: int = Query(default=200, ge=1, le=5000),
+        after_id: Annotated[int, Query(ge=0, le=MAX_EVENT_CURSOR_ID)] = 0,
+        limit: Annotated[int, Query(ge=1, le=5000)] = 200,
     ) -> JSONResponse:
         latest_event_id = _latest_run_event_id(ctx, run_id)
         if after_id > latest_event_id:
@@ -28,7 +29,7 @@ def register_run_event_api_routes(app: FastAPI, ctx: WebRouteContext) -> None:
     async def api_run_stream(
         request: Request,
         run_id: str,
-        after_id: int = Query(default=0, ge=0, le=MAX_EVENT_CURSOR_ID),
+        after_id: Annotated[int, Query(ge=0, le=MAX_EVENT_CURSOR_ID)] = 0,
     ) -> Response:
         latest_event_id = _latest_run_event_id(ctx, run_id)
         if after_id > latest_event_id:

@@ -20,7 +20,7 @@ def semantic_antipattern_match_is_negated(value: str, start: int) -> bool:
             r"do not|don't|must not|should not|never|avoid|refuse|reject|rather than|instead of|"
             r"\bnot\s+(?:a|an|as)?\s*$|\bno\s+$|不要|不能|不得|不应|不是|拒绝|避免",
             context,
-            re.I,
+            re.IGNORECASE,
         )
     )
 
@@ -29,14 +29,14 @@ def text_mentions_multiround_loopora_governance(text: object) -> bool:
     value = re.sub(r"\s+", " ", str(text or "")).strip()
     if not value:
         return False
-    return any(re.search(pattern, value, re.I) for pattern in _LOOP_FIT_GOVERNANCE_PATTERNS)
+    return any(re.search(pattern, value, re.IGNORECASE) for pattern in _LOOP_FIT_GOVERNANCE_PATTERNS)
 
 
 def loop_fit_governance_trace(text: object, *, limit: int = 2) -> list[str]:
     traces = [
         unit[:240].rstrip() + ("..." if len(unit) > 240 else "")
         for unit in trace_text_units(str(text or ""))
-        if any(re.search(pattern, unit, re.I) for pattern in _LOOP_FIT_GOVERNANCE_PATTERNS)
+        if any(re.search(pattern, unit, re.IGNORECASE) for pattern in _LOOP_FIT_GOVERNANCE_PATTERNS)
     ]
     return traces[:limit]
 
@@ -93,9 +93,9 @@ def text_mentions_loop_fit_contradiction(text: object) -> bool:
         r"(?:不需要|不用|无需|不必)\s*(?:开|使用|跑)?\s*(?:loopora|loop|循环)",
     )
     for pattern in patterns:
-        for match in re.finditer(pattern, value, re.I):
+        for match in re.finditer(pattern, value, re.IGNORECASE):
             matched = match.group(0).lower()
-            if re.search(r"\bnot\s+(?:enough|sufficient)\b|不(?:够|足够)", matched, re.I):
+            if re.search(r"\bnot\s+(?:enough|sufficient)\b|不(?:够|足够)", matched, re.IGNORECASE):
                 continue
             if semantic_antipattern_match_is_negated(value, match.start()):
                 continue
@@ -108,7 +108,7 @@ def trace_text_units(text: str) -> list[str]:
     for raw_line in str(text or "").splitlines():
         cleaned = re.sub(r"^\s*[-*]\s+", "", raw_line).strip()
         cleaned = re.sub(r"^\s*\d+[.)]\s+", "", cleaned).strip()
-        if not cleaned or cleaned.startswith("#") or cleaned in {"---"}:
+        if not cleaned or cleaned.startswith("#") or cleaned == "---":
             continue
         for part in re.split(r"(?<=[.!?。！？；;])\s+", cleaned):
             compact = part.strip()

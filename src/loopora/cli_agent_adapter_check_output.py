@@ -5,6 +5,7 @@ import shlex
 import typer
 
 from loopora.agent_adapters import prefix_loopora_command
+from loopora.agent_native_v3 import AGENT_NATIVE_V3_SCHEMA_VERSION
 from loopora.agent_native_v3 import agent_v3_envelope, agent_v3_legacy_raw
 
 
@@ -24,7 +25,7 @@ def adapter_check_json_payload(result: dict) -> dict:
 def adapter_check_summary(result: dict) -> dict:
     recovery = result.get("check_recovery") if isinstance(result.get("check_recovery"), dict) else {}
     summary: dict[str, object] = {
-        "schema_version": 3,
+        "schema_version": AGENT_NATIVE_V3_SCHEMA_VERSION,
         "adapter": str(result.get("adapter") or "").strip(),
         "label": str(result.get("label") or "").strip(),
         "workdir": str(result.get("workdir") or "").strip(),

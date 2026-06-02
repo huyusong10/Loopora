@@ -1,0 +1,59 @@
+name: Feature Request
+description: Propose a Loopora improvement with stable behavior and evidence in mind.
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What user workflow, evidence gap, or maintenance risk should this improve?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed Behavior
+      description: Describe the user-observable behavior or public contract you want, not private implementation details.
+    validations:
+      required: true
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Affected Surface
+      multiple: true
+      options:
+        - CLI
+        - Web
+        - Agent adapter
+        - Loop planning
+        - Run evidence and verdicts
+        - Bundle import/export
+        - Packaging or install
+        - Documentation
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence Or Examples
+      description: What examples, tests, screenshots, logs, or scenarios would prove this works?
+    validations:
+      required: false
+  - type: textarea
+    id: risks
+    attributes:
+      label: Compatibility And Risk
+      description: Note any public API, data, permission, accessibility, localization, migration, or rollback concerns.
+    validations:
+      required: false
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Proposal Checklist
+      options:
+        - label: I described stable user-observable behavior rather than only an implementation approach.
+          required: true
+        - label: I noted whether this changes public compatibility, data handling, permissions, or security posture.
+          required: true

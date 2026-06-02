@@ -4,6 +4,7 @@ import json
 import logging
 import time
 from collections.abc import Iterator
+from typing import Annotated
 
 from fastapi import FastAPI, Query, Request
 from fastapi.responses import JSONResponse, Response, StreamingResponse
@@ -18,8 +19,8 @@ def register_alignment_event_api_routes(app: FastAPI, ctx: WebRouteContext) -> N
     @app.get("/api/alignments/sessions/{session_id}/events")
     async def api_alignment_events(
         session_id: str,
-        after_id: int = Query(default=0, ge=0, le=MAX_EVENT_CURSOR_ID),
-        limit: int = Query(default=200, ge=1, le=5000),
+        after_id: Annotated[int, Query(ge=0, le=MAX_EVENT_CURSOR_ID)] = 0,
+        limit: Annotated[int, Query(ge=1, le=5000)] = 200,
     ) -> JSONResponse:
         latest_event_id = _latest_alignment_event_id(ctx, session_id)
         if after_id > latest_event_id:
@@ -30,7 +31,7 @@ def register_alignment_event_api_routes(app: FastAPI, ctx: WebRouteContext) -> N
     async def api_alignment_stream(
         request: Request,
         session_id: str,
-        after_id: int = Query(default=0, ge=0, le=MAX_EVENT_CURSOR_ID),
+        after_id: Annotated[int, Query(ge=0, le=MAX_EVENT_CURSOR_ID)] = 0,
     ) -> Response:
         ctx.svc().get_alignment_session(session_id)
         latest_event_id = _latest_alignment_event_id(ctx, session_id)

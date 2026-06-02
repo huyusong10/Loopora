@@ -76,17 +76,17 @@ CORE_EVENT_TYPES = (
 )
 
 CORE_EVENT_AGGREGATE_TYPES = {
-    **{event_type: "loop" for event_type in LOOP_EVENT_TYPES},
-    **{
-        event_type: "run"
-        for event_type in (
+    **dict.fromkeys(LOOP_EVENT_TYPES, "loop"),
+    **dict.fromkeys(
+        (
             RUN_EVENT_TYPES
             | STEP_EVENT_TYPES
             | EVIDENCE_EVENT_TYPES
             | VERDICT_EVENT_TYPES
             | ITERATION_EVENT_TYPES
-        )
-    },
+        ),
+        "run",
+    ),
 }
 
 

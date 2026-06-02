@@ -93,7 +93,7 @@ def _has_residual_risk_exception(normalized: str) -> bool:
 
 
 def _regex_search(pattern: str, value: str) -> bool:
-    return bool(re.search(pattern, value, re.I))
+    return bool(re.search(pattern, value, re.IGNORECASE))
 
 
 def _has_unmanaged_residual_risk_detail(normalized: str) -> bool:

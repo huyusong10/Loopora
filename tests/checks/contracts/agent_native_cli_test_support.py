@@ -110,24 +110,27 @@ def _mkdir(path: Path) -> Path:
 
 
 def _write_agent_submit_auto_repair_fixture(tmp_path: Path) -> dict:
+    run_id = "run_auto_repair"
+    step_id = "builder_step"
+    target_agent = "loopora-builder"
     workdir = tmp_path / "project"
     workdir.mkdir()
-    layout = RunArtifactLayout(tmp_path / "runs" / "run_auto_repair")
+    layout = RunArtifactLayout(tmp_path / "runs" / run_id)
     layout.initialize()
     agent_native_dir = layout.run_dir / "agent_native"
     agent_native_dir.mkdir(parents=True, exist_ok=True)
     result_outbox_dir = workdir / ".loopora" / "agent_outbox" / "codex"
     result_outbox_dir.mkdir(parents=True, exist_ok=True)
-    active_template = result_outbox_dir / "run_auto_repair__builder_step.result.template.json"
+    active_template = result_outbox_dir / f"{run_id}__{step_id}.result.template.json"
     host_dispatch = {
         "schema_version": 1,
         "adapter": "codex",
-        "run_id": "run_auto_repair",
+        "run_id": run_id,
         "iter": 0,
-        "step_id": "builder_step",
+        "step_id": step_id,
         "step_order": 0,
-        "target_agent": "loopora-builder",
-        "actual_agent": "loopora-builder",
+        "target_agent": target_agent,
+        "actual_agent": target_agent,
         "dispatch_mode": "host_subagent",
         "inline": False,
     }
@@ -146,18 +149,18 @@ def _write_agent_submit_auto_repair_fixture(tmp_path: Path) -> dict:
                 "active_step": {
                     "agent_step_view": {
                         "adapter": "codex",
-                        "run_id": "run_auto_repair",
+                        "run_id": run_id,
                         "iter": 0,
-                        "step_id": "builder_step",
+                        "step_id": step_id,
                         "step_order": 0,
                         "role": {"name": "Builder", "id": "builder", "archetype": "builder"},
-                        "role_dispatch": {"target_agent": "loopora-builder"},
+                        "role_dispatch": {"target_agent": target_agent},
                         "known_evidence_ids": ["ev_known"],
-                        "context_absolute_path": str(layout.step_instruction_context_path(0, 0, "builder_step")),
+                        "context_absolute_path": str(layout.step_instruction_context_path(0, 0, step_id)),
                         "output_schema": {"type": "object", "properties": {"summary": {"type": "string"}}},
                         "submit_hint": {
                             "result_template_absolute_path": str(active_template),
-                            "result_file_absolute_path": str(result_outbox_dir / "run_auto_repair__builder_step.result.json"),
+                            "result_file_absolute_path": str(result_outbox_dir / f"{run_id}__{step_id}.result.json"),
                             "result_outbox_absolute_dir": str(result_outbox_dir),
                         },
                     }

@@ -11,6 +11,12 @@
   <a href="https://fastapi.tiangolo.com/">
     <img alt="FastAPI" src="https://img.shields.io/badge/web-FastAPI-009688?logo=fastapi&logoColor=white">
   </a>
+  <a href="https://github.com/huyusong10/Loopora/actions/workflows/ci.yml?query=branch%3Adev">
+    <img alt="CI" src="https://github.com/huyusong10/Loopora/actions/workflows/ci.yml/badge.svg?branch=dev">
+  </a>
+  <a href="https://github.com/huyusong10/Loopora/actions/workflows/codeql.yml?query=branch%3Adev">
+    <img alt="CodeQL" src="https://github.com/huyusong10/Loopora/actions/workflows/codeql.yml/badge.svg?branch=dev">
+  </a>
   <img alt="Agent first" src="https://img.shields.io/badge/agent--first-loop-2563EB">
   <img alt="Local first" src="https://img.shields.io/badge/local--first-evidence-0D7C66">
   <img alt="Status" src="https://img.shields.io/badge/status-%E5%AE%9E%E9%AA%8C%E4%B8%AD-D66A36">
@@ -275,3 +281,7 @@ Web 适合以下场景：
 | 调整方案 | 在需要时编辑候选方案，或从 Web 直接创建 Loop |
 
 Agent 入口与 Web 入口并不冲突。即使 Loop 从 Agent 中生成，也会进入同一套本地记录，可在 Web 上查看和管理。
+
+## 贡献与安全
+
+提交改动前，请先阅读 [CONTRIBUTING.md](./CONTRIBUTING.md)，了解本地环境、质量门和 design/tests 边界。安全问题请按 [SECURITY.md](./SECURITY.md) 报告；不要在公开 issue 中发布漏洞细节、密钥、令牌、私有日志或敏感工作区路径。

@@ -12,7 +12,7 @@ def select_local_governance_trace(candidates: list[object]) -> list[str]:
         compact = _compact_trace_candidate(candidate)
         if not compact or compact.lower() in seen:
             continue
-        if not re.search(LOCAL_GOVERNANCE_MARKER_PATTERN, compact, re.I):
+        if not re.search(LOCAL_GOVERNANCE_MARKER_PATTERN, compact, re.IGNORECASE):
             continue
         priority = local_governance_trace_priority(compact)
         if priority is None:
@@ -95,14 +95,14 @@ def local_governance_role_responsibility_present(
     action_pattern: str,
 ) -> bool:
     return bool(
-        re.search(actor_pattern, text, re.I)
-        and re.search(LOCAL_GOVERNANCE_MARKER_PATTERN, text, re.I)
-        and re.search(action_pattern, text, re.I)
+        re.search(actor_pattern, text, re.IGNORECASE)
+        and re.search(LOCAL_GOVERNANCE_MARKER_PATTERN, text, re.IGNORECASE)
+        and re.search(action_pattern, text, re.IGNORECASE)
     )
 
 
 def local_governance_markers_present(candidates: list[object]) -> bool:
-    return any(re.search(LOCAL_GOVERNANCE_MARKER_PATTERN, str(candidate or ""), re.I) for candidate in candidates)
+    return any(re.search(LOCAL_GOVERNANCE_MARKER_PATTERN, str(candidate or ""), re.IGNORECASE) for candidate in candidates)
 
 
 def _compact_trace_candidate(candidate: object) -> str:

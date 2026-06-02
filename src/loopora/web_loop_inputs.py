@@ -71,7 +71,7 @@ def _loop_payload_from_mapping(payload: Mapping[str, object]) -> tuple[dict[str,
         "orchestration_id": str(payload.get("orchestration_id", "")).strip() or None,
         "executor_kind": executor_kind,
         "executor_mode": executor_mode,
-        "command_cli": command_cli if command_cli else profile.cli_name,
+        "command_cli": command_cli or profile.cli_name,
         "command_args_text": command_args_text,
         "model": model if model or profile.default_model == "" else profile.default_model,
         "reasoning_effort": reasoning_effort if reasoning_effort or profile.effort_default == "" else profile.effort_default,
@@ -93,7 +93,7 @@ def _loop_payload_number(
     payload: Mapping[str, object],
     key: str,
     *,
-    default: int | float,
+    default: float,
     integer_only: bool,
 ) -> int | float:
     value = payload.get(key, default)
@@ -120,8 +120,7 @@ def _loop_form_is_pristine(values: Mapping[str, object] | None) -> bool:
 def _canonicalize_loop_form_for_comparison(values: Mapping[str, object] | None) -> dict[str, object]:
     normalized = _normalize_loop_form(values)
     canonical = dict(normalized)
-    for key in canonical:
-        value = canonical[key]
+    for key, value in canonical.items():
         if key == "start_immediately":
             canonical[key] = _coerce_bool(value)
             continue

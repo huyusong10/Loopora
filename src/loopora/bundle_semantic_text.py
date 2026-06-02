@@ -61,7 +61,7 @@ def _semantic_text_mentions_evidence_bucket_projection(text: object) -> bool:
         "residual": r"\bresidual risk\b|残余风险",
     }
     segments = [segment.strip() for segment in re.split(r"[\n.;。；]", value) if segment.strip()]
-    return any(all(re.search(pattern, segment, re.I) for pattern in bucket_patterns.values()) for segment in segments)
+    return any(all(re.search(pattern, segment, re.IGNORECASE) for pattern in bucket_patterns.values()) for segment in segments)
 
 
 def _semantic_text_mentions_workflow_judgment_flow(text: object) -> bool:
@@ -71,18 +71,18 @@ def _semantic_text_mentions_workflow_judgment_flow(text: object) -> bool:
     evidence_flow = re.search(
         r"\b(?:evidence|proof|handoffs?|inspect(?:ion|or)?|review)\b|证据|证明|交接|检查|审查|评审",
         value,
-        re.I,
+        re.IGNORECASE,
     )
     gatekeeper_closure = re.search(
         r"\b(?:gatekeeper|gate keeper|final judgment|finish|closure|verdict)\b|守门|裁决|收束|结论",
         value,
-        re.I,
+        re.IGNORECASE,
     )
     early_exposure = re.search(
         r"\b(?:weak|unproven|fake[- ]?done|fake completion|drift|block(?:ing|er)?|gap|unsupported)\b"
         r"|弱证据|未证明|假完成|偏差|漂移|阻断|缺口|无支撑",
         value,
-        re.I,
+        re.IGNORECASE,
     )
     return bool(evidence_flow and gatekeeper_closure and early_exposure)
 
@@ -106,7 +106,7 @@ def _semantic_text_mentions_personality_memory_antipattern(text: object) -> bool
         r"总是.{0,16}(?:按|遵循|使用).{0,12}(?:偏好|人格|风格)",
     ]
     for pattern in patterns:
-        for match in re.finditer(pattern, value, re.I):
+        for match in re.finditer(pattern, value, re.IGNORECASE):
             if semantic_antipattern_match_is_negated(value, match.start()):
                 continue
             return True
@@ -126,7 +126,7 @@ def _semantic_text_mentions_named_loopora_antipattern(text: object) -> bool:
         r"提示词包|堆提示词|堆角色|循环脚本|刷基准|基准刷分|聊天壳",
     ]
     for pattern in patterns:
-        for match in re.finditer(pattern, value, re.I):
+        for match in re.finditer(pattern, value, re.IGNORECASE):
             if semantic_antipattern_match_is_negated(value, match.start()):
                 continue
             return True

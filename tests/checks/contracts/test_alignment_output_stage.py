@@ -8,6 +8,10 @@ from loopora.service_alignment_output_stage import (
     alignment_output_stage_plan,
 )
 
+ALIGN_OUTPUT_STAGE_ID = "align_output_stage"
+AGREEMENT_SUMMARY = "这是一份需要继续补齐证据的协议。"
+USER_TRANSCRIPT = [{"role": "user", "content": "请帮我对齐这个长任务。"}]
+
 
 class FakeAlignmentOutputStageRepository:
     def __init__(self, session: dict) -> None:
@@ -28,18 +32,29 @@ class FakeAlignmentOutputStageRepository:
         return event
 
 
+def _alignment_session(tmp_path: Path, *, session_id: str = ALIGN_OUTPUT_STAGE_ID, stage: str = "clarifying", transcript: list[dict] | None = None) -> dict:
+    return {
+        "id": session_id,
+        "workdir": str(tmp_path),
+        "alignment_stage": stage,
+        "transcript": USER_TRANSCRIPT if transcript is None else transcript,
+    }
+
+
+def _agreement_output(**overrides: object) -> dict:
+    output = {
+        "alignment_phase": "agreement",
+        "agreement_summary": AGREEMENT_SUMMARY,
+        "readiness_checklist": {"loop_fit": False},
+    }
+    output.update(overrides)
+    return output
+
+
 def test_alignment_output_stage_plan_projects_agreement_block(tmp_path: Path) -> None:
     plan = alignment_output_stage_plan(
-        {
-            "workdir": str(tmp_path),
-            "alignment_stage": "clarifying",
-            "transcript": [{"role": "user", "content": "请帮我对齐这个长任务。"}],
-        },
-        {
-            "alignment_phase": "agreement",
-            "agreement_summary": "这是一份需要继续补齐证据的协议。",
-            "readiness_checklist": {"loop_fit": False},
-        },
+        _alignment_session(tmp_path),
+        _agreement_output(),
         captured_at="2026-05-29T00:00:00Z",
         readiness_keys=["loop_fit"],
         readiness_evidence_keys=[],
@@ -54,28 +69,19 @@ def test_alignment_output_stage_plan_projects_agreement_block(tmp_path: Path) ->
 
 
 def test_apply_alignment_output_stage_updates_session_event_and_output(tmp_path: Path) -> None:
-    session = {
-        "id": "align_output_stage",
-        "workdir": str(tmp_path),
-        "alignment_stage": "clarifying",
-        "transcript": [{"role": "user", "content": "请帮我对齐这个长任务。"}],
-    }
+    session = _alignment_session(tmp_path)
     repo = FakeAlignmentOutputStageRepository(session)
     context = AlignmentOutputStageContext(
         repository=repo,
         decorate_session=lambda payload: {**payload, "decorated": True},
         now=lambda: "2026-05-30T00:00:00Z",
     )
-    output = {
-        "alignment_phase": "agreement",
-        "agreement_summary": "这是一份需要继续补齐证据的协议。",
-        "readiness_checklist": {"loop_fit": False},
-    }
+    output = _agreement_output()
 
     updated = apply_alignment_output_stage(
         context,
         AlignmentOutputStageRequest(
-            session_id="align_output_stage",
+            session_id=ALIGN_OUTPUT_STAGE_ID,
             session=session,
             output=output,
             readiness_keys=["loop_fit"],
@@ -97,7 +103,7 @@ def test_apply_alignment_output_stage_updates_session_event_and_output(tmp_path:
 
 
 def test_apply_alignment_output_stage_leaves_non_stage_output_untouched(tmp_path: Path) -> None:
-    session = {"id": "align_no_stage", "workdir": str(tmp_path), "alignment_stage": "ready", "transcript": []}
+    session = _alignment_session(tmp_path, session_id="align_no_stage", stage="ready", transcript=[])
     repo = FakeAlignmentOutputStageRepository(session)
     context = AlignmentOutputStageContext(
         repository=repo,
@@ -124,17 +130,13 @@ def test_apply_alignment_output_stage_leaves_non_stage_output_untouched(tmp_path
 
 def test_alignment_output_bundle_stage_error_blocks_unconfirmed_bundle(tmp_path: Path) -> None:
     error = alignment_output_bundle_stage_error(
-        {
-            "workdir": str(tmp_path),
-            "alignment_stage": "clarifying",
-            "transcript": [],
-        },
-        {
-            "alignment_phase": "bundle",
-            "agreement_summary": "Agreement",
-            "readiness_checklist": {"loop_fit": True},
-            "readiness_evidence": {},
-        },
+        _alignment_session(tmp_path, transcript=[]),
+        _agreement_output(
+            alignment_phase="bundle",
+            agreement_summary="Agreement",
+            readiness_checklist={"loop_fit": True},
+            readiness_evidence={},
+        ),
         confirmed_stages={"confirmed"},
         readiness_keys=["loop_fit"],
         readiness_evidence_keys=[],

@@ -143,7 +143,7 @@ def _judgment_tradeoff_trace(
         compact = _compact_trace_candidate(candidate)
         if not compact or compact.lower() in seen:
             continue
-        if not any(re.search(pattern, compact, re.I) for pattern in TRADEOFF_PATTERNS):
+        if not any(re.search(pattern, compact, re.IGNORECASE) for pattern in TRADEOFF_PATTERNS):
             continue
         seen.add(compact.lower())
         traces.append((_tradeoff_trace_priority(compact), index, compact[:240].rstrip() + ("..." if len(compact) > 240 else "")))
@@ -151,9 +151,9 @@ def _judgment_tradeoff_trace(
 
 
 def _tradeoff_trace_priority(text: str) -> int:
-    if any(re.search(pattern, text, re.I) for pattern in HIGH_SIGNAL_TRADEOFF_PATTERNS):
+    if any(re.search(pattern, text, re.IGNORECASE) for pattern in HIGH_SIGNAL_TRADEOFF_PATTERNS):
         return 0
-    if re.search(r"\bprefer\b|优先|先于|高于", text, re.I):
+    if re.search(r"\bprefer\b|优先|先于|高于", text, re.IGNORECASE):
         return 1
     return 2
 
@@ -172,7 +172,7 @@ def _execution_strategy_trace(
         compact = _compact_trace_candidate(candidate)
         if not compact or compact.lower() in seen:
             continue
-        if not any(re.search(pattern, compact, re.I) for pattern in EXECUTION_STRATEGY_PATTERNS):
+        if not any(re.search(pattern, compact, re.IGNORECASE) for pattern in EXECUTION_STRATEGY_PATTERNS):
             continue
         seen.add(compact.lower())
         traces.append(compact[:240].rstrip() + ("..." if len(compact) > 240 else ""))

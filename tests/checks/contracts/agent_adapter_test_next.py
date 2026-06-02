@@ -9,6 +9,9 @@ from agent_adapter_test_surface import (
 )
 
 
+EXPECTED_AGENT_NEXT_KNOWN_EVIDENCE_COUNT = 4
+
+
 def _assert_agent_next_json_summary(stdout: str) -> None:
     payload = json.loads(stdout)
     summary, _legacy = assert_agent_v3_envelope(payload, kind="agent_next", summary_key="agent_next_summary", status="active")
@@ -47,7 +50,7 @@ def _assert_agent_next_step_json_summary(next_summary: dict) -> None:
     assert "replace null placeholders" in next_summary["result_template_fill"]
     assert next_summary["result_outbox_dir"] == ".loopora/agent_outbox/codex"
     assert next_summary["submit_command"] == "loopora agent codex submit --run-id run_next"
-    assert next_summary["known_evidence_count"] == 4
+    assert next_summary["known_evidence_count"] == EXPECTED_AGENT_NEXT_KNOWN_EVIDENCE_COUNT
     assert next_summary["known_evidence_ids"] == ["ev_builder", "ev_contract"]
     assert next_summary["known_evidence_scope"] == "filtered by evidence_query archetypes=builder limit=12"
     assert next_summary["known_evidence_refs"][0]["id"] == "ev_builder"

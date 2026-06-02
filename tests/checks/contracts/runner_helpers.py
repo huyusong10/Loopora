@@ -14,6 +14,9 @@ from loopora.service import LooporaService
 from loopora.workflows import prompt_asset_path
 
 
+MIN_EVIDENCE_MANIFEST_CLAIM_COUNT = 3
+
+
 def _read_jsonl(path: Path) -> list[dict]:
     return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
 
@@ -102,7 +105,7 @@ def _assert_evidence_manifest(run_dir: Path) -> None:
     assert manifest["manifest_path"] == "evidence/manifest.json"
     assert manifest["ledger_path"] == "evidence/ledger.jsonl"
     assert manifest["coverage_path"] == "evidence/coverage.json"
-    assert manifest["claim_count"] >= 3
+    assert manifest["claim_count"] >= MIN_EVIDENCE_MANIFEST_CLAIM_COUNT
     assert manifest["artifact_backed_claim_count"] == manifest["claim_count"]
     assert manifest["run_artifact_claim_count"] >= 1
     assert all(claim["producer"]["step_id"] for claim in manifest["claims"])

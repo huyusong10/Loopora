@@ -46,8 +46,11 @@ class WorkspaceSafetyError(LooporaError):
         )
 
 
-class StopRequested(LooporaError):
+class StopRequestedError(LooporaError):
     """Raised when a user asked to stop a running loop."""
+
+
+StopRequested = StopRequestedError
 
 
 def normalize_completion_mode(value: str | None) -> str:

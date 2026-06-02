@@ -395,13 +395,13 @@ def _event_summaries(events: list[dict]) -> list[dict]:
 def _state_summary(path: Path) -> dict:
     state = _safe_read_json(path)
     active = state.get("active_step") if isinstance(state.get("active_step"), dict) else {}
-    capsule = active.get("capsule") if isinstance(active.get("capsule"), dict) else {}
+    step_view = active.get("agent_step_view") if isinstance(active.get("agent_step_view"), dict) else {}
     return {
         "status": state.get("status"),
         "iter_id": state.get("iter_id"),
         "step_index": state.get("step_index"),
-        "active_step_id": capsule.get("step_id"),
-        "active_role": (capsule.get("role") or {}).get("archetype") if isinstance(capsule.get("role"), dict) else None,
+        "active_step_id": step_view.get("step_id"),
+        "active_role": (step_view.get("role") or {}).get("archetype") if isinstance(step_view.get("role"), dict) else None,
         "host_dispatches": [
             {
                 "step_id": item.get("step_id"),
@@ -580,7 +580,7 @@ def _experience_contract_payloads(workdir: Path, run_path: Path) -> list[tuple[P
     paths: list[Path] = []
     if run_path != Path():
         paths.extend(sorted(run_path.glob("agent_native/**/*.json"))[-12:])
-        paths.extend(sorted(run_path.glob("iterations/**/capsule.json"))[-12:])
+        paths.extend(sorted(run_path.glob("iterations/**/agent_step_view.json"))[-12:])
     paths.extend(sorted((state_dir_for_workdir(workdir) / "agent_outbox").glob("**/*.result.template.json"))[-12:])
     return [(path, payload) for path in paths if (payload := _safe_read_json(path))]
 
@@ -591,8 +591,8 @@ def _experience_artifact_source(path: Path, *, workdir: Path, run_path: Path) ->
             relative = path.relative_to(run_path)
             if relative.parts[:1] == ("agent_native",):
                 return "run_agent_native_artifact"
-            if "capsule.json" in relative.parts:
-                return "step_capsule"
+            if "agent_step_view.json" in relative.parts:
+                return "agent_step_view"
     with suppress(ValueError):
         relative = path.relative_to(state_dir_for_workdir(workdir))
         if relative.parts[:1] == ("agent_outbox",):
@@ -1329,13 +1329,13 @@ Required order:
 0. After reading the installed entry files, create the candidate bundle on disk and verify that `{bundle_file}` exists before moving on.
 1. Invoke `/loopora-plan` or the installed `loopora-plan` project entry semantics.
 2. Only after the candidate is READY, invoke `/loopora-run` or the installed `loopora-run` project entry semantics.
-3. Continue the installed Agent-native loop path until Loopora returns `complete: true`. For each returned step capsule, use the host's official native role/subagent or task mechanism named by `role_dispatch.target_agent`; in short, use the host's native role/subagent mechanism named by `role_dispatch.target_agent` whenever that is the host's official spelling. Mirror `native_todo` through the host's todo/progress-list capability when available, write one wrapper JSON result with `loopora_host_dispatch` and `result`, follow any `evidence_rules`, `evidence_ref_contract`, and `role_dispatch`, and submit it as instructed by the installed entry.
+3. Continue the installed Agent-native loop path until Loopora returns `complete: true`. For each returned Agent Step View, use the host's official native role/subagent or task mechanism named by `role_dispatch.target_agent`; in short, use the host's native role/subagent mechanism named by `role_dispatch.target_agent` whenever that is the host's official spelling. Mirror `native_todo` through the host's todo/progress-list capability when available, write one wrapper JSON result with `loopora_host_dispatch` and `result`, follow any `evidence_rules`, `evidence_ref_contract`, and `role_dispatch`, and submit it as instructed by the installed entry.
 4. While the run is active, observe the local Loopora runtime activity endpoint or the returned run URL enough to confirm the run is visible before terminal completion.
 5. Return a short summary with the candidate URL, run URL, runtime activity observation, and terminal run status.
 
 Keep each role dispatch small and deterministic for this release-profile probe. Builder must create `loopora-agent-release-proof.json` in the workdir and return `proof_files: ["loopora-agent-release-proof.json"]`; it may still return empty `changed_files`, `proof_artifacts`, and `artifact_paths`. GateKeeper should cite only the exact Builder evidence id returned in `known_evidence_ids`. For every satisfied `coverage_results` target, set `status` to `covered`; do not use verdict bucket words such as `proven` or `unproven` as coverage status values. GateKeeper must return `residual_risks: []` when passing; place the fact that this is a bounded release probe in `decision_summary` or `evidence_claims`, not in `residual_risks`. For Codex, if you use `spawn_agent`, set `agent_type` to the exact target agent, omit `fork_context`, and wait with a bounded timeout shorter than this harness timeout. For Claude Code, use the official Agent tool when available and accept Task as the compatibility spelling; for OpenCode, use the configured task/subagent mechanism.
 
-For every result file, use the installed entry's wrapper format: top-level `loopora_host_dispatch` plus top-level `result`. The `result` object must use the exact top-level keys required by the step capsule's `output_schema`. For GateKeeper, write `passed`, `decision_summary`, `metrics`, `metric_scores`, `evidence_refs`, `evidence_claims`, and the other schema fields inside `result`; do not use a `verdict` or `task_verdict` envelope. In `loopora_host_dispatch`, set both `target_agent` and `actual_agent` to the exact `role_dispatch.target_agent`, set `dispatch_mode` to `host_subagent`, `host_task`, or `host_agent`, and set `inline` to false. If the host exposes an official subagent/task trace id or tool-call id, copy it into `native_trace` or `native_trace_ref`; if not, leave those optional trace fields empty. Every `evidence_refs` list, including inside `coverage_results`, must contain only exact strings copied from `known_evidence_ids`. If `known_evidence_ids` contains only `ev_000_00_builder_step`, use only `ev_000_00_builder_step`; do not invent suffixes such as `_binding`, `_output`, `_preference`, or `_fake_done_risk`. Artifact labels and file names belong in evidence_claims or notes.
+For every result file, use the installed entry's wrapper format: top-level `loopora_host_dispatch` plus top-level `result`. The `result` object must use the exact top-level keys required by the Agent Step View's `output_schema`. For GateKeeper, write `passed`, `decision_summary`, `metrics`, `metric_scores`, `evidence_refs`, `evidence_claims`, and the other schema fields inside `result`; do not use a `verdict` or `task_verdict` envelope. In `loopora_host_dispatch`, set both `target_agent` and `actual_agent` to the exact `role_dispatch.target_agent`, set `dispatch_mode` to `host_subagent`, `host_task`, or `host_agent`, and set `inline` to false. If the host exposes an official subagent/task trace id or tool-call id, copy it into `native_trace` or `native_trace_ref`; if not, leave those optional trace fields empty. Every `evidence_refs` list, including inside `coverage_results`, must contain only exact strings copied from `known_evidence_ids`. If `known_evidence_ids` contains only `ev_000_00_builder_step`, use only `ev_000_00_builder_step`; do not invent suffixes such as `_binding`, `_output`, `_preference`, or `_fake_done_risk`. Artifact labels and file names belong in evidence_claims or notes.
 
 Do not edit user-owned config files.
 Do not invent a direct Loopora CLI command from this prompt; follow the installed project entry instructions when a shell command is needed.
@@ -1382,7 +1382,7 @@ def _assert_managed_plan_before_run(adapter: str, entry_invocations: list[dict])
 
 
 @pytest.mark.parametrize("adapter", AGENT_TARGETS)
-def test_real_agent_host_can_guide_bundle_then_monitor_loop(adapter: str, tmp_path: Path, monkeypatch) -> None:  # noqa: PLR0915
+def test_real_agent_host_can_guide_bundle_then_monitor_loop(adapter: str, tmp_path: Path, monkeypatch) -> None:  # noqa: PLR0915 - release-profile probe keeps the full host journey in one scenario.
     template = _require_real_agent_template(adapter)
     timeout = float(os.environ.get(TIMEOUT_ENV, "1200"))
     loopora_home = tmp_path / "loopora-home"

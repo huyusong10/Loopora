@@ -55,6 +55,9 @@ from loopora.service_alignment_run_source_projection import (
 )
 
 
+ALIGNMENT_CONTEXT_TITLE_PREVIEW_LIMIT = 80
+
+
 def alignment_source_option_id(source_type: str, identifier: object) -> str:
     normalized_identifier = str(identifier or "").strip()
     if source_type == "spec_file":
@@ -64,7 +67,7 @@ def alignment_source_option_id(source_type: str, identifier: object) -> str:
     return f"{source_type}:{safe_identifier}"
 
 
-def alignment_context_title_preview(content: str, *, limit: int = 80) -> str:
+def alignment_context_title_preview(content: str, *, limit: int = ALIGNMENT_CONTEXT_TITLE_PREVIEW_LIMIT) -> str:
     text = " ".join(str(content or "").split()).strip()
     if len(text) <= limit:
         return text

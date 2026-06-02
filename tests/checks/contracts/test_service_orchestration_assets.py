@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 
 def test_service_accepts_strategy_source_for_orchestration_mutations(service_factory) -> None:
     service = service_factory(scenario="success")
@@ -23,13 +25,9 @@ def test_service_accepts_strategy_source_for_orchestration_mutations(service_fac
 def test_service_rejects_conflicting_strategy_source_aliases_for_orchestration_create(service_factory) -> None:
     service = service_factory(scenario="success")
 
-    try:
+    with pytest.raises(TypeError, match="strategy_source and workflow cannot both be provided"):
         service.create_orchestration(
             name="Conflicting Strategy Source",
             strategy_source={"preset": "inspect_first"},
             workflow={"preset": "build_first"},
         )
-    except TypeError as exc:
-        assert "strategy_source and workflow cannot both be provided" in str(exc)
-    else:
-        raise AssertionError("conflicting strategy source aliases should be rejected")

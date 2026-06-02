@@ -8,7 +8,7 @@ from loopora.diagnostics import log_event, log_exception
 from loopora.db_shared import logger
 
 
-_JSON_COLUMN_TYPES: dict[str, type[dict] | type[list]] = {
+_JSON_COLUMN_TYPES: dict[str, type[dict | list]] = {
     "compiled_spec_json": dict,
     "role_models_json": dict,
     "workflow_json": dict,
@@ -34,7 +34,7 @@ class RepositoryRowDecodingMixin:
         return {}
 
     @staticmethod
-    def _expected_json_column_type(column: str) -> type[dict] | type[list]:
+    def _expected_json_column_type(column: str) -> type[dict | list]:
         return _JSON_COLUMN_TYPES.get(column, dict)
 
     @staticmethod

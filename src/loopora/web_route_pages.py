@@ -64,7 +64,7 @@ def _register_home_and_create_pages(app: FastAPI, ctx: WebRouteContext) -> None:
             request,
             page_mode="manual",
             values=request.query_params,
-            import_values=request.query_params if request.query_params else None,
+            import_values=request.query_params or None,
         )
 
 
@@ -81,7 +81,7 @@ def _register_library_pages(app: FastAPI, ctx: WebRouteContext) -> None:
                 url=with_query_params("/loops/new/manual#bundle-import-form", replace_bundle_id=replace_bundle_id),
                 status_code=303,
             )
-        return ctx.render_bundles(request, import_values=request.query_params if request.query_params else None)
+        return ctx.render_bundles(request, import_values=request.query_params or None)
 
     @app.get("/bundles/{bundle_id}", response_class=HTMLResponse)
     async def bundle_detail_page(request: Request, bundle_id: str) -> HTMLResponse:
@@ -103,7 +103,7 @@ def _register_library_pages(app: FastAPI, ctx: WebRouteContext) -> None:
 
     @app.get("/roles/new", response_class=HTMLResponse)
     async def new_role_definition(request: Request) -> HTMLResponse:
-        return ctx.render_new_role_definition(request, values=request.query_params if request.query_params else None)
+        return ctx.render_new_role_definition(request, values=request.query_params or None)
 
     @app.get("/roles/{role_definition_id}/edit", response_class=HTMLResponse)
     async def edit_role_definition(request: Request, role_definition_id: str) -> HTMLResponse:

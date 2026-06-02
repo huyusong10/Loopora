@@ -14,7 +14,7 @@ def lint_alignment_bundle_generation_text(raw_text: str) -> list[str]:
     if not stripped:
         return issues
     non_empty_lines = [line.strip() for line in str(raw_text or "").splitlines() if line.strip()]
-    if non_empty_lines and re.match(r"^```(?:yaml|yml)?\s*$", non_empty_lines[0], re.I):
+    if non_empty_lines and re.match(r"^```(?:yaml|yml)?\s*$", non_empty_lines[0], re.IGNORECASE):
         issues.append("Web alignment generated bundle_yaml must be one raw YAML document, not markdown-fenced output")
     if non_empty_lines and not re.match(r"^version\s*:\s*1(?:\s*(?:#.*)?)?$", non_empty_lines[0]):
         issues.append("Web alignment generated bundle_yaml must start with version: 1")

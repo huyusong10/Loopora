@@ -68,7 +68,7 @@ def _normalize_bundle_loop_execution(payload: Mapping[str, Any]) -> dict[str, st
         return {
             "executor_kind": executor_kind,
             "executor_mode": executor_mode,
-            "command_cli": command_cli if command_cli else profile.cli_name,
+            "command_cli": command_cli or profile.cli_name,
             "command_args_text": command_args_text,
             "model": model,
             "reasoning_effort": reasoning_effort,

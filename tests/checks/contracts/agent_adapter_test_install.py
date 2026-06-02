@@ -4,12 +4,16 @@ import json
 from pathlib import Path
 
 
-import loopora.agent_adapters as agent_adapters
+from loopora import agent_adapters
 from agent_adapter_expected import (
     AGENT_ENTRY_GEN_CONTRACT_SNIPPETS,
     AGENT_ENTRY_LOOP_CONTRACT_SNIPPETS,
     AGENT_ORCHESTRATOR_CONTRACT_SNIPPETS,
 )
+
+
+MAX_AGENT_ENTRY_LINES = 80
+SHA256_HEX_LENGTH = 64
 
 
 def _codex_skill_paths(workdir: Path) -> dict[str, Path]:
@@ -29,6 +33,16 @@ def _opencode_command_paths(workdir: Path) -> dict[str, Path]:
         "plan": workdir / ".opencode" / "commands" / "loopora-plan.md",
         "run": workdir / ".opencode" / "commands" / "loopora-run.md",
     }
+
+def _manifest_managed_file_paths(manifest_payload: dict) -> set[str]:
+    return {item["path"] for item in manifest_payload["managed_files"]}
+
+def _assert_entry_line_budget(entry_text: str) -> None:
+    assert len(entry_text.splitlines()) <= MAX_AGENT_ENTRY_LINES
+
+def _assert_plan_entry_avoids_yaml_authoring(plan_entry: str) -> None:
+    for forbidden in ("authoring YAML", "fix the YAML", "YAML"):
+        assert forbidden not in plan_entry
 
 def _claude_settings_has_loopora_session_hook(settings: dict) -> bool:
     hooks = settings.get("hooks")
@@ -63,12 +77,10 @@ def _assert_claude_gen_entry(gen_skill: str, plan_contract: str) -> None:
     assert "Create, revise, repair, or tighten the current Claude Code Loop preview" in gen_skill
     assert "thin dispatcher" in gen_skill
     assert "references/loopora-plan-contract.md" in gen_skill
-    assert len(gen_skill.splitlines()) <= 80
+    _assert_entry_line_budget(gen_skill)
     for snippet in AGENT_ENTRY_GEN_CONTRACT_SNIPPETS:
         assert snippet in plan_contract
-    assert "authoring YAML" not in gen_skill
-    assert "fix the YAML" not in gen_skill
-    assert "YAML" not in gen_skill
+    _assert_plan_entry_avoids_yaml_authoring(gen_skill)
     assert "Web alignment URL" not in gen_skill
 
 def _assert_claude_loop_entry(loop_skill: str, run_contract: str) -> None:
@@ -89,7 +101,7 @@ def _assert_claude_loop_entry(loop_skill: str, run_contract: str) -> None:
     assert "references/loopora-recovery-matrix.md" in loop_skill
     _assert_loop_entry_native_run_contract(loop_skill)
     assert "--source-option-id" in loop_skill
-    assert len(loop_skill.splitlines()) <= 80
+    _assert_entry_line_budget(loop_skill)
     for snippet in AGENT_ENTRY_LOOP_CONTRACT_SNIPPETS:
         assert snippet in run_contract
     assert "Claude Code native dispatch guidance" in run_contract
@@ -116,7 +128,7 @@ def _assert_claude_manifest(manifest_path: Path) -> str:
     first_manifest = manifest_path.read_text(encoding="utf-8")
     manifest_payload = json.loads(first_manifest)
     assert manifest_payload["managed_schema_version"] == agent_adapters.ADAPTER_MANAGED_SCHEMA_VERSION
-    assert {item["path"] for item in manifest_payload["managed_files"]} == {
+    assert _manifest_managed_file_paths(manifest_payload) == {
         ".claude/skills/loopora-plan/SKILL.md",
         ".claude/skills/loopora-plan/references/loopora-plan-contract.md",
         ".claude/skills/loopora-run/SKILL.md",
@@ -163,21 +175,7 @@ def _assert_claude_managed_install(workdir: Path, skill_paths: dict[str, Path]) 
     manifest_path = workdir / ".loopora" / "adapters" / "claude" / "manifest.json"
     return manifest_path, _assert_claude_manifest(manifest_path)
 
-def _assert_opencode_managed_install(workdir: Path, command_paths: dict[str, Path]) -> tuple[Path, str]:  # noqa: PLR0915
-    gen_command = command_paths["plan"].read_text(encoding="utf-8")
-    loop_command = command_paths["run"].read_text(encoding="utf-8")
-    plan_contract = (workdir / ".opencode" / "loopora" / "references" / "loopora-plan-contract.md").read_text(encoding="utf-8")
-    run_contract = (workdir / ".opencode" / "loopora" / "references" / "loopora-run-contract.md").read_text(encoding="utf-8")
-    recovery_matrix = (workdir / ".opencode" / "loopora" / "references" / "loopora-recovery-matrix.md").read_text(encoding="utf-8")
-    builder_agent = workdir / ".opencode" / "agents" / "loopora-builder.md"
-    orchestrator_agent = workdir / ".opencode" / "agents" / "loopora-orchestrator.md"
-    old_gen_command = workdir / ".opencode" / "commands" / "loopora-gen.md"
-    old_loop_command = workdir / ".opencode" / "commands" / "loopora-loop.md"
-    assert "LOOPORA-MANAGED: opencode-adapter" in gen_command
-    assert builder_agent.exists()
-    assert orchestrator_agent.exists()
-    assert not old_gen_command.exists()
-    assert not old_loop_command.exists()
+def _assert_opencode_plan_entry(gen_command: str, plan_contract: str) -> None:
     assert "description:" in gen_command
     assert "agent: build" not in gen_command
     assert "$ARGUMENTS" in gen_command
@@ -188,16 +186,16 @@ def _assert_opencode_managed_install(workdir: Path, command_paths: dict[str, Pat
     assert "Create, revise, repair, or tighten the current OpenCode Loop preview" in gen_command
     assert "thin dispatcher" in gen_command
     assert ".opencode/loopora/references/loopora-plan-contract.md" in gen_command
-    assert len(gen_command.splitlines()) <= 80
+    _assert_entry_line_budget(gen_command)
     for snippet in AGENT_ENTRY_GEN_CONTRACT_SNIPPETS:
         assert snippet in plan_contract
-    assert "authoring YAML" not in gen_command
-    assert "fix the YAML" not in gen_command
-    assert "YAML" not in gen_command
+    _assert_plan_entry_avoids_yaml_authoring(gen_command)
+    assert "READY bundle" not in gen_command
+
+def _assert_opencode_loop_entry(loop_command: str, run_contract: str, recovery_matrix: str) -> None:
     assert "reviewed Loop preview" in loop_command
     assert "preserves this OpenCode task judgment and evidence requirements" in loop_command
     assert "confirmed Loop preview" not in loop_command
-    assert "READY bundle" not in gen_command
     assert "READY bundle" not in loop_command
     assert "LOOPORA_AGENT_ENTRY_SOURCE=opencode_project_command" in loop_command
     assert "agent: loopora-orchestrator" in loop_command
@@ -209,7 +207,7 @@ def _assert_opencode_managed_install(workdir: Path, command_paths: dict[str, Pat
     assert ".opencode/loopora/references/loopora-recovery-matrix.md" in loop_command
     _assert_loop_entry_native_run_contract(loop_command)
     assert "--source-option-id" in loop_command
-    assert len(loop_command.splitlines()) <= 80
+    _assert_entry_line_budget(loop_command)
     for snippet in AGENT_ENTRY_LOOP_CONTRACT_SNIPPETS:
         assert snippet in run_contract + recovery_matrix
     assert "OpenCode native dispatch guidance" in run_contract
@@ -219,6 +217,8 @@ def _assert_opencode_managed_install(workdir: Path, command_paths: dict[str, Pat
     assert "native trace are not Loopora proof" in run_contract
     assert '--context-id "${OPENCODE_SESSION_ID:-}"' in loop_command
     assert "--entry-source opencode_project_command" in loop_command
+
+def _assert_opencode_agent_prompts(builder_agent: Path, orchestrator_agent: Path) -> None:
     builder_agent_text = builder_agent.read_text(encoding="utf-8")
     orchestrator_agent_text = orchestrator_agent.read_text(encoding="utf-8")
     assert "Loopora Builder" in builder_agent_text
@@ -229,12 +229,13 @@ def _assert_opencode_managed_install(workdir: Path, command_paths: dict[str, Pat
     assert "loopora-builder: allow" in orchestrator_agent_text
     for snippet in AGENT_ORCHESTRATOR_CONTRACT_SNIPPETS:
         assert snippet in orchestrator_agent_text
-    manifest_path = workdir / ".loopora" / "adapters" / "opencode" / "manifest.json"
+
+def _assert_opencode_manifest(manifest_path: Path) -> tuple[Path, str]:
     assert manifest_path.exists()
     first_manifest = manifest_path.read_text(encoding="utf-8")
     manifest_payload = json.loads(first_manifest)
     assert manifest_payload["managed_schema_version"] == agent_adapters.ADAPTER_MANAGED_SCHEMA_VERSION
-    assert {item["path"] for item in manifest_payload["managed_files"]} == {
+    assert _manifest_managed_file_paths(manifest_payload) == {
         ".opencode/commands/loopora-plan.md",
         ".opencode/loopora/references/loopora-plan-contract.md",
         ".opencode/commands/loopora-run.md",
@@ -249,6 +250,27 @@ def _assert_opencode_managed_install(workdir: Path, command_paths: dict[str, Pat
         ".opencode/agents/loopora-orchestrator.md",
     }
     return manifest_path, first_manifest
+
+def _assert_opencode_managed_install(workdir: Path, command_paths: dict[str, Path]) -> tuple[Path, str]:
+    gen_command = command_paths["plan"].read_text(encoding="utf-8")
+    loop_command = command_paths["run"].read_text(encoding="utf-8")
+    plan_contract = (workdir / ".opencode" / "loopora" / "references" / "loopora-plan-contract.md").read_text(encoding="utf-8")
+    run_contract = (workdir / ".opencode" / "loopora" / "references" / "loopora-run-contract.md").read_text(encoding="utf-8")
+    recovery_matrix = (workdir / ".opencode" / "loopora" / "references" / "loopora-recovery-matrix.md").read_text(encoding="utf-8")
+    builder_agent = workdir / ".opencode" / "agents" / "loopora-builder.md"
+    orchestrator_agent = workdir / ".opencode" / "agents" / "loopora-orchestrator.md"
+    old_gen_command = workdir / ".opencode" / "commands" / "loopora-gen.md"
+    old_loop_command = workdir / ".opencode" / "commands" / "loopora-loop.md"
+    assert "LOOPORA-MANAGED: opencode-adapter" in gen_command
+    assert builder_agent.exists()
+    assert orchestrator_agent.exists()
+    assert not old_gen_command.exists()
+    assert not old_loop_command.exists()
+    _assert_opencode_plan_entry(gen_command, plan_contract)
+    _assert_opencode_loop_entry(loop_command, run_contract, recovery_matrix)
+    _assert_opencode_agent_prompts(builder_agent, orchestrator_agent)
+    manifest_path = workdir / ".loopora" / "adapters" / "opencode" / "manifest.json"
+    return _assert_opencode_manifest(manifest_path)
 
 def _assert_codex_managed_install(workdir: Path, skill_paths: dict[str, Path]) -> tuple[Path, str]:
     codex_builder_agent = workdir / ".codex" / "agents" / "loopora-builder.toml"
@@ -273,12 +295,10 @@ def _assert_codex_managed_install(workdir: Path, skill_paths: dict[str, Path]) -
     assert "create, revise, repair, or tighten the reviewed Loop preview" in gen_skill
     assert "thin dispatcher" in gen_skill
     assert "references/loopora-plan-contract.md" in gen_skill
-    assert len(gen_skill.splitlines()) <= 80
+    _assert_entry_line_budget(gen_skill)
     for snippet in AGENT_ENTRY_GEN_CONTRACT_SNIPPETS:
         assert snippet in plan_contract
-    assert "authoring YAML" not in gen_skill
-    assert "fix the YAML" not in gen_skill
-    assert "YAML" not in gen_skill
+    _assert_plan_entry_avoids_yaml_authoring(gen_skill)
     assert "reviewed Loop preview" in loop_skill
     assert "preserves the current task judgment and evidence requirements" in loop_skill
     assert "confirmed Loop preview" not in loop_skill
@@ -294,7 +314,7 @@ def _assert_codex_managed_install(workdir: Path, skill_paths: dict[str, Path]) -
     assert "references/loopora-recovery-matrix.md" in loop_skill
     _assert_loop_entry_native_run_contract(loop_skill)
     assert "--source-option-id" in loop_skill
-    assert len(loop_skill.splitlines()) <= 80
+    _assert_entry_line_budget(loop_skill)
     for snippet in AGENT_ENTRY_LOOP_CONTRACT_SNIPPETS:
         assert snippet in run_contract + recovery_matrix
     assert "Codex native dispatch guidance" in run_contract
@@ -327,7 +347,7 @@ def _assert_codex_manifest(workdir: Path) -> tuple[Path, str]:
     manifest_payload = json.loads(first_manifest)
     assert manifest_payload["managed_schema_version"] == agent_adapters.ADAPTER_MANAGED_SCHEMA_VERSION
     assert manifest_payload["version"] == agent_adapters.ADAPTER_VERSION
-    assert {item["path"] for item in manifest_payload["managed_files"]} == {
+    assert _manifest_managed_file_paths(manifest_payload) == {
         ".agents/skills/loopora-plan/SKILL.md",
         ".agents/skills/loopora-plan/references/loopora-plan-contract.md",
         ".agents/skills/loopora-run/SKILL.md",
@@ -341,5 +361,5 @@ def _assert_codex_manifest(workdir: Path) -> tuple[Path, str]:
         ".codex/agents/loopora-guide.toml",
         ".codex/agents/loopora-orchestrator.toml",
     }
-    assert all(len(item["sha256"]) == 64 for item in manifest_payload["managed_files"])
+    assert all(len(item["sha256"]) == SHA256_HEX_LENGTH for item in manifest_payload["managed_files"])
     return manifest_path, first_manifest

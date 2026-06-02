@@ -96,7 +96,7 @@ def _coerce_setting_number(
     payload: dict[str, object],
     *,
     key: str,
-    default: int | float,
+    default: float,
     integer_only: bool,
     minimum: float,
 ) -> int | float:

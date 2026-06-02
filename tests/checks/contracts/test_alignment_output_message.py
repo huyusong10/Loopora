@@ -61,7 +61,6 @@ def output_message_request(
 
 
 def test_alignment_output_message_preserves_valid_bundle_and_normalized_missing_items(tmp_path: Path) -> None:
-    repo = FakeAlignmentOutputMessageRepository()
     output = {
         "assistant_message": "已整理成 bundle。",
         "bundle_yaml": "version: 1\n",
@@ -72,10 +71,7 @@ def test_alignment_output_message_preserves_valid_bundle_and_normalized_missing_
         "alignment_missing_items": ["task_scope", "unknown", "task_scope"],
     }
 
-    result = alignment_output_message_bundle_and_options(
-        AlignmentOutputMessageContext(repository=repo),
-        output_message_request(tmp_path, output),
-    )
+    repo, result = output_message_result(tmp_path, output)
 
     assert result.assistant_message == "已整理成 bundle。"
     assert result.bundle_yaml == "version: 1"
@@ -86,7 +82,6 @@ def test_alignment_output_message_preserves_valid_bundle_and_normalized_missing_
 
 
 def test_alignment_output_message_blocks_unconfirmed_bundle_and_projects_default_options(tmp_path: Path) -> None:
-    repo = FakeAlignmentOutputMessageRepository()
     output = {
         "assistant_message": "已整理完成。",
         "bundle_yaml": "version: 1\n",
@@ -96,10 +91,7 @@ def test_alignment_output_message_blocks_unconfirmed_bundle_and_projects_default
         "readiness_evidence": {},
     }
 
-    result = alignment_output_message_bundle_and_options(
-        AlignmentOutputMessageContext(repository=repo),
-        output_message_request(tmp_path, output, alignment_stage="clarifying"),
-    )
+    repo, result = output_message_result(tmp_path, output, alignment_stage="clarifying")
 
     assert "明确确认" in result.assistant_message
     assert result.bundle_yaml == ""
@@ -117,17 +109,13 @@ def test_alignment_output_message_blocks_unconfirmed_bundle_and_projects_default
 
 
 def test_alignment_output_message_records_language_mismatch_without_forcing_needs_user_input(tmp_path: Path) -> None:
-    repo = FakeAlignmentOutputMessageRepository()
     output = {
         "assistant_message": "I prepared a follow-up question.",
         "needs_user_input": True,
         "alignment_missing_items": ["loop_fit"],
     }
 
-    result = alignment_output_message_bundle_and_options(
-        AlignmentOutputMessageContext(repository=repo),
-        output_message_request(tmp_path, output),
-    )
+    repo, result = output_message_result(tmp_path, output)
 
     assert "确认一个会改变 Loop 形状的点" in result.assistant_message
     assert result.bundle_yaml == ""
@@ -142,3 +130,10 @@ def test_alignment_output_message_records_language_mismatch_without_forcing_need
             "payload": {"missing": ["assistant_message"], "surface": "assistant_message"},
         }
     ]
+
+
+def output_message_result(tmp_path: Path, output: dict, **request_overrides):
+    repo = FakeAlignmentOutputMessageRepository()
+    return repo, alignment_output_message_bundle_and_options(
+        AlignmentOutputMessageContext(repository=repo), output_message_request(tmp_path, output, **request_overrides)
+    )

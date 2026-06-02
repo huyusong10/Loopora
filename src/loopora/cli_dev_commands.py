@@ -23,11 +23,13 @@ DevResetYesOption = Annotated[
     typer.Option("--yes", help="Actually delete the planned Loopora development state. Without this flag the command is a dry run."),
 ]
 
+DEV_RESET_SUMMARY_SCHEMA_VERSION = 3
+
 
 def register_dev_commands(dev_app: typer.Typer) -> None:
     @dev_app.command("reset")
     def reset(
-        workdir: DevResetWorkdirOption = Path("."),
+        workdir: DevResetWorkdirOption = Path(),
         *,
         yes: DevResetYesOption = False,
         json_output: JsonOutputOption = False,
@@ -50,7 +52,7 @@ def _dev_reset_json_payload(result: dict) -> dict:
     skipped = [str(item) for item in list(result.get("skipped") or []) if str(item).strip()]
     return {
         "dev_reset_summary": {
-            "schema_version": 3,
+            "schema_version": DEV_RESET_SUMMARY_SCHEMA_VERSION,
             "workdir": str(result.get("workdir") or "").strip(),
             "dry_run": result.get("dry_run") is not False,
             "planned_count": len(planned),

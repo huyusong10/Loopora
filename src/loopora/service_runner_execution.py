@@ -18,7 +18,7 @@ from loopora.service_types import (
     LooporaConflictError,
     LooporaNotFoundError,
     RoleExecutionError,
-    StopRequested,
+    StopRequestedError,
     WorkspaceSafetyError,
 )
 from loopora.service_runner_control_execution import ServiceRunnerControlExecutionMixin
@@ -158,7 +158,7 @@ class ServiceRunnerExecutionMixin(
         run_dir: Path,
         exc: BaseException,
     ) -> dict:
-        if isinstance(exc, (StopRequested, ExecutionStopped)):
+        if isinstance(exc, (StopRequestedError, ExecutionStopped)):
             return self._handle_runner_stop(run_id, run, run_dir)
         if isinstance(exc, RoleExecutionError):
             return self._handle_runner_role_execution_error(run_id, run, run_dir, exc)
@@ -212,7 +212,7 @@ class ServiceRunnerExecutionMixin(
                     summary=summary,
                 )
             )
-        except (StopRequested, ExecutionStopped, RoleExecutionError, WorkspaceSafetyError) as exc:
+        except (StopRequestedError, ExecutionStopped, RoleExecutionError, WorkspaceSafetyError) as exc:
             return self._handle_runner_execution_exception(run_id, run, run_dir, exc)
         except Exception as exc:  # noqa: BLE001 - runner crash boundary must persist failed run state.
             return self._handle_runner_execution_exception(run_id, run, run_dir, exc)

@@ -15,9 +15,9 @@ from loopora import cli
 from loopora import cli_agent_adapter_commands
 from loopora import cli_agent_native
 from loopora import cli_agent_runtime_support
-import loopora.agent_adapters as agent_adapters
-import loopora.agent_web as agent_web
-import loopora.service_agent_native as service_agent_native
+from loopora import agent_adapters
+from loopora import agent_web
+from loopora import service_agent_native
 from loopora.executor_fake_payloads import alignment_bundle_yaml
 from loopora.service_agent_adapters import AgentBundleCandidateRequest
 from loopora.service_agent_native import AgentNativeStepClaimRequest, AgentNativeStepSubmitRequest, ServiceAgentNativeMixin

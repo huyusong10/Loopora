@@ -4,11 +4,14 @@ from loopora.engine import RunnerStepResultRequest, runner_step_result
 from loopora.kernel import ActorRef, StepResultStatus
 
 
+KERNEL_STEP_RESULT_ITERATION = 2
+
+
 def test_runner_step_result_adapts_legacy_output_to_kernel_step_result() -> None:
     result = runner_step_result(
         RunnerStepResultRequest(
             run_id="run_123",
-            iteration=2,
+            iteration=KERNEL_STEP_RESULT_ITERATION,
             step={"id": "gatekeeper"},
             actor=ActorRef(kind="agent", id="codex", adapter="codex"),
             output={
@@ -32,7 +35,7 @@ def test_runner_step_result_adapts_legacy_output_to_kernel_step_result() -> None
 
     assert result.run_id == "run_123"
     assert result.step_id == "gatekeeper"
-    assert result.iteration == 2
+    assert result.iteration == KERNEL_STEP_RESULT_ITERATION
     assert result.status == StepResultStatus.BLOCKED
     assert result.summary == "GateKeeper blocked closure."
     assert result.blocking_items == ("permission proof missing",)

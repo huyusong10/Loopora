@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from http import HTTPStatus
+
 from agent_adapter_test_support import (
     Path,
     TestClient,
@@ -14,7 +16,7 @@ def test_agent_adapter_web_api_reports_status_and_mutates_implemented_hosts(serv
     workdir.mkdir()
 
     status_response = client.get("/api/agent-adapters", params={"workdir": str(workdir)})
-    assert status_response.status_code == 200
+    assert status_response.status_code == HTTPStatus.OK
     payload = status_response.json()
     statuses = {item["adapter"]: item["status"] for item in payload["adapters"]}
     assert statuses == {
@@ -24,22 +26,22 @@ def test_agent_adapter_web_api_reports_status_and_mutates_implemented_hosts(serv
     }
 
     install_response = client.post("/api/agent-adapters/codex/install", json={"workdir": str(workdir)})
-    assert install_response.status_code == 200
+    assert install_response.status_code == HTTPStatus.OK
     assert install_response.json()["status"] == "installed"
     assert (workdir / ".agents" / "skills" / "loopora-plan" / "SKILL.md").exists()
 
     uninstall_response = client.post("/api/agent-adapters/codex/uninstall", json={"workdir": str(workdir)})
-    assert uninstall_response.status_code == 200
+    assert uninstall_response.status_code == HTTPStatus.OK
     assert uninstall_response.json()["status"] == "not_installed"
     assert not (workdir / ".agents" / "skills" / "loopora-plan" / "SKILL.md").exists()
 
     claude_install_response = client.post("/api/agent-adapters/claude/install", json={"workdir": str(workdir)})
-    assert claude_install_response.status_code == 200
+    assert claude_install_response.status_code == HTTPStatus.OK
     assert claude_install_response.json()["status"] == "installed"
     assert (workdir / ".claude" / "skills" / "loopora-plan" / "SKILL.md").exists()
 
     opencode_install_response = client.post("/api/agent-adapters/opencode/install", json={"workdir": str(workdir)})
-    assert opencode_install_response.status_code == 200
+    assert opencode_install_response.status_code == HTTPStatus.OK
     assert opencode_install_response.json()["status"] == "installed"
     assert (workdir / ".opencode" / "commands" / "loopora-plan.md").exists()
 
@@ -54,9 +56,9 @@ def test_agent_adapter_web_api_reports_invalid_json(service_factory) -> None:
     )
     non_object = client.post("/api/agent-adapters/codex/uninstall", json=["not", "an", "object"])
 
-    assert invalid_json.status_code == 400
+    assert invalid_json.status_code == HTTPStatus.BAD_REQUEST
     assert "invalid JSON body" in invalid_json.json()["error"]
-    assert non_object.status_code == 400
+    assert non_object.status_code == HTTPStatus.BAD_REQUEST
     assert non_object.json()["error"] == "request body must be a JSON object"
 
 def test_agent_web_health_check_requires_loopora_runtime_payload(monkeypatch) -> None:

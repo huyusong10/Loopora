@@ -45,6 +45,9 @@ on:
         type: boolean
         default: false
 
+permissions:
+  contents: read
+
 jobs:
   real-probe:
     runs-on: ubuntu-latest
@@ -71,7 +74,10 @@ jobs:
           cache-suffix: real-probe
 
       - name: Install dependencies
-        run: uv sync
+        run: uv sync --locked
+
+      - name: Check dependency compatibility
+        run: uv pip check
 
       - name: Optional host setup
         if: inputs.setup_command != ''

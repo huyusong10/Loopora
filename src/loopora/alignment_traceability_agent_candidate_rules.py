@@ -90,7 +90,7 @@ def _category_projection_issues(
     missing = [
         label
         for label, bundle_pattern in categories
-        if not re.search(bundle_pattern, normalized_bundle_text, re.I)
+        if not re.search(bundle_pattern, normalized_bundle_text, re.IGNORECASE)
     ]
     if not missing:
         return []

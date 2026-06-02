@@ -52,9 +52,7 @@ def sync_context(repo: FakeAlignmentSyncRepository, *, validation_error: Excepti
         return AlignmentBundleLifecycleContext(
             repository=repo,
             get_session=get_session,
-            write_validation_log=lambda session, validation: validation_logs.append(
-                {"session": session, "validation": validation}
-            ),
+            write_validation_log=lambda session, validation: validation_logs.append({"session": session, "validation": validation}),
         )
 
     def build_preview(bundle: dict, *, source_path: str, validation: dict) -> dict:
@@ -76,24 +74,13 @@ def ready_session(tmp_path: Path, *, status: str = "ready") -> dict:
     bundle_path = tmp_path / "align_sync" / "artifacts" / "bundle.yml"
     bundle_path.parent.mkdir(parents=True, exist_ok=True)
     bundle_path.write_text("version: 1\n", encoding="utf-8")
-    return {
-        "id": "align_sync",
-        "status": status,
-        "bundle_path": str(bundle_path),
-        "transcript": [],
-        "working_agreement": {},
-    }
+    return {"id": "align_sync", "status": status, "bundle_path": str(bundle_path), "transcript": [], "working_agreement": {}}
 
 
 def test_alignment_sync_command_reloads_normalizes_logs_and_returns_preview(tmp_path: Path) -> None:
-    repo = FakeAlignmentSyncRepository(ready_session(tmp_path))
-    context, validation_logs, preview_requests = sync_context(repo)
+    repo, context, validation_logs, preview_requests = sync_case(tmp_path)
 
-    result = sync_alignment_bundle_from_file(
-        context,
-        "align_sync",
-        active_statuses={"running", "validating", "repairing"},
-    )
+    result = sync_bundle(context, active_statuses=("running", "validating", "repairing"))
 
     bundle_path = Path(repo.session["bundle_path"])
     assert result["ok"] is True
@@ -103,24 +90,16 @@ def test_alignment_sync_command_reloads_normalizes_logs_and_returns_preview(tmp_
     assert repo.session["error_message"] == ""
     assert repo.session["finished_at"] is None
     assert repo.session["transcript"][-1]["content"] == "已重新读取 bundle.yml，并校验通过。"
-    assert preview_requests == [
-        {
-            "bundle": {"loop": {"name": "Synced Loop"}},
-            "source_path": str(bundle_path),
-            "validation": result["validation"],
-        }
-    ]
+    assert preview_requests == [{"bundle": {"loop": {"name": "Synced Loop"}}, "source_path": str(bundle_path), "validation": result["validation"]}]
     assert validation_logs[0]["validation"]["ok"] is True
-    assert [event["event_type"] for event in repo.events] == ["alignment_message", "alignment_bundle_synced"]
+    assert_event_types(repo, "alignment_message", "alignment_bundle_synced")
 
 
 def test_alignment_sync_command_records_missing_file_failure(tmp_path: Path) -> None:
-    session = ready_session(tmp_path)
-    Path(session["bundle_path"]).unlink()
-    repo = FakeAlignmentSyncRepository(session)
-    context, validation_logs, _preview_requests = sync_context(repo)
+    repo, context, validation_logs, _preview_requests = sync_case(tmp_path)
+    Path(repo.session["bundle_path"]).unlink()
 
-    result = sync_alignment_bundle_from_file(context, "align_sync", active_statuses={"running"})
+    result = sync_bundle(context)
 
     assert result["ok"] is False
     assert result["bundle"] is None
@@ -129,29 +108,40 @@ def test_alignment_sync_command_records_missing_file_failure(tmp_path: Path) -> 
     assert "alignment bundle does not exist" in repo.session["error_message"]
     assert repo.session["transcript"][-1]["content"].startswith("重新读取 bundle.yml 失败：")
     assert validation_logs[0]["validation"]["semantic_lint"]["ok"] is False
-    assert [event["event_type"] for event in repo.events] == ["alignment_message", "alignment_bundle_sync_failed"]
+    assert_event_types(repo, "alignment_message", "alignment_bundle_sync_failed")
 
 
-def test_alignment_sync_command_rejects_invalid_statuses(tmp_path: Path) -> None:
-    active_repo = FakeAlignmentSyncRepository(ready_session(tmp_path, status="running"))
-    active_context, _validation_logs, _preview_requests = sync_context(active_repo)
-    with pytest.raises(LooporaConflictError, match="cannot sync bundle while alignment session is active"):
-        sync_alignment_bundle_from_file(active_context, "align_sync", active_statuses={"running"})
-
-    imported_repo = FakeAlignmentSyncRepository(ready_session(tmp_path, status="imported"))
-    imported_context, _validation_logs, _preview_requests = sync_context(imported_repo)
-    with pytest.raises(LooporaConflictError, match="cannot sync bundle in status imported"):
-        sync_alignment_bundle_from_file(imported_context, "align_sync", active_statuses={"running"})
+@pytest.mark.parametrize(("status", "message"), [("running", "cannot sync bundle while alignment session is active"), ("imported", "cannot sync bundle in status imported")])
+def test_alignment_sync_command_rejects_invalid_statuses(tmp_path: Path, status: str, message: str) -> None:
+    _repo, context, _validation_logs, _preview_requests = sync_case(tmp_path, status=status)
+    with pytest.raises(LooporaConflictError, match=message):
+        sync_bundle(context)
 
 
 def test_alignment_sync_command_records_validation_failure(tmp_path: Path) -> None:
-    repo = FakeAlignmentSyncRepository(ready_session(tmp_path))
-    context, validation_logs, _preview_requests = sync_context(repo, validation_error=LooporaError("bundle semantic lint failed"))
+    repo, context, validation_logs, _preview_requests = sync_case(
+        tmp_path,
+        validation_error=LooporaError("bundle semantic lint failed"),
+    )
 
-    result = sync_alignment_bundle_from_file(context, "align_sync", active_statuses={"running"})
+    result = sync_bundle(context)
 
     assert result["ok"] is False
     assert repo.session["status"] == "failed"
     assert repo.session["error_message"] == "bundle semantic lint failed"
     assert validation_logs[0]["validation"]["semantic_lint"] == {"ok": False, "issues": ["semantic gap"]}
-    assert [event["event_type"] for event in repo.events] == ["alignment_message", "alignment_bundle_sync_failed"]
+    assert_event_types(repo, "alignment_message", "alignment_bundle_sync_failed")
+
+
+def sync_case(tmp_path: Path, *, status: str = "ready", validation_error: Exception | None = None):
+    repo = FakeAlignmentSyncRepository(ready_session(tmp_path, status=status))
+    context, validation_logs, preview_requests = sync_context(repo, validation_error=validation_error)
+    return repo, context, validation_logs, preview_requests
+
+
+def assert_event_types(repo: FakeAlignmentSyncRepository, *event_types: str) -> None:
+    assert [event["event_type"] for event in repo.events] == list(event_types)
+
+
+def sync_bundle(context: AlignmentSyncContext, *, active_statuses: tuple[str, ...] = ("running",)) -> dict:
+    return sync_alignment_bundle_from_file(context, "align_sync", active_statuses=set(active_statuses))

@@ -19,9 +19,9 @@ Loopora keeps two explicit execution planes:
 | `agent_native` | Current Coding Agent and its native subagent / task mechanism | `/loopora-plan`, `/loopora-run`, `loopora agent <adapter> next/submit` |
 | `headless` | Loopora worker invoking executor subprocesses | Web-owned runs, `loopora loops run`, background worker, CI and custom automation |
 
-Agent-first `/loopora-run` must create or reuse an `agent_native` run. It may register the run and return an execution capsule, but it must not spawn Codex, Claude Code or OpenCode CLI subprocesses to simulate role work.
+Agent-first `/loopora-run` must create or reuse an `agent_native` run. It may register the run and return an Agent Step View projection, but it must not spawn Codex, Claude Code or OpenCode CLI subprocesses to simulate role work.
 
-The execution capsule is the handoff contract between Loopora Core and the host Agent. It must carry the full step prompt, target native role agent, frozen `judgment_contract`, required coverage summary, context refs, evidence rules and output schema. The host may choose the native subagent / task mechanism, but it must not reconstruct these fields from memory or from a shortened prompt.
+The Agent Step View is the handoff projection between Loopora Core and the host Agent. It must carry the full step prompt, target native role agent, frozen `judgment_contract`, required coverage summary, context refs, evidence rules and output schema. The host may choose the native subagent / task mechanism, but it must not reconstruct these fields from memory or from a shortened prompt.
 
 Host-native todo/progress lists and user-question affordances are adapter experience projections, not proof. They should mirror Loopora's current handoff when available, while Core still treats evidence refs, handoffs, coverage and task verdicts as the fact source. Host-native subagent/task trace ids are optional dispatch proof enrichments: preserve them when exposed by the host, but do not invent them or block older hosts solely because no trace id is available.
 
@@ -32,12 +32,12 @@ The headless path remains a first-class automation path and the execution plane 
 - Bundle `executor_kind` / `executor_mode` stay in assets for compatibility, Web alignment defaults and headless fallback, but they do not cause nested provider CLI execution in an Agent-first run.
 - `agent_native` runs can be `awaiting_agent`; this is an active run lifecycle state, not a terminal result and not a hidden background worker.
 - Host submissions must carry dispatch proof, and Core remains the evidence, handoff, coverage and GateKeeper verdict fact source.
-- Agent-native execution preserves the same human judgment contract as headless execution: bundle judgment freezes into the run contract, then projects into every step capsule and terminal observation surface.
+- Agent-native execution preserves the same human judgment contract as headless execution: bundle judgment freezes into the run contract, then projects into every Agent Step View and terminal observation surface.
 - Web can compose Loops for headless execution and observe both execution planes, but user-facing status must distinguish an Agent-native run waiting for host work from a headless worker actively running.
 
 ## Validation
 
-- The split Agent adapter contract tests cover `/loopora-plan -> /loopora-run`, READY binding, imported-session handoff, `agent_native` state, dispatch proof, optional native trace, native todo/question projections, frozen `next_step.judgment_contract`, required coverage, no inline submit, control capsules and CLI behavior that does not spawn a nested worker.
-- `tests/checks/contracts/test_runner_artifacts.py` covers the typed StepContextPacket contract that feeds the capsule.
+- The split Agent adapter contract tests cover `/loopora-plan -> /loopora-run`, READY binding, imported-session handoff, `agent_native` state, dispatch proof, optional native trace, native todo/question projections, frozen `next_step.judgment_contract`, required coverage, no inline submit, control-step views and CLI behavior that does not spawn a nested worker.
+- `tests/checks/contracts/test_runner_step_context_architecture.py` and `tests/checks/contracts/test_agent_native_step_view_request.py` cover the StepInstruction context boundary that feeds the Agent Step View projection.
 - `tests/probes/real_environment/run_real_probes.py --suite real-agent` is the release-profile real-host check for managed Agent entries.
 - `tests/probes/real_environment/run_real_probes.py --suite real-cli` keeps the explicit headless/provider CLI boundary covered separately.

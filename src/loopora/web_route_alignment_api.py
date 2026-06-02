@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from pathlib import Path
+from typing import Annotated
 
 from fastapi import FastAPI, Query, Request
 from fastapi.responses import JSONResponse
@@ -72,7 +73,7 @@ def _register_alignment_session_routes(app: FastAPI, ctx: WebRouteContext) -> No
         return JSONResponse({"session": session}, status_code=201)
 
     @app.get("/api/alignments/sessions")
-    async def api_list_alignment_sessions(limit: int = Query(default=30, ge=1, le=100)) -> JSONResponse:
+    async def api_list_alignment_sessions(limit: Annotated[int, Query(ge=1, le=100)] = 30) -> JSONResponse:
         return JSONResponse({"sessions": ctx.svc().list_alignment_sessions(limit=limit)})
 
     @app.get("/api/alignments/sessions/{session_id}")

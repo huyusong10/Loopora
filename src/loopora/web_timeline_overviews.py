@@ -175,6 +175,6 @@ TIMELINE_EVENT_FORMATTERS = {
     "workspace_guard_triggered": _format_workspace_guard_triggered,
     "run_finished": _format_run_finished,
     "run_result_accepted": _format_run_result_accepted,
-    **{event_type: _format_control_event for event_type in CONTROL_TIMELINE_TITLES},
-    **{event_type: _format_parallel_group_event for event_type in PARALLEL_GROUP_TIMELINE_TITLES},
+    **dict.fromkeys(CONTROL_TIMELINE_TITLES, _format_control_event),
+    **dict.fromkeys(PARALLEL_GROUP_TIMELINE_TITLES, _format_parallel_group_event),
 }

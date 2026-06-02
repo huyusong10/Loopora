@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from typing import Annotated
 
 import typer
 import uvicorn
@@ -43,6 +44,14 @@ from loopora.specs import SpecError
 from loopora.web import build_app
 from loopora.web_request_context import _is_loopback_host
 
+AllowUnsafeOpenOption = Annotated[
+    bool,
+    typer.Option(
+        "--allow-unsafe-open",
+        help="Allow non-loopback hosts without an auth token. Dangerous on shared networks.",
+    ),
+]
+
 
 def register_root_commands(app: typer.Typer) -> None:
     _register_main_callback(app)
@@ -80,6 +89,7 @@ def _register_run_command(app: typer.Typer) -> None:
         orchestration_id: OrchestrationIdOption = "",
         strategy_preset: StrategyPresetOption = "",
         strategy_file: StrategyFileOption = None,
+        *,
         background: BackgroundOption = False,
     ) -> None:
         """Expert: create and run a Loop from an existing spec file."""
@@ -128,7 +138,8 @@ def _register_serve_command(app: typer.Typer) -> None:
             envvar=APP_AUTH_ENV,
             help="Optional token required for all web and API requests.",
         ),
-        allow_unsafe_open: bool = typer.Option(False, "--allow-unsafe-open", help="Allow non-loopback hosts without an auth token. Dangerous on shared networks."),
+        *,
+        allow_unsafe_open: AllowUnsafeOpenOption = False,
     ) -> None:
         """Run the local Web UI."""
         log_event(

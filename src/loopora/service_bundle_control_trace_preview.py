@@ -46,4 +46,4 @@ def role_posture_preview(role: dict) -> str:
 
 
 def _role_prompt_mechanics_unit(text: str) -> bool:
-    return bool(re.fullmatch(r"(?:version|archetype)\s*:\s*.+", text.strip(), re.I))
+    return bool(re.fullmatch(r"(?:version|archetype)\s*:\s*.+", text.strip(), re.IGNORECASE))

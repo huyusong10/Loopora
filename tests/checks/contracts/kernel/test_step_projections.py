@@ -13,6 +13,10 @@ from loopora.projections import (
 )
 
 
+STEP_COMMITTED_SOURCE_SEQUENCE = 3
+STEP_INSTRUCTION_SOURCE_SEQUENCE = 2
+
+
 def _instruction():
     return runner_step_instruction(
         RunnerStepInstructionRequest(
@@ -58,7 +62,7 @@ def test_step_surfaces_projection_replays_latest_step_instruction_event() -> Non
     projection = replay_step_surfaces_projection([event])
 
     assert projection["available"] is True
-    assert projection["source_sequence"] == 2
+    assert projection["source_sequence"] == STEP_INSTRUCTION_SOURCE_SEQUENCE
     assert projection["agent_step_view"]["step_id"] == "builder"
     assert projection["cli_summary"]["target_count"] == 1
     assert projection["cli_step_summary"]["kind"] == "cli_step_summary"
@@ -73,7 +77,7 @@ def test_step_surfaces_projection_is_unavailable_after_step_commit() -> None:
         stream_id="run:run_projection",
         aggregate_type="run",
         aggregate_id="run_projection",
-        sequence=3,
+        sequence=STEP_COMMITTED_SOURCE_SEQUENCE,
         event_type="StepCommitted",
         schema_version=1,
         occurred_at="2026-01-01T00:01:00+00:00",
@@ -91,7 +95,7 @@ def test_step_surfaces_projection_is_unavailable_after_step_commit() -> None:
     projection = replay_step_surfaces_projection([_step_instruction_event(instruction), committed])
 
     assert projection["available"] is False
-    assert projection["source_sequence"] == 3
+    assert projection["source_sequence"] == STEP_COMMITTED_SOURCE_SEQUENCE
     assert projection["agent_step_view"] == {}
     assert projection["cli_summary"] == {}
     assert projection["cli_step_summary"] == {}
@@ -105,7 +109,7 @@ def _step_instruction_event(instruction) -> EventEnvelope:
         stream_id="run:run_projection",
         aggregate_type="run",
         aggregate_id="run_projection",
-        sequence=2,
+        sequence=STEP_INSTRUCTION_SOURCE_SEQUENCE,
         event_type="StepInstructionIssued",
         schema_version=1,
         occurred_at="2026-01-01T00:00:00+00:00",

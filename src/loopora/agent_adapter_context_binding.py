@@ -160,4 +160,4 @@ def _adapter_session_env(kind: str) -> str:
 def _atomic_write_text(path: Path, content: str) -> None:
     tmp = path.with_name(path.name + ".tmp")
     tmp.write_text(content, encoding="utf-8")
-    os.replace(tmp, path)
+    tmp.replace(path)

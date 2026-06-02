@@ -22,7 +22,7 @@ def register_agent_adapter_lifecycle_commands(init_app: typer.Typer, uninstall_a
 
 def _register_init_commands(init_app: typer.Typer) -> None:
     @init_app.command("codex")
-    def init_codex(workdir: AdapterWorkdirOption = Path("."), check: CheckOption = False, json_output: JsonOutputOption = False) -> None:
+    def init_codex(workdir: AdapterWorkdirOption = Path(), *, check: CheckOption = False, json_output: JsonOutputOption = False) -> None:
         """Install or update the Codex project entry for task-judgment first use.
 
         Then return to Codex with the task goal, fake-done risk, and required evidence.
@@ -31,7 +31,7 @@ def _register_init_commands(init_app: typer.Typer) -> None:
         _install_adapter("codex", workdir=workdir, check=check, json_output=json_output)
 
     @init_app.command("claude")
-    def init_claude(workdir: AdapterWorkdirOption = Path("."), check: CheckOption = False, json_output: JsonOutputOption = False) -> None:
+    def init_claude(workdir: AdapterWorkdirOption = Path(), *, check: CheckOption = False, json_output: JsonOutputOption = False) -> None:
         """Install or update the Claude Code project entry for task-judgment first use.
 
         Then return to Claude Code with the task goal, fake-done risk, and required evidence.
@@ -40,7 +40,7 @@ def _register_init_commands(init_app: typer.Typer) -> None:
         _install_adapter("claude", workdir=workdir, check=check, json_output=json_output)
 
     @init_app.command("opencode")
-    def init_opencode(workdir: AdapterWorkdirOption = Path("."), check: CheckOption = False, json_output: JsonOutputOption = False) -> None:
+    def init_opencode(workdir: AdapterWorkdirOption = Path(), *, check: CheckOption = False, json_output: JsonOutputOption = False) -> None:
         """Install or update the OpenCode project entry for task-judgment first use.
 
         Then return to OpenCode with the task goal, fake-done risk, and required evidence.
@@ -74,17 +74,17 @@ def _check_adapter(adapter: str, *, workdir: Path, json_output: bool) -> None:
 
 def _register_uninstall_commands(uninstall_app: typer.Typer) -> None:
     @uninstall_app.command("codex")
-    def uninstall_codex(workdir: AdapterWorkdirOption = Path("."), json_output: JsonOutputOption = False) -> None:
+    def uninstall_codex(workdir: AdapterWorkdirOption = Path(), *, json_output: JsonOutputOption = False) -> None:
         """Remove the Loopora-managed Codex project entry."""
         _uninstall_adapter("codex", workdir=workdir, json_output=json_output)
 
     @uninstall_app.command("claude")
-    def uninstall_claude(workdir: AdapterWorkdirOption = Path("."), json_output: JsonOutputOption = False) -> None:
+    def uninstall_claude(workdir: AdapterWorkdirOption = Path(), *, json_output: JsonOutputOption = False) -> None:
         """Remove the Loopora-managed Claude Code project entry."""
         _uninstall_adapter("claude", workdir=workdir, json_output=json_output)
 
     @uninstall_app.command("opencode")
-    def uninstall_opencode(workdir: AdapterWorkdirOption = Path("."), json_output: JsonOutputOption = False) -> None:
+    def uninstall_opencode(workdir: AdapterWorkdirOption = Path(), *, json_output: JsonOutputOption = False) -> None:
         """Remove the Loopora-managed OpenCode project entry."""
         _uninstall_adapter("opencode", workdir=workdir, json_output=json_output)
 
@@ -99,6 +99,6 @@ def _uninstall_adapter(adapter: str, *, workdir: Path, json_output: bool) -> Non
 
 def register_agent_check_command(adapter_app: typer.Typer, *, adapter: str) -> None:
     @adapter_app.command("check")
-    def agent_check(workdir: AdapterWorkdirOption = Path("."), json_output: JsonOutputOption = False) -> None:
+    def agent_check(workdir: AdapterWorkdirOption = Path(), *, json_output: JsonOutputOption = False) -> None:
         """Check the Loopora-managed project entry for this Agent adapter."""
         _check_adapter(adapter, workdir=workdir, json_output=json_output)

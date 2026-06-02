@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import time
+from http import HTTPStatus
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -9,6 +10,45 @@ from fastapi.testclient import TestClient
 from loopora.executor_fake_payloads import alignment_bundle_yaml
 from loopora.settings import app_home
 from loopora.service_agent_adapters import AgentBundleCandidateRequest
+
+KEY_TAKEAWAY_CONTRACT_PATH = "contract/run_contract.json"
+KEY_TAKEAWAY_GOAL = "Ship the requested behavior."
+KEY_TAKEAWAY_TARGET_IDS = {"done_when.check_001", "gatekeeper.finish"}
+KEY_TAKEAWAY_SUCCESS_SURFACE = [
+    "The result remains easy for the next role to verify.",
+    "The surrounding contract stays clear enough to revise safely.",
+]
+KEY_TAKEAWAY_FAKE_DONE_STATES = ["A happy-path-only result that leaves the edge path unverifiable."]
+KEY_TAKEAWAY_EVIDENCE_SIGNAL = "Prefer structured run artifacts"
+KEY_TAKEAWAY_EVIDENCE_PREFERENCE = "Prefer structured run artifacts and reproducible checks over role self-report."
+KEY_TAKEAWAY_EVIDENCE_PREFERENCES = [KEY_TAKEAWAY_EVIDENCE_PREFERENCE]
+KEY_TAKEAWAY_RESIDUAL_RISK = "Minor copy polish can wait, but unverifiable completion should fail closed."
+KEY_TAKEAWAY_CHECK_COUNT = 2
+
+CROWDED_DIRECTORY_CREATED_ENTRIES = 1001
+CROWDED_DIRECTORY_PREVIEW_ENTRY_LIMIT = 1000
+
+RECORDED_VERDICT_KIND_BY_STATUS = {
+    "passed": "passed_verdict_recorded",
+    "passed_with_residual_risk": "passed_with_residual_risk_recorded",
+    "insufficient_evidence": "unproven_verdict_recorded",
+    "failed": "failed_verdict_recorded",
+    "not_evaluated": "not_evaluated_verdict_recorded",
+}
+RECORDED_VERDICT_TITLE_BY_STATUS = {
+    "passed": "Passing evidence verdict recorded",
+    "passed_with_residual_risk": "Pass-with-risk verdict recorded",
+    "insufficient_evidence": "Unproven evidence verdict recorded",
+    "failed": "Failed evidence verdict recorded",
+    "not_evaluated": "Unevaluated evidence verdict recorded",
+}
+RECORDED_VERDICT_PAGE_TEXT_BY_STATUS = {
+    "passed": "Passing verdict recorded",
+    "passed_with_residual_risk": "Pass-with-risk verdict recorded",
+    "insufficient_evidence": "Unproven verdict recorded",
+    "failed": "Failed verdict recorded",
+    "not_evaluated": "Unevaluated verdict recorded",
+}
 
 def _read_service_log_records() -> list[dict]:
     return [json.loads(line) for line in (app_home() / "logs" / "service.log").read_text(encoding="utf-8").splitlines() if line.strip()]
@@ -55,14 +95,14 @@ def _create_api_loop_run(client: TestClient, sample_spec_file: Path, sample_work
             "start_immediately": True,
         },
     )
-    assert response.status_code == 201
+    assert response.status_code == HTTPStatus.CREATED
     return response.json()["run"]["id"]
 
 def _wait_for_run_success(client: TestClient, run_id: str) -> None:
     deadline = time.time() + 5
     while time.time() < deadline:
         run_response = client.get(f"/api/runs/{run_id}")
-        assert run_response.status_code == 200
+        assert run_response.status_code == HTTPStatus.OK
         if run_response.json()["status"] == "succeeded":
             return
         time.sleep(0.05)
@@ -70,22 +110,22 @@ def _wait_for_run_success(client: TestClient, run_id: str) -> None:
 
 def _assert_file_explorer_contract(client: TestClient, run_id: str) -> None:
     explorer = client.get(f"/api/files?run_id={run_id}&root=workdir")
-    assert explorer.status_code == 200
+    assert explorer.status_code == HTTPStatus.OK
     assert explorer.json()["kind"] == "directory"
     assert explorer.json()["entries_truncated"] is False
 
     loopora_dir = client.get(f"/api/files?run_id={run_id}&root=loopora")
-    assert loopora_dir.status_code == 200
+    assert loopora_dir.status_code == HTTPStatus.OK
     assert loopora_dir.json()["kind"] == "directory"
     assert loopora_dir.json()["entries_truncated"] is False
 
     invalid_root = client.get(f"/api/files?run_id={run_id}&root=archive")
-    assert invalid_root.status_code == 400
+    assert invalid_root.status_code == HTTPStatus.BAD_REQUEST
     assert "error" in invalid_root.json()
 
 def _assert_run_artifact_catalog(client: TestClient, run_id: str) -> None:
     artifacts = client.get(f"/api/runs/{run_id}/artifacts")
-    assert artifacts.status_code == 200
+    assert artifacts.status_code == HTTPStatus.OK
     artifact_payload = artifacts.json()
     assert any(item["id"] == "original-spec" and item["available"] for item in artifact_payload)
     assert any(item["id"] == "summary" and item["available"] for item in artifact_payload)
@@ -137,7 +177,7 @@ def _assert_artifact_file(
     content_fragment: str | None = None,
 ) -> None:
     artifact = client.get(f"/api/runs/{run_id}/artifacts/{artifact_id}")
-    assert artifact.status_code == 200
+    assert artifact.status_code == HTTPStatus.OK
     payload = artifact.json()
     assert payload["kind"] == "file"
     if expected_content is not None:
@@ -146,7 +186,7 @@ def _assert_artifact_file(
         assert content_fragment in payload["content"]
 
 def _assert_attachment_download(response, *, filename: str) -> None:
-    assert response.status_code == 200
+    assert response.status_code == HTTPStatus.OK
     assert response.headers["content-type"] == "application/octet-stream"
     assert response.headers["content-disposition"].startswith("attachment;")
     assert filename in response.headers["content-disposition"]
@@ -156,30 +196,15 @@ def _assert_acceptance_evidence_payload(payload: dict) -> None:
     assert payload["evidence_available"] is True
     assert payload["task_verdict_summary"]
     _assert_key_takeaway_judgment_contract(payload["judgment_contract"])
-    assert payload["run_contract_path"] == "contract/run_contract.json"
-    assert payload["judgment_contract_summary"] == "Ship the requested behavior."
-    assert payload["check_mode"] == "specified"
-    assert payload["check_count"] == 2
-    assert payload["completion_mode"] == "gatekeeper"
-    assert payload["strategy_preset"]
-    assert "workflow_preset" not in payload
-    assert any(target["id"] == "done_when.check_001" for target in payload["coverage_targets"])
-    assert any(target["id"] == "gatekeeper.finish" for target in payload["coverage_targets"])
+    _assert_key_takeaway_contract_core(
+        payload,
+        path_key="run_contract_path",
+        goal_key="judgment_contract_summary",
+    )
     assert isinstance(payload["loop_fit_reasons"], list)
     assert isinstance(payload["execution_strategy"], list)
-    assert payload["execution_strategy"]
-    assert isinstance(payload["local_governance"], list)
     assert isinstance(payload["role_postures"], list)
-    assert any("Prefer structured run artifacts" in item for item in payload["judgment_tradeoffs"])
-    assert payload["success_surface"] == [
-        "The result remains easy for the next role to verify.",
-        "The surrounding contract stays clear enough to revise safely.",
-    ]
-    assert payload["fake_done_states"] == ["A happy-path-only result that leaves the edge path unverifiable."]
-    assert payload["evidence_preferences"] == [
-        "Prefer structured run artifacts and reproducible checks over role self-report."
-    ]
-    assert payload["residual_risk"] == "Minor copy polish can wait, but unverifiable completion should fail closed."
+    assert any(KEY_TAKEAWAY_EVIDENCE_SIGNAL in item for item in payload["judgment_tradeoffs"])
     assert payload["task_verdict_path"] == "evidence/task_verdict.json"
     assert payload["coverage_path"] == "evidence/coverage.json"
     assert payload["manifest_path"] == "evidence/manifest.json"
@@ -194,7 +219,7 @@ def _accept_run_result_and_assert_observation_event(client: TestClient, service,
 
     accept_response = client.post(f"/runs/{run['id']}/accept", follow_redirects=False)
 
-    assert accept_response.status_code == 303
+    assert accept_response.status_code == HTTPStatus.SEE_OTHER
     assert accept_response.headers["location"] == f"/runs/{run['id']}"
     run_after_accept = service.get_run(run["id"])
     loop_after_accept = service.get_loop(loop["id"])
@@ -211,35 +236,17 @@ def _accept_run_result_and_assert_observation_event(client: TestClient, service,
     return accepted_events
 
 def _expected_recorded_verdict_kind(task_verdict_status: str) -> str:
-    return {
-        "passed": "passed_verdict_recorded",
-        "passed_with_residual_risk": "passed_with_residual_risk_recorded",
-        "insufficient_evidence": "unproven_verdict_recorded",
-        "failed": "failed_verdict_recorded",
-        "not_evaluated": "not_evaluated_verdict_recorded",
-    }.get(task_verdict_status, "evidence_verdict_recorded")
+    return RECORDED_VERDICT_KIND_BY_STATUS.get(task_verdict_status, "evidence_verdict_recorded")
 
 def _expected_recorded_verdict_title(task_verdict_status: str) -> str:
-    return {
-        "passed": "Passing evidence verdict recorded",
-        "passed_with_residual_risk": "Pass-with-risk verdict recorded",
-        "insufficient_evidence": "Unproven evidence verdict recorded",
-        "failed": "Failed evidence verdict recorded",
-        "not_evaluated": "Unevaluated evidence verdict recorded",
-    }.get(task_verdict_status, "Evidence verdict recorded")
+    return RECORDED_VERDICT_TITLE_BY_STATUS.get(task_verdict_status, "Evidence verdict recorded")
 
 def _expected_recorded_verdict_page_text(task_verdict_status: str) -> str:
-    return {
-        "passed": "Passing verdict recorded",
-        "passed_with_residual_risk": "Pass-with-risk verdict recorded",
-        "insufficient_evidence": "Unproven verdict recorded",
-        "failed": "Failed verdict recorded",
-        "not_evaluated": "Unevaluated verdict recorded",
-    }.get(task_verdict_status, "Evidence verdict recorded")
+    return RECORDED_VERDICT_PAGE_TEXT_BY_STATUS.get(task_verdict_status, "Evidence verdict recorded")
 
 def _assert_run_artifact_previews(client: TestClient, run_id: str, sample_spec_text: str) -> None:
     missing_artifact = client.get(f"/api/runs/{run_id}/artifacts/missing-artifact/download")
-    assert missing_artifact.status_code == 404
+    assert missing_artifact.status_code == HTTPStatus.NOT_FOUND
     assert missing_artifact.json()["error"] == "unknown artifact"
     summary_download = client.get(f"/api/runs/{run_id}/artifacts/summary/download")
     _assert_attachment_download(summary_download, filename="summary.md")
@@ -255,23 +262,23 @@ def _assert_file_preview_safety(client: TestClient, run_id: str, sample_workdir:
     binary_path = sample_workdir / ".DS_Store"
     binary_path.write_bytes(b"\x00\x01\x02binary-data")
     binary_preview = client.get(f"/api/files?run_id={run_id}&root=workdir&path=.DS_Store")
-    assert binary_preview.status_code == 200
+    assert binary_preview.status_code == HTTPStatus.OK
     assert binary_preview.json()["kind"] == "file"
     assert binary_preview.json()["is_binary"] is True
 
     bad_path = client.get(f"/api/files?run_id={run_id}&root=workdir&path=../secret.txt")
-    assert bad_path.status_code == 400
+    assert bad_path.status_code == HTTPStatus.BAD_REQUEST
 
     sibling_dir = sample_workdir.parent / "workdir-shadow"
     sibling_dir.mkdir()
     (sibling_dir / "secret.txt").write_text("nope", encoding="utf-8")
     sneaky_path = client.get(f"/api/files?run_id={run_id}&root=workdir&path=../workdir-shadow/secret.txt")
-    assert sneaky_path.status_code == 400
+    assert sneaky_path.status_code == HTTPStatus.BAD_REQUEST
 
     unsafe_md = sample_workdir / "unsafe.md"
     unsafe_md.write_text("# Title\n\n<script>alert('xss')</script>\n", encoding="utf-8")
     unsafe_preview = client.get(f"/api/files?run_id={run_id}&root=workdir&path=unsafe.md")
-    assert unsafe_preview.status_code == 200
+    assert unsafe_preview.status_code == HTTPStatus.OK
     assert "<script>" not in unsafe_preview.json()["rendered_html"]
     assert "&lt;script&gt;alert" in unsafe_preview.json()["rendered_html"]
 
@@ -279,7 +286,7 @@ def _assert_file_preview_safety(client: TestClient, run_id: str, sample_workdir:
     large_body = "x" * 1_000_001
     large_path.write_text(large_body, encoding="utf-8")
     large_preview = client.get(f"/api/files?run_id={run_id}&root=workdir&path=large.txt")
-    assert large_preview.status_code == 200
+    assert large_preview.status_code == HTTPStatus.OK
     large_payload = large_preview.json()
     assert large_payload["kind"] == "file"
     assert large_payload["preview_omitted"] is True
@@ -298,32 +305,32 @@ def _assert_file_preview_safety(client: TestClient, run_id: str, sample_workdir:
 
     crowded_dir = sample_workdir / "crowded"
     crowded_dir.mkdir()
-    for index in range(1001):
+    for index in range(CROWDED_DIRECTORY_CREATED_ENTRIES):
         (crowded_dir / f"entry-{index:04d}.txt").write_text("", encoding="utf-8")
     crowded_preview = client.get(f"/api/files?run_id={run_id}&root=workdir&path=crowded")
-    assert crowded_preview.status_code == 200
+    assert crowded_preview.status_code == HTTPStatus.OK
     crowded_payload = crowded_preview.json()
     assert crowded_payload["kind"] == "directory"
     assert crowded_payload["entries_truncated"] is True
-    assert len(crowded_payload["entries"]) == 1000
+    assert len(crowded_payload["entries"]) == CROWDED_DIRECTORY_PREVIEW_ENTRY_LIMIT
 
 def _stream_body(stream_response) -> str:
     return "".join(chunk.decode() if isinstance(chunk, bytes) else chunk for chunk in stream_response.iter_text())
 
 def _assert_run_event_streaming(client: TestClient, run_id: str) -> None:
     events = client.get(f"/api/runs/{run_id}/events")
-    assert events.status_code == 200
+    assert events.status_code == HTTPStatus.OK
     event_payload = events.json()
     assert event_payload
 
     with client.stream("GET", f"/api/runs/{run_id}/stream") as stream_response:
-        assert stream_response.status_code == 200
+        assert stream_response.status_code == HTTPStatus.OK
         body = _stream_body(stream_response)
     assert "run_finished" in body or "keep-alive" in body
 
     latest_event_id = event_payload[-1]["id"]
     with client.stream("GET", f"/api/runs/{run_id}/stream?after_id={latest_event_id}") as stream_response:
-        assert stream_response.status_code == 200
+        assert stream_response.status_code == HTTPStatus.OK
         delta_body = _stream_body(stream_response)
     assert "run_started" not in delta_body
 
@@ -333,37 +340,34 @@ def _assert_run_event_streaming(client: TestClient, run_id: str) -> None:
         f"/api/runs/{run_id}/stream",
         headers={"Last-Event-ID": str(reconnect_from)},
     ) as stream_response:
-        assert stream_response.status_code == 200
+        assert stream_response.status_code == HTTPStatus.OK
         reconnect_body = _stream_body(stream_response)
     assert f"id: {reconnect_from}\n" not in reconnect_body
 
 def _assert_key_takeaway_judgment_contract(judgment_contract: dict) -> None:
-    assert judgment_contract["contract_path"] == "contract/run_contract.json"
-    assert judgment_contract["goal"] == "Ship the requested behavior."
-    assert judgment_contract["check_mode"] == "specified"
-    assert judgment_contract["check_count"] == 2
-    assert judgment_contract["completion_mode"] == "gatekeeper"
-    assert judgment_contract["strategy_preset"]
-    assert "workflow_preset" not in judgment_contract
-    assert any(target["id"] == "done_when.check_001" for target in judgment_contract["coverage_targets"])
-    assert any(target["id"] == "gatekeeper.finish" for target in judgment_contract["coverage_targets"])
-    assert judgment_contract["success_surface"] == [
-        "The result remains easy for the next role to verify.",
-        "The surrounding contract stays clear enough to revise safely.",
-    ]
-    assert judgment_contract["fake_done_states"] == ["A happy-path-only result that leaves the edge path unverifiable."]
-    assert judgment_contract["evidence_preferences"] == [
-        "Prefer structured run artifacts and reproducible checks over role self-report."
-    ]
-    assert judgment_contract["execution_strategy"]
-    assert isinstance(judgment_contract["local_governance"], list)
-    assert "Prefer structured run artifacts and reproducible checks over role self-report." in judgment_contract["judgment_tradeoffs"]
+    _assert_key_takeaway_contract_core(judgment_contract, path_key="contract_path", goal_key="goal")
+    assert KEY_TAKEAWAY_EVIDENCE_PREFERENCE in judgment_contract["judgment_tradeoffs"]
     assert any("one coherent attempt that improves the main path" in item for item in judgment_contract["judgment_tradeoffs"])
-    assert judgment_contract["residual_risk"] == "Minor copy polish can wait, but unverifiable completion should fail closed."
+
+def _assert_key_takeaway_contract_core(payload: dict, *, path_key: str, goal_key: str) -> None:
+    assert payload[path_key] == KEY_TAKEAWAY_CONTRACT_PATH
+    assert payload[goal_key] == KEY_TAKEAWAY_GOAL
+    assert payload["check_mode"] == "specified"
+    assert payload["check_count"] == KEY_TAKEAWAY_CHECK_COUNT
+    assert payload["completion_mode"] == "gatekeeper"
+    assert payload["strategy_preset"]
+    assert "workflow_preset" not in payload
+    assert {target["id"] for target in payload["coverage_targets"]} >= KEY_TAKEAWAY_TARGET_IDS
+    assert payload["execution_strategy"]
+    assert isinstance(payload["local_governance"], list)
+    assert payload["success_surface"] == KEY_TAKEAWAY_SUCCESS_SURFACE
+    assert payload["fake_done_states"] == KEY_TAKEAWAY_FAKE_DONE_STATES
+    assert payload["evidence_preferences"] == KEY_TAKEAWAY_EVIDENCE_PREFERENCES
+    assert payload["residual_risk"] == KEY_TAKEAWAY_RESIDUAL_RISK
 
 def _assert_run_detail_terminal_actions_page(client: TestClient, run: dict, loop: dict) -> None:
     page_response = client.get(f"/runs/{run['id']}")
-    assert page_response.status_code == 200
+    assert page_response.status_code == HTTPStatus.OK
     assert "Run status" in page_response.text
     assert "Task verdict" in page_response.text
     assert 'data-testid="run-status-card"' in page_response.text
@@ -379,7 +383,7 @@ def _assert_run_detail_terminal_actions_page(client: TestClient, run: dict, loop
     assert 'id="stop-run"' not in page_response.text
 
     export_response = client.get(f"/bundles/derive/export?loop_id={loop['id']}")
-    assert export_response.status_code == 200
+    assert export_response.status_code == HTTPStatus.OK
     assert export_response.headers["content-type"].startswith("application/yaml")
     assert "Rerun From Detail Loop" in export_response.text
 
@@ -398,7 +402,8 @@ def _assert_bundle_preview_control_summary(preview: dict) -> None:
     assert preview_control_summary["coverage"]["check_count"] >= 1
     assert preview_control_summary["coverage"]["target_count"] >= preview_control_summary["coverage"]["check_count"]
     assert isinstance(preview_control_summary["loop_fit_reasons"], list)
-    assert preview_control_summary["residual_risk_policy"] and preview_control_summary["role_postures"]
+    assert preview_control_summary["residual_risk_policy"]
+    assert preview_control_summary["role_postures"]
     assert "traceability" in preview_control_summary
     assert preview["traceability"] == preview_control_summary["traceability"]
     assert isinstance(preview["traceability"]["items"], list)

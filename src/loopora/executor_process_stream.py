@@ -7,16 +7,21 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TextIO
 
 _NO_LINE = object()
 
 
-class ProcessStreamStopped(RuntimeError):
+class ProcessStreamStoppedError(RuntimeError):
     """Raised when the caller requests stop while the child process is active."""
 
 
-class ProcessStreamIdleTimeout(RuntimeError):
+class ProcessStreamIdleTimeoutError(RuntimeError):
     """Raised when the child process produces no output before the idle deadline."""
+
+
+ProcessStreamStopped = ProcessStreamStoppedError
+ProcessStreamIdleTimeout = ProcessStreamIdleTimeoutError
 
 
 @dataclass(slots=True)
@@ -68,7 +73,7 @@ def stream_process(
         while True:
             if callbacks.should_stop():
                 callbacks.terminate_process(process)
-                raise ProcessStreamStopped(f"run {context.run_id} stopped while {context.role} was running")
+                raise ProcessStreamStoppedError(f"run {context.run_id} stopped while {context.role} was running")
 
             raw_line = _next_stream_line(output_queue)
             if raw_line is None:
@@ -95,6 +100,7 @@ def stream_process(
             callbacks.set_child_pid(None)
         if output_queue is not None:
             output_queue.reader.join(timeout=0.2)
+        _close_stdout_pipe(process.stdout)
 
 
 @dataclass(slots=True)
@@ -113,12 +119,24 @@ def _start_stdout_reader(process: subprocess.Popen[str], role: str) -> _OutputQu
         try:
             for raw_line in stdout:
                 output_queue.put(raw_line)
+        except (OSError, ValueError):
+            pass
         finally:
+            _close_stdout_pipe(stdout)
             output_queue.put(None)
 
     reader = threading.Thread(target=pump_stdout, daemon=True, name=f"{role}-stdout")
     reader.start()
     return _OutputQueue(lines=output_queue, reader=reader)
+
+
+def _close_stdout_pipe(stdout: TextIO | None) -> None:
+    if stdout is None or stdout.closed:
+        return
+    try:
+        stdout.close()
+    except OSError:
+        return
 
 
 def _next_stream_line(output_queue: _OutputQueue) -> str | None | object:
@@ -149,6 +167,6 @@ def _raise_if_idle_timeout_elapsed(
         return
     terminate_process(process)
     timeout_text = f"{idle_timeout_seconds:g}s"
-    raise ProcessStreamIdleTimeout(
+    raise ProcessStreamIdleTimeoutError(
         f"role={context.role} produced no output for {timeout_text}; treating the role as stalled"
     )

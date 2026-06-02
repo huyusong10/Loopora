@@ -3,7 +3,7 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
-import loopora.system_dialogs as system_dialogs
+from loopora import system_dialogs
 
 
 def test_reveal_path_uses_finder_on_macos(monkeypatch, tmp_path: Path) -> None:

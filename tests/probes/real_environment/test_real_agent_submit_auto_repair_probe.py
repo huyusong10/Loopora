@@ -7,7 +7,6 @@ import pytest
 from typer.testing import CliRunner
 
 from loopora import cli
-from loopora.context_flow import evidence_entry_id
 from loopora.db import LooporaRepository
 from loopora.executor import FakeCodexExecutor
 from loopora.executor_fake_payloads import alignment_bundle_yaml
@@ -48,7 +47,7 @@ def _write_auto_repair_state(tmp_path: Path) -> dict:
         json.dumps(
             {
                 "active_step": {
-                    "capsule": {
+                    "agent_step_view": {
                         "adapter": "codex",
                         "run_id": "run_auto_repair_probe",
                         "iter": 0,
@@ -160,8 +159,8 @@ def _create_real_core_submit_fixture(tmp_path: Path, case_id: str) -> dict:
     layout = RunArtifactLayout(Path(started["run"]["runs_dir"]))
     state_path = layout.run_dir / "agent_native" / "state.json"
     state = json.loads(state_path.read_text(encoding="utf-8"))
-    capsule = state["active_step"]["capsule"]
-    output_schema = capsule["output_schema"]
+    active_step_view = state["active_step"]["agent_step_view"]
+    output_schema = active_step_view["output_schema"]
     output_schema.setdefault("properties", {})["evidence_refs"] = {"type": "array", "items": {"type": "string"}}
     state_path.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
     role_dispatch = step.get("role_dispatch") if isinstance(step.get("role_dispatch"), dict) else {}
@@ -229,11 +228,21 @@ def _invoke_real_core_submit(runner: CliRunner, fixture: dict, result_file: Path
     return runner.invoke(cli.app, args)
 
 
-def _append_submitted_evidence_marker(layout: RunArtifactLayout, *, step: dict) -> None:
-    layout.evidence_ledger_path.parent.mkdir(parents=True, exist_ok=True)
-    evidence_id = evidence_entry_id(int(step.get("iter") or 0), int(step.get("step_order") or 0), str(step["step_id"]))
-    with layout.evidence_ledger_path.open("a", encoding="utf-8") as handle:
-        handle.write(json.dumps({"id": evidence_id, "result": "completed"}, ensure_ascii=False) + "\n")
+def _commit_step_then_restore_claimed_state(fixture: dict) -> None:
+    state_path = fixture["layout"].run_dir / "agent_native" / "state.json"
+    stale_claimed_state = json.loads(state_path.read_text(encoding="utf-8"))
+    fixture["service"].submit_agent_native_step(
+        AgentNativeStepSubmitRequest(
+            adapter="codex",
+            workdir=fixture["workdir"],
+            run_id=fixture["run_id"],
+            step_id=fixture["step_id"],
+            output=_real_core_builder_output(),
+            host_dispatch=fixture["dispatch"],
+            entry_source="codex_project_skill",
+        )
+    )
+    state_path.write_text(json.dumps(stale_claimed_state, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 def _cli_output(result) -> str:
@@ -365,7 +374,7 @@ def test_submit_auto_repair_real_core_probe_preserves_validation_blockers(monkey
     schema_blocked = invoke_case(schema, schema_fixture, json_output=True)
 
     stale_fixture = _create_real_core_submit_fixture(tmp_path, "stale-step")
-    _append_submitted_evidence_marker(stale_fixture["layout"], step=stale_fixture["step"])
+    _commit_step_then_restore_claimed_state(stale_fixture)
     stale = _write_json_result(stale_fixture["workdir"] / "stale.json", _real_core_builder_output())
     stale_blocked = invoke_case(stale, stale_fixture)
 

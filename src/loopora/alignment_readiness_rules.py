@@ -74,7 +74,7 @@ def readiness_evidence_bucket_projection_issue(evidence: dict) -> bool:
         "blocking": r"\bblocking\b|阻断",
         "residual": r"\bresidual risk\b|残余风险",
     }
-    return not all(re.search(pattern, text, re.I) for pattern in bucket_patterns.values())
+    return not all(re.search(pattern, text, re.IGNORECASE) for pattern in bucket_patterns.values())
 
 
 def readiness_evidence_task_scoped_issue(evidence: dict) -> bool:
@@ -99,7 +99,7 @@ def readiness_evidence_task_scoped_issue(evidence: dict) -> bool:
     )
     value = text.lower()
     for pattern in patterns:
-        for match in re.finditer(pattern, value, re.I):
+        for match in re.finditer(pattern, value, re.IGNORECASE):
             if semantic_antipattern_match_is_negated(value, match.start()):
                 continue
             return True
@@ -181,46 +181,46 @@ def success_surface_evidence_placeholder_issue(value: str) -> bool:
         r"\b(?:good and useful|works? well|high[- ]quality result|successful result|good result)\b",
         r"(?:好用|有用|效果好|高质量|结果好)",
     )
-    return any(re.search(pattern, value, re.I) for pattern in generic_patterns)
+    return any(re.search(pattern, value, re.IGNORECASE) for pattern in generic_patterns)
 
 
 def fake_done_evidence_placeholder_issue(value: str) -> bool:
-    if not re.search(r"\b(?:avoid bugs?|no bugs?|high[- ]quality|bug[- ]free)\b|避免\s*bug|高质量|没有\s*bug", value, re.I):
+    if not re.search(r"\b(?:avoid bugs?|no bugs?|high[- ]quality|bug[- ]free)\b|避免\s*bug|高质量|没有\s*bug", value, re.IGNORECASE):
         return False
     concrete_risk_markers = (
         r"\b(?:claim|claims|screenshot|happy[- ]path|proof|evidence|artifact|audit|permission|export|download|unproven|weak)\b",
         r"声称|截图|happy path|证明|证据|产物|审计|权限|导出|下载|未证明|弱证据",
     )
-    return not any(re.search(pattern, value, re.I) for pattern in concrete_risk_markers)
+    return not any(re.search(pattern, value, re.IGNORECASE) for pattern in concrete_risk_markers)
 
 
 def evidence_preference_placeholder_issue(value: str) -> bool:
-    if not re.search(r"\b(?:need proof|enough proof|feel confident|evidence is needed|needs evidence)\b|需要证明|足够证明|有信心", value, re.I):
+    if not re.search(r"\b(?:need proof|enough proof|feel confident|evidence is needed|needs evidence)\b|需要证明|足够证明|有信心", value, re.IGNORECASE):
         return False
     proof_type_markers = (
         r"\b(?:test|tests|command|browser|journey|artifact|log|audit|screenshot|fixture|trace|coverage|contract|schema|lint)\b",
         r"测试|命令|浏览器|旅程|产物|日志|审计|截图|fixture|覆盖|契约|schema|lint",
     )
-    return not any(re.search(pattern, value, re.I) for pattern in proof_type_markers)
+    return not any(re.search(pattern, value, re.IGNORECASE) for pattern in proof_type_markers)
 
 
 def role_posture_placeholder_issue(value: str) -> bool:
     if role_posture_without_gatekeeper_judgment_issue(value):
         return True
-    if not re.search(r"\b(?:use|add|configure)\s+(?:two|three|multiple|[2-9])\s+roles?\b|使用.{0,8}(?:两个|三个|多个|[2-9]\s*个).{0,6}角色", value, re.I):
+    if not re.search(r"\b(?:use|add|configure)\s+(?:two|three|multiple|[2-9])\s+roles?\b|使用.{0,8}(?:两个|三个|多个|[2-9]\s*个).{0,6}角色", value, re.IGNORECASE):
         return False
     role_responsibility_markers = (
         r"\b(?:builder|inspector|guide|gatekeeper|custom|build|inspect|verify|judge|block|repair)\b",
         r"builder|inspector|guide|gatekeeper|构建|检查|验证|裁决|阻断|修复",
     )
-    return not any(re.search(pattern, value, re.I) for pattern in role_responsibility_markers)
+    return not any(re.search(pattern, value, re.IGNORECASE) for pattern in role_responsibility_markers)
 
 
 def role_posture_without_gatekeeper_judgment_issue(value: str) -> bool:
     mentions_role_work = re.search(
         r"\b(?:builder|inspector|guide|custom|build|inspect|verify|review|handoff)\b|构建|检查|验证|审查|交接",
         value,
-        re.I,
+        re.IGNORECASE,
     )
     if not mentions_role_work:
         return False
@@ -229,6 +229,6 @@ def role_posture_without_gatekeeper_judgment_issue(value: str) -> bool:
         r"\b(?:judges?|decides?|verdict|blocks?|blockers?|closes?|finishes?|fails?[- ]closed|final|strict)\b.{0,80}\bgatekeeper\b|"
         r"gatekeeper.{0,40}(?:裁决|判定|判断|阻断|收束|关闭|严格|失败关闭|最终)",
         value,
-        re.I,
+        re.IGNORECASE,
     )
     return gatekeeper_judgment is None

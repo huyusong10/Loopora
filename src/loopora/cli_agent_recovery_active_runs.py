@@ -54,7 +54,7 @@ def _attach_agent_next_commands_to_recovery_choices(
 def _agent_active_run_conflict_recovery_result(request: AgentActiveRunConflictRecoveryRequest) -> dict:
     try:
         activity = request.service.get_runtime_activity()
-    except Exception:  # noqa: BLE001 - error recovery must never replace the primary domain error.
+    except Exception:  # noqa: BLE001 - active-run conflict recovery must never replace the primary domain error.
         return {}
     active_runs = [
         _active_run_recovery_projection(request.service, run)

@@ -56,11 +56,12 @@ def _register_agent_runtime_for(agent_app: typer.Typer, *, adapter: str, help_te
 
     @adapter_app.command("plan")
     def agent_plan(
-        workdir: AdapterWorkdirOption = Path("."),
+        workdir: AdapterWorkdirOption = Path(),
         message: AdapterMessageOption = "",
         bundle_file: BundleFileOption = None,
         context_id: ContextIdOption = "",
         entry_source: EntrySourceOption = "",
+        *,
         json_output: JsonOutputOption = False,
         no_web: NoWebOption = False,
     ) -> None:
@@ -91,10 +92,11 @@ def _register_agent_runtime_for(agent_app: typer.Typer, *, adapter: str, help_te
 
     @adapter_app.command("run")
     def agent_run(
-        workdir: AdapterWorkdirOption = Path("."),
+        workdir: AdapterWorkdirOption = Path(),
         context_id: ContextIdOption = "",
         source_option_id: SourceOptionIdOption = "",
         entry_source: EntrySourceOption = "",
+        *,
         json_output: JsonOutputOption = False,
         no_web: NoWebOption = False,
     ) -> None:
@@ -132,10 +134,11 @@ def _register_agent_runtime_for(agent_app: typer.Typer, *, adapter: str, help_te
 
     @adapter_app.command("next")
     def agent_next(
-        workdir: AdapterWorkdirOption = Path("."),
+        workdir: AdapterWorkdirOption = Path(),
         context_id: ContextIdOption = "",
         run_id: RunIdOption = "",
         entry_source: EntrySourceOption = "",
+        *,
         json_output: JsonOutputOption = False,
         no_web: NoWebOption = False,
     ) -> None:
@@ -155,11 +158,12 @@ def _register_agent_runtime_for(agent_app: typer.Typer, *, adapter: str, help_te
     @adapter_app.command("submit")
     def agent_submit(
         result_file: ResultFileOption,
-        workdir: AdapterWorkdirOption = Path("."),
+        workdir: AdapterWorkdirOption = Path(),
         context_id: ContextIdOption = "",
         run_id: RunIdOption = "",
         step_id: StepIdOption = "",
         entry_source: EntrySourceOption = "",
+        *,
         json_output: JsonOutputOption = False,
         no_web: NoWebOption = False,
     ) -> None:

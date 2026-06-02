@@ -195,21 +195,30 @@ def _agent_native_rejected_gatekeeper_output(step: dict) -> dict:
     )
     return output
 
+def _submit_agent_native_step_output(service, *, adapter: str, workdir: Path, step: dict, context_id: str = "") -> dict:
+    return service.submit_agent_native_step(
+        AgentNativeStepSubmitRequest(
+            adapter=adapter,
+            workdir=workdir,
+            context_id=context_id,
+            run_id=str(step["run_id"]),
+            step_id=str(step["step_id"]),
+            output=_agent_native_step_output(step),
+            host_dispatch=_agent_native_host_dispatch(adapter, step),
+            entry_source="opencode_project_command" if adapter == "opencode" else f"{adapter}_project_skill",
+        )
+    )
+
 def _drive_agent_native_until_archetype(service, result: dict, *, adapter: str, workdir: Path, archetype: str) -> dict:
     while True:
         step = result["next_step"]
         if step["role"]["archetype"] == archetype:
             return result
-        result = service.submit_agent_native_step(
-            AgentNativeStepSubmitRequest(
-                adapter=adapter,
-                workdir=workdir,
-                run_id=str(step["run_id"]),
-                step_id=str(step["step_id"]),
-                output=_agent_native_step_output(step),
-                host_dispatch=_agent_native_host_dispatch(adapter, step),
-                entry_source=f"{adapter}_project_skill" if adapter != "opencode" else "opencode_project_command",
-            )
+        result = _submit_agent_native_step_output(
+            service,
+            adapter=adapter,
+            workdir=workdir,
+            step=step,
         )
 
 def _agent_native_host_dispatch(adapter: str, step: dict) -> dict:
@@ -256,17 +265,12 @@ def _drive_agent_native_run_to_success(service, *, adapter: str, started: dict, 
             assert "gatekeeper.finish_coverage_is_core_derived" in evidence_rule_ids
             assert step.get("evidence_ref_contract", {}).get("unknown_ids_are_blocking") is True
         seen_steps.append(step_id)
-        result = service.submit_agent_native_step(
-            AgentNativeStepSubmitRequest(
-                adapter=adapter,
-                workdir=workdir,
-                context_id=context_id,
-                run_id=str(step["run_id"]),
-                step_id=step_id,
-                output=_agent_native_step_output(step),
-                host_dispatch=_agent_native_host_dispatch(adapter, step),
-                entry_source=f"{adapter}_project_skill" if adapter != "opencode" else "opencode_project_command",
-            )
+        result = _submit_agent_native_step_output(
+            service,
+            adapter=adapter,
+            workdir=workdir,
+            context_id=context_id,
+            step=step,
         )
     assert seen_steps[0] == "builder_step"
     assert any("gatekeeper" in item for item in seen_steps)

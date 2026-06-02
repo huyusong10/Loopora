@@ -9,6 +9,9 @@ from loopora.service_alignment_invocation import (
 )
 
 
+ALIGNMENT_INVOCATION_IDLE_TIMEOUT_SECONDS = 9.5
+
+
 class FakeAlignmentInvocationRepository:
     def __init__(self, session: dict) -> None:
         self.session = dict(session)
@@ -79,18 +82,8 @@ def test_run_alignment_executor_builds_invocation_boundary_and_persists_session_
     prompt_calls: list[dict] = []
     invocation_dir_calls: list[dict] = []
 
-    def get_session(_session_id: str) -> dict:
-        return dict(repo.session)
-
     def build_prompt(session_payload: dict, *, mode: str, validation_error: str = "", invalid_yaml: str = "") -> str:
-        prompt_calls.append(
-            {
-                "session_id": session_payload["id"],
-                "mode": mode,
-                "validation_error": validation_error,
-                "invalid_yaml": invalid_yaml,
-            }
-        )
+        prompt_calls.append({"session_id": session_payload["id"], "mode": mode, "validation_error": validation_error, "invalid_yaml": invalid_yaml})
         return "Prompt for repair."
 
     def next_invocation_dir(invocation_root: Path, attempt: int, *, repair: bool) -> Path:
@@ -99,7 +92,7 @@ def test_run_alignment_executor_builds_invocation_boundary_and_persists_session_
 
     context = AlignmentExecutorRunContext(
         repository=repo,
-        get_session=get_session,
+        get_session=lambda _session_id: dict(repo.session),
         config=AlignmentExecutorInvocationConfig(
             output_schema={"type": "object", "properties": {"assistant_message": {"type": "string"}}},
             idle_timeout_seconds=9.5,
@@ -111,24 +104,11 @@ def test_run_alignment_executor_builds_invocation_boundary_and_persists_session_
         ),
     )
 
-    output = run_alignment_executor(
-        context,
-        session_id,
-        mode="repair",
-        validation_error="missing evidence flow",
-        invalid_yaml="bad: yaml",
-    )
+    output = run_alignment_executor(context, session_id, mode="repair", validation_error="missing evidence flow", invalid_yaml="bad: yaml")
 
     invocation_dir = root / "invocations" / "repair-0002"
     assert output["assistant_message"] == "Invocation completed."
-    assert prompt_calls == [
-        {
-            "session_id": session_id,
-            "mode": "repair",
-            "validation_error": "missing evidence flow",
-            "invalid_yaml": "bad: yaml",
-        }
-    ]
+    assert prompt_calls == [{"session_id": session_id, "mode": "repair", "validation_error": "missing evidence flow", "invalid_yaml": "bad: yaml"}]
     assert invocation_dir_calls == [{"root": root, "attempt": 2, "repair": True}]
     assert (invocation_dir / "prompt.md").read_text(encoding="utf-8") == "Prompt for repair.\n"
     assert json.loads((invocation_dir / "schema.json").read_text(encoding="utf-8"))["type"] == "object"
@@ -136,12 +116,9 @@ def test_run_alignment_executor_builds_invocation_boundary_and_persists_session_
     output_debug = json.loads((invocation_dir / "output.json").read_text(encoding="utf-8"))
     assert output_debug["assistant_message"] == "Invocation completed."
     assert output_debug["bundle_written"] is False
-    assert executor.requests[0].idle_timeout_seconds == 9.5
+    assert executor.requests[0].idle_timeout_seconds == ALIGNMENT_INVOCATION_IDLE_TIMEOUT_SECONDS
     assert executor.requests[0].extra_context["validation_error"] == "missing evidence flow"
     assert repo.updates[-1] == {"executor_session_ref": {"session_id": "native-42", "provider": "codex"}}
-    assert [event["event_type"] for event in repo.events] == [
-        "codex_event",
-        "alignment_executor_session_ref",
-    ]
+    assert [event["event_type"] for event in repo.events] == ["codex_event", "alignment_executor_session_ref"]
     assert repo.events[0]["payload"]["alignment_status"] == "running"
     assert repo.events[0]["payload"]["invocation_id"] == "repair-0002"

@@ -22,7 +22,7 @@ Older labels such as L1/L2/L3 are no longer the primary taxonomy. They mixed exe
 
 | Profile | When | Typical Entry |
 | --- | --- | --- |
-| `default-fast` | Every normal code change before commit | `uv run ruff check .` and `uv run pytest -q tests/checks/contracts` |
+| `default-fast` | Every normal code change before commit | Dependency compatibility, static JS syntax, Ruff, whitespace-safe diff, package build, and contract checks |
 | `focused` | A touched module has a nearby contract or journey check | Focused pytest path under `tests/checks/contracts/` or `tests/checks/journeys/` |
 | `journey` | A touched UI flow, CI container job, or release profile needs rendered/user-flow evidence | `uv run pytest -q tests/checks/journeys` |
 | `opt-in` | A user/reviewer asks for visual, semantic, real-host, or exploratory evidence | `tests/reviews/run.py`, `tests/probes/real_environment/run_real_probes.py`, or a scenario playbook |
@@ -34,7 +34,14 @@ Older labels such as L1/L2/L3 are no longer the primary taxonomy. They mixed exe
 For ordinary code work, run:
 
 ```bash
-uv run ruff check .
+uv sync --locked --dry-run
+uv pip check
+find src/loopora/static -name '*.js' -print0 | xargs -0 -n1 node --check
+uv run ruff check src/loopora tests
+git diff --check
+rm -rf tmp/package-check
+mkdir -p tmp/package-check
+uv build --out-dir tmp/package-check
 uv run pytest -q tests/checks/contracts
 ```
 

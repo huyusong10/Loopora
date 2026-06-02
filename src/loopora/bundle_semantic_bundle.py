@@ -111,6 +111,6 @@ def _lint_alignment_collaboration_summary(summary: object) -> list[str]:
         return ["collaboration_summary must explain why this task needs multi-round Loopora governance"]
     if not _semantic_text_mentions_evidence(summary):
         return ["collaboration_summary must mention evidence, proof, verification, handoff, or blockers"]
-    if not re.search(r"gatekeeper|gate keeper|裁决|阻断|签字|收束", str(summary or ""), re.I):
+    if not re.search(r"gatekeeper|gate keeper|裁决|阻断|签字|收束", str(summary or ""), re.IGNORECASE):
         return ["collaboration_summary must explain GateKeeper or final judgment posture"]
     return []

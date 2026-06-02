@@ -1,0 +1,74 @@
+name: Bug Report
+description: Report a reproducible Loopora defect that is not a private security issue.
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a Loopora bug. If this might expose credentials, tokens, private workspace paths, run artifacts, evidence records, or Web access tokens, stop here and follow SECURITY.md instead of posting details publicly.
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What went wrong, and what user-visible behavior did you expect instead?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction
+      description: Minimal steps, commands, or Web actions that reproduce the issue without private data.
+      placeholder: |
+        1. Run ...
+        2. Open ...
+        3. Observe ...
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence
+      description: Paste relevant command output, error text, screenshots, or logs after removing secrets and private paths.
+    validations:
+      required: false
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Affected Surface
+      multiple: true
+      options:
+        - CLI
+        - Web
+        - Agent adapter
+        - Loop/run runtime
+        - Bundle import/export
+        - Packaging or install
+        - Documentation
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version Or Commit
+      description: Loopora version, commit SHA, or branch.
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: Operating system, Python version, and relevant Agent host if any.
+      placeholder: "macOS 14, Python 3.12, Codex"
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Public Report Checklist
+      options:
+        - label: I removed secrets, tokens, private logs, private workspace paths, and sensitive run artifacts.
+          required: true
+        - label: This is not a private security report; SECURITY.md is the right path for vulnerabilities.
+          required: true

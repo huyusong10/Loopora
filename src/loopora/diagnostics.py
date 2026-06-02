@@ -133,7 +133,7 @@ def _normalize_value(value: Any, *, key: str = "") -> Any:
 
 def _component_name(logger_name: str) -> str:
     prefix = f"{APP_PACKAGE}."
-    name = logger_name[len(prefix) :] if logger_name.startswith(prefix) else logger_name
+    name = logger_name.removeprefix(prefix)
     root = name.split(".", 1)[0]
     for boundary in _COMPONENT_BOUNDARIES:
         if root == boundary or root.startswith(f"{boundary}_"):

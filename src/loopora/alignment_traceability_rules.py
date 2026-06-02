@@ -167,7 +167,7 @@ def alignment_agreement_category_projection_issues(evidence: dict, *, normalized
         missing = [
             category_label
             for category_label, bundle_pattern in categories
-            if not re.search(bundle_pattern, normalized_bundle_text, re.I)
+            if not re.search(bundle_pattern, normalized_bundle_text, re.IGNORECASE)
         ]
         if not missing:
             continue
@@ -194,8 +194,7 @@ def alignment_agent_candidate_traceability_issues(task_text: str, bundle: dict) 
         required_matches = 1 if len(terms) < 4 else 2
         if len(matched) < required_matches:
             issues.append(
-                "agent-first candidate must project the host Agent task summary into runnable surfaces: "
-                + "missing "
+                "agent-first candidate must project the host Agent task summary into runnable surfaces: missing "
                 + ", ".join(terms[:5])
             )
     issues.extend(

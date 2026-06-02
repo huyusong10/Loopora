@@ -11,6 +11,12 @@
   <a href="https://fastapi.tiangolo.com/">
     <img alt="FastAPI" src="https://img.shields.io/badge/web-FastAPI-009688?logo=fastapi&logoColor=white">
   </a>
+  <a href="https://github.com/huyusong10/Loopora/actions/workflows/ci.yml?query=branch%3Adev">
+    <img alt="CI" src="https://github.com/huyusong10/Loopora/actions/workflows/ci.yml/badge.svg?branch=dev">
+  </a>
+  <a href="https://github.com/huyusong10/Loopora/actions/workflows/codeql.yml?query=branch%3Adev">
+    <img alt="CodeQL" src="https://github.com/huyusong10/Loopora/actions/workflows/codeql.yml/badge.svg?branch=dev">
+  </a>
   <img alt="Agent first" src="https://img.shields.io/badge/agent--first-loop-2563EB">
   <img alt="Local first" src="https://img.shields.io/badge/local--first-evidence-0D7C66">
   <img alt="Status" src="https://img.shields.io/badge/status-experimental-D66A36">
@@ -275,3 +281,7 @@ Web fits these scenarios:
 | Adjust plans | Edit candidate plan when needed, or create Loop directly from Web |
 
 Agent entry and Web entry are not separate worlds. Even if a Loop starts inside your Agent, it enters the same local records and can be viewed and managed in Web.
+
+## Contributing And Security
+
+See [CONTRIBUTING.md](./CONTRIBUTING.md) for local setup, quality gates, and design/test boundaries before opening a change. Report vulnerabilities through [SECURITY.md](./SECURITY.md); do not publish exploit details, secrets, tokens, private logs, or sensitive workspace paths in public issues.

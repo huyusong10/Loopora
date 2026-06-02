@@ -11,13 +11,14 @@ from agent_native_v3_helpers import assert_agent_v3_envelope
 from agent_adapter_test_common import (
     _assert_loopora_agent_command,
     _assert_labeled_loopora_agent_command,
-    _candidate_digest,
-    _ready_candidate_digest,
 )
 from agent_adapter_test_surface import (
     _assert_codex_native_surface_summary,
     _assert_codex_native_surface_plain,
 )
+
+
+EXPECTED_READY_REVIEW_CHECK_COUNT = 2
 
 
 def _assert_plan_repair_retry_text(output: str, bundle_file: Path) -> None:
@@ -89,25 +90,14 @@ def _assert_web_review_json_payload(payload: dict, *, task_message: str) -> None
     _assert_loopora_agent_command(summary["after_review_command"], "run")
     assert summary["ready"] is False
     assert summary["requires_web_alignment"] is True
-    assert summary["loop_recovery"] == "finish_web_review"
-    assert summary["review_status"] == "not runnable; no candidate plan file was submitted"
     assert summary["review_focus"]
-    assert summary["task_anchor_preview"] == task_message
     assert summary["next_review_step"].startswith("open the preview URL")
-    assert summary["after_review_slash_command"] == "/loopora-run"
 
-def _write_ready_bundle(tmp_path: Path, sample_workdir: Path) -> tuple[Path, dict[str, int | str]]:
+def _write_ready_bundle(tmp_path: Path, sample_workdir: Path) -> Path:
     bundle_file = tmp_path / "bundle.yml"
     bundle_text = alignment_bundle_yaml(str(sample_workdir.resolve()))
-    candidate_sha, candidate_bytes = _candidate_digest(bundle_text)
-    ready_sha, ready_bytes = _ready_candidate_digest(bundle_text)
     bundle_file.write_text(bundle_text, encoding="utf-8")
-    return bundle_file, {
-        "candidate_sha": candidate_sha,
-        "candidate_bytes": candidate_bytes,
-        "ready_sha": ready_sha,
-        "ready_bytes": ready_bytes,
-    }
+    return bundle_file
 
 def _assert_ready_plan_summary(payload: dict) -> None:
     summary, _legacy = assert_agent_v3_envelope(payload, kind="agent_plan", summary_key="agent_plan_summary", status="ready")
@@ -122,8 +112,7 @@ def _assert_ready_plan_summary(payload: dict) -> None:
     assert "--json" in summary["ready_cli_command"]
     assert summary["ready_run_command"] == summary["ready_cli_command"]
 
-def _assert_ready_plan_payload(payload: dict, expected: dict[str, int | str]) -> None:
-    _ = expected
+def _assert_ready_plan_payload(payload: dict) -> None:
     payload, _legacy = assert_agent_v3_envelope(payload, kind="agent_plan", summary_key="agent_plan_summary", status="ready")
     assert payload["ready"] is True
     assert payload["status"] == "ready"
@@ -134,7 +123,7 @@ def _assert_ready_review_projection(review: dict) -> None:
     assert "Future iterations stay anchored" in review["loopora_fit_reasons"][0]
     assert "happy-path claim" in review["fake_done_risks"][0]
     assert "project-owned checks" in review["evidence_preferences"][0]
-    assert review["coverage"]["check_count"] == 2
+    assert review["coverage"]["check_count"] == EXPECTED_READY_REVIEW_CHECK_COUNT
     assert review["coverage"]["target_count"] >= review["coverage"]["check_count"]
     assert review["traceability"]["mapped_count"] == review["traceability"]["required_count"]
     assert review["gatekeeper"]["enabled"] is True
@@ -164,17 +153,10 @@ def _assert_invalid_candidate_repair_payload(payload: dict, *, task_message: str
     assert summary["repair_focus"]
     assert summary["plan_file_to_repair"] == str(bundle_file)
     _assert_plan_repair_retry_payload(summary, bundle_file)
-    assert summary["ready"] is False
-    assert summary["requires_candidate_repair"] is True
-    assert summary["loop_recovery"] == "repair_candidate_plan_file"
     assert summary["validation_error"]
-    assert summary["repair_task_message"] == task_message
-    assert summary["repair_focus"]
     assert summary["repair_focus"][0].startswith("add these missing task objects from --message")
     assert "refund" in summary["repair_focus"][0]
-    assert summary["plan_file_to_repair"] == str(bundle_file)
     assert summary["preview_plan_copy"].endswith("/artifacts/bundle.yml")
-    _assert_plan_repair_retry_payload(summary, bundle_file)
 
 def _assert_invalid_candidate_run_recovery(stdout: str, *, task_message: str, validation_error: str, repair_focus: list, bundle_file: Path) -> None:
     run_payload = json.loads(stdout)

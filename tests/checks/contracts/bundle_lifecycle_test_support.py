@@ -142,10 +142,14 @@ def _has_cleanup_record(caplog, *, operation: str, resource_type: str, owner_id:
     log_path = app_home() / "logs" / "service.log"
     if log_path.exists():
         records.extend(json.loads(line) for line in log_path.read_text(encoding="utf-8").splitlines() if line.strip())
-    return any(
+    return any(_matches_cleanup_record(record, operation=operation, resource_type=resource_type, owner_id=owner_id) for record in records)
+
+
+def _matches_cleanup_record(record: dict, *, operation: str, resource_type: str, owner_id: str | None) -> bool:
+    context = record.get("context") or {}
+    return (
         record.get("event") == "service.cleanup.failed"
-        and (record.get("context") or {}).get("operation") == operation
-        and (record.get("context") or {}).get("resource_type") == resource_type
-        and (owner_id is None or (record.get("context") or {}).get("owner_id") == owner_id)
-        for record in records
+        and context.get("operation") == operation
+        and context.get("resource_type") == resource_type
+        and (owner_id is None or context.get("owner_id") == owner_id)
     )

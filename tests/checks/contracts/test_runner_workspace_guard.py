@@ -12,6 +12,10 @@ from loopora.service import LooporaError
 from runner_helpers import _create_loop
 
 
+DESTRUCTIVE_RUN_DELETED_ORIGINAL_COUNT = 3
+GUARDED_WORKSPACE_BASELINE_FILE_COUNT = 3
+
+
 def test_destructive_generator_is_blocked_by_workspace_guard(
     service_factory,
     sample_spec_file: Path,
@@ -31,9 +35,9 @@ def test_destructive_generator_is_blocked_by_workspace_guard(
 
     assert run["status"] == "failed"
     assert "workspace safety guard" in (run["error_message"] or "")
-    assert guard["baseline_file_count"] == 3
+    assert guard["baseline_file_count"] == GUARDED_WORKSPACE_BASELINE_FILE_COUNT
     assert guard["remaining_original_file_count"] == 0
-    assert guard["deleted_original_count"] == 3
+    assert guard["deleted_original_count"] == DESTRUCTIVE_RUN_DELETED_ORIGINAL_COUNT
     assert "progress.md" in guard["deleted_original_paths"]
     assert "Execution stopped by the workspace safety guard." in (run_dir / "summary.md").read_text(encoding="utf-8")
     events = service.stream_events(run["id"], limit=200)
@@ -131,4 +135,4 @@ def test_destructive_tester_is_blocked_by_workspace_guard(
     assert run["status"] == "failed"
     assert "workspace safety guard" in (run["error_message"] or "")
     assert guard["role"] in {"tester", "inspector"}
-    assert guard["deleted_original_count"] == 3
+    assert guard["deleted_original_count"] == DESTRUCTIVE_RUN_DELETED_ORIGINAL_COUNT
