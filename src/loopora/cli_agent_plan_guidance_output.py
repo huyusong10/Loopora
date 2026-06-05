@@ -5,10 +5,15 @@ import shlex
 import typer
 
 from loopora.cli_agent_plan_recovery_results import (
+    REPAIR_CLI_COMMAND_POLICY,
+    REPAIR_FORBIDDEN_ACTIONS,
+    REPAIR_NEXT_ACTION,
+    REPAIR_REFERENCE,
     _agent_entry_return_run_command,
     _agent_entry_return_slash_command,
     _agent_entry_review,
     _agent_gen_error_summary,
+    _agent_plan_repair_action,
     _agent_repair_cli_command,
     _agent_task_message_from_session,
     _agent_web_review_focus,
@@ -58,8 +63,11 @@ def _print_agent_web_review_task_anchor(result: dict) -> None:
 def _print_agent_web_review_return_command(result: dict) -> None:
     command = _agent_entry_return_run_command(result)
     typer.echo("after_review_ready: return to this Agent session and run /loopora-run; do not start the Agent Runner run from Web")
+    typer.echo("run_blocked_until_web_review: yes")
+    typer.echo("after_review_cli_command_status: blocked_until_web_review_complete")
     typer.echo(f"after_review_slash_command: {_agent_entry_return_slash_command()}")
     if command:
+        typer.echo(f"after_web_review_cli_command: {command}")
         typer.echo(f"after_review_cli_command: {command}")
         typer.echo(f"after_review_command: {command}")
 
@@ -78,6 +86,7 @@ def _print_agent_repair_guidance(result: dict) -> None:
             "or benchmark/test-harness-only work; reframe the task with later evidence, handoff, "
             "or GateKeeper value before trying a runnable Loop"
         )
+    _print_agent_plan_repair_panel(result)
     if source_path:
         typer.echo(f"plan_file_to_repair: {source_path}")
     if session_bundle_path and session_bundle_path != source_path:
@@ -94,8 +103,38 @@ def _print_agent_repair_guidance(result: dict) -> None:
     repair_cli_command = _agent_repair_cli_command(result, plan_file=source_path)
     if repair_cli_command:
         typer.echo(f"repair_cli_command: {repair_cli_command}")
+        typer.echo(f"repair_cli_command_policy: {REPAIR_CLI_COMMAND_POLICY}")
+    typer.echo(f"repair_reference: {REPAIR_REFERENCE}")
     typer.echo(
         "next_repair_step: repair the candidate plan file so it preserves repair_task_message and repair_focus in "
-        "spec, roles, workflow, and evidence rules; rerun repair_cli_command or repair_slash_command, then use "
+        "spec, roles, workflow, and evidence rules; do not inspect alignment session artifacts, manifests, Loopora "
+        "source/help, or run filesystem-wide discovery; rerun repair_cli_command or repair_slash_command, then use "
         "/loopora-run only after the preview is ready"
     )
+
+
+def _print_agent_plan_repair_panel(result: dict) -> None:
+    action = _agent_plan_repair_action(result)
+    typer.echo("agent_work_panel:")
+    typer.echo("state: repair_candidate_plan_file")
+    typer.echo("task_proven: false")
+    typer.echo("task_outcome: not_ready_repair_candidate_plan_file")
+    typer.echo(f"next_action: {_clip_inline(REPAIR_NEXT_ACTION, 260)}")
+    typer.echo("evidence_focus: validation_error and repair_focus from the rejected candidate plan")
+    typer.echo("todo_items:")
+    typer.echo("- edit the candidate plan file")
+    typer.echo("- rerun repair_cli_command exactly with compact JSON")
+    typer.echo("- start /loopora-run only after preview readiness")
+    typer.echo("repair_action:")
+    for key in ("file_to_edit", "command_after_edit", "stop_before"):
+        value = str(action.get(key) or "").strip()
+        if value:
+            typer.echo(f"{key}: {_clip_inline(value, 360)}")
+    typer.echo("allowed_inputs:")
+    for item in list(action.get("allowed_inputs") or []):
+        text = str(item).strip()
+        if text:
+            typer.echo(f"- {_clip_inline(text, 220)}")
+    typer.echo("forbidden_actions:")
+    for item in REPAIR_FORBIDDEN_ACTIONS:
+        typer.echo(f"- {_clip_inline(item, 220)}")

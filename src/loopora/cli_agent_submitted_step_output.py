@@ -68,6 +68,7 @@ def _print_agent_submitted_coverage_results(value: object) -> None:
     if not summaries:
         return
     counts = _coverage_result_counts(value)
+    typer.echo("submitted_coverage_result_scope: submitted_role_raw_classifications_not_aggregated_coverage")
     if counts:
         parts = [f"{status}={count}" for status, count in counts.items()]
         typer.echo(f"submitted_coverage_result_counts: {' '.join(parts)}")

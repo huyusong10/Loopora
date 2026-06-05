@@ -48,6 +48,7 @@ def test_cli_agent_gen_without_bundle_rejects_missing_task_summary(sample_workdi
     assert "Judgment tradeoffs: ..." in text_result.stdout
     assert "decision_impact: This answer decides the Loop's task contract" in text_result.stdout
     assert "example_user_reply: Build the account-deletion audit flow;" in text_result.stdout
+    _assert_plain_message_cli_command(text_result.stdout)
     assert "task_message_template:" not in text_result.stdout
     assert "first_task_message_example:" not in text_result.stdout
     assert "debug_cli_example_command:" not in text_result.stdout
@@ -88,6 +89,10 @@ def test_cli_agent_gen_without_bundle_rejects_missing_task_summary(sample_workdi
     assert summary["ask_user"].startswith("What long-running task should Loopora govern?")
     assert summary["question_action"]["subagent_policy"].startswith("Do not ask user questions")
     assert "fake done would be UI-only deletion" in summary["example_user_reply"]
+    assert summary["message_source_policy"].startswith("If the current host user prompt already contains")
+    _assert_loopora_agent_command(summary["message_cli_command"], "plan")
+    assert "--json --compact-json" in summary["message_cli_command"]
+    assert summary["next_plan_cli_command"] == summary["message_cli_command"]
     assert (
         summary["task_message_template"]
         == "Goal: ...; Fake-done risks: ...; Required evidence: ...; Judgment tradeoffs: ..."
@@ -97,6 +102,19 @@ def test_cli_agent_gen_without_bundle_rejects_missing_task_summary(sample_workdi
     assert f"--workdir {sample_workdir.resolve()}" in summary["debug_cli_example_command"]
     assert "--message" in summary["debug_cli_example_command"]
     assert summary["next"] == "Ask the user the ask_user question, then rerun /loopora-plan with the user's task context."
+
+
+def _assert_plain_message_cli_command(output: str) -> None:
+    assert "message_source_policy: If the current host user prompt already contains" in output
+    assert "message_cli_command:" in output
+    message_cli = next(
+        line.removeprefix("message_cli_command: ")
+        for line in output.splitlines()
+        if line.startswith("message_cli_command: ")
+    )
+    _assert_loopora_agent_command(message_cli, "plan")
+    assert "--message" in message_cli
+    assert "--json --compact-json" in message_cli
 
 
 def test_cli_agent_gen_rejects_candidate_bundle_without_task_summary(tmp_path: Path, sample_workdir: Path) -> None:

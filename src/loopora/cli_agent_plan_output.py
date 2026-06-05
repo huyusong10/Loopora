@@ -55,11 +55,11 @@ __all__ = [
 ]
 
 
-def _print_agent_gen_result(result: dict, *, json_output: bool) -> None:
+def _print_agent_gen_result(result: dict, *, json_output: bool, compact_json_output: bool = False) -> None:
     _attach_agent_ready_run_handoff_fields(result)
-    if json_output:
+    if json_output or compact_json_output:
         _attach_agent_gen_recovery_fields(result)
-        echo_json(_agent_gen_json_payload(result))
+        echo_json(_agent_gen_json_payload(result, include_raw=not compact_json_output))
         return
     if result.get("ready"):
         typer.echo("Loopora Loop preview is ready")

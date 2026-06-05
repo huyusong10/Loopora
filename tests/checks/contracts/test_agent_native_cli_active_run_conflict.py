@@ -93,7 +93,7 @@ def test_cli_agent_run_active_workdir_conflict_reports_recovery_commands(sample_
     assert active_run["loop_name"] == "Refund safety Loop"
     assert active_run["current_step"]["step_id"] == "builder_step"
     assert active_run["current_step"]["target_agent"] == "loopora-builder"
-    assert summary["next_active_run_command"].endswith("--run-id run_active --json --entry-source codex_project_skill")
+    assert summary["next_active_run_command"].endswith("--run-id run_active --json --compact-json --entry-source codex_project_skill")
     _assert_loopora_cli_command(
         summary["next_active_run_command"],
         "loopora agent codex next",

@@ -95,12 +95,34 @@ def text_mentions_loop_fit_contradiction(text: object) -> bool:
     for pattern in patterns:
         for match in re.finditer(pattern, value, re.IGNORECASE):
             matched = match.group(0).lower()
-            if re.search(r"\bnot\s+(?:enough|sufficient)\b|不(?:够|足够)", matched, re.IGNORECASE):
+            if re.search(
+                r"\b(?:not|never)\s+(?:enough|sufficient)\b|不(?:够|足够)",
+                matched,
+                re.IGNORECASE,
+            ):
                 continue
             if semantic_antipattern_match_is_negated(value, match.start()):
                 continue
+            if _loop_fit_contradiction_match_is_evidence_id_guardrail(value, match):
+                continue
             return True
     return False
+
+
+def _loop_fit_contradiction_match_is_evidence_id_guardrail(value: str, match: re.Match[str]) -> bool:
+    window = value[max(0, match.start() - 96) : min(len(value), match.end() + 96)]
+    if not re.search(r"\bevidence\s+ids?\b", window, re.IGNORECASE):
+        return False
+    return bool(
+        re.search(
+            r"\bno\s+(?:suffixing|splitting|derivation|deriving|inventing|fabricating)\b|"
+            r"\bdo\s+not\s+(?:suffix|split|derive|invent|fabricate)\b|"
+            r"\bmust\s+(?:use|cite)\s+exact\b|"
+            r"\bexact\s+(?:upstream\s+)?(?:builder\s+)?evidence\s+ids?\b",
+            window,
+            re.IGNORECASE,
+        )
+    )
 
 
 def trace_text_units(text: str) -> list[str]:

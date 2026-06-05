@@ -31,6 +31,32 @@ def test_review_term_hints_scan_visible_text_not_template_identifiers(monkeypatc
     assert "href=" not in report
 
 
+def test_review_term_hints_ignore_markdown_link_and_html_attribute_urls(monkeypatch, tmp_path: Path) -> None:
+    write_source_lines(
+        tmp_path,
+        "README.md",
+        [
+            '<a href="https://example.test/actions/workflows/ci.yml">',
+            '  <img alt="CI" src="https://example.test/actions/workflows/ci.yml/badge.svg">',
+            "</a>",
+            "[CI badge](https://example.test/actions/workflows/ci.yml)",
+            "Workflow controls belong on expert pages.",
+        ],
+    )
+
+    report = write_term_hints_report(
+        monkeypatch,
+        tmp_path,
+        globs=["README.md"],
+        terms=["workflow"],
+    )
+
+    assert "README.md:1" not in report
+    assert "README.md:2" not in report
+    assert "README.md:4" not in report
+    assert "`README.md:5` `workflow`" in report
+
+
 def test_review_term_hints_scan_locale_text_but_not_js_selectors(monkeypatch, tmp_path: Path) -> None:
     write_source_lines(
         tmp_path,

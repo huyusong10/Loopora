@@ -116,6 +116,12 @@ def build_run_contract_snapshot(request: RunContractSnapshotRequest) -> dict:
             "strategy_source": artifact_ref(layout, layout.contract_strategy_source_path, kind="contract", label="strategy-source"),
             "workflow": artifact_ref(layout, layout.contract_workflow_path, kind="contract", label="workflow"),
             "run_contract": artifact_ref(layout, layout.run_contract_path, kind="contract", label="run-contract"),
+            "workspace_baseline": artifact_ref(
+                layout,
+                layout.workspace_baseline_path,
+                kind="workspace",
+                label="workspace-baseline",
+            ),
             "latest_state": artifact_ref(layout, layout.latest_state_path, kind="state", label="latest-state"),
             "latest_iteration_summary": artifact_ref(
                 layout,

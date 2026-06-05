@@ -63,5 +63,6 @@ def agent_native_submitted_step_result(request: AgentNativeSubmittedStepResultRe
     }
     coverage_results = _agent_native_output_coverage_results(request.normalized_output)
     if coverage_results:
+        submitted_step["coverage_result_scope"] = "submitted_role_raw_classifications_not_aggregated_coverage"
         submitted_step["coverage_results"] = coverage_results
     return submitted_step

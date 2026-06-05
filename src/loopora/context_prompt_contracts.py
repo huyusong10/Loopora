@@ -2,6 +2,15 @@ from __future__ import annotations
 
 import json
 
+from loopora.proof_command_prompt_guidance import (
+    INSPECTOR_PRIMARY_PROOF_PROMPT_GUIDANCE,
+    PROOF_COMMAND_OUTPUT_PROMPT_GUIDANCE,
+)
+from loopora.residual_risk_prompt_guidance import (
+    GATEKEEPER_RESIDUAL_RISK_PROMPT_GUIDANCE,
+    GATEKEEPER_UPSTREAM_EVIDENCE_PROMPT_GUIDANCE,
+)
+
 
 def render_step_prompt(
     *,
@@ -32,6 +41,7 @@ def system_prompt_prefix(archetype: str) -> str:
             "- Preserve existing non-.loopora files and avoid destructive rewrites.\n"
             "- Prefer focused, incremental changes over broad resets.\n"
             "- Treat project-local instructions, design docs, and tests as contract and evidence inputs when they exist.\n"
+            f"- {PROOF_COMMAND_OUTPUT_PROMPT_GUIDANCE}\n"
             "- If downstream review steps run in a parallel_group, leave one coherent handoff for all reviewers instead of splitting evidence across private notes.\n"
             "- Treat the run contract as frozen: do not reinterpret or lower Task, Done When, Guardrails, bundle collaboration summary, Loopora fit, strategy collaboration intent, role posture, Success Surface, Fake Done, Evidence Preferences, Execution Strategy, Judgment Tradeoffs, Local Governance, or Residual Risk; "
             "surface contract problems as evidence gaps or blockers instead.\n"
@@ -43,6 +53,8 @@ def system_prompt_prefix(archetype: str) -> str:
             "- Collect evidence with project-owned commands, files, and artifacts.\n"
             "- Prefer concrete commands and observations.\n"
             "- Treat project-local instructions, design docs, and tests as contract and evidence inputs when they exist.\n"
+            f"- {PROOF_COMMAND_OUTPUT_PROMPT_GUIDANCE}\n"
+            f"- {INSPECTOR_PRIMARY_PROOF_PROMPT_GUIDANCE}\n"
             "- Classify important observations as Proven, Weak, Unproven, Blocking, or Residual risk when that helps downstream judgment.\n"
             "- If this step is in a parallel_group, cover only your assigned evidence responsibility and do not wait for peer reviewers.\n"
             "- Treat the run contract as frozen: do not reinterpret or lower Task, Done When, Guardrails, bundle collaboration summary, Loopora fit, strategy collaboration intent, role posture, Success Surface, Fake Done, Evidence Preferences, Execution Strategy, Judgment Tradeoffs, Local Governance, or Residual Risk; "
@@ -55,6 +67,7 @@ def system_prompt_prefix(archetype: str) -> str:
             "- Decide conservatively from direct evidence.\n"
             "- When evidence is weak, fail closed and explain what is missing.\n"
             "- Treat project-local instructions, design docs, and tests as contract and evidence inputs when they exist.\n"
+            f"- {PROOF_COMMAND_OUTPUT_PROMPT_GUIDANCE}\n"
             "- Keep run status separate from task verdict, and organize the verdict as Proven, Weak, Unproven, Blocking, or Residual risk.\n"
             "- If upstream reviewers ran in a parallel_group, fan in every relevant review branch instead of treating the last handoff as the whole review.\n"
             "- Treat the run contract as frozen: do not reinterpret or lower Task, Done When, Guardrails, bundle collaboration summary, Loopora fit, strategy collaboration intent, role posture, Success Surface, Fake Done, Evidence Preferences, Execution Strategy, Judgment Tradeoffs, Local Governance, or Residual Risk; "
@@ -98,6 +111,9 @@ def output_contract_prompt(archetype: str) -> str:
         return (
             "Output contract: return JSON with execution_summary, check_results, dynamic_checks, tester_observations, "
             "and coverage_results. Use empty arrays for check_results, dynamic_checks, and coverage_results when there are no items. "
+            "Leave dynamic_checks empty unless you performed a new reproducible check that is not already represented by check_results or coverage_results. "
+            "If a command verifies a listed Done When/check id, Fake Done, Evidence Preference, scope, checksum, or coverage target, put that evidence in check_results, coverage_results, or tester_observations instead of dynamic_checks; do not duplicate file-read, artifact-presence, checksum/scope, or command-success facts there. "
+            "Each dynamic_checks item must name the extra nonduplicated claim it proves. "
             "Only populate coverage_results when you can explicitly verify or reject coverage target ids. "
             "Inside execution_summary, return total_checks, passed, failed, errored, and total_duration_ms. "
             "For every check_results item and dynamic_checks item, return id, title, status, and notes. "
@@ -116,7 +132,9 @@ def output_contract_prompt(archetype: str) -> str:
             "For every coverage_results item, return target_id, status, evidence_refs, and note; use covered for a verified target and keep Proven/Weak/Unproven/Blocking/Residual risk as verdict buckets. "
             "A pass must cite supporting upstream evidence_refs from the Evidence ledger; a plain Builder handoff is not support unless it carries a proof artifact or measured evidence. If this is the first gate in the workflow, "
             "claims alone are not enough; provide concrete metric_scores tied to the evidence you inspected. "
+            f"{GATEKEEPER_UPSTREAM_EVIDENCE_PROMPT_GUIDANCE}"
             "Accepted residual_risks must name the risk plus an owner, follow-up, or acceptance path; vague residual risk keeps the pass blocked. "
+            f"{GATEKEEPER_RESIDUAL_RISK_PROMPT_GUIDANCE}"
             "If the run contract disallows accepted residual risk, keep residual_risks empty and report any remaining risk as blocking instead of passing. "
             "The decision_summary should separate run status from task verdict and name any Weak, Unproven, Blocking, or Residual risk evidence."
         )

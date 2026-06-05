@@ -52,6 +52,10 @@ WEB_LAYOUT_HINT_SCRIPT = """() => {
   const hints = [];
   const viewportWidth = window.innerWidth;
   for (const element of document.body.querySelectorAll("*")) {
+    const closedDetails = element.closest("details:not([open])");
+    if (closedDetails && element !== closedDetails && !element.closest("summary")) {
+      continue;
+    }
     const style = window.getComputedStyle(element);
     if (style.visibility === "hidden" || style.display === "none") {
       continue;
@@ -241,7 +245,18 @@ def _reviewable_term_text(path: Path, line: str) -> str:
     suffix = path.suffix.lower()
     if suffix in {".html", ".svg"}:
         return _markup_reviewable_text(line)
+    if suffix in {".md", ".mdx"}:
+        return _markdown_reviewable_text(line)
     return line
+
+
+def _markdown_reviewable_text(line: str) -> str:
+    text = _markup_reviewable_text(line) if "<" in line and ">" in line else line
+    text = re.sub(r"!\[([^\]]*)\]\([^)]+\)", r"\1", text)
+    text = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", text)
+    if re.match(r"^\s*\[[^\]]+\]:\s+\S+", text):
+        return ""
+    return text
 
 
 def _markup_reviewable_text(line: str) -> str:

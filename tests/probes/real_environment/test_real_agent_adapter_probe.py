@@ -133,6 +133,26 @@ def _assert_real_agent_command_model_policy(adapter: str, command: str) -> None:
     )
 
 
+def _assert_real_agent_command_monitorability(adapter: str, command: str) -> None:
+    if adapter != "claude":
+        return
+    try:
+        args = shlex.split(command)
+    except ValueError:
+        args = command.split()
+    has_stream_json = "--output-format=stream-json" in args or any(
+        arg == "--output-format" and index + 1 < len(args) and args[index + 1] == "stream-json"
+        for index, arg in enumerate(args)
+    )
+    has_partial_messages = "--include-partial-messages" in args
+    message = (
+        "Claude Code real-agent release probe must use `--output-format stream-json --include-partial-messages` "
+        "so the harness can monitor Agent/Task start, work-panel exposure, and repair signals before final stdout."
+    )
+    assert has_stream_json, message
+    assert has_partial_messages, message
+
+
 def _require_real_agent_template(adapter: str) -> str:
     if os.environ.get(ENABLE_ENV) != "1":
         pytest.skip(f"set {ENABLE_ENV}=1 to run the real Agent adapter release-profile probe")
@@ -466,6 +486,8 @@ def _experience_health_summary(
     artifact_contracts = _experience_artifact_contracts(workdir, run_path)
     native_trace_observed = _experience_native_trace_observed(run_path)
     auto_repair_events = _experience_auto_repair_events(stdout_tail, stderr_tail)
+    stream_task_events = _claude_stream_task_events(stdout_text, stderr_text)
+    role_dispatch_prompt_contract = _claude_role_dispatch_prompt_contract(stdout_text, stderr_text)
     agent_work_panel_sources = _experience_marker_sources(
         "agent_work_panel",
         host_stdout=stdout_text,
@@ -482,7 +504,24 @@ def _experience_health_summary(
         notes.append("native_todo_contract_seen")
     if native_trace_observed:
         notes.append("native_trace_seen_in_agent_native_state")
-    if not any((agent_work_panel_sources, artifact_contracts["native_todo_seen"], native_trace_observed, auto_repair_events)):
+    if stream_task_events["stream_json_seen"]:
+        notes.append("host_stream_json_seen")
+    if stream_task_events["task_started_count"]:
+        notes.append("host_native_role_task_started_seen")
+    elif stream_task_events["stream_json_seen"]:
+        notes.append("host_native_role_task_started_not_seen")
+    role_dispatch_prompt_note = _role_dispatch_prompt_contract_note(role_dispatch_prompt_contract)
+    if role_dispatch_prompt_note:
+        notes.append(role_dispatch_prompt_note)
+    if not any(
+        (
+            agent_work_panel_sources,
+            artifact_contracts["native_todo_seen"],
+            native_trace_observed,
+            auto_repair_events,
+            stream_task_events["task_started_count"],
+        )
+    ):
         notes.append("no_experience_markers_seen_in_available_sources")
     return {
         "agent_work_panel_seen": bool(agent_work_panel_sources),
@@ -508,9 +547,23 @@ def _experience_health_summary(
         )
         or artifact_contracts["role_dispatch_seen"],
         "native_trace_observed": native_trace_observed,
+        "host_stream_json_seen": stream_task_events["stream_json_seen"],
+        "native_role_task_started_count": stream_task_events["task_started_count"],
+        "native_role_task_completed_count": stream_task_events["task_completed_count"],
+        "native_role_task_started": stream_task_events["task_started"],
+        "native_role_task_completed": stream_task_events["task_completed"],
+        "role_dispatch_prompt_contract": role_dispatch_prompt_contract,
         "auto_repair_events": auto_repair_events,
         "experience_notes": notes,
     }
+
+
+def _role_dispatch_prompt_contract_note(contract: dict[str, object]) -> str:
+    if contract["violation_count"]:
+        return "role_dispatch_prompt_contract_violation"
+    if contract["agent_task_prompt_count"]:
+        return "role_dispatch_prompt_contract_ok"
+    return ""
 
 
 def _experience_marker_sources(
@@ -539,6 +592,105 @@ def _any_marker(text: str, *markers: str) -> bool:
 
 def _todo_not_evidence_seen(text: str) -> bool:
     return "not_evidence" in text or "not evidence" in text
+
+
+def _host_stream_json_events(*texts: str) -> list[dict]:
+    events: list[dict] = []
+    for text in texts:
+        for line in str(text or "").splitlines():
+            stripped = line.strip()
+            if not stripped.startswith("{"):
+                continue
+            try:
+                payload = json.loads(stripped)
+            except ValueError:
+                continue
+            if isinstance(payload, dict):
+                events.append(payload)
+    return events
+
+
+def _claude_stream_task_events(*texts: str) -> dict[str, object]:
+    started: list[dict[str, str]] = []
+    completed: list[dict[str, str]] = []
+    for event in _host_stream_json_events(*texts):
+        if event.get("type") != "system":
+            continue
+        subtype = str(event.get("subtype") or "")
+        if subtype == "task_started":
+            started.append(
+                {
+                    "task_id": _truncate_text(event.get("task_id"), limit=120),
+                    "tool_use_id": _truncate_text(event.get("tool_use_id"), limit=120),
+                    "subagent_type": _truncate_text(event.get("subagent_type"), limit=120),
+                    "description": _truncate_text(event.get("description"), limit=180),
+                }
+            )
+        elif subtype == "task_notification" and str(event.get("status") or "") == "completed":
+            completed.append(
+                {
+                    "task_id": _truncate_text(event.get("task_id"), limit=120),
+                    "tool_use_id": _truncate_text(event.get("tool_use_id"), limit=120),
+                    "status": "completed",
+                    "summary": _truncate_text(event.get("summary"), limit=180),
+                }
+            )
+    return {
+        "stream_json_seen": bool(_host_stream_json_events(*texts)),
+        "task_started_count": len(started),
+        "task_completed_count": len(completed),
+        "task_started": started[-8:],
+        "task_completed": completed[-8:],
+    }
+
+
+def _claude_role_dispatch_prompt_contract(*texts: str) -> dict[str, object]:
+    prompts: list[dict[str, object]] = []
+    for event in _host_stream_json_events(*texts):
+        if event.get("type") != "assistant":
+            continue
+        message = event.get("message") if isinstance(event.get("message"), dict) else {}
+        for item in list(message.get("content") or []):
+            if not isinstance(item, dict) or item.get("type") != "tool_use":
+                continue
+            tool_name = str(item.get("name") or "").strip()
+            if tool_name not in {"Agent", "Task"}:
+                continue
+            tool_input = item.get("input") if isinstance(item.get("input"), dict) else {}
+            prompt = str(tool_input.get("prompt") or "").strip()
+            reasons = _role_dispatch_prompt_violation_reasons(prompt)
+            prompts.append(
+                {
+                    "tool_name": tool_name,
+                    "subagent_type": _truncate_text(tool_input.get("subagent_type"), limit=120),
+                    "description": _truncate_text(tool_input.get("description"), limit=180),
+                    "copied_compact_prompt": not reasons,
+                    "violation_reasons": reasons,
+                    "prompt_preview": _truncate_text(prompt, limit=260),
+                }
+            )
+    violations = [item for item in prompts if item["violation_reasons"]]
+    return {
+        "agent_task_prompt_count": len(prompts),
+        "copied_compact_prompt_count": len(prompts) - len(violations),
+        "violation_count": len(violations),
+        "violations": violations[:6],
+    }
+
+
+def _role_dispatch_prompt_violation_reasons(prompt: str) -> list[str]:
+    if not prompt:
+        return ["missing_prompt"]
+    reasons: list[str] = []
+    if not prompt.startswith("Use this exact string as the whole Agent/Task prompt"):
+        reasons.append("not_compact_dispatch_message")
+    if prompt.startswith("You are running as"):
+        reasons.append("custom_role_preamble")
+    if "Do the following:" in prompt:
+        reasons.append("appended_task_instructions")
+    if "target_agent:" in prompt:
+        reasons.append("colon_anchor_rewrite")
+    return reasons
 
 
 def _experience_auto_repair_events(host_stdout: str, host_stderr: str) -> list[dict]:
@@ -1094,7 +1246,7 @@ def _phase_report_has_terminal_proof_and_work_panel(phase_report: dict) -> bool:
     return (
         bool(statuses.get("task_verdict_passed", {}).get("ok"))
         and bool(statuses.get("runtime_activity_observed_run", {}).get("ok"))
-        and bool(health.get("agent_work_panel_seen"))
+        and (bool(health.get("agent_work_panel_seen")) or bool(health.get("agent_work_panel_artifact_exposed")))
     )
 
 
@@ -1206,7 +1358,12 @@ def _assert_run_observation_chain(workdir: Path, run_id: str, adapter: str) -> N
     assert events
     event_types = [str(event.get("event_type") or "") for event in events]
     for step_id in ("builder_step", "gatekeeper_step"):
-        for event_type in ("step_context_prepared", "role_request_prepared", "agent_native_step_claimed", "agent_native_step_submitted"):
+        for event_type in (
+            "step_instruction_context_prepared",
+            "role_request_prepared",
+            "agent_native_step_claimed",
+            "agent_native_step_submitted",
+        ):
             assert any(event.get("event_type") == event_type and (event.get("payload") or {}).get("step_id") == step_id for event in events)
     run_finished = [event for event in events if event.get("event_type") == "run_finished"]
     assert run_finished
@@ -1219,20 +1376,125 @@ def _assert_run_observation_chain(workdir: Path, run_id: str, adapter: str) -> N
         assert dispatch.get("adapter") == adapter
         assert dispatch.get("actual_agent") == dispatch.get("target_agent")
         assert dispatch.get("inline") is False
-    assert event_types.index("step_context_prepared") < event_types.index("run_finished")
+    assert event_types.index("step_instruction_context_prepared") < event_types.index("run_finished")
 
 
-def _assert_host_visible_work_panel(phase_report: dict, phase_report_path: Path) -> None:
+def _assert_experience_visible_work_panel(phase_report: dict, phase_report_path: Path) -> None:
     health = phase_report.get("diagnostics", {}).get("experience_health", {})
     if health.get("agent_work_panel_seen") is True:
         return
+    if health.get("agent_work_panel_artifact_exposed") is True:
+        return
     raise AssertionError(
         _format_real_probe_diagnostic_failure(
-            "real Agent host stdout/stderr did not expose the required agent_work_panel block",
+            "real Agent host did not expose the required agent_work_panel block in stdout/stderr or Loopora experience artifacts",
             report=phase_report,
             report_path=phase_report_path,
         )
     ) from None
+
+
+def _assert_claude_role_dispatch_prompt_contract(phase_report: dict, phase_report_path: Path) -> None:
+    health = phase_report.get("diagnostics", {}).get("experience_health", {})
+    contract = health.get("role_dispatch_prompt_contract") if isinstance(health.get("role_dispatch_prompt_contract"), dict) else {}
+    violation_count = int(contract.get("violation_count") or 0)
+    copied_count = int(contract.get("copied_compact_prompt_count") or 0)
+    if violation_count:
+        raise AssertionError(
+            _format_real_probe_diagnostic_failure(
+                "Claude Agent/Task role prompts must copy summary.next_role_dispatch_message as the whole prompt; "
+                "custom role preambles, appended task instructions, or colon-anchor rewrites were observed",
+                report=phase_report,
+                report_path=phase_report_path,
+            )
+        ) from None
+    if copied_count < 2:
+        raise AssertionError(
+            _format_real_probe_diagnostic_failure(
+                "Claude Agent/Task stream did not expose compact role-dispatch prompts for both Builder and GateKeeper",
+                report=phase_report,
+                report_path=phase_report_path,
+            )
+        ) from None
+
+
+def _assert_no_release_prompt_polluted_validation(phase_report: dict, phase_report_path: Path) -> None:
+    validations = phase_report.get("diagnostics", {}).get("alignment_validations")
+    polluted = []
+    workdir_placeholder = []
+    unsafe_prompt_ref = []
+    for item in list(validations or []):
+        if not isinstance(item, dict):
+            continue
+        text = " ".join([str(item.get("error") or ""), *[str(issue) for issue in list(item.get("issues") or [])]])
+        if "observed workdir stack" in text:
+            polluted.append(item)
+        if "loop.workdir must be" in text and "$PWD" in text:
+            workdir_placeholder.append(item)
+        if "prompt_ref must be a safe relative path" in text:
+            unsafe_prompt_ref.append(item)
+    if polluted:
+        raise AssertionError(
+            _format_real_probe_diagnostic_failure(
+                "real Agent release prompt polluted the candidate bundle with a semantic-lint trigger phrase; "
+                "rewrite the probe prompt so negative environment/stack guidance is not copied into spec.markdown",
+                report=phase_report,
+                report_path=phase_report_path,
+            )
+        ) from None
+    if workdir_placeholder:
+        raise AssertionError(
+            _format_real_probe_diagnostic_failure(
+                "real Agent release prompt allowed loop.workdir to be authored as a shell placeholder; "
+                "the candidate must use the exact absolute workdir path before the first /loopora-plan call",
+                report=phase_report,
+                report_path=phase_report_path,
+            )
+        ) from None
+    if unsafe_prompt_ref:
+        raise AssertionError(
+            _format_real_probe_diagnostic_failure(
+                "real Agent release prompt allowed unsafe or URI-style prompt_ref values; "
+                "role prompt_ref values must be safe relative paths before the first /loopora-plan call",
+                report=phase_report,
+                report_path=phase_report_path,
+            )
+        ) from None
+
+
+def _assert_release_probe_candidate_validated_without_repair(phase_report: dict, phase_report_path: Path) -> None:
+    validations = [item for item in list(phase_report.get("diagnostics", {}).get("alignment_validations") or []) if isinstance(item, dict)]
+    failed_validations = [item for item in validations if item.get("ok") is not True]
+    if not validations or failed_validations:
+        raise AssertionError(
+            _format_real_probe_diagnostic_failure(
+                "real Agent release probe should produce a READY candidate on the first managed /loopora-plan call; "
+                "failed validation followed by repair hides an intermediate experience regression",
+                report=phase_report,
+                report_path=phase_report_path,
+            )
+        ) from None
+    binding = phase_report.get("diagnostics", {}).get("binding") if isinstance(phase_report.get("diagnostics"), dict) else {}
+    entry_invocations = list(binding.get("entry_invocations") or []) if isinstance(binding, dict) else []
+    plan_invocations = [
+        item
+        for item in entry_invocations
+        if isinstance(item, dict) and _canonical_entry_action(item.get("action")) == "plan" and item.get("entry_source") == "claude_project_skill"
+    ]
+    run_invocations = [
+        item
+        for item in entry_invocations
+        if isinstance(item, dict) and _canonical_entry_action(item.get("action")) == "run" and item.get("entry_source") == "claude_project_skill"
+    ]
+    if len(plan_invocations) != 1 or len(run_invocations) != 1:
+        raise AssertionError(
+            _format_real_probe_diagnostic_failure(
+                "real Agent release probe should invoke the managed plan entry once, then the managed run entry once; "
+                "extra plan retries indicate the candidate was not cleanly authored on the first pass",
+                report=phase_report,
+                report_path=phase_report_path,
+            )
+        ) from None
 
 
 def _agent_label(adapter: str) -> str:
@@ -1257,7 +1519,14 @@ def _entry_file_hint(adapter: str) -> str:
     return ".agents/skills/loopora-plan/SKILL.md and .agents/skills/loopora-run/SKILL.md"
 
 
+def _release_probe_workdir_for_bundle(bundle_file: Path) -> Path:
+    if len(bundle_file.parents) >= 4 and bundle_file.parents[1].name == "agent_inbox" and bundle_file.parents[2].name == ".loopora":
+        return bundle_file.parents[3]
+    return bundle_file.parent
+
+
 def _release_probe_prompt(adapter: str, bundle_file: Path, executor_script: Path) -> str:
+    workdir = _release_probe_workdir_for_bundle(bundle_file)
     return f"""# Loopora Agent Adapter Release Gate
 
 Use the Loopora {_agent_label(adapter)} project entry installed in this workdir. If this non-interactive host does not expose native slash commands directly, inspect the installed project entry files and follow their instructions.
@@ -1289,6 +1558,7 @@ Use these requirements to author, not copy, the candidate:
 - Use metadata name `agent-adapter-release-profile-probe` and describe it as a release-profile probe for Loopora Agent managed entry and Agent-native submission.
 - Explain in `collaboration_summary` that one Agent pass cannot prove the whole managed-entry contract, so Loopora must govern candidate validation, managed run binding, runtime visibility, native role dispatch, exact evidence refs, and evidence-backed verdict buckets.
 - Use `completion_mode: gatekeeper`, `executor_kind: custom`, `executor_mode: command`, `command_cli: {sys.executable}`, and this executor script for both the loop defaults and the role definitions: `{executor_script}`.
+- Set `loop.workdir` exactly to `{workdir}`. Do not use `$PWD`, `${{PWD}}`, `.`, relative paths, or any shell placeholder in `loop.workdir`.
 - Keep `model` and `reasoning_effort` blank everywhere so the probe delegates model and reasoning configuration to the current host/provider defaults.
 - The Builder command args must pass the executor script, the literal role `builder`, `{{output_path}}`, and `{{prompt}}`; the GateKeeper command args must pass the executor script, the literal role `gatekeeper`, `{{output_path}}`, and `{{prompt}}`.
 - Keep the workflow minimal and explicit: `builder_step` runs first; `gatekeeper_step` reads `handoffs_from: [builder_step]`, queries Builder evidence, and uses `on_pass: finish_run`.
@@ -1296,6 +1566,8 @@ Use these requirements to author, not copy, the candidate:
 - The GateKeeper role must cite only exact upstream Builder evidence ids from `known_evidence_ids`, use `covered` as the coverage status for satisfied targets, and keep Proven, Weak, Unproven, Blocking, and Residual risk as verdict bucket prose.
 - The GateKeeper result for this release gate must keep `residual_risks: []`. If any residual risk remains, set `passed: false`; do not submit a residual-risk pass.
 - The spec must include Task, Done When, Success Surface, Guardrails, Fake Done, Evidence Preferences, and Residual Risk sections covering managed entry provenance, runtime visibility, Builder proof evidence, GateKeeper exact evidence refs, task verdict buckets, no nested host CLI, and the limited residual risk of non-interactive host-native role dispatch.
+- Set Builder `prompt_ref` exactly to `roles/release-proof-builder.md` and GateKeeper `prompt_ref` exactly to `roles/release-gatekeeper.md`. Do not leave `prompt_ref` blank, use `local://`, use an absolute path, or use any URI-style value.
+- Set Builder role `description` exactly to `Release proof Builder role for the Loopora Agent release-profile probe.` and GateKeeper role `description` exactly to `Release GateKeeper role for the Loopora Agent release-profile probe.` Keep both descriptions as quoted YAML strings. Do not place literal result-schema snippets such as `residual_risks: []`, `proof_files: [...]`, or `coverage_results: ...` inside any `description`; put result-shape guidance in `prompt_markdown` or `posture_notes`, where block scalars make punctuation safe.
 - `# Done When` becomes the required coverage contract for this deterministic probe. It must contain exactly three top-level bullet items, no more and no fewer: candidate validation plus managed run binding/runtime visibility; Builder proof file plus `proof_files`; GateKeeper exact upstream evidence refs plus `covered` coverage status before `finish_run`.
 - Do not put terminal run status, task verdict, fake-done risks, guardrails, or evidence preferences in `# Done When`; those belong in `# Success Surface`, `# Guardrails`, `# Fake Done`, or `# Evidence Preferences`. Extra Done When bullets create uncovered required targets and fail this release gate.
 - `# Success Surface` must contain exactly one top-level bullet item requiring terminal run status `succeeded` with task verdict `passed`; do not author a residual-risk pass for this release gate.
@@ -1303,13 +1575,14 @@ Use these requirements to author, not copy, the candidate:
 - `# Evidence Preferences` must contain exactly two top-level bullet items: task verdict buckets are Proven, Weak, Unproven, Blocking, and Residual risk; evidence references must use exact ids from `known_evidence_ids`.
 - `collaboration_summary` must explicitly describe GateKeeper / final judgment posture, not just setup or execution mechanics.
 - Residual Risk must say the limited non-interactive native-dispatch risk is accepted only for this probe when wrapper JSON, dispatch metadata, role outputs, exact evidence refs, and terminal verdict buckets are present; otherwise fail closed.
-- Do not claim an observed workdir stack, framework, language, or product architecture. This fixture only gives you the installed Loopora entries, a README, and the executor script path, so omit stack/architecture claims entirely.
+- Do not describe stack, framework, language, product architecture, test-suite, or build-capability details. This fixture only gives you the installed Loopora entries, a README, and the executor script path, so omit environment/architecture claims entirely.
 - The user-facing bundle prose should say this is a release-profile probe for conversation-guided bundle generation, managed run binding, runtime activity, and Agent-native submission. Do not reduce it to a generic smoke test.
 
 Required bundle structure checklist:
 
 - Top-level keys include `version`, `metadata`, `collaboration_summary`, `loop`, `spec`, `role_definitions`, and `workflow`.
-- Use quoted strings or YAML block scalars for long prose. Prefer block scalars for `collaboration_summary`, `spec.markdown`, `prompt_markdown`, `posture_notes`, and `command_args_text` so colons and punctuation cannot break YAML parsing.
+- Use quoted strings or YAML block scalars for all prose or punctuation-rich scalar values, including `metadata.description` and every `role_definitions[].description`. Prefer block scalars for `collaboration_summary`, `spec.markdown`, `posture_notes`, and `command_args_text` so colons and punctuation cannot break YAML parsing.
+- For each role `prompt_markdown`, use a literal block scalar `|`, not folded `>-`; folded scalars collapse YAML front matter lines into one line and fail validation.
 - `metadata` contains only identity fields such as `name` and `description`; do not place `collaboration_summary`, `completion_mode`, executor settings, roles, or steps inside `metadata`.
 - `loop` is the run configuration object and must include `name`, `workdir`, `completion_mode`, `executor_kind`, `executor_mode`, `command_cli`, `command_args_text`, `model`, and `reasoning_effort`.
 - Every custom `command_args_text` block must preserve the literal placeholders `{{output_path}}` and `{{prompt}}`; do not replace them with concrete paths while authoring the bundle.
@@ -1319,7 +1592,7 @@ Required bundle structure checklist:
 - `spec` is an object with `markdown` containing the Task, Done When, Success Surface, Guardrails, Fake Done, Evidence Preferences, and Residual Risk sections.
 - `spec.markdown` must use these exact top-level Markdown headings: `# Task`, `# Done When`, `# Success Surface`, `# Guardrails`, `# Fake Done`, `# Evidence Preferences`, and `# Residual Risk`.
 - `role_definitions` is a list containing one Builder role definition with key `release-proof-builder` and one GateKeeper role definition with key `release-gatekeeper`; each role has `key`, `name`, `description`, `archetype`, `prompt_ref`, `prompt_markdown`, `posture_notes`, repeats the custom command executor settings, and keeps `model` / `reasoning_effort` blank.
-- Each role `prompt_markdown` must start with these exact YAML front matter lines, with no blank line before `version: 1`: `---`, then `version: 1`, then the matching `archetype: builder` or `archetype: gatekeeper`, then `---`, followed by role guidance.
+- Each role `prompt_markdown` must use `prompt_markdown: |` and start with these exact YAML front matter lines, with no blank line before `version: 1`: `---`, then `version: 1`, then the matching `archetype: builder` or `archetype: gatekeeper`, then `---`, followed by role guidance.
 - `workflow` is the workflow object, not the `loop` object. It should define `roles` as objects such as `{{id, role_definition_key}}`; use role id `builder` with `role_definition_key: release-proof-builder` and role id `gatekeeper` with `role_definition_key: release-gatekeeper`.
 - `workflow.collaboration_intent` is required and must explain evidence flow, GateKeeper closure, and weak-evidence or fake-done exposure: Builder creates durable proof first, then GateKeeper queries exact Builder evidence before `finish_run`.
 - `workflow.steps` must be a list. Each step object must use an explicit `id`; do not use `key`, generated names, or omitted ids. The exact step id `builder_step` uses `role_id: builder` and runs first. The exact step id `gatekeeper_step` uses `role_id: gatekeeper`, has `inputs.handoffs_from: [builder_step]`, has `inputs.evidence_query.archetypes: [builder]`, has `inputs.evidence_query.limit` set to a small integer, and sets `on_pass: finish_run`. Do not use unsupported evidence query keys such as `from_steps`.
@@ -1429,6 +1702,7 @@ def test_real_agent_host_can_guide_bundle_then_monitor_loop(adapter: str, tmp_pa
             bundle_file=shlex.quote(str(bundle_file)),
         )
         _assert_real_agent_command_model_policy(adapter, command)
+        _assert_real_agent_command_monitorability(adapter, command)
         monitor_result = _wait_for_host_command_with_runtime_monitoring(
             HostCommandMonitorRequest(
                 command=command,
@@ -1444,7 +1718,12 @@ def test_real_agent_host_can_guide_bundle_then_monitor_loop(adapter: str, tmp_pa
         binding = monitor_result.binding
         activity_snapshots = monitor_result.activity_snapshots
         assert completed.returncode == 0, completed.stderr or completed.stdout
-        _assert_host_visible_work_panel(monitor_result.phase_report, monitor_result.phase_report_path)
+        _assert_experience_visible_work_panel(monitor_result.phase_report, monitor_result.phase_report_path)
+        _assert_no_release_prompt_polluted_validation(monitor_result.phase_report, monitor_result.phase_report_path)
+        if adapter == "claude":
+            _assert_release_probe_candidate_validated_without_repair(monitor_result.phase_report, monitor_result.phase_report_path)
+        if adapter == "claude":
+            _assert_claude_role_dispatch_prompt_contract(monitor_result.phase_report, monitor_result.phase_report_path)
         assert bundle_file.exists()
         preview = _loopora_service(loopora_home).preview_bundle_text(bundle_file.read_text(encoding="utf-8"))
         assert preview["ok"] is True, preview.get("error")

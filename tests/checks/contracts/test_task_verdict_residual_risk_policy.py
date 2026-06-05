@@ -95,6 +95,32 @@ def test_task_verdict_classifies_unmanaged_coverage_risk_signal_as_weak(tmp_path
     assert task_verdict["buckets"]["residual_risk"] == []
 
 
+def test_task_verdict_ignores_legacy_truncated_coverage_preview_when_raw_risk_is_managed(
+    tmp_path: Path,
+) -> None:
+    risk = (
+        "The entitlement matrix has one accepted residual risk after the required proof is covered: "
+        + "the SaaS catalog can add a new plan tier before the next release without this probe knowing about it. " * 3
+        + "Owner: Product Operations. Follow-up: add the tier to entitlement_matrix_probe.py during catalog rollout. "
+        + "Acceptance path: release checklist review must confirm no new tier exists before closure."
+    )
+    run_dir = tmp_path / "run_legacy_truncated_coverage_preview"
+    legacy_preview = risk[:239].rstrip() + "…"
+    _write_covered_coverage(run_dir, latest_gatekeeper=gatekeeper_residual_risk(legacy_preview))
+
+    task_verdict = build_passed_task_verdict(run_dir, residual_risks=[risk])
+
+    assert task_verdict["status"] == "passed_with_residual_risk"
+    assert task_verdict["summary"] == "GateKeeper passed."
+    assert task_verdict["buckets"]["weak"] == []
+    assert task_verdict["buckets"]["residual_risk"] == [
+        {
+            "label": risk[:239].rstrip() + "...",
+            "managed": True,
+        }
+    ]
+
+
 def _assert_unmanaged_residual_risk(task_verdict: dict[str, Any], label: str) -> None:
     assert task_verdict["status"] == "insufficient_evidence"
     assert task_verdict["summary"] == "GateKeeper reported residual risk without a named owner, follow-up, or acceptance path."

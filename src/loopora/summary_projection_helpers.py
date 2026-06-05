@@ -20,6 +20,26 @@ def set_summary_mapping(summary: dict[str, object], key: str, value: object) -> 
         summary[key] = value
 
 
+def set_summary_before(summary: dict[str, object], key: str, value: object, before_key: str) -> None:
+    if value in ("", [], {}, None):
+        summary.pop(key, None)
+        return
+    summary.pop(key, None)
+    if before_key not in summary:
+        summary[key] = value
+        return
+    items = list(summary.items())
+    summary.clear()
+    inserted = False
+    for existing_key, existing_value in items:
+        if existing_key == before_key:
+            summary[key] = value
+            inserted = True
+        summary[existing_key] = existing_value
+    if not inserted:
+        summary[key] = value
+
+
 def non_bool_int(value: object) -> int | None:
     return structured_optional_non_negative_int(value)
 

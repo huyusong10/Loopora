@@ -124,5 +124,5 @@ def agent_loop_json_command(
             context_id=context_id,
             source_option_id=source_option_id,
         )
-        + " --json"
+        + " --json --compact-json"
     )

@@ -151,11 +151,14 @@ def _print_agent_current_step_submit_hint(submit_hint: dict) -> None:
     if result_template_path or result_contract:
         if result_file_path:
             typer.echo(
-                "result_template_fill: open the template, save a filled copy to result_file_to_write, "
+                "result_template_fill: in the main Agent session, open the template, save a filled copy to result_file_to_write, "
                 "replace null placeholders in result, keep loopora_host_dispatch, then submit"
             )
         else:
-            typer.echo("result_template_fill: open the template, replace null placeholders in result, keep loopora_host_dispatch, then submit the filled copy")
+            typer.echo(
+                "result_template_fill: in the main Agent session, open the template, replace null placeholders in result, "
+                "keep loopora_host_dispatch, then submit the filled copy"
+            )
     result_outbox_dir = str(submit_hint.get("result_outbox_absolute_dir") or submit_hint.get("result_outbox_dir") or "").strip()
     if result_outbox_dir:
         typer.echo(f"result_outbox_dir: {result_outbox_dir}")

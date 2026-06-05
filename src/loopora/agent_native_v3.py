@@ -69,6 +69,7 @@ class CurrentStepHandoffV3(TypedDict, total=False):
     step_contract_path: str
     result_template: str
     submit_command: str
+    role_dispatch_message: str
     dispatch_unavailable: dict[str, Any]
 
 

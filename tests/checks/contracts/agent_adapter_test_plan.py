@@ -26,12 +26,37 @@ def _assert_plan_repair_retry_text(output: str, bundle_file: Path) -> None:
     assert f"repair_slash_command: /loopora-plan {bundle_file}" in output
     command = _assert_labeled_loopora_agent_command(output, "repair_cli_command", "plan", entry_source="direct_cli")
     assert f"--bundle-file {bundle_file}" in command
+    assert "--json --compact-json" in command
+    assert "repair_cli_command_policy: rerun repair_cli_command exactly with --json --compact-json" in output
+    assert "do not replace it with --json-only" in output
+    assert "head -c" in output
+    assert "Python string slicing" in output
+    assert "repair_reference: use validation_error plus repair_focus" in output
+    assert "do not run loopora --help" in output
+    assert "find /" in output
+    assert "alignment session artifacts" in output
+    assert "manifests" in output
+    assert "Loopora source/help" in output
+    assert "whole filesystem" in output
 
 def _assert_plan_repair_retry_payload(payload: dict, bundle_file: Path) -> None:
     assert payload["next_plan_command"] == "/loopora-plan"
     assert payload["repair_slash_command"] == f"/loopora-plan {bundle_file}"
     _assert_loopora_agent_command(payload["repair_cli_command"], "plan", entry_source="direct_cli")
     assert f"--bundle-file {bundle_file}" in payload["repair_cli_command"]
+    assert "--json --compact-json" in payload["repair_cli_command"]
+    assert payload["repair_cli_command_policy"].startswith("rerun repair_cli_command exactly with --json --compact-json")
+    assert "do not replace it with --json-only" in payload["repair_cli_command_policy"]
+    assert "head -c" in payload["repair_cli_command_policy"]
+    assert "Python string slicing" in payload["repair_cli_command_policy"]
+    assert "do not run loopora --help" in payload["repair_cli_command_policy"]
+    assert "find /" in payload["repair_cli_command_policy"]
+    assert "alignment session artifacts" in payload["repair_cli_command_policy"]
+    assert "manifests" in payload["repair_cli_command_policy"]
+    assert payload["repair_reference"].startswith("use validation_error plus repair_focus")
+    assert "do not inspect alignment session artifacts" in payload["repair_reference"]
+    assert "whole filesystem" in payload["repair_reference"]
+    assert "Loopora source" in payload["repair_reference"]
 
 def _invoke_codex_plan(runner: CliRunner, workdir: Path, **options):
     args = ["agent", "codex", "plan", "--workdir", str(workdir)]
@@ -48,6 +73,8 @@ def _invoke_codex_plan(runner: CliRunner, workdir: Path, **options):
         args.append("--no-web")
     if options.get("json_output"):
         args.append("--json")
+    if options.get("compact_json_output"):
+        args.append("--compact-json")
     return runner.invoke(cli.app, args)
 
 def _assert_web_review_plain_output(output: str, *, task_message: str) -> None:
@@ -66,7 +93,10 @@ def _assert_web_review_plain_output(output: str, *, task_message: str) -> None:
     assert "\nUse the evidence-first path:" not in output
     assert "next_review_step: open the preview URL" in output
     assert "after_review_ready: return to this Agent session and run /loopora-run" in output
+    assert "run_blocked_until_web_review: yes" in output
+    assert "after_review_cli_command_status: blocked_until_web_review_complete" in output
     assert "after_review_slash_command: /loopora-run" in output
+    _assert_labeled_loopora_agent_command(output, "after_web_review_cli_command", "run")
     _assert_labeled_loopora_agent_command(output, "after_review_cli_command", "run")
     _assert_labeled_loopora_agent_command(output, "after_review_command", "run")
     _assert_codex_native_surface_plain(output)
@@ -85,7 +115,10 @@ def _assert_web_review_json_payload(payload: dict, *, task_message: str) -> None
     assert summary["review_recommended_action"] == "Continue evidence-first review (Recommended)"
     assert summary["review_reply_preview"].startswith("Continue Web review from this /loopora-plan task anchor:")
     assert summary["after_review_ready"].startswith("return to this Agent session")
+    assert summary["run_blocked_until_web_review"] == "yes"
+    assert summary["after_review_cli_command_status"] == "blocked_until_web_review_complete"
     assert summary["after_review_slash_command"] == "/loopora-run"
+    _assert_loopora_agent_command(summary["after_web_review_cli_command"], "run")
     _assert_loopora_agent_command(summary["after_review_cli_command"], "run")
     _assert_loopora_agent_command(summary["after_review_command"], "run")
     assert summary["ready"] is False
@@ -110,6 +143,7 @@ def _assert_ready_plan_summary(payload: dict) -> None:
     assert summary["ready_slash_command"] == "/loopora-run"
     assert "loopora agent codex run" in summary["ready_cli_command"]
     assert "--json" in summary["ready_cli_command"]
+    assert "--compact-json" in summary["ready_cli_command"]
     assert summary["ready_run_command"] == summary["ready_cli_command"]
 
 def _assert_ready_plan_payload(payload: dict) -> None:
@@ -137,6 +171,12 @@ def _assert_invalid_candidate_repair_plain_output(output: str, *, task_message: 
     assert f"repair_task_message: {task_message}" in output
     _assert_plan_repair_retry_text(output, bundle_file)
     assert "repair_task_message and repair_focus" in output
+    assert "agent_work_panel:" in output
+    assert "repair_action:" in output
+    assert "state: repair_candidate_plan_file" in output
+    assert "next_action: edit plan_file_to_repair directly" in output
+    assert "do not inspect alignment session artifacts or manifests" in output
+    assert "Loopora source/help" in output
     assert "host Agent task summary" in output
     assert "add these missing task objects from --message" in output
     assert all(item in output for item in ("refund", "authorization"))
@@ -151,12 +191,29 @@ def _assert_invalid_candidate_repair_payload(payload: dict, *, task_message: str
     assert summary["requires_candidate_repair"] is True
     assert summary["repair_task_message"] == task_message
     assert summary["repair_focus"]
+    assert summary["agent_work_panel"]["state"] == "repair_candidate_plan_file"
+    assert summary["agent_work_panel"]["task_proven"] is False
+    assert summary["agent_work_panel"]["next_action"].startswith("edit plan_file_to_repair directly")
+    assert summary["repair_action"]["state"] == "repair_candidate_plan_file"
+    assert summary["repair_action"]["file_to_edit"] == str(bundle_file)
+    assert summary["repair_action"]["command_after_edit"] == summary["repair_cli_command"]
+    assert "validation_error" in summary["repair_action"]["allowed_inputs"]
+    assert any("alignment session artifacts or manifests" in item for item in summary["repair_action"]["forbidden_actions"])
     assert summary["plan_file_to_repair"] == str(bundle_file)
     _assert_plan_repair_retry_payload(summary, bundle_file)
     assert summary["validation_error"]
     assert summary["repair_focus"][0].startswith("add these missing task objects from --message")
     assert "refund" in summary["repair_focus"][0]
     assert summary["preview_plan_copy"].endswith("/artifacts/bundle.yml")
+    assert "alignment session artifacts" in summary["next_repair_step"]
+    assert "Loopora source/help" in summary["next_repair_step"]
+    assert "filesystem-wide discovery" in summary["next_repair_step"]
+    keys = list(summary)
+    assert keys.index("agent_work_panel") < keys.index("preview_url")
+    assert keys.index("repair_action") < keys.index("preview_url")
+    assert keys.index("validation_error") < keys.index("agent_surface")
+    assert keys.index("repair_focus") < keys.index("agent_surface")
+    assert keys.index("next_repair_step") < keys.index("agent_surface")
 
 def _assert_invalid_candidate_run_recovery(stdout: str, *, task_message: str, validation_error: str, repair_focus: list, bundle_file: Path) -> None:
     run_payload = json.loads(stdout)
@@ -169,7 +226,14 @@ def _assert_invalid_candidate_run_recovery(stdout: str, *, task_message: str, va
     assert run_summary["repair_task_message"] == task_message
     assert run_summary["plan_file_to_repair"] == str(bundle_file)
     assert run_summary["preview_plan_copy"].endswith("/artifacts/bundle.yml")
+    assert run_summary["agent_work_panel"]["state"] == "repair_candidate_plan_file"
+    assert run_summary["repair_action"]["file_to_edit"] == str(bundle_file)
+    assert any("alignment session artifacts or manifests" in item for item in run_summary["repair_action"]["forbidden_actions"])
+    assert "repair_cli_command_policy" in run_summary
+    assert "repair_reference" in run_summary
     assert "repair_task_message and repair_focus" in run_summary["next_repair_step"]
+    assert "alignment session artifacts" in run_summary["next_repair_step"]
+    assert "Loopora source/help" in run_summary["next_repair_step"]
 
 def _assert_missing_candidate_agent_review(review: dict, *, task_message: str) -> None:
     assert review["source"] == "agent_entry"

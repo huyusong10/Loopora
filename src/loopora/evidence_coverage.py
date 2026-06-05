@@ -155,7 +155,7 @@ def _collect_coverage_evidence_item(
     kind = str(item.get("evidence_kind") or "observation").strip() or "observation"
     evidence_kind_counts[kind] += 1
     artifact_refs = item.get("artifact_refs") if isinstance(item.get("artifact_refs"), list) else []
-    risk = _clean_text(item.get("residual_risk"), max_length=240)
+    risk = _clean_residual_risk_text(item.get("residual_risk"))
 
     coverage_result_target_ids: set[str] = set()
     for coverage_result in _coverage_result_rows(item.get("coverage_results")):
@@ -205,13 +205,17 @@ def _overall_coverage_status(target_state: Mapping[str, dict]) -> str:
     return "covered"
 
 
-def _clean_text(value: object, *, max_length: int = 500) -> str:
+def _clean_text(value: object, *, max_length: int | None = 500) -> str:
     text = " ".join(str(value or "").split()).strip()
-    if len(text) > max_length:
+    if max_length is not None and len(text) > max_length:
         return text[: max_length - 1].rstrip() + "…"
     return text
 
 
+def _clean_residual_risk_text(value: object) -> str:
+    return _clean_text(value, max_length=None)
+
+
 def _is_meaningful_residual_risk(value: object) -> bool:
-    text = _clean_text(value, max_length=240)
+    text = _clean_residual_risk_text(value)
     return residual_risk_is_meaningful(text)

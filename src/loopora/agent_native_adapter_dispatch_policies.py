@@ -8,7 +8,7 @@ NATIVE_SUBMIT_CONTRACT = "loopora_host_dispatch + schema-shaped result template"
 NATIVE_PROOF_BOUNDARY = "native todo/trace may guide host work; Loopora evidence refs and task verdict remain the proof source"
 NATIVE_RUN_ENTRY_CONTRACT_TITLE = "Native Run Contract"
 NATIVE_RUN_ENTRY_CONTRACT_BULLETS = (
-    "Read root `agent_v3_envelope.summary` before raw legacy diagnostics.",
+    "Read the top-level JSON `summary` before `raw.legacy` diagnostics; this is the v3 Agent envelope summary.",
     "Start only from `/loopora-plan`, `/loopora-run`, or explicit Loopora CLI commands; host hooks or session start must not auto-trigger Loopora work.",
     "Dispatch only through the host-native role agent named by `next_step.role_dispatch.target_agent`; if unavailable, stop before submit.",
     "Treat host auto-activation, compatibility routing, or rule injection as context hints, not Loopora dispatch proof.",

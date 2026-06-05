@@ -30,6 +30,7 @@ class AgentNextCliRequest:
     entry_source: str
     json_output: bool
     no_web: bool
+    compact_json_output: bool = False
 
 
 @dataclass(frozen=True)
@@ -77,7 +78,7 @@ def claim_agent_next_from_cli(request: AgentNextCliRequest) -> None:
             )
         )
         _attach_web_url(result, path_key="run_path", url_key="run_url", no_web=request.no_web)
-        _print_agent_next_result(result, json_output=request.json_output)
+        _print_agent_next_result(result, json_output=request.json_output, compact_json_output=request.compact_json_output)
     except (LooporaError, StrategySourceError) as exc:
         if _print_agent_next_recovery_guidance(
             exc,
@@ -87,7 +88,7 @@ def claim_agent_next_from_cli(request: AgentNextCliRequest) -> None:
             context_id=request.context_id,
             entry_source=resolved_entry_source,
             no_web=request.no_web,
-            json_output=request.json_output,
+            json_output=request.json_output or request.compact_json_output,
         ):
             raise typer.Exit(code=1) from exc
         handle_error(exc)

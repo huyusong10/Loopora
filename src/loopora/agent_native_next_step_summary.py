@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from loopora.agent_native_coverage_summary import (
     coverage_classification_note,
     coverage_gap_summaries,
@@ -17,12 +19,16 @@ from loopora.agent_native_next_step_sections import (
 )
 from loopora.agent_native_step_view_paths import agent_native_step_contract_path_text
 from loopora.summary_projection_helpers import (
+    clip_inline,
     non_bool_int,
     set_summary_text,
 )
 
+ROLE_DISPATCH_MESSAGE_LIMIT = 1000
+ROLE_DISPATCH_LIST_ITEM_LIMIT = 8
 
-def agent_next_step_summary(next_step: dict, *, adapter: str = "", workdir: str = "") -> dict:
+
+def agent_next_step_summary(next_step: dict, *, adapter: str = "", workdir: str = "", compact: bool = False) -> dict:
     if not next_step:
         return {}
     role = next_step.get("role") if isinstance(next_step.get("role"), dict) else {}
@@ -56,13 +62,117 @@ def agent_next_step_summary(next_step: dict, *, adapter: str = "", workdir: str 
         summary["dispatch_unavailable"] = dispatch_unavailable
     set_summary_text(summary, "action_policy", action_policy_summary(action_policy))
     _attach_agent_next_step_submit_summary(summary, next_step, submit_hint)
-    _attach_agent_next_step_evidence_summary(summary, next_step)
-    _attach_agent_next_step_coverage_summary(summary, next_step)
+    _attach_agent_next_step_evidence_summary(summary, next_step, compact=compact)
+    _attach_agent_next_step_coverage_summary(summary, next_step, compact=compact)
+    set_summary_text(summary, "role_dispatch_message", _role_dispatch_message(summary, workdir=workdir))
     iteration_repair = agent_iteration_repair_summary(next_step.get("iteration_repair"))
     if iteration_repair:
         summary["iteration_repair"] = iteration_repair
     summary.update(agent_next_step_continuation_summary(next_step))
     return {key: value for key, value in summary.items() if value not in ("", [], {})}
+
+
+def _role_dispatch_message(summary: dict[str, object], *, workdir: str = "") -> str:
+    target = str(summary.get("target_agent") or "").strip()
+    if not target:
+        return ""
+    is_gatekeeper = "gatekeeper" in target.lower()
+    base_prefix = (
+        "Use this exact string as the whole Agent/Task prompt; do not prepend `You are running as`, "
+        "append `Do the following`, or wrapper examples. "
+    )
+    if is_gatekeeper:
+        prefix = (
+            base_prefix
+            + "return one raw wrapper JSON object only. Main session writes/submits result. Open local paths. "
+            + "GateKeeper evidence reuse rule: inspect known evidence; decide from exact ids if sufficient; "
+            + "do not rerun same successful command or proof detours. "
+        )
+    else:
+        prefix = (
+            base_prefix
+            + "Invoke the named host-native role agent; return one raw wrapper JSON object only. "
+            + "Main session writes/submits result. Open local paths. "
+        )
+        prefix += "direct .loopora/agent_artifacts; no /tmp staging or wc/count-only probes. "
+        prefix += "Do not paste full CLI JSON/full schemas/large evidence ledgers. "
+    anchors = [f"target_agent={target}"]
+    for label, key in (
+        ("context_path", "context_path"),
+        ("step_contract_path", "step_contract_path"),
+        ("result_template", "result_template"),
+    ):
+        value = str(summary.get(key) or "").strip()
+        if value:
+            anchors.append(f"{label}={_dispatch_path_text(value, workdir=workdir)}")
+    known_ids = [str(item).strip() for item in list(summary.get("known_evidence_ids") or []) if str(item).strip()]
+    coverage_ids = [str(item).strip() for item in list(summary.get("coverage_target_ids") or []) if str(item).strip()]
+    value = str(summary.get("action_policy") or "").strip()
+    if is_gatekeeper:
+        _append_bounded_list_anchor(anchors, "known_evidence_ids", known_ids, prefix=prefix, max_items=1)
+        if value:
+            _append_optional_anchor(anchors, f"action_policy={value}", prefix=prefix)
+        _append_bounded_list_anchor(anchors, "coverage_target_ids", coverage_ids, prefix=prefix)
+    else:
+        _append_bounded_list_anchor(anchors, "coverage_target_ids", coverage_ids, prefix=prefix)
+        _append_bounded_list_anchor(anchors, "known_evidence_ids", known_ids, prefix=prefix)
+        if value:
+            _append_optional_anchor(anchors, f"action_policy={value}", prefix=prefix)
+    for label, key in (
+        ("required_coverage", "required_coverage"),
+    ):
+        value = str(summary.get(key) or "").strip()
+        if not value:
+            continue
+        _append_optional_anchor(anchors, f"{label}={_dispatch_path_text(value, workdir=workdir)}", prefix=prefix)
+    return clip_inline(prefix + "; ".join(anchors) + ".", ROLE_DISPATCH_MESSAGE_LIMIT)
+
+
+def _append_bounded_list_anchor(
+    anchors: list[str],
+    label: str,
+    values: list[str],
+    *,
+    prefix: str,
+    max_items: int | None = None,
+) -> None:
+    if not values:
+        return
+    max_count = min(ROLE_DISPATCH_LIST_ITEM_LIMIT, len(values), max_items or len(values))
+    for count in range(max_count, 0, -1):
+        omitted = len(values) - count
+        anchor = f"{label}={', '.join(values[:count])}"
+        if omitted:
+            anchor = f"{anchor} (+{omitted} omitted)"
+        if _inline_dispatch_length(prefix, [*anchors, anchor]) <= ROLE_DISPATCH_MESSAGE_LIMIT:
+            anchors.append(anchor)
+            return
+
+
+def _append_optional_anchor(anchors: list[str], anchor: str, *, prefix: str) -> None:
+    if _inline_dispatch_length(prefix, [*anchors, anchor]) <= ROLE_DISPATCH_MESSAGE_LIMIT:
+        anchors.append(anchor)
+
+
+def _inline_dispatch_length(prefix: str, anchors: list[str]) -> int:
+    return len(" ".join((prefix + "; ".join(anchors) + ".").split()))
+
+
+def _dispatch_path_text(value: str, *, workdir: str = "") -> str:
+    text = str(value or "").strip()
+    if not text or not workdir:
+        return text
+    try:
+        path = Path(text).expanduser()
+    except (OSError, ValueError):
+        return text
+    if not path.is_absolute():
+        return text
+    try:
+        relative = path.resolve().relative_to(Path(workdir).expanduser().resolve())
+    except (OSError, ValueError):
+        return text
+    return str(relative)
 
 
 def _attach_agent_next_step_submit_summary(summary: dict[str, object], next_step: dict, submit_hint: dict) -> None:
@@ -82,13 +192,13 @@ def _attach_agent_next_step_submit_summary(summary: dict[str, object], next_step
     set_summary_text(summary, "result_template_contract", submit_hint.get("result_file_contract"))
     if submit_hint.get("result_file_contract") or submit_hint.get("result_template_absolute_path") or submit_hint.get("result_template_path"):
         summary["result_template_fill"] = (
-            "open the template, save a filled copy to result_file_to_write, replace null placeholders in result, keep loopora_host_dispatch, then submit"
+            "in the main Agent session, open the template, save a filled copy to result_file_to_write, replace null placeholders in result, keep loopora_host_dispatch, then submit"
         )
     set_summary_text(summary, "result_outbox_dir", submit_hint.get("result_outbox_absolute_dir") or submit_hint.get("result_outbox_dir"))
     set_summary_text(summary, "submit_command", submit_hint.get("command"))
 
 
-def _attach_agent_next_step_evidence_summary(summary: dict[str, object], next_step: dict) -> None:
+def _attach_agent_next_step_evidence_summary(summary: dict[str, object], next_step: dict, *, compact: bool) -> None:
     known_count = non_bool_int(next_step.get("known_evidence_count"))
     if known_count is not None:
         summary["known_evidence_count"] = known_count
@@ -98,16 +208,64 @@ def _attach_agent_next_step_evidence_summary(summary: dict[str, object], next_st
         if len(known_ids) > len(displayed_known_ids):
             summary["known_evidence_ids_omitted"] = len(known_ids) - len(displayed_known_ids)
         summary["known_evidence_ids"] = displayed_known_ids
-    known_refs = agent_known_evidence_ref_summaries(next_step.get("known_evidence_refs"), limit=5)
+    known_refs = agent_known_evidence_ref_summaries(next_step.get("known_evidence_refs"), limit=3 if compact else 5)
     if known_refs:
         summary["known_evidence_refs"] = known_refs
     set_summary_text(summary, "known_evidence_scope", agent_current_step_evidence_scope_summary(next_step))
 
 
-def _attach_agent_next_step_coverage_summary(summary: dict[str, object], next_step: dict) -> None:
+def _attach_agent_next_step_coverage_summary(summary: dict[str, object], next_step: dict, *, compact: bool) -> None:
     required_coverage = next_step.get("required_coverage") if isinstance(next_step.get("required_coverage"), dict) else {}
+    coverage_target_ids = _coverage_target_ids(next_step)
+    if coverage_target_ids:
+        summary["coverage_target_ids"] = coverage_target_ids
+    coverage_targets = _coverage_targets(next_step, compact=False)
+    if coverage_targets and compact:
+        coverage_preview = _coverage_targets(next_step, compact=True)
+        summary["coverage_targets_preview"] = coverage_preview
+        if len(coverage_targets) > len(coverage_preview):
+            summary["coverage_targets_omitted"] = len(coverage_targets) - len(coverage_preview)
+    elif coverage_targets:
+        summary["coverage_targets"] = coverage_targets
     set_summary_text(summary, "required_coverage", required_coverage_summary(required_coverage))
     set_summary_text(summary, "coverage_classification_note", coverage_classification_note(next_step))
-    top_gaps = coverage_gap_summaries(required_coverage.get("top_gaps"), limit=5)
+    top_gaps = coverage_gap_summaries(required_coverage.get("top_gaps"), limit=3 if compact else 5)
     if top_gaps:
         summary["top_coverage_gaps"] = top_gaps
+
+
+def _coverage_target_ids(next_step: dict) -> list[str]:
+    target_ids = [str(item).strip() for item in list(next_step.get("coverage_target_ids") or []) if str(item).strip()]
+    if target_ids:
+        return list(dict.fromkeys(target_ids))
+    target_ids = []
+    for item in list(next_step.get("coverage_targets") or []):
+        if not isinstance(item, dict):
+            continue
+        target_id = str(item.get("id") or item.get("target_id") or "").strip()
+        if target_id:
+            target_ids.append(target_id)
+    return list(dict.fromkeys(target_ids))
+
+
+def _coverage_targets(next_step: dict, *, compact: bool = False) -> list[dict[str, object]]:
+    targets: list[dict[str, object]] = []
+    for item in list(next_step.get("coverage_targets") or []):
+        if not isinstance(item, dict):
+            continue
+        target_id = str(item.get("id") or item.get("target_id") or "").strip()
+        if not target_id:
+            continue
+        target: dict[str, object] = {"id": target_id}
+        kind = str(item.get("kind") or "").strip()
+        if kind:
+            target["kind"] = kind
+        if "required" in item:
+            target["required"] = bool(item.get("required"))
+        text = str(item.get("text") or item.get("label") or "").strip()
+        if text:
+            target["text"] = text if not compact else text[:157].rstrip() + ("..." if len(text) > 160 else "")
+        targets.append(target)
+        if compact and len(targets) >= 3:
+            break
+    return targets

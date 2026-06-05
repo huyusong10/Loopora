@@ -24,6 +24,13 @@ EntrySourceOption = Annotated[
     str,
     typer.Option("--entry-source", hidden=True, help="Internal marker for Loopora-managed Agent entry provenance."),
 ]
+CompactJsonOutputOption = Annotated[
+    bool,
+    typer.Option(
+        "--compact-json",
+        help="Print Agent Native v3 summary JSON without the raw legacy payload.",
+    ),
+]
 BundleFileOption = Annotated[
     Path | None,
     typer.Option(
@@ -41,6 +48,13 @@ ResultFileOption = Annotated[
 ]
 RunIdOption = Annotated[str, typer.Option("--run-id", help="Optional Loopora run id. Defaults to the run bound to the current host session/workdir.")]
 StepIdOption = Annotated[str, typer.Option("--step-id", help="Loopora step id being submitted.")]
+NextStepIdCompatOption = Annotated[
+    str,
+    typer.Option(
+        "--step-id",
+        help="Compatibility no-op: agent next always claims the run's active step and cannot select an arbitrary step.",
+    ),
+]
 AdapterMessageOption = Annotated[
     str,
     typer.Option("--message", help="Short task summary for the Loop preview; required for Agent-first traceability."),

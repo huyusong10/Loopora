@@ -61,7 +61,11 @@ _SEMANTIC_LINT_HINT_RULES = (
     ),
     (
         ("alignment bundle must project task verdict evidence into proven, weak, unproven, blocking, and residual risk buckets",),
-        "project evidence buckets into collaboration_summary, Evidence Preferences, Inspector posture, and GateKeeper closure",
+        "add one unwrapped line `Buckets: Proven, Weak, Unproven, Blocking, Residual risk.` to collaboration_summary, Evidence Preferences, Inspector posture, and GateKeeper closure",
+    ),
+    (
+        ("alignment bundle must convert project-local governance markers into builder reading",),
+        "add local governance responsibility sentences near the marker text: Builder reads and follows applicable project-local governance before edits; Inspector verifies related design/tests/governance evidence; GateKeeper treats skipped governance or missing expected validation as Weak, Unproven, or Blocking",
     ),
     (
         ("web alignment bundles must use gatekeeper completion_mode",),
@@ -195,6 +199,18 @@ def _task_projection_area_repair_hint(area: str) -> str:
 
 
 _VALIDATION_REPAIR_HINT_RULES: tuple[tuple[tuple[str, ...], str], ...] = (
+    (
+        ("invalid bundle YAML", "unacceptable character"),
+        "remove hidden YAML control characters such as NUL bytes from the plan file, especially inside quoted ids",
+    ),
+    (
+        ("invalid bundle YAML", "#x0000"),
+        "remove hidden YAML control characters such as NUL bytes from the plan file, especially inside quoted ids",
+    ),
+    (
+        ("invalid bundle YAML", "special characters are not allowed"),
+        "remove hidden YAML control characters such as NUL bytes from the plan file, especially inside quoted ids",
+    ),
     (("metadata.name is required",), "add metadata.name so the plan has a stable reviewable identity"),
     (("spec is required", "spec."), "fill the spec with the concrete task contract, done conditions, risks, and evidence expectations"),
     (

@@ -136,9 +136,17 @@ def build_step_instruction_context(request: StepInstructionContextRequest) -> di
     continuation_context = _normalize_continuation_context(request.continuation_context or run_contract.get("continuation_context"))
     iter_index = coerced_non_negative_int(request.iter_id)
     step_order = coerced_non_negative_int(request.step_order)
+    workspace_baseline = _workspace_baseline_context(run_contract, layout)
+    coverage_targets = _contract_mapping_list(compiled_spec.get("coverage_targets"))
+    coverage_target_ids = [
+        str(item.get("id") or item.get("target_id") or "").strip()
+        for item in coverage_targets
+        if str(item.get("id") or item.get("target_id") or "").strip()
+    ]
     return {
         "contract": {
             "path": layout.relative(layout.run_contract_path),
+            "workspace_baseline": workspace_baseline,
             "goal": str(compiled_spec.get("goal") or "").strip(),
             "constraints": str(compiled_spec.get("constraints") or "No explicit constraints were provided.").strip(),
             "check_mode": str(compiled_spec.get("check_mode") or "specified"),
@@ -154,12 +162,14 @@ def build_step_instruction_context(request: StepInstructionContextRequest) -> di
             "execution_strategy": execution_strategy,
             "local_governance": local_governance,
             "role_postures": _contract_role_postures(run_contract.get("role_postures") or strategy_snapshot.get("roles")),
-            "coverage_targets": _contract_mapping_list(compiled_spec.get("coverage_targets")),
+            "coverage_targets": coverage_targets,
             "success_surface": _contract_string_list(run_contract.get("success_surface") or compiled_spec.get("success_surface")),
             "fake_done_states": _contract_string_list(run_contract.get("fake_done_states") or compiled_spec.get("fake_done_states")),
             "evidence_preferences": _contract_string_list(run_contract.get("evidence_preferences") or compiled_spec.get("evidence_preferences")),
             "residual_risk": _contract_string(run_contract.get("residual_risk") or compiled_spec.get("residual_risk")),
         },
+        "coverage_target_ids": coverage_target_ids,
+        "coverage_targets": coverage_targets,
         "continuation": continuation_context,
         "iteration": {
             "iter_index": iter_index,
@@ -213,6 +223,7 @@ def build_step_instruction_context(request: StepInstructionContextRequest) -> di
         },
         "artifacts": [
             artifact_ref(layout, layout.run_contract_path, kind="contract", label="run-contract"),
+            workspace_baseline["artifact"],
             artifact_ref(layout, layout.latest_state_path, kind="state", label="latest-state"),
             artifact_ref(layout, layout.latest_iteration_summary_path, kind="state", label="latest-iteration-summary"),
             artifact_ref(layout, layout.timeline_events_path, kind="timeline", label="timeline-events"),
@@ -222,4 +233,17 @@ def build_step_instruction_context(request: StepInstructionContextRequest) -> di
             artifact_ref(layout, layout.evidence_coverage_path, kind="evidence", label="evidence-coverage"),
             artifact_ref(layout, layout.evidence_manifest_path, kind="evidence", label="evidence-manifest"),
         ],
+    }
+
+
+def _workspace_baseline_context(run_contract: dict, layout: RunArtifactLayout) -> dict:
+    baseline = run_contract.get("workspace_baseline") if isinstance(run_contract.get("workspace_baseline"), dict) else {}
+    artifact = baseline.get("artifact") if isinstance(baseline.get("artifact"), dict) else {}
+    normalized_artifact = {
+        **artifact_ref(layout, layout.workspace_baseline_path, kind="workspace", label="workspace-baseline"),
+        **{key: str(value) for key, value in artifact.items() if key in {"kind", "label", "relative_path", "workspace_path", "absolute_path"}},
+    }
+    return {
+        "file_count": coerced_non_negative_int(baseline.get("file_count")),
+        "artifact": normalized_artifact,
     }

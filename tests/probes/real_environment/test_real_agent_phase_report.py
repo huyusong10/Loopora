@@ -188,6 +188,12 @@ def test_real_agent_phase_report_summarizes_real_probe_milestones(tmp_path: Path
     assert health["user_question_guidance_available"] is True
     assert health["role_dispatch_guidance_seen"] is True
     assert health["native_trace_observed"] is True
+    assert health["role_dispatch_prompt_contract"] == {
+        "agent_task_prompt_count": 0,
+        "copied_compact_prompt_count": 0,
+        "violation_count": 0,
+        "violations": [],
+    }
     assert health["auto_repair_events"] == [
         {
             "source": "host_stdout_tail",
@@ -376,6 +382,259 @@ def test_real_agent_external_config_pin_requires_explicit_override(monkeypatch) 
     module._assert_real_agent_command_model_policy("codex", 'codex exec -c model_reasoning_effort="high" prompt')
 
 
+def test_real_agent_claude_command_requires_stream_json_monitoring() -> None:
+    module = _load_real_agent_module()
+
+    module._assert_real_agent_command_monitorability(
+        "claude",
+        "claude -p --output-format stream-json --include-partial-messages prompt",
+    )
+    module._assert_real_agent_command_monitorability("codex", "codex exec prompt")
+
+    with pytest.raises(AssertionError) as excinfo:
+        module._assert_real_agent_command_monitorability("claude", "claude -p prompt")
+
+    assert "--output-format stream-json --include-partial-messages" in str(excinfo.value)
+
+
+def test_real_agent_phase_report_extracts_claude_stream_task_events(tmp_path: Path) -> None:
+    module = _load_real_agent_module()
+    stdout = "\n".join(
+        [
+            json.dumps(
+                {
+                    "type": "system",
+                    "subtype": "task_started",
+                    "task_id": "task-1",
+                    "tool_use_id": "tool-1",
+                    "subagent_type": "loopora-builder",
+                    "description": "Builder step",
+                }
+            ),
+            json.dumps(
+                {
+                    "type": "system",
+                    "subtype": "task_notification",
+                    "status": "completed",
+                    "task_id": "task-1",
+                    "tool_use_id": "tool-1",
+                    "summary": "Builder step",
+                }
+            ),
+        ]
+    )
+
+    health = module._experience_health_summary(workdir=tmp_path, run_path=Path(), host_stdout=stdout)
+
+    assert health["host_stream_json_seen"] is True
+    assert health["native_role_task_started_count"] == 1
+    assert health["native_role_task_completed_count"] == 1
+    assert health["native_role_task_started"][0]["subagent_type"] == "loopora-builder"
+    assert "host_native_role_task_started_seen" in health["experience_notes"]
+
+
+def test_real_agent_phase_report_extracts_claude_role_dispatch_prompt_contract(tmp_path: Path) -> None:
+    module = _load_real_agent_module()
+    valid_prompt = (
+        "Use this exact string as the whole Agent/Task prompt; do not rewrite it. "
+        "target_agent=loopora-builder; context_path=.loopora/context.json."
+    )
+    invalid_prompt = (
+        "You are running as the Loopora GateKeeper role agent.\n\n"
+        "Do the following:\n"
+        "target_agent: loopora-gatekeeper\n"
+    )
+    stdout = "\n".join(
+        [
+            json.dumps(
+                {
+                    "type": "assistant",
+                    "message": {
+                        "content": [
+                            {
+                                "type": "tool_use",
+                                "name": "Task",
+                                "input": {
+                                    "subagent_type": "loopora-builder",
+                                    "description": "Builder",
+                                    "prompt": valid_prompt,
+                                },
+                            }
+                        ]
+                    },
+                }
+            ),
+            json.dumps(
+                {
+                    "type": "assistant",
+                    "message": {
+                        "content": [
+                            {
+                                "type": "tool_use",
+                                "name": "Agent",
+                                "input": {
+                                    "subagent_type": "loopora-gatekeeper",
+                                    "description": "GateKeeper",
+                                    "prompt": invalid_prompt,
+                                },
+                            }
+                        ]
+                    },
+                }
+            ),
+        ]
+    )
+
+    health = module._experience_health_summary(workdir=tmp_path, run_path=Path(), host_stdout=stdout)
+    contract = health["role_dispatch_prompt_contract"]
+
+    assert contract["agent_task_prompt_count"] == 2
+    assert contract["copied_compact_prompt_count"] == 1
+    assert contract["violation_count"] == 1
+    assert contract["violations"][0]["subagent_type"] == "loopora-gatekeeper"
+    assert contract["violations"][0]["violation_reasons"] == [
+        "not_compact_dispatch_message",
+        "custom_role_preamble",
+        "appended_task_instructions",
+        "colon_anchor_rewrite",
+    ]
+    assert "role_dispatch_prompt_contract_violation" in health["experience_notes"]
+
+
+def test_real_agent_phase_report_marks_missing_claude_stream_task_events(tmp_path: Path) -> None:
+    module = _load_real_agent_module()
+
+    health = module._experience_health_summary(
+        workdir=tmp_path,
+        run_path=Path(),
+        host_stdout=json.dumps({"type": "assistant", "message": {"content": []}}),
+    )
+
+    assert health["host_stream_json_seen"] is True
+    assert health["native_role_task_started_count"] == 0
+    assert "host_native_role_task_started_not_seen" in health["experience_notes"]
+
+
+def test_real_agent_probe_rejects_release_prompt_polluted_validation(tmp_path: Path) -> None:
+    module = _load_real_agent_module()
+    report = {
+        "adapter": "claude",
+        "workdir": str(tmp_path),
+        "phase_statuses": {},
+        "diagnostics": {
+            "alignment_validations": [
+                {
+                    "ok": False,
+                    "error": "bundle semantic lint failed: bundle field spec.markdown must not claim an observed workdir stack unsupported by Workdir Snapshot",
+                    "issues": [],
+                }
+            ]
+        },
+    }
+
+    with pytest.raises(AssertionError) as excinfo:
+        module._assert_no_release_prompt_polluted_validation(report, tmp_path / "phase.json")
+
+    assert "semantic-lint trigger phrase" in str(excinfo.value)
+
+
+def test_real_agent_probe_rejects_workdir_placeholder_validation(tmp_path: Path) -> None:
+    module = _load_real_agent_module()
+    report = {
+        "adapter": "claude",
+        "workdir": str(tmp_path),
+        "phase_statuses": {},
+        "diagnostics": {
+            "alignment_validations": [
+                {
+                    "ok": False,
+                    "error": f"bundle loop.workdir must be {tmp_path}, got {tmp_path}/$PWD",
+                    "issues": [],
+                }
+            ]
+        },
+    }
+
+    with pytest.raises(AssertionError) as excinfo:
+        module._assert_no_release_prompt_polluted_validation(report, tmp_path / "phase.json")
+
+    assert "loop.workdir to be authored as a shell placeholder" in str(excinfo.value)
+
+
+def test_real_agent_probe_rejects_unsafe_prompt_ref_validation(tmp_path: Path) -> None:
+    module = _load_real_agent_module()
+    report = {
+        "adapter": "claude",
+        "workdir": str(tmp_path),
+        "phase_statuses": {},
+        "diagnostics": {
+            "alignment_validations": [
+                {
+                    "ok": False,
+                    "error": "prompt_ref must be a safe relative path",
+                    "issues": [],
+                }
+            ]
+        },
+    }
+
+    with pytest.raises(AssertionError) as excinfo:
+        module._assert_no_release_prompt_polluted_validation(report, tmp_path / "phase.json")
+
+    assert "unsafe or URI-style prompt_ref" in str(excinfo.value)
+
+
+def test_real_agent_probe_rejects_validation_repair_as_release_regression(tmp_path: Path) -> None:
+    module = _load_real_agent_module()
+    report = {
+        "adapter": "claude",
+        "workdir": str(tmp_path),
+        "phase_statuses": {},
+        "diagnostics": {
+            "alignment_validations": [
+                {"ok": False, "error": "candidate failed before repair", "issues": []},
+                {"ok": True, "error": "", "issues": []},
+            ],
+            "binding": {
+                "entry_invocations": [
+                    {"action": "plan", "entry_source": "claude_project_skill"},
+                    {"action": "plan", "entry_source": "claude_project_skill"},
+                    {"action": "run", "entry_source": "claude_project_skill"},
+                ]
+            },
+        },
+    }
+
+    with pytest.raises(AssertionError) as excinfo:
+        module._assert_release_probe_candidate_validated_without_repair(report, tmp_path / "phase.json")
+
+    assert "failed validation followed by repair" in str(excinfo.value)
+
+
+def test_real_agent_probe_rejects_extra_managed_plan_retry(tmp_path: Path) -> None:
+    module = _load_real_agent_module()
+    report = {
+        "adapter": "claude",
+        "workdir": str(tmp_path),
+        "phase_statuses": {},
+        "diagnostics": {
+            "alignment_validations": [{"ok": True, "error": "", "issues": []}],
+            "binding": {
+                "entry_invocations": [
+                    {"action": "plan", "entry_source": "claude_project_skill"},
+                    {"action": "plan", "entry_source": "claude_project_skill"},
+                    {"action": "run", "entry_source": "claude_project_skill"},
+                ]
+            },
+        },
+    }
+
+    with pytest.raises(AssertionError) as excinfo:
+        module._assert_release_probe_candidate_validated_without_repair(report, tmp_path / "phase.json")
+
+    assert "managed plan entry once" in str(excinfo.value)
+
+
 def test_real_agent_prompt_requires_authoring_without_embedded_candidate_yaml(tmp_path: Path) -> None:
     module = _load_real_agent_module()
     executor_script = tmp_path / "release_executor.py"
@@ -388,6 +647,16 @@ def test_real_agent_prompt_requires_authoring_without_embedded_candidate_yaml(tm
     assert "do not return a todo-only response" in prompt
     assert "do not end a response after preparatory commands" in prompt
     assert "a run binding exists" in prompt
+    expected_workdir = module._release_probe_workdir_for_bundle(tmp_path / "candidate.yml")
+    assert f"Set `loop.workdir` exactly to `{expected_workdir}`" in prompt
+    assert "Do not use `$PWD`, `${PWD}`, `.`, relative paths, or any shell placeholder in `loop.workdir`" in prompt
+    assert "Set Builder `prompt_ref` exactly to `roles/release-proof-builder.md`" in prompt
+    assert "GateKeeper `prompt_ref` exactly to `roles/release-gatekeeper.md`" in prompt
+    assert "Do not leave `prompt_ref` blank, use `local://`, use an absolute path, or use any URI-style value" in prompt
+    assert "Set Builder role `description` exactly to `Release proof Builder role for the Loopora Agent release-profile probe.`" in prompt
+    assert "GateKeeper role `description` exactly to `Release GateKeeper role for the Loopora Agent release-profile probe.`" in prompt
+    assert "Keep both descriptions as quoted YAML strings" in prompt
+    assert "Do not place literal result-schema snippets such as `residual_risks: []`" in prompt
     assert "final main-session answer visibly includes a literal `agent_work_panel:` block" in prompt
     assert "agent_work_panel:" in prompt
     assert "Final response format" in prompt
@@ -395,12 +664,16 @@ def test_real_agent_prompt_requires_authoring_without_embedded_candidate_yaml(tm
     assert "Do not omit the block even when the task verdict passed" in prompt
     assert "verify that" in prompt
     assert "Required bundle structure checklist" in prompt
+    assert "all prose or punctuation-rich scalar values, including `metadata.description`" in prompt
+    assert "literal block scalar `|`, not folded `>-`" in prompt
+    assert "must use `prompt_markdown: |`" in prompt
     assert "`workflow` is the workflow object, not the `loop` object" in prompt
     assert "YAML front matter lines" in prompt
     assert "archetype: builder" in prompt
     assert "archetype: gatekeeper" in prompt
     assert "role_definition_key: release-proof-builder" in prompt
-    assert "Do not claim an observed workdir stack" in prompt
+    assert "omit environment/architecture claims entirely" in prompt
+    assert "observed workdir stack" not in prompt
     assert "`workflow.collaboration_intent` is required" in prompt
     assert "inputs.evidence_query.archetypes" in prompt
     assert "Do not use unsupported evidence query keys" in prompt

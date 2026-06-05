@@ -11,6 +11,19 @@ from loopora.cli_shared import echo_json
 from loopora.service_types import LooporaConflictError
 
 
+def is_adapter_install_conflict(exc: LooporaConflictError) -> bool:
+    message = str(exc)
+    return (
+        ("non-Loopora" in message and "adapter files:" in message)
+        or message.startswith(
+            (
+                "refusing to update Claude Code settings because ",
+                "Claude Code settings must be a JSON object:",
+            )
+        )
+    )
+
+
 def handle_adapter_install_conflict(adapter: str, *, workdir: Path, exc: LooporaConflictError, json_output: bool) -> None:
     label = _adapter_label(adapter) or "Agent"
     root = resolve_adapter_project_root(workdir)

@@ -1,5 +1,10 @@
 from __future__ import annotations
 
+from typer.testing import CliRunner
+
+from loopora import cli
+from loopora import cli_agent_runtime_commands
+
 from agent_adapter_test_support import (
     Path,
     _assert_codex_native_surface_summary,
@@ -52,3 +57,45 @@ def test_agent_next_summary_reports_dispatch_recovery_commands_when_target_confi
         loopora_home=home,
     )
     assert "do not submit inline role work" in dispatch_unavailable["next"]
+
+
+def test_agent_next_accepts_step_id_as_compatibility_noop(monkeypatch, tmp_path: Path) -> None:
+    captured = {}
+
+    def fake_claim_agent_next_from_cli(request) -> None:
+        captured["adapter"] = request.adapter
+        captured["run_id"] = request.run_id
+        captured["json_output"] = request.json_output
+
+    monkeypatch.setattr(cli_agent_runtime_commands, "claim_agent_next_from_cli", fake_claim_agent_next_from_cli)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli.app,
+        [
+            "agent",
+            "claude",
+            "next",
+            "--workdir",
+            str(tmp_path),
+            "--run-id",
+            "run_example",
+            "--step-id",
+            "inspector_step",
+            "--json",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert captured == {"adapter": "claude", "run_id": "run_example", "json_output": True}
+
+
+def test_agent_next_help_names_step_id_as_compatibility_noop() -> None:
+    runner = CliRunner()
+
+    result = runner.invoke(cli.app, ["agent", "claude", "next", "--help"])
+
+    assert result.exit_code == 0, result.output
+    assert "--step-id" in result.stdout
+    assert "Compatibility no-op" in result.stdout
+    assert "active step" in result.stdout

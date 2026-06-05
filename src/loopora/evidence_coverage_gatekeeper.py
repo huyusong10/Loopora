@@ -17,9 +17,7 @@ def latest_gatekeeper_projection(
 ) -> dict:
     if str(item.get("archetype") or "").strip().lower() != "gatekeeper":
         return {}
-    gatekeeper_refs = [
-        str(ref).split(":", 1)[1].strip() for ref in list(item.get("verifies") or []) if str(ref).startswith("evidence:") and str(ref).split(":", 1)[1].strip()
-    ]
+    gatekeeper_refs = _gatekeeper_evidence_refs(item)
     return {
         "id": item_id,
         "result": str(item.get("result") or "").strip(),
@@ -66,6 +64,19 @@ def gatekeeper_has_self_measured_evidence(item: Mapping[str, Any], *, item_id: s
     if str(item.get("result") or "").strip().lower() != "passed":
         return False
     return structured_bool_is_true(item.get("measured_evidence")) and structured_non_negative_int(item.get("concrete_evidence_claim_count")) > 0
+
+
+def _gatekeeper_evidence_refs(item: Mapping[str, Any]) -> list[str]:
+    refs = [
+        str(ref).split(":", 1)[1].strip()
+        for ref in list(item.get("verifies") or [])
+        if str(ref).startswith("evidence:") and str(ref).split(":", 1)[1].strip()
+    ]
+    if refs:
+        return list(dict.fromkeys(refs))
+    return list(
+        dict.fromkeys(str(ref).strip() for ref in list(item.get("related_evidence_ids") or []) if str(ref).strip())
+    )
 
 
 def _supporting_gatekeeper_refs(evidence_refs: list[str], evidence_items_by_id: Mapping[str, Mapping[str, Any]]) -> list[str]:

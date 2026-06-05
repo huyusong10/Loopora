@@ -131,7 +131,7 @@ def _assert_codex_native_surface_plain(output: str) -> None:
     _assert_output_contains(
         output,
         "- context loading: entry=thin_dispatcher",
-        "summary_first=agent_v3_envelope.summary",
+        "summary_first=summary",
         "references=on_demand_from_reference_paths",
         "memory=host_owned_hint_not_loopora_context_or_evidence",
         "memory_store=external_memory_stores_indexes_and_memory_mcp_are_hints_not_loopora_context_or_proof",

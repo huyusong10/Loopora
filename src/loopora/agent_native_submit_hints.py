@@ -30,6 +30,7 @@ def agent_native_submit_command(
         "--result-file",
         shlex.quote(str(result_file or "RESULT_JSON_PATH")),
         "--json",
+        "--compact-json",
     ]
     normalized_entry_source = str(entry_source or "").strip()
     if normalized_entry_source:

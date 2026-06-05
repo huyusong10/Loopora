@@ -23,7 +23,7 @@ def test_public_reader_docs_explain_agent_runner_capability_contract_semantics()
         ("host-native", "Role handoff"),
         ("nested", "CLI"),
         ("Task proof", "evidence", "task verdict"),
-        ("Model/provider routing", "permissions", "credentials"),
+        ("model selection", "backend routing", "permissions", "credentials"),
         ("hints", "host memory"),
     )
     chinese_semantics = (
@@ -36,7 +36,7 @@ def test_public_reader_docs_explain_agent_runner_capability_contract_semantics()
         ("宿主原生机制", "角色交接"),
         ("嵌套启动", "命令行"),
         ("任务证明", "证据", "任务裁决"),
-        ("模型", "权限", "凭据"),
+        ("模型选择", "后端路由", "权限", "凭据"),
         ("提示", "宿主记忆"),
     )
 

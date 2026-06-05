@@ -61,6 +61,17 @@ def test_agent_native_step_view_request_consumes_step_instruction_context(tmp_pa
             "coverage_top_gaps": [{"target_id": "done_when.check_002"}],
         },
         "evidence": {"known_ids": ["ev_000_00_builder_step"], "items": [{"id": "ev_000_00_builder_step"}]},
+        "artifacts": [
+            {
+                "kind": "workspace",
+                "label": "workspace-baseline",
+                "relative_path": "contract/workspace_baseline.json",
+                "workspace_path": ".loopora/runs/run_agent_step_view/contract/workspace_baseline.json",
+                "absolute_path": str(
+                    layout.run_dir.joinpath("contract", "workspace_baseline.json").resolve()
+                ),
+            }
+        ],
     }
 
     step_view = agent_native_step_view(
@@ -83,6 +94,8 @@ def test_agent_native_step_view_request_consumes_step_instruction_context(tmp_pa
     assert step_view["required_coverage"]["status"] == "blocked"
     assert step_view["required_coverage"]["missing_check_ids"] == ["check_002"]
     assert step_view["known_evidence_refs"][0]["id"] == "ev_000_00_builder_step"
+    assert step_view["context_artifacts"][0]["label"] == "workspace-baseline"
+    assert step_view["context_artifacts"][0]["relative_path"] == "contract/workspace_baseline.json"
 
 # Merged from test_agent_native_submit_boundaries.py
 from agent_adapter_test_support import (

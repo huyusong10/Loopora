@@ -248,6 +248,77 @@ def _assert_no_horizontal_overflow(page) -> None:
     assert metrics["bodyW"] <= metrics["clientW"] + 1
 
 
+def _assert_alignment_intro_precedes_form(page) -> None:
+    metrics = page.evaluate(
+        """() => {
+          const intro = document.querySelector("#alignment-empty-state");
+          const form = document.querySelector("#alignment-start-form");
+          if (!intro || !form) {
+            return {present: false};
+          }
+          const introRect = intro.getBoundingClientRect();
+          const formRect = form.getBoundingClientRect();
+          return {
+            present: true,
+            introBottom: introRect.bottom,
+            formTop: formRect.top,
+          };
+        }"""
+    )
+    assert metrics["present"] is True
+    assert metrics["introBottom"] <= metrics["formTop"] + 1
+
+
+def _assert_alignment_judgment_placeholders_fit(page) -> None:
+    metrics = page.evaluate(
+        """() => {
+          const ids = [
+            "alignment-task-goal-input",
+            "alignment-fake-done-risk-input",
+            "alignment-required-evidence-input",
+          ];
+          return ids.map((id) => {
+            const element = document.querySelector(`[data-testid="${id}"]`);
+            return element ? {
+              id,
+              present: true,
+              clientHeight: element.clientHeight,
+              scrollHeight: element.scrollHeight,
+            } : {id, present: false};
+          });
+        }"""
+    )
+    for item in metrics:
+        assert item["present"] is True
+        assert item["scrollHeight"] <= item["clientHeight"] + 1, item
+
+
+def _assert_input_placeholder_fits(page, testid: str) -> None:
+    metrics = page.evaluate(
+        """(testid) => {
+          const element = document.querySelector(`[data-testid="${testid}"]`);
+          if (!element) {
+            return {present: false};
+          }
+          const style = getComputedStyle(element);
+          const canvas = document.createElement("canvas");
+          const context = canvas.getContext("2d");
+          context.font = style.font;
+          const placeholderWidth = context.measureText(element.placeholder || "").width;
+          const availableWidth = element.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+          return {
+            present: true,
+            placeholder: element.placeholder,
+            placeholderWidth,
+            availableWidth,
+          };
+        }""",
+        testid,
+    )
+    assert metrics["present"] is True
+    assert metrics["placeholderWidth"] <= metrics["availableWidth"] + 1, metrics
+
+
 def test_browser_tests_do_not_use_nested_sync_api_entrypoint() -> None:
     forbidden = "playwright.sync_api" + ".sync_playwright"
     assert forbidden not in Path(__file__).read_text(encoding="utf-8")
@@ -312,6 +383,7 @@ def test_browser_core_web_surfaces_render_without_overflow(tmp_path: Path) -> No
         page = browser.new_page(viewport={"width": 390, "height": 844})
         for path, testid in (
             ("/", "home-workbench"),
+            ("/tools", "agent-adapters-panel"),
             ("/loops/new/bundle", "alignment-start-form"),
             ("/loops/new/manual", "manual-compose-section"),
             (f"/loops/{loop['id']}", "loop-detail-page"),
@@ -320,6 +392,20 @@ def test_browser_core_web_surfaces_render_without_overflow(tmp_path: Path) -> No
             page.goto(f"{base_url}{path}", wait_until="domcontentloaded")
             page.get_by_test_id(testid).wait_for(state="visible", timeout=10_000)
             _assert_no_horizontal_overflow(page)
+            if path == "/tools":
+                _assert_input_placeholder_fits(page, "agent-adapter-workdir")
+
+        for viewport in (
+            {"width": 390, "height": 844},
+            {"width": 768, "height": 900},
+            {"width": 1280, "height": 900},
+        ):
+            page.set_viewport_size(viewport)
+            page.goto(f"{base_url}/loops/new/bundle", wait_until="domcontentloaded")
+            page.get_by_test_id("alignment-start-form").wait_for(state="visible", timeout=10_000)
+            _assert_no_horizontal_overflow(page)
+            _assert_alignment_intro_precedes_form(page)
+            _assert_alignment_judgment_placeholders_fit(page)
 
 
 def test_browser_agent_native_handoff_stays_on_loopora_loop_path(tmp_path: Path) -> None:

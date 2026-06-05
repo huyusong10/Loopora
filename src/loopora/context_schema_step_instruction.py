@@ -15,7 +15,17 @@ from loopora.context_schema_shared import (
 
 STEP_INSTRUCTION_CONTEXT_SCHEMA = {
     "type": "object",
-    "required": ["contract", "continuation", "iteration", "current_step", "upstream", "evidence", "artifacts"],
+    "required": [
+        "contract",
+        "coverage_target_ids",
+        "coverage_targets",
+        "continuation",
+        "iteration",
+        "current_step",
+        "upstream",
+        "evidence",
+        "artifacts",
+    ],
     "properties": {
         "contract": {
             "type": "object",
@@ -34,6 +44,7 @@ STEP_INSTRUCTION_CONTEXT_SCHEMA = {
                 "execution_strategy",
                 "local_governance",
                 "role_postures",
+                "workspace_baseline",
                 "coverage_targets",
                 "success_surface",
                 "fake_done_states",
@@ -55,6 +66,15 @@ STEP_INSTRUCTION_CONTEXT_SCHEMA = {
                 "execution_strategy": {"type": "array", "items": {"type": "string"}},
                 "local_governance": {"type": "array", "items": {"type": "string"}},
                 "role_postures": {"type": "array", "items": ROLE_POSTURE_CONTRACT_SCHEMA},
+                "workspace_baseline": {
+                    "type": "object",
+                    "required": ["file_count", "artifact"],
+                    "properties": {
+                        "file_count": {"type": "integer"},
+                        "artifact": ARTIFACT_REF_SCHEMA,
+                    },
+                    "additionalProperties": False,
+                },
                 "coverage_targets": {"type": "array", "items": {"type": "object"}},
                 "success_surface": {"type": "array", "items": {"type": "string"}},
                 "fake_done_states": {"type": "array", "items": {"type": "string"}},
@@ -63,6 +83,8 @@ STEP_INSTRUCTION_CONTEXT_SCHEMA = {
             },
             "additionalProperties": False,
         },
+        "coverage_target_ids": {"type": "array", "items": {"type": "string"}},
+        "coverage_targets": {"type": "array", "items": {"type": "object"}},
         "continuation": CONTINUATION_CONTEXT_SCHEMA,
         "iteration": {
             "type": "object",

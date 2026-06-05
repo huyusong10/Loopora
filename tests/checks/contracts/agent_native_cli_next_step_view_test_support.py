@@ -28,7 +28,7 @@ NEXT_STEP_ID = "inspector_step"
 NEXT_STEP_DIR = f"iterations/iter_000/steps/01__{NEXT_STEP_ID}"
 
 
-def invoke_agent_next_step_view(monkeypatch: Any, tmp_path: Path, *, json_output: bool = False):
+def invoke_agent_next_step_view(monkeypatch: Any, tmp_path: Path, *, json_output: bool = False, compact_json_output: bool = False):
     workdir = _mkdir(tmp_path / "project")
     layout = RunArtifactLayout(tmp_path / "runs" / "run_next")
     _write_next_step_run_contract(layout)
@@ -46,6 +46,8 @@ def invoke_agent_next_step_view(monkeypatch: Any, tmp_path: Path, *, json_output
     ]
     if json_output:
         args.append("--json")
+    if compact_json_output:
+        args.append("--compact-json")
     return runner.invoke(cli.app, args), layout
 
 
@@ -142,10 +144,10 @@ def _agent_next_step_view_payload(layout: RunArtifactLayout) -> dict:
                     "do not cite todo completion as Loopora evidence."
                 ),
                 "items": [
-                    "Read agent_v3_envelope.summary and the step contract.",
+                    "Read top-level summary and the step contract.",
                     "Invoke loopora-inspector through the host-native role agent mechanism.",
                     "Fill the result template with schema-shaped output and preserve loopora_host_dispatch.",
-                    "Submit the filled result and read agent_v3_envelope.summary before continuing.",
+                    "Submit the filled result and read top-level summary before continuing.",
                 ],
             },
             "action_policy": {"workspace": "read_only", "can_block": True, "can_finish_run": False},
@@ -162,6 +164,21 @@ def _agent_next_step_view_payload(layout: RunArtifactLayout) -> dict:
                     },
                 ],
             },
+            "coverage_target_ids": ["done_when.check_001", "gatekeeper.finish"],
+            "coverage_targets": [
+                {
+                    "id": "done_when.check_001",
+                    "kind": "done_when",
+                    "required": True,
+                    "text": "The primary user flow works end to end.",
+                },
+                {
+                    "id": "gatekeeper.finish",
+                    "kind": "gatekeeper",
+                    "required": True,
+                    "text": "GateKeeper must cite supporting upstream evidence refs.",
+                },
+            ],
             "known_evidence_count": 4,
             "known_evidence_ids": ["ev_builder", "ev_contract"],
             "known_evidence_refs": [
@@ -215,7 +232,7 @@ def _agent_next_step_view_payload(layout: RunArtifactLayout) -> dict:
             "submit_hint": {
                 "command": f"loopora agent codex submit --run-id {RUN_ID}",
                 "result_file_contract": (
-                    "Write one wrapper JSON object with loopora_host_dispatch and a schema-shaped result; "
+                    "Result file must contain one wrapper JSON object with loopora_host_dispatch and a schema-shaped result; "
                     "replace null placeholders before submit."
                 ),
                 "result_template_path": f".loopora/agent_outbox/codex/{RUN_ID}__{NEXT_STEP_ID}.result.template.json",

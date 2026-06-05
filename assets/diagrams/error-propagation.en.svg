@@ -27,7 +27,7 @@
   <g filter="url(#shadow)">
     <rect x="330" y="158" width="178" height="168" rx="18" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5"/>
     <text x="419" y="200" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="18" font-weight="700" fill="#172033">Round 2</text>
-    <rect x="362" y="228" width="114" height="34" rx="17" fill="#dbeafe"/>
+    <rect x="348" y="228" width="142" height="34" rx="17" fill="#dbeafe"/>
     <text x="419" y="250" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="15" font-weight="600" fill="#1e3a8a">Shell improves</text>
     <text x="419" y="291" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="14" font-weight="400" fill="#64748b">More states and copy</text>
   </g>
@@ -38,7 +38,7 @@
   <g filter="url(#shadow)">
     <rect x="590" y="158" width="178" height="168" rx="18" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5"/>
     <text x="679" y="200" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="18" font-weight="700" fill="#172033">Round 3</text>
-    <rect x="611" y="228" width="136" height="34" rx="17" fill="#dbeafe"/>
+    <rect x="602" y="228" width="154" height="34" rx="17" fill="#dbeafe"/>
     <text x="679" y="250" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="15" font-weight="600" fill="#1e3a8a">Easy proofs grow</text>
     <text x="679" y="291" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="14" font-weight="400" fill="#64748b">Main path gets smoother</text>
   </g>

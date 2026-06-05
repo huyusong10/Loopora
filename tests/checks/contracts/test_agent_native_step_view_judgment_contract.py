@@ -81,6 +81,7 @@ def test_agent_native_step_view_projects_full_judgment_contract(
         started["judgment_contract"]["collaboration_summary"].removesuffix("…")
     )
     assert step_judgment_contract["contract_path"] == context_contract["path"]
+    assert any(item["label"] == "workspace-baseline" for item in started["next_step"]["context_artifacts"])
     for field in STEP_CONTEXT_CONTRACT_FIELDS:
         assert step_judgment_contract[field] == context_contract[field]
     assert step_judgment_contract["role_postures"]
@@ -98,6 +99,7 @@ def test_agent_native_step_view_projects_full_judgment_contract(
         AgentNativeStepClaimRequest(adapter="codex", workdir=sample_workdir, run_id=started["run"]["id"])
     )
     assert claimed["next_step"]["judgment_contract"]["contract_path"] == claimed["judgment_contract"]["contract_path"]
+    assert any(item["label"] == "workspace-baseline" for item in claimed["next_step"]["context_artifacts"])
     for field in REFRESH_FALLBACK_FIELDS:
         assert claimed["next_step"]["judgment_contract"][field] == started["judgment_contract"][field]
     assert claimed["next_step"]["judgment_contract"]["coverage_targets"] == context_contract["coverage_targets"]

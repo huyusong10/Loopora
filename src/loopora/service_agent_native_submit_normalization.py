@@ -87,6 +87,7 @@ class ServiceAgentNativeSubmitNormalizationMixin:
         except ValueError as exc:
             raise LooporaConflictError(agent_native_submit_guard_message(str(exc))) from exc
         write_json(layout.step_output_raw_path(iter_id, step_order, step_id), output)
+        self._append_agent_native_step_submitted_event(request, submit_context=submit_context)
         finish_result = self.submit_runner_step_result(context, iteration, result)
         submitted_step = self._agent_native_submitted_step_result(
             AgentNativeSubmittedStepResultRequest(

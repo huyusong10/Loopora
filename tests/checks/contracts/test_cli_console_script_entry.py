@@ -30,3 +30,16 @@ def test_cli_package_exposes_python_module_entry_help() -> None:
     assert result.returncode == CLI_SUCCESS
     assert "Loopora CLI" in result.stdout
     assert "init" in result.stdout
+
+
+def test_cli_package_exposes_python_module_version() -> None:
+    result = subprocess.run(
+        [sys.executable, "-m", "loopora", "--version"],
+        capture_output=True,
+        check=False,
+        text=True,
+        timeout=MODULE_HELP_TIMEOUT_SECONDS,
+    )
+
+    assert result.returncode == CLI_SUCCESS
+    assert result.stdout.strip() == f"loopora {distribution('loopora').version}"

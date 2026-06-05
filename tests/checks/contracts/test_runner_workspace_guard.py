@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from hashlib import sha256
 import json
 import shutil
 from pathlib import Path
@@ -86,6 +87,30 @@ def test_workspace_guard_ignores_generated_cache_deletions(
     assert not (run_dir / "workspace_guard.json").exists()
     assert not (run_dir / "timeline" / "workspace_guard.json").exists()
     assert not any(event["event_type"] == "workspace_guard_triggered" for event in service.stream_events(run["id"], limit=10))
+
+
+def test_workspace_baseline_captures_file_fingerprints_without_changing_guard_contract(
+    service_factory,
+    sample_spec_file: Path,
+    sample_workdir: Path,
+) -> None:
+    (sample_workdir / "src").mkdir()
+    source = "print('keep')\n"
+    (sample_workdir / "src" / "app.py").write_text(source, encoding="utf-8")
+
+    service = service_factory(scenario="success")
+    loop = _create_loop(service, sample_spec_file, sample_workdir, name="Fingerprinted Baseline Loop")
+    run = service.start_run(loop["id"])
+    run_dir = Path(run["runs_dir"])
+    baseline = json.loads((run_dir / "contract" / "workspace_baseline.json").read_text(encoding="utf-8"))
+
+    assert "src/app.py" in baseline["files"]
+    assert baseline["file_fingerprints"]["src/app.py"] == {
+        "sha256": sha256(source.encode("utf-8")).hexdigest(),
+        "size_bytes": len(source.encode("utf-8")),
+    }
+    assert baseline["fingerprint_errors"] == []
+    assert service._read_workspace_baseline_files(RunArtifactLayout(run_dir).workspace_baseline_path) == set(baseline["files"])
 
 
 def test_workspace_guard_fails_closed_when_baseline_is_missing_or_malformed(

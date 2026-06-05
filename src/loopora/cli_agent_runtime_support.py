@@ -80,7 +80,7 @@ def agent_next_command_hint(*, adapter: str, context_id: str, run_id: str, entry
         bits.append(f"--run-id {run_id}")
     elif context_id:
         bits.append(f"--context-id {context_id}")
-    bits.append("--json")
+    bits.extend(["--json", "--compact-json"])
     normalized_entry_source = str(entry_source or "").strip()
     if normalized_entry_source:
         bits.extend(["--entry-source", shlex.quote(normalized_entry_source)])

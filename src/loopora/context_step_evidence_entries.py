@@ -135,7 +135,17 @@ def _evidence_source(archetype: str) -> str:
 
 def _evidence_verifies(archetype: str, output: dict, *, current_evidence_id: str = "") -> list[str]:
     refs: list[str] = []
-    refs.extend(_coverage_result_verify_refs(output.get("coverage_results")))
+    if archetype == "gatekeeper":
+        measured_evidence = has_measured_gate_evidence(output.get("metric_scores"), output.get("metrics"))
+        for item in string_list(output.get("evidence_refs")):
+            if item == current_evidence_id and not measured_evidence:
+                continue
+            refs.append(f"evidence:{item}")
+        refs.extend(f"check:{item}" for item in string_list(output.get("failed_check_ids")))
+        refs.extend(_coverage_result_verify_refs(output.get("coverage_results")))
+    else:
+        refs.extend(_coverage_result_verify_refs(output.get("coverage_results")))
+
     if archetype == "inspector":
         for bucket_name in ("check_results", "dynamic_checks"):
             for item in output.get(bucket_name, []) or []:
@@ -145,17 +155,10 @@ def _evidence_verifies(archetype: str, output: dict, *, current_evidence_id: str
                 status = str(item.get("status") or "").strip()
                 if item_id:
                     refs.append(f"{bucket_name}:{item_id}:{status or 'unknown'}")
-    elif archetype == "gatekeeper":
-        refs.extend(f"check:{item}" for item in string_list(output.get("failed_check_ids")))
-        measured_evidence = has_measured_gate_evidence(output.get("metric_scores"), output.get("metrics"))
-        for item in string_list(output.get("evidence_refs")):
-            if item == current_evidence_id and not measured_evidence:
-                continue
-            refs.append(f"evidence:{item}")
-    else:
+    elif archetype != "gatekeeper":
         refs.extend(string_list(output.get("changed_files")))
         refs.extend(string_list(output.get("observations")))
-    return refs[:20]
+    return list(dict.fromkeys(refs))[:20]
 
 
 def _step_result_verify_ref(step_id: object, status: object) -> str:

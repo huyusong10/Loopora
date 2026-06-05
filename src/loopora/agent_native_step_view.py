@@ -4,10 +4,12 @@ from dataclasses import dataclass
 from typing import Any
 
 from loopora.agent_native_step_contracts import agent_native_evidence_rules, agent_native_todo_contract
+from loopora.agent_native_context_artifacts import agent_native_context_artifact_refs
 from loopora.agent_native_iteration_repair import agent_native_step_view_iteration_repair_context
 from loopora.agent_native_judgment_contract import agent_native_step_view_judgment_contract
 from loopora.agent_native_step_continuation import agent_native_step_view_continuation_context
 from loopora.agent_native_evidence_refs import agent_native_step_view_known_evidence_ids
+from loopora.agent_native_evidence_contracts import agent_native_coverage_targets_from_judgment_contract
 from loopora.agent_native_required_coverage import agent_native_required_coverage
 from loopora.agent_native_role_dispatch import agent_native_role_dispatch
 from loopora.agent_native_step_view_refresh import refresh_agent_native_step_view_with_judgment_contract as refresh_agent_native_step_view_with_judgment_contract
@@ -59,6 +61,8 @@ def agent_native_step_view(request: AgentNativeStepViewRequest) -> dict[str, Any
     )
     target_agent = str(role_dispatch.get("target_agent") or "")
     step_context = request.step_instruction_context
+    judgment_contract = agent_native_step_view_judgment_contract(request.run, step_context)
+    coverage_targets = agent_native_coverage_targets_from_judgment_contract(judgment_contract)
     return {
         "execution_plane": "agent_native",
         "adapter": request.adapter,
@@ -82,9 +86,12 @@ def agent_native_step_view(request: AgentNativeStepViewRequest) -> dict[str, Any
         "inputs": dict(request.step.get("inputs") or {}) if isinstance(request.step.get("inputs"), dict) else {},
         "action_policy": dict(request.step.get("action_policy") or {}),
         "required_coverage": agent_native_required_coverage(step_context),
-        "judgment_contract": agent_native_step_view_judgment_contract(request.run, step_context),
+        "judgment_contract": judgment_contract,
+        "coverage_target_ids": [str(item["id"]) for item in coverage_targets],
+        "coverage_targets": coverage_targets,
         "continuation": agent_native_step_view_continuation_context(step_context),
         "iteration_repair": agent_native_step_view_iteration_repair_context(step_context),
+        "context_artifacts": agent_native_context_artifact_refs(step_context),
         "prompt": request.prompt,
         "output_schema": request.output_schema,
         "evidence_rules": agent_native_evidence_rules(str(request.role["archetype"])),
@@ -108,7 +115,7 @@ def agent_native_step_view(request: AgentNativeStepViewRequest) -> dict[str, Any
                 entry_source=normalized_entry_source,
                 result_file=str(result_file_path.resolve()),
             ),
-            "result_file_contract": "Write one wrapper JSON object with loopora_host_dispatch and a schema-shaped result; replace null placeholders before submit.",
+            "result_file_contract": "Result file must contain one wrapper JSON object with loopora_host_dispatch and a schema-shaped result; replace null placeholders before submit.",
             "result_outbox_dir": request.layout.workspace_relative(result_outbox_dir),
             "result_outbox_absolute_dir": str(result_outbox_dir.resolve()),
             "result_file_path": request.layout.workspace_relative(result_file_path),

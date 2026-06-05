@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from agent_native_v3_helpers import assert_agent_v3_envelope
+from agent_native_v3_helpers import assert_agent_v3_compact_envelope, assert_agent_v3_envelope
 from agent_adapter_test_support import (
     AgentNativeStepClaimRequest,
     AgentNativeStepSubmitRequest,
@@ -233,6 +233,7 @@ __all__ = [
     '_write_agent_submit_repair_fixture',
     '_write_terminal_unproven_run_contract',
     'agent_work_panel',
+    'assert_agent_v3_compact_envelope',
     'assert_agent_v3_envelope',
     'cli',
     'json',

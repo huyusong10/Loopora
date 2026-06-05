@@ -37,6 +37,8 @@ RESULT_OUTBOX_DIR = ".loopora/agent_outbox/codex"
 RUN_AGENT_RESULT_TEMPLATE = f"run_agent__{AGENT_STEP_ID}.result.template.json"
 RUN_AGENT_SUBMIT_COMMAND = f"loopora agent codex submit --run-id run_agent --step-id {AGENT_STEP_ID}"
 DISPATCH_UNAVAILABLE_REASON = "target_agent_config_missing"
+RESULT_TEMPLATE_CONTRACT_PREFIX = "result_template_contract: Result file must contain one wrapper JSON object with loopora_host_dispatch"
+RESULT_TEMPLATE_FILL_PREFIX = "result_template_fill: in the main Agent session, open the template, replace null placeholders in result"
 
 
 def _assert_agent_run_summary_for_started_run(started: dict) -> None:
@@ -88,7 +90,7 @@ def _assert_agent_native_observation_current_step(current_step: dict) -> None:
     assert current_step["submit_hint"]["result_outbox_absolute_dir"].endswith(RESULT_OUTBOX_DIR)
     assert current_step["submit_hint"]["result_file_absolute_path"].endswith(RESULT_FILE_SUFFIX)
     assert current_step["submit_hint"]["result_file_contract"] == (
-        "Write one wrapper JSON object with loopora_host_dispatch and a schema-shaped result; "
+        "Result file must contain one wrapper JSON object with loopora_host_dispatch and a schema-shaped result; "
         "replace null placeholders before submit."
     )
     assert isinstance(current_step["known_evidence_count"], int)
@@ -319,10 +321,10 @@ def _assert_agent_native_cli_output(
     assert STEP_CONTEXT_FILE in stdout
     assert "known_evidence_count: 3" in stdout
     assert "known_evidence_ids:" not in stdout
-    assert "result_template_contract: Write one wrapper JSON object with loopora_host_dispatch" in stdout
+    assert RESULT_TEMPLATE_CONTRACT_PREFIX in stdout
     assert "schema-shaped result" in stdout
     assert "replace null placeholders before submit" in stdout
-    assert "result_template_fill: open the template, replace null placeholders in result" in stdout
+    assert RESULT_TEMPLATE_FILL_PREFIX in stdout
     assert "keep loopora_host_dispatch, then submit the filled copy" in stdout
     _assert_cli_handoff_contract_paths(
         stdout,
@@ -352,10 +354,17 @@ def _assert_agent_run_json_summary_reports_missing_dispatch(
     assert next_step_summary["step_id"] == AGENT_STEP_ID
     assert next_step_summary["target_agent"] == AGENT_TARGET
     assert "dispatch_next" not in next_step_summary
+    assert next_step_summary["coverage_target_ids"] == [PRIMARY_COVERAGE_TARGET_ID, "gatekeeper.finish"]
+    assert next_step_summary["coverage_targets"][0] == {
+        "id": PRIMARY_COVERAGE_TARGET_ID,
+        "kind": "done_when",
+        "required": True,
+        "text": "Support admin can approve a refund.",
+    }
     assert next_step_summary["context_path"].endswith(STEP_CONTEXT_FILE)
     assert next_step_summary["step_contract_path"].endswith(STEP_CONTRACT_FILE)
     assert next_step_summary["result_template"].endswith(RUN_AGENT_RESULT_TEMPLATE)
-    assert next_step_summary["result_template_contract"].startswith("Write one wrapper JSON object")
+    assert next_step_summary["result_template_contract"].startswith("Result file must contain one wrapper JSON object")
     assert "replace null placeholders" in next_step_summary["result_template_fill"]
     assert next_step_summary["result_outbox_dir"].endswith(RESULT_OUTBOX_DIR)
     assert next_step_summary["submit_command"] == RUN_AGENT_SUBMIT_COMMAND

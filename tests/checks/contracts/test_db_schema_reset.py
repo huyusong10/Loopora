@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import json
 import sqlite3
 from pathlib import Path
 
 import pytest
+from typer.testing import CliRunner
 
+from loopora import cli
 from loopora.db import LooporaRepository
 from loopora.db_schema import CURRENT_SCHEMA_VERSION
 from loopora.service_types import LooporaConflictError
@@ -61,6 +64,48 @@ def test_repository_rejects_v2_schema_for_v3_development_reset(tmp_path: Path) -
         LooporaRepository(target)
 
 
+def test_cli_serve_reports_v3_reset_without_traceback(monkeypatch, tmp_path: Path) -> None:
+    app_home = tmp_path / "loopora-home"
+    app_home.mkdir()
+    _create_legacy_app_db(app_home / "app.db")
+    monkeypatch.setenv("LOOPORA_HOME", str(app_home))
+
+    result = CliRunner().invoke(cli.app, ["serve"])
+    error_text = result.stderr or result.output
+
+    assert result.exit_code == 1
+    assert "Loopora v3 development reset required" in error_text
+    assert "loopora dev reset --workdir <project>" in error_text
+    assert "Traceback" not in error_text
+    assert "cli.command.failed" not in error_text
+    assert "schema_version" not in error_text
+
+
+def test_cli_init_json_reports_v3_reset_without_adapter_conflict(monkeypatch, tmp_path: Path) -> None:
+    app_home = tmp_path / "loopora-home"
+    workdir = tmp_path / "project"
+    app_home.mkdir()
+    workdir.mkdir()
+    _create_legacy_app_db(app_home / "app.db")
+    monkeypatch.setenv("LOOPORA_HOME", str(app_home))
+
+    runner = CliRunner()
+    for args in (
+        ["init", "codex", "--workdir", str(workdir), "--json"],
+        ["init", "codex", "--workdir", str(workdir), "--check", "--json"],
+    ):
+        result = runner.invoke(cli.app, args)
+        payload = json.loads(result.stdout)
+
+        assert result.exit_code == 1
+        assert result.stderr == ""
+        assert payload["loop_recovery"] == "development_reset_required"
+        assert payload["reset_command"] == "loopora dev reset --workdir <project>"
+        assert "Loopora v3 development reset required" in payload["message"]
+        assert "adapter_install_conflict" not in result.stdout
+        assert "install_conflict" not in result.stdout
+
+
 def test_run_schema_persists_task_verdict_separately_from_raw_verdict(tmp_path: Path) -> None:
     repository = LooporaRepository(tmp_path / "app.db")
     run = _create_run(repository, tmp_path, run_id="run_task_verdict", status="running")
@@ -91,3 +136,9 @@ def test_run_schema_persists_task_verdict_separately_from_raw_verdict(tmp_path: 
 
     assert refreshed["last_verdict_json"]["decision_summary"] == "Raw GateKeeper pass."
     assert refreshed["task_verdict_json"]["summary"] == "Evidence-backed task pass."
+
+
+def _create_legacy_app_db(path: Path) -> None:
+    with sqlite3.connect(path) as connection:
+        connection.execute("CREATE TABLE loop_definitions (id TEXT PRIMARY KEY, name TEXT NOT NULL)")
+        connection.execute("PRAGMA user_version = 1")

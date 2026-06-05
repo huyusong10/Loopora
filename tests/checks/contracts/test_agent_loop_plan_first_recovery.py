@@ -49,6 +49,11 @@ def test_cli_agent_loop_json_without_plan_returns_structured_plan_first_recovery
     assert summary["question_action"]["target"] == "main_agent_session"
     assert "official user-question" in summary["question_action"]["native_tool_policy"]
     assert summary["example_user_reply"].startswith("Build the account-deletion audit flow")
+    assert summary["message_source_policy"].startswith("If the current host user prompt already contains")
+    _assert_loopora_agent_command(summary["message_cli_command"], "plan")
+    assert "--message" in summary["message_cli_command"]
+    assert "--json --compact-json" in summary["message_cli_command"]
+    assert summary["next_plan_cli_command"] == summary["message_cli_command"]
     assert (
         summary["task_message_template"]
         == "Goal: ...; Fake-done risks: ...; Required evidence: ...; Judgment tradeoffs: ..."

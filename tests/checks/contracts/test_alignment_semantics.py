@@ -40,6 +40,18 @@ def test_loop_fit_contradiction_detector_covers_shared_readiness_and_bundle_case
 
 
 def test_loop_fit_contradiction_detector_respects_negated_antipatterns() -> None:
+    exact_id_rule = (
+        "Evidence references must use exact ids copied from known_evidence_ids; "
+        "no suffixing, splitting, or derivation of new evidence ids is allowed."
+    )
+    governed_one_pass = (
+        "One pass, direct chat, or test-harness-only output is never sufficient; "
+        "later rounds add evidence handoffs and a GateKeeper verdict."
+    )
+    artifact_backed_output = (
+        "Test-harness output alone is insufficient evidence because Inspectors still need artifact-backed proof."
+    )
+
     assert not text_mentions_loop_fit_contradiction(
         "One Agent pass plus human review is not enough because later rounds create new proof artifacts."
     )
@@ -52,6 +64,9 @@ def test_loop_fit_contradiction_detector_respects_negated_antipatterns() -> None
     assert not text_mentions_loop_fit_contradiction("现有测试不够，后续轮次仍要补证据。")
     assert not text_mentions_loop_fit_contradiction("不是不用 Loopora，而是要先证明后续轮次会产生新证据。")
     assert not text_mentions_loop_fit_contradiction("不是一轮就够了；后续轮次必须继续补新证据。")
+    assert not text_mentions_loop_fit_contradiction(exact_id_rule)
+    assert not text_mentions_loop_fit_contradiction(governed_one_pass)
+    assert not text_mentions_loop_fit_contradiction(artifact_backed_output)
 
 
 def test_loop_fit_governance_detector_supports_shared_lint_and_projection() -> None:

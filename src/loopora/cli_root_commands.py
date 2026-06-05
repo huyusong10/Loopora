@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from importlib.metadata import PackageNotFoundError, version
 import logging
 from typing import Annotated
 
@@ -62,8 +63,31 @@ def register_root_commands(app: typer.Typer) -> None:
 
 def _register_main_callback(app: typer.Typer) -> None:
     @app.callback()
-    def main() -> None:
+    def main(
+        *,
+        version_requested: Annotated[
+            bool,
+            typer.Option(
+                "--version",
+                callback=_version_callback,
+                is_eager=True,
+                help="Show the installed Loopora version and exit.",
+            ),
+        ] = False,
+    ) -> None:
+        _ = version_requested
         configure_logging()
+
+
+def _version_callback(value: object) -> None:
+    if not value:
+        return
+    try:
+        package_version = version("loopora")
+    except PackageNotFoundError:
+        package_version = "unknown"
+    typer.echo(f"loopora {package_version}")
+    raise typer.Exit
 
 
 def _register_run_command(app: typer.Typer) -> None:
@@ -168,8 +192,12 @@ def _register_serve_command(app: typer.Typer) -> None:
                     f"Open the UI once with ?token={auth_token} appended to the URL, or send it as Authorization: Bearer.",
                     fg=typer.colors.YELLOW,
                 )
+        try:
+            web_app = build_app(bind_host=host, bind_port=port, auth_token=auth_token or None)
+        except LooporaError as exc:
+            handle_error(exc)
         uvicorn.run(
-            build_app(bind_host=host, bind_port=port, auth_token=auth_token or None),
+            web_app,
             host=host,
             port=port,
             log_level="info",

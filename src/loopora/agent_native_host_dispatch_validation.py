@@ -43,6 +43,7 @@ def validate_agent_native_host_dispatch(context: dict[str, Any], dispatch: dict[
     if dispatch_adapter != adapter:
         raise LooporaConflictError("agent-native host dispatch adapter does not match the submitted adapter")
     dispatch_position = _agent_native_dispatch_position(active, dispatch)
+    _reject_unavailable_role_output_claim(dispatch)
 
     normalized = {
         "schema_version": _agent_native_dispatch_schema_version(dispatch),
@@ -141,6 +142,42 @@ def _agent_native_dispatch_trace(
     if trace and "available" not in trace:
         trace["available"] = True
     return trace
+
+
+def _reject_unavailable_role_output_claim(dispatch: dict[str, Any]) -> None:
+    claim_text = _agent_native_dispatch_claim_text(dispatch)
+    if not claim_text:
+        return
+    role_output_unavailable = any(
+        phrase in claim_text
+        for phrase in (
+            "returned no output",
+            "returned no structured output",
+            "no structured output",
+            "role output unavailable",
+            "without role output",
+            "role agent output unavailable",
+            "subagent output unavailable",
+        )
+    )
+    main_constructed_result = (
+        any(actor in claim_text for actor in ("main session", "main orchestrator", "orchestrator session"))
+        and any(phrase in claim_text for phrase in ("constructed the wrapper", "constructed wrapper", "constructed the result"))
+    )
+    if role_output_unavailable or main_constructed_result:
+        raise LooporaConflictError(
+            "agent-native host dispatch role agent output is unavailable; do not submit main-session reconstructed role proof"
+        )
+
+
+def _agent_native_dispatch_claim_text(dispatch: dict[str, Any]) -> str:
+    trace_payload = dispatch.get("native_trace") if isinstance(dispatch.get("native_trace"), dict) else {}
+    parts = [
+        dispatch.get("attestation"),
+        dispatch.get("notes"),
+        trace_payload.get("notes"),
+    ]
+    return " ".join(" ".join(str(part or "").split()).lower() for part in parts if str(part or "").strip())
 
 
 def _agent_native_optional_dispatch_text(value: object, *, limit: int = 320) -> str:

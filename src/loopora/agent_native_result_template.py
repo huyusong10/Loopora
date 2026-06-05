@@ -7,7 +7,7 @@ from loopora.agent_native_result_schema import agent_native_result_scaffold_from
 from loopora.agent_native_role_dispatch import agent_native_template_role_dispatch
 from loopora.agent_native_step_view_paths import agent_native_step_view_artifact_path_texts
 from loopora.agent_native_evidence_contracts import (
-    _agent_native_step_view_coverage_targets,
+    agent_native_coverage_targets_from_judgment_contract,
 )
 from loopora.service_types import LooporaError
 from loopora.structured_numbers import structured_non_negative_int
@@ -58,7 +58,13 @@ def _agent_native_result_contract(
     dispatch: dict[str, Any],
     output_schema: dict[str, Any],
 ) -> dict[str, Any]:
-    coverage_targets = _agent_native_step_view_coverage_targets(step_view)
+    coverage_targets = (
+        [dict(item) for item in list(step_view.get("coverage_targets") or []) if isinstance(item, dict)]
+        if isinstance(step_view.get("coverage_targets"), list)
+        else agent_native_coverage_targets_from_judgment_contract(
+            step_view.get("judgment_contract") if isinstance(step_view.get("judgment_contract"), dict) else {}
+        )
+    )
     result_contract: dict[str, Any] = {
         "ignored_on_submit": True,
         "result_must_match_output_schema": True,

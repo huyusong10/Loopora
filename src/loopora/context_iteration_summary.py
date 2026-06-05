@@ -28,32 +28,11 @@ def build_iteration_summary(context: IterationSummaryContext) -> dict:
     iter_id = coerced_non_negative_int(context.iter_id)
     step_results = context.step_results
     stagnation = context.stagnation
-    gatekeeper_handoff = next(
-        (item["handoff"] for item in reversed(step_results) if item["role"]["archetype"] == "gatekeeper"),
-        None,
-    )
     gatekeeper_output = next(
         (item["output"] for item in reversed(step_results) if item["role"]["archetype"] == "gatekeeper"),
         {},
     )
-    latest_by_step = {
-        item["step"]["id"]: layout.relative(
-            layout.step_handoff_path(iter_id, coerced_non_negative_int(item["step_order"]), item["step"]["id"])
-        )
-        for item in step_results
-    }
-    latest_by_role = {
-        item["role"]["id"]: layout.relative(
-            layout.step_handoff_path(iter_id, coerced_non_negative_int(item["step_order"]), item["step"]["id"])
-        )
-        for item in step_results
-    }
-    latest_by_archetype = {
-        item["role"]["archetype"]: layout.relative(
-            layout.step_handoff_path(iter_id, coerced_non_negative_int(item["step_order"]), item["step"]["id"])
-        )
-        for item in step_results
-    }
+    latest_refs = _latest_step_refs(layout, iter_id, step_results)
     composite = _number_value(gatekeeper_output.get("composite_score"))
     previous_composite = _number_value(context.previous_composite)
     delta = round(composite - previous_composite, 6) if composite is not None and previous_composite is not None else None
@@ -95,23 +74,7 @@ def build_iteration_summary(context: IterationSummaryContext) -> dict:
             "coverage_top_gaps": _normalize_coverage_gap_rows(stagnation.get("latest_coverage_top_gaps")),
             "consecutive_no_required_coverage_delta": _int_value(stagnation.get("consecutive_no_required_coverage_delta")),
         },
-        "latest_refs": {
-            "summary_path": layout.relative(layout.iteration_summary_path(iter_id)),
-            "latest_gatekeeper": (
-                layout.relative(
-                    layout.step_handoff_path(
-                        iter_id,
-                        gatekeeper_handoff["source"]["step_order"],
-                        gatekeeper_handoff["source"]["step_id"],
-                    )
-                )
-                if gatekeeper_handoff
-                else None
-            ),
-            "latest_by_step": latest_by_step,
-            "latest_by_role": latest_by_role,
-            "latest_by_archetype": latest_by_archetype,
-        },
+        "latest_refs": {"summary_path": layout.relative(layout.iteration_summary_path(iter_id)), **latest_refs},
     }
 
 
@@ -132,6 +95,67 @@ def derive_latest_state(previous_state: dict, iteration_summary: dict) -> dict:
         "latest_by_archetype": latest_by_archetype,
         "latest_gatekeeper": latest_gatekeeper,
         "latest_summary_path": iteration_summary["latest_refs"]["summary_path"],
+    }
+
+
+def derive_latest_state_from_step_results(
+    previous_state: dict,
+    *,
+    layout: RunArtifactLayout,
+    iter_id: int,
+    step_results: list[dict],
+) -> dict:
+    latest_refs = _latest_step_refs(layout, coerced_non_negative_int(iter_id), step_results)
+    return derive_latest_state(
+        previous_state,
+        {
+            "iter": coerced_non_negative_int(iter_id),
+            "latest_refs": {
+                "summary_path": str(previous_state.get("latest_summary_path") or ""),
+                **latest_refs,
+            },
+        },
+    )
+
+
+def _latest_step_refs(layout: RunArtifactLayout, iter_id: int, step_results: list[dict]) -> dict:
+    gatekeeper_handoff = next(
+        (item["handoff"] for item in reversed(step_results) if item["role"]["archetype"] == "gatekeeper"),
+        None,
+    )
+    latest_by_step = {
+        item["step"]["id"]: layout.relative(
+            layout.step_handoff_path(iter_id, coerced_non_negative_int(item["step_order"]), item["step"]["id"])
+        )
+        for item in step_results
+    }
+    latest_by_role = {
+        item["role"]["id"]: layout.relative(
+            layout.step_handoff_path(iter_id, coerced_non_negative_int(item["step_order"]), item["step"]["id"])
+        )
+        for item in step_results
+    }
+    latest_by_archetype = {
+        item["role"]["archetype"]: layout.relative(
+            layout.step_handoff_path(iter_id, coerced_non_negative_int(item["step_order"]), item["step"]["id"])
+        )
+        for item in step_results
+    }
+    return {
+        "latest_gatekeeper": (
+            layout.relative(
+                layout.step_handoff_path(
+                    iter_id,
+                    gatekeeper_handoff["source"]["step_order"],
+                    gatekeeper_handoff["source"]["step_id"],
+                )
+            )
+            if gatekeeper_handoff
+            else None
+        ),
+        "latest_by_step": latest_by_step,
+        "latest_by_role": latest_by_role,
+        "latest_by_archetype": latest_by_archetype,
     }
 
 

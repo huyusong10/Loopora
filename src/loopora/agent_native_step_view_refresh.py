@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from loopora.agent_native_context_artifacts import agent_native_context_artifact_refs
 from loopora.agent_native_step_contracts import agent_native_evidence_rules, agent_native_todo_contract
 from loopora.agent_native_iteration_repair import agent_native_step_view_iteration_repair_context
 from loopora.agent_native_judgment_contract import agent_native_step_view_judgment_contract
@@ -30,6 +31,7 @@ def refresh_agent_native_step_view_with_judgment_contract(
     normalized["required_coverage"] = agent_native_required_coverage(step_context)
     normalized["continuation"] = agent_native_step_view_continuation_context(step_context)
     normalized["iteration_repair"] = agent_native_step_view_iteration_repair_context(step_context)
+    normalized["context_artifacts"] = agent_native_context_artifact_refs(step_context)
     role = normalized.get("role") if isinstance(normalized.get("role"), dict) else {}
     archetype = str(role.get("archetype") or "").strip()
     if archetype:

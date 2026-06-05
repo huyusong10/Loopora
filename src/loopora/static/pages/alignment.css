@@ -786,9 +786,11 @@ html[data-locale="zh"] .alignment-role-title em {
 }
 
 .bundle-chat-main:has(#alignment-empty-state:not([hidden])) {
-  grid-template-rows: auto auto;
+  grid-template-rows: max-content max-content;
   align-content: start;
   gap: clamp(20px, 3vw, 36px);
+  overflow-x: hidden;
+  overflow-y: auto;
   padding-top: clamp(34px, 5vw, 72px);
 }
 
@@ -804,6 +806,7 @@ html[data-locale="zh"] .alignment-role-title em {
 
 .bundle-chat-main:has(#alignment-empty-state:not([hidden])) .bundle-chat-scroll {
   overflow: visible;
+  min-height: max-content;
   padding: 0;
 }
 
@@ -1512,17 +1515,19 @@ html[data-locale="zh"] .alignment-role-title em {
 }
 
 .alignment-judgment-field textarea {
-  min-height: 68px;
+  box-sizing: border-box;
+  min-height: 88px;
   max-height: 136px;
   padding: 10px 11px;
   border: 1px solid rgba(var(--outline-rgb), 0.1);
   border-radius: var(--radius-md);
   background: rgba(var(--panel-rgb), 0.72);
   box-shadow: none;
+  overflow-y: auto;
   resize: vertical;
   font-size: 0.88rem;
   font-weight: 520;
-  line-height: 1.42;
+  line-height: 1.5;
 }
 
 .alignment-judgment-field textarea:focus {

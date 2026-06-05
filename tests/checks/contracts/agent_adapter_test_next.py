@@ -27,9 +27,22 @@ def _assert_agent_next_json_summary(stdout: str) -> None:
     assert summary["task_proof_source"] == "run.task_verdict"
     assert summary["run_lifecycle_source"] == "result.complete"
     assert summary["next_evidence_focus"] == "Previous GateKeeper rejected the pass because evidence was non-supporting."
+    assert summary["next_step_id"] == "inspector_step"
+    assert summary["next_target_agent"] == "loopora-inspector"
+    assert summary["dispatch_next"] == (
+        "invoke loopora-inspector with the next context and step contract paths below; do not perform this role inline"
+    )
+    assert summary["next_context_path"] == "iterations/iter_000/steps/01__inspector_step/step_instruction_context.json"
+    assert summary["next_step_contract_path"] == "iterations/iter_000/steps/01__inspector_step/step_contract.json"
+    assert summary["next_result_template"] == ".loopora/agent_outbox/codex/run_next__inspector_step.result.template.json"
+    assert summary["next_submit_command"] == "loopora agent codex submit --run-id run_next"
+    assert summary["next_role_dispatch_message"] == summary["next_step"]["role_dispatch_message"]
+    summary_keys = list(summary)
+    assert summary_keys.index("agent_work_panel") < summary_keys.index("agent_surface")
     _assert_agent_work_panel_summary(summary["agent_work_panel"])
     _assert_agent_next_step_json_summary(summary["next_step"])
     _assert_codex_native_surface_summary(summary)
+
 
 def _assert_agent_next_step_json_summary(next_summary: dict) -> None:
     assert next_summary["step_id"] == "inspector_step"
@@ -46,10 +59,11 @@ def _assert_agent_next_step_json_summary(next_summary: dict) -> None:
     assert next_summary["context_path"] == "iterations/iter_000/steps/01__inspector_step/step_instruction_context.json"
     assert next_summary["step_contract_path"] == "iterations/iter_000/steps/01__inspector_step/step_contract.json"
     assert next_summary["result_template"] == ".loopora/agent_outbox/codex/run_next__inspector_step.result.template.json"
-    assert next_summary["result_template_contract"].startswith("Write one wrapper JSON object")
+    assert next_summary["result_template_contract"].startswith("Result file must contain one wrapper JSON object")
     assert "replace null placeholders" in next_summary["result_template_fill"]
     assert next_summary["result_outbox_dir"] == ".loopora/agent_outbox/codex"
     assert next_summary["submit_command"] == "loopora agent codex submit --run-id run_next"
+    _assert_agent_role_dispatch_message(next_summary["role_dispatch_message"])
     assert next_summary["known_evidence_count"] == EXPECTED_AGENT_NEXT_KNOWN_EVIDENCE_COUNT
     assert next_summary["known_evidence_ids"] == ["ev_builder", "ev_contract"]
     assert next_summary["known_evidence_scope"] == "filtered by evidence_query archetypes=builder limit=12"
@@ -62,6 +76,21 @@ def _assert_agent_next_step_json_summary(next_summary: dict) -> None:
     assert next_summary["known_evidence_refs"][1]["id"] == "ev_contract"
     assert next_summary["known_evidence_refs"][1]["result"] == "blocked"
     assert next_summary["known_evidence_refs"][1]["coverage_target_ids"] == ["done_when.check_001"]
+    assert next_summary["coverage_target_ids"] == ["done_when.check_001", "gatekeeper.finish"]
+    assert next_summary["coverage_targets"] == [
+        {
+            "id": "done_when.check_001",
+            "kind": "done_when",
+            "required": True,
+            "text": "The primary user flow works end to end.",
+        },
+        {
+            "id": "gatekeeper.finish",
+            "kind": "gatekeeper",
+            "required": True,
+            "text": "GateKeeper must cite supporting upstream evidence refs.",
+        },
+    ]
     assert next_summary["top_coverage_gaps"] == [
         {
             "target_id": "done_when.check_001",
@@ -79,6 +108,28 @@ def _assert_agent_next_step_json_summary(next_summary: dict) -> None:
     assert repair["evidence_refs"] == ["ev_gatekeeper_block"]
     assert repair["top_gaps"][0]["target_id"] == "done_when.check_001"
     assert next_summary["required_coverage"] == "weak; required checks 1 covered / 1 missing"
+
+
+def _assert_agent_role_dispatch_message(message: str) -> None:
+    assert "Use this exact string as the whole Agent/Task prompt" in message
+    assert "prepend `You are running as`" in message
+    assert "append `Do the following`" in message
+    assert "Invoke the named host-native role agent" in message
+    assert "target_agent=loopora-inspector" in message
+    assert "context_path=iterations/iter_000/steps/01__inspector_step/step_instruction_context.json" in message
+    assert "step_contract_path=iterations/iter_000/steps/01__inspector_step/step_contract.json" in message
+    assert "result_template=.loopora/agent_outbox/codex/run_next__inspector_step.result.template.json" in message
+    assert "action_policy=read_only, can_block" in message
+    assert "coverage_target_ids=done_when.check_001, gatekeeper.finish" in message
+    assert "known_evidence_ids=ev_builder, ev_contract" in message
+    assert "return one raw wrapper JSON object only" in message
+    assert "Main session writes/submits result" in message
+    assert "Do not paste full CLI JSON" in message
+    assert "full schemas" in message
+    assert "large evidence ledgers" in message
+    assert "wrapper examples" in message
+    assert "no proof artifact" not in message
+
 
 def _assert_agent_work_panel_summary(panel: dict) -> None:
     assert list(panel) == [
@@ -115,10 +166,11 @@ def _assert_agent_work_panel_summary(panel: dict) -> None:
     ]
     assert panel["run_url"] == "/runs/run_next"
 
+
 def _expected_agent_next_todo_items() -> list[str]:
     return [
-        "Read agent_v3_envelope.summary and the step contract.",
+        "Read top-level summary and the step contract.",
         "Invoke loopora-inspector through the host-native role agent mechanism.",
         "Fill the result template with schema-shaped output and preserve loopora_host_dispatch.",
-        "Submit the filled result and read agent_v3_envelope.summary before continuing.",
+        "Submit the filled result and read top-level summary before continuing.",
     ]

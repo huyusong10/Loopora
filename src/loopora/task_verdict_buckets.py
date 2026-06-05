@@ -4,9 +4,11 @@ from collections.abc import Mapping
 from typing import Any
 
 from loopora.coverage_target_semantics import coverage_target_is_required
+from loopora.evidence_manifest_artifacts import dedupe_artifact_refs
 from loopora.residual_risk_support import (
     residual_risk_is_managed,
     residual_risk_is_meaningful,
+    residual_risk_text_matches_or_previews_any,
     residual_risk_policy_disallows_acceptance,
 )
 
@@ -156,7 +158,7 @@ def _coverage_risk_signals_for_buckets(
     coverage: Mapping[str, Any],
     verdict: Mapping[str, Any],
 ) -> list[str]:
-    raw_verdict_risks = {clean_text(risk, max_length=240) for risk in verdict_residual_risk_texts(verdict)}
+    raw_verdict_risks = verdict_residual_risk_texts(verdict)
     latest_gatekeeper = coverage.get("latest_gatekeeper")
     if (
         isinstance(latest_gatekeeper, Mapping)
@@ -165,7 +167,7 @@ def _coverage_risk_signals_for_buckets(
         risks = string_list(latest_gatekeeper.get("residual_risk"))
     else:
         risks = _strict_string_list(coverage.get("risk_signals"))
-    return [risk for risk in risks if clean_text(risk, max_length=240) not in raw_verdict_risks]
+    return [risk for risk in risks if not residual_risk_text_matches_or_previews_any(risk, raw_verdict_risks)]
 
 
 def _append_verdict_residual_risk_buckets(
@@ -213,7 +215,7 @@ def _strict_string_list(value: object) -> list[str]:
 def _mapping_list(value: object, *, limit: int) -> list[dict]:
     if not isinstance(value, list):
         return []
-    return [dict(item) for item in value if isinstance(item, Mapping)][:limit]
+    return dedupe_artifact_refs([dict(item) for item in value if isinstance(item, Mapping)])[:limit]
 
 
 def _dedupe_bucket_items(items: list[dict]) -> list[dict]:

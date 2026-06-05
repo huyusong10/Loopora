@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 from agent_adapter_test_support import _assert_cli_list, cli_agent_adapter_commands
 
 
@@ -98,16 +100,45 @@ def test_agent_cli_submitted_step_summarizes_coverage_results(capsys) -> None:
 
     output = capsys.readouterr().out
 
+    assert "submitted_coverage_result_scope: submitted_role_raw_classifications_not_aggregated_coverage" in output
     assert "submitted_coverage_result_counts: covered=1 weak=1" in output
     assert "submitted_coverage_results:" in output
     assert "- done_when.check_001 covered refs=ev_builder:" in output
     assert "API authorization and idempotency are directly tested." in output
     assert "- done_when.check_002 weak refs=ev_builder:" in output
     assert "Provider retry is present but rollback proof is incomplete." in output
+    assert summary["coverage_result_scope"] == "submitted_role_raw_classifications_not_aggregated_coverage"
     assert summary["coverage_result_counts"] == {"covered": 1, "weak": 1}
-    assert summary["coverage_results"][0] == {
+    assert summary["coverage_results_preview"][0] == {
         "target_id": "done_when.check_001",
         "status": "covered",
         "evidence_refs": ["ev_builder"],
-        "note": "API authorization and idempotency are directly tested.",
     }
+    assert "coverage_results" not in summary
+
+
+def test_agent_cli_submitted_step_json_summary_bounds_long_coverage_notes() -> None:
+    long_note = "Inspector observation. " * 400
+    submitted_step = {
+        "step_id": "contract_inspection_step",
+        "status": "completed",
+        "coverage_results": [
+            {
+                "target_id": f"done_when.check_{index:03d}",
+                "status": "covered",
+                "evidence_refs": [f"ev_{index:03d}"],
+                "note": long_note,
+            }
+            for index in range(12)
+        ],
+    }
+
+    summary = cli_agent_adapter_commands._agent_submitted_step_summary(submitted_step)
+    encoded = json.dumps(summary)
+
+    assert summary["coverage_result_counts"] == {"covered": 12}
+    assert summary["coverage_results_omitted"] == 9
+    assert len(summary["coverage_results_preview"]) == 3
+    assert all("note" not in item for item in summary["coverage_results_preview"])
+    assert long_note not in encoded
+    assert len(encoded) < 1200

@@ -24,7 +24,7 @@
 
   <rect x="376" y="126" width="248" height="208" rx="18" fill="#eff6ff" stroke="#2563eb" stroke-width="2.5" filter="url(#shadow)"/>
   <text x="500" y="168" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="21" font-weight="700" fill="#172033">Artifacts</text>
-  <text x="404" y="213" font-family="Inter, Arial, sans-serif" font-size="15.5" fill="#1e3a8a">components, demos, tests, docs</text>
+  <text x="404" y="213" font-family="Inter, Arial, sans-serif" font-size="14.5" fill="#1e3a8a">components, demos, tests, docs</text>
   <text x="404" y="247" font-family="Inter, Arial, sans-serif" font-size="15.5" fill="#1e3a8a">many commits</text>
   <text x="404" y="281" font-family="Inter, Arial, sans-serif" font-size="15.5" fill="#1e3a8a">Vue project runs</text>
   <text x="404" y="315" font-family="Inter, Arial, sans-serif" font-size="15.5" fill="#1e3a8a">but this is not completion</text>

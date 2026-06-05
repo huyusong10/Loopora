@@ -20,6 +20,11 @@ from loopora.settings_types import AppSettings as AppSettings
 logger = get_logger(__name__)
 
 
+class _TerminalDiagnosticFilter(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        return getattr(record, "event", "") != "cli.command.failed"
+
+
 def load_settings() -> AppSettings:
     path = settings_path()
     defaults = AppSettings()
@@ -62,6 +67,7 @@ def configure_logging() -> None:
     stream_handler.setLevel(logging.WARNING)
     file_handler.set_name("loopora-file")
     stream_handler.set_name("loopora-stream")
+    stream_handler.addFilter(_TerminalDiagnosticFilter())
 
     package_logger = logging.getLogger(APP_PACKAGE)
     for handler in package_logger.handlers:

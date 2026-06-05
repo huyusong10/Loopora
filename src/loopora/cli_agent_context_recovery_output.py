@@ -43,6 +43,8 @@ def _agent_loop_recovery_summary(result: dict) -> dict:
         "ready": bool(result.get("ready")),
         "loop_recovery": _visible_loop_recovery(str(result.get("loop_recovery") or "").strip()),
     }
+    if result.get("loop_recovery") == "repair_candidate_plan_file":
+        _attach_repair_candidate_summary(summary, result)
     attach_native_run_surface(summary, result)
     _set_summary_text(summary, "workdir", result.get("workdir"))
     if result.get("loop_recovery") == "choose_recoverable_context":
@@ -56,6 +58,9 @@ def _agent_loop_recovery_summary(result: dict) -> dict:
         _set_summary_text(summary, "ask_user", result.get("ask_user"))
         _set_summary_mapping(summary, "question_action", result.get("question_action"))
         _set_summary_text(summary, "example_user_reply", result.get("example_user_reply"))
+        _set_summary_text(summary, "message_source_policy", result.get("message_source_policy"))
+        _set_summary_text(summary, "message_cli_command", result.get("message_cli_command"))
+        _set_summary_text(summary, "next_plan_cli_command", result.get("next_plan_cli_command"))
         _set_summary_text(summary, "task_message_template", result.get("task_message_template"))
         _set_summary_text(summary, "first_task_message_example", result.get("first_task_message_example"))
         _set_summary_text(summary, "debug_cli_example_command", result.get("debug_cli_example_command"))
@@ -68,15 +73,39 @@ def _agent_loop_recovery_summary(result: dict) -> dict:
         _set_summary_text(summary, "repair_task_message", result.get("repair_task_message"))
         _set_summary_text(summary, "plan_file_to_repair", result.get("plan_file_to_repair"))
         _set_summary_text(summary, "preview_plan_copy", result.get("preview_plan_copy"))
+        _set_summary_text(summary, "next_plan_command", result.get("next_plan_command"))
+        _set_summary_text(summary, "repair_slash_command", result.get("repair_slash_command"))
+        _set_summary_text(summary, "repair_cli_command", result.get("repair_cli_command"))
+        _set_summary_text(summary, "repair_cli_command_policy", result.get("repair_cli_command_policy"))
+        _set_summary_text(summary, "repair_reference", result.get("repair_reference"))
         _set_summary_text(summary, "next_review_step", result.get("next_review_step"))
         _set_summary_text(summary, "review_status", result.get("review_status"))
         _set_summary_text(summary, "task_anchor_status", result.get("task_anchor_status"))
         _set_summary_text(summary, "task_anchor_preview", result.get("task_anchor_preview"))
         _set_summary_text(summary, "review_scope", result.get("review_scope"))
         _set_summary_text(summary, "next_repair_step", result.get("next_repair_step"))
+        _set_summary_text(summary, "run_blocked_until_web_review", result.get("run_blocked_until_web_review"))
+        _set_summary_text(summary, "after_review_cli_command_status", result.get("after_review_cli_command_status"))
         _set_summary_text(summary, "after_review_slash_command", result.get("after_review_slash_command"))
+        _set_summary_text(summary, "after_web_review_cli_command", result.get("after_web_review_cli_command"))
         _set_summary_text(summary, "after_review_cli_command", result.get("after_review_cli_command"))
     return {key: value for key, value in summary.items() if value not in ("", [], {})}
+
+
+def _attach_repair_candidate_summary(summary: dict[str, object], result: dict) -> None:
+    _set_summary_mapping(summary, "agent_work_panel", result.get("agent_work_panel"))
+    _set_summary_mapping(summary, "repair_action", result.get("repair_action"))
+    _set_summary_text(summary, "validation_error", result.get("validation_error") or _agent_gen_error_summary(result))
+    _set_summary_list(summary, "repair_focus", result.get("repair_focus"))
+    _set_summary_text(summary, "repair_task_message", result.get("repair_task_message"))
+    _set_summary_text(summary, "plan_file_to_repair", result.get("plan_file_to_repair"))
+    _set_summary_text(summary, "preview_plan_copy", result.get("preview_plan_copy"))
+    _set_summary_text(summary, "next_plan_command", result.get("next_plan_command"))
+    _set_summary_text(summary, "repair_slash_command", result.get("repair_slash_command"))
+    _set_summary_text(summary, "repair_cli_command", result.get("repair_cli_command"))
+    _set_summary_text(summary, "repair_cli_command_policy", result.get("repair_cli_command_policy"))
+    _set_summary_text(summary, "repair_reference", result.get("repair_reference"))
+    _set_summary_text(summary, "next_repair_step", result.get("next_repair_step"))
 
 
 def _visible_loop_recovery(loop_recovery: str) -> str:

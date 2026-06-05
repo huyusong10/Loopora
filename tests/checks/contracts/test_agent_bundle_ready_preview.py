@@ -11,6 +11,7 @@ from agent_bundle_candidates_test_support import (
     _invoke_codex_plan,
     _write_ready_bundle,
     alignment_bundle_yaml,
+    assert_agent_v3_compact_envelope,
     assert_agent_v3_envelope,
     cli,
     json,
@@ -45,6 +46,41 @@ def test_cli_codex_gen_accepts_ready_bundle_without_starting_run(tmp_path: Path,
     assert "--json" in summary["ready_cli_command"]
     assert summary["ready_run_command"] == summary["ready_cli_command"]
     assert "run" not in summary
+
+
+def test_cli_codex_gen_compact_json_omits_raw_but_keeps_ready_handoff(tmp_path: Path, sample_workdir: Path) -> None:
+    bundle_file = _write_ready_bundle(tmp_path, sample_workdir)
+    runner = CliRunner()
+
+    result = _invoke_codex_plan(
+        runner,
+        sample_workdir,
+        message="Ship contract inspection for implementation handoff.",
+        bundle_file=bundle_file,
+        compact_json_output=True,
+    )
+
+    assert result.exit_code == 0, result.stdout
+    payload = json.loads(result.stdout)
+    summary = assert_agent_v3_compact_envelope(
+        payload,
+        kind="agent_plan",
+        summary_key="agent_plan_summary",
+        status="ready",
+    )
+    _assert_ready_review_projection(summary["ready_review_projection"])
+    surface = summary["agent_surface"]
+    assert surface["entry_kind"] == "project_skill"
+    assert surface["slash_commands"] == {"plan": "/loopora-plan", "run": "/loopora-run"}
+    assert "loopora-builder" in surface["target_agents"]
+    assert surface["capability_contract"]["role_dispatch"] == "host_native"
+    assert surface["nested_provider_cli"] == "not_used"
+    assert "packaging" not in surface
+    assert "permission_boundary" not in surface
+    assert "observability" not in surface
+    assert summary["ready_slash_command"] == "/loopora-run"
+    assert "loopora agent codex run" in summary["ready_cli_command"]
+    assert "--json --compact-json" in summary["ready_cli_command"]
 
 
 def test_cli_agent_gen_ready_output_points_back_to_same_agent_loop(tmp_path: Path, sample_workdir: Path) -> None:

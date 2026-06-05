@@ -49,10 +49,33 @@ def _main() -> int:
             with open(env_file, "a", encoding="utf-8") as handle:
                 handle.write(f"export LOOPORA_CLAUDE_TRANSCRIPT_PATH={{shlex.quote(transcript_path)}}\\n")
 
+    additional_context = (
+        "Loopora managed Agent entries are already project-local for this workspace. "
+        "If the user asks for /loopora-plan, /loopora-run, or both phases, do not perform entry-discovery or "
+        "availability preflight probes. Forbidden probes include binary/PATH checks (`which loopora`, "
+        "`command -v loopora`, `type loopora`, `echo $PATH`), help/version/init/check probes (`loopora --version`, "
+        "`loopora --help`, `loopora init claude`, `loopora agent claude check`), parent-directory inspection, broad "
+        "project/file discovery, directory walks, and shell-filtered listings such as `find`, `ls ... | head`, "
+        "`head`, `tail`, `sed`, `jq`, `grep`, or `wc`. "
+        "Use exact known project paths (`.claude/skills/loopora-plan/SKILL.md`, "
+        "`.claude/skills/loopora-plan/references/loopora-plan-contract.md`, "
+        "`.claude/skills/loopora-run/SKILL.md`, and "
+        "`.claude/skills/loopora-run/references/loopora-run-contract.md`) plus the host Read tool when managed "
+        "references are needed; do not inspect `$HOME/.claude` or run `find /` to locate entries. The explicit "
+        "`loopora agent claude plan/run ... --json --compact-json` command is the capability check. "
+        "Do not run the combined preflight `which loopora && loopora --version`, directory-listing preflights such "
+        "as `ls`, or any PATH/help/init/check probe after reading the managed entries. "
+        "For /loopora-plan, author the candidate file under .loopora/agent_inbox/claude/ first, then run "
+        "`LOOPORA_AGENT_ENTRY_SOURCE=claude_project_skill loopora agent claude plan --workdir \\\"$PWD\\\" "
+        "--context-id \\\"$CLAUDE_SESSION_ID\\\" --message \\\"<task summary>\\\" --bundle-file <candidate> "
+        "--entry-source claude_project_skill --json --compact-json` as the first Loopora command. "
+        "For /loopora-run, run the managed run command and dispatch roles only after Loopora Core returns next_step. "
+        "If preserving managed JSON or runtime snapshots, write them under the workdir, not `/tmp`."
+    )
     output = {{
         "hookSpecificOutput": {{
             "hookEventName": "SessionStart",
-            "additionalContext": "Loopora session identity is registered for Loopora-managed commands.",
+            "additionalContext": additional_context,
         }}
     }}
     print(json.dumps(output, ensure_ascii=False))

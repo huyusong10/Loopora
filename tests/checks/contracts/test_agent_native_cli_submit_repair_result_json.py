@@ -38,7 +38,7 @@ def test_cli_agent_submit_invalid_json_prints_result_file_repair_guidance(monkey
     json_result = invoke_result_json_repair_submit(runner, fixture, fixture["bad_result_file"], json_output=True)
     summary = assert_result_json_repair_summary(json_result, fixture["bad_result_file"])
     assert any("fix JSON syntax" in item for item in summary["repair_focus"])
-    assert summary["schema_lookup"].endswith("--run-id run_bad_json --json --entry-source codex_project_skill")
+    assert summary["schema_lookup"].endswith("--run-id run_bad_json --json --compact-json --entry-source codex_project_skill")
 
     missing_file = tmp_path / "missing-filled.result.json"
     missing = invoke_result_json_repair_submit(runner, fixture, missing_file, json_output=True)

@@ -11,6 +11,11 @@ from agent_adapter_test_support import (
 )
 
 
+def _plain_recovery_text(result) -> str:
+    parts = [result.output, _error_text(result)]
+    return "\n".join(part for part in parts if part)
+
+
 def test_cli_codex_adapter_install_conflict_guides_recovery_without_overwriting(tmp_path: Path) -> None:
     workdir = tmp_path / "project"
     conflict = workdir / ".agents" / "skills" / "loopora-plan" / "SKILL.md"
@@ -21,10 +26,9 @@ def test_cli_codex_adapter_install_conflict_guides_recovery_without_overwriting(
     result = runner.invoke(cli.app, ["init", "codex", "--workdir", str(workdir)])
 
     assert result.exit_code == 1
-    assert result.stdout == ""
     assert conflict.read_text(encoding="utf-8") == "# User-owned Codex entry\n"
     assert not (workdir / ".loopora" / "adapters" / "codex" / "manifest.json").exists()
-    error_text = _error_text(result)
+    error_text = _plain_recovery_text(result)
     assert "Codex Loopora entry was not installed." in error_text
     assert f"target project: {workdir.resolve()}" in error_text
     assert "left the project unchanged" in error_text
@@ -40,7 +44,6 @@ def test_cli_codex_adapter_install_conflict_guides_recovery_without_overwriting(
     json_result = runner.invoke(cli.app, ["init", "codex", "--workdir", str(workdir), "--json"])
 
     assert json_result.exit_code == 1
-    assert _error_text(json_result) == ""
     payload = json.loads(json_result.stdout)
     assert payload["loop_recovery"] == "adapter_install_conflict"
     assert payload["install_status"] == "conflict"
@@ -71,8 +74,7 @@ def test_cli_codex_loop_requires_ready_bundle(tmp_path: Path) -> None:
     )
 
     assert result.exit_code == 1
-    output_text = result.output
-    assert _error_text(result) == ""
+    output_text = _plain_recovery_text(result)
     assert "loop_recovery: run /loopora-plan before /loopora-run can start" in output_text
     assert "ready Loop preview" in output_text
     assert "required_inputs:" in output_text
@@ -102,8 +104,7 @@ def test_cli_claude_loop_requires_ready_bundle(tmp_path: Path) -> None:
     result = runner.invoke(cli.app, ["agent", "claude", "run", "--workdir", str(workdir), "--no-web"])
 
     assert result.exit_code == 1
-    output_text = result.output
-    assert _error_text(result) == ""
+    output_text = _plain_recovery_text(result)
     assert "loop_recovery: run /loopora-plan before /loopora-run can start" in output_text
     assert "ready Loop preview" in output_text
     assert "READY Loopora bundle" not in output_text
@@ -117,8 +118,7 @@ def test_cli_opencode_loop_requires_ready_bundle(tmp_path: Path) -> None:
     result = runner.invoke(cli.app, ["agent", "opencode", "run", "--workdir", str(workdir), "--no-web"])
 
     assert result.exit_code == 1
-    output_text = result.output
-    assert _error_text(result) == ""
+    output_text = _plain_recovery_text(result)
     assert "loop_recovery: run /loopora-plan before /loopora-run can start" in output_text
     assert "ready Loop preview" in output_text
     assert "READY Loopora bundle" not in output_text

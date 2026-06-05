@@ -9,6 +9,7 @@ from loopora.coverage_target_semantics import coverage_target_is_required
 from loopora.residual_risk_support import (
     residual_risk_is_managed,
     residual_risk_is_meaningful,
+    residual_risk_text_matches_or_previews_any,
     residual_risk_is_unmanaged,
     residual_risk_policy_disallows_acceptance,
 )
@@ -138,7 +139,9 @@ def _gatekeeper_residual_risk_texts(verdict: Mapping[str, Any], coverage: Mappin
     risks = verdict_residual_risk_texts(verdict)
     latest_gatekeeper = coverage.get("latest_gatekeeper")
     if isinstance(latest_gatekeeper, Mapping):
-        risks.extend(string_list(latest_gatekeeper.get("residual_risk")))
+        for risk in string_list(latest_gatekeeper.get("residual_risk")):
+            if not residual_risk_text_matches_or_previews_any(risk, risks):
+                risks.append(risk)
     return risks
 
 

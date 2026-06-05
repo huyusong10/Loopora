@@ -259,7 +259,7 @@ Loopora's capability contract makes that boundary explicit:
 
 - The current host Agent executes in its current workspace. Loopora manages entries, context binding, role boundaries, evidence, task verdicts, and `.loopora/` state.
 - Activation stays explicit through `/loopora-plan`, `/loopora-run`, or Loopora CLI commands. Generic host commands, hooks, session-start events, status lines, and remote control surfaces do not become Loopora phase entries.
-- Model/provider routing, external routers, permissions, approval mode, MCP servers, external tools, host memory, host skills/plugins, credentials, environment secrets, and global configuration stay owned by the host Agent and user.
+- Model selection, backend routing, external routers, permissions, approval mode, MCP servers, external tools, host memory, host skills/plugins, credentials, environment secrets, and global configuration stay owned by the host Agent and user.
 - Host entries are thin project-local packaging. Behavior comes from Loopora Core and managed references; manifests and checks detect drift; generated projections, marketplaces, registries, symlinks, and prompt-only exports are discovery or guidance rather than runtime dependency, install proof, or task proof.
 - Entries present compact summaries first and open reference files or full payloads only when needed. Host memory, compacted summaries, loaded skills, injected editor context, workflow kits, role catalogs, checkpoints, and archived sessions are hints, not Loopora context binding or evidence.
 - Role handoff stays path-based, uses the host-native mechanism, and stops before inline work if dispatch is unavailable. Multi-role fan-out happens only when the reviewed Loop workflow declares a parallel group.

@@ -118,7 +118,7 @@ def test_agent_entry_launch_projection_prefers_ready_event_fingerprint(tmp_path)
 
     assert launch["source"] == "agent_entry"
     assert launch["slash_command"] == "/loopora-run"
-    assert launch["loop_command"].endswith("--json")
+    assert launch["loop_command"].endswith("--json --compact-json")
     assert "--context-id thread-a" in launch["loop_command"]
     assert launch["ready_candidate_sha256"] == "ready-sha"
     assert launch["ready_candidate_bytes"] == READY_CANDIDATE_BYTES

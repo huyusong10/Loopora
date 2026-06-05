@@ -200,7 +200,7 @@ bundles_app = typer.Typer(help="Import, export, and manage Loop plan files")
 spec_app = typer.Typer(help="Expert: work with Markdown Loop contracts")
 prompts_app = typer.Typer(help="Developer: validate and inspect prompt templates")
 diagnose_app = typer.Typer(help="Inspect local diagnostics and repair safe historical issues")
-dev_app = typer.Typer(help="Developer: reset incompatible v2 local state")
+dev_app = typer.Typer(help="Developer: reset incompatible development local state")
 init_app = typer.Typer(
     help=(
         "Install /loopora-plan and /loopora-run project entries, then return to the Agent "

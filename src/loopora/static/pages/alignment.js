@@ -2585,8 +2585,8 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     if (text.includes("host Agent task summary") || text.includes("project the host Agent task summary")) {
       hints.push(localeText(
-        "把 /loopora-plan 摘要里的高信号对象写进 spec、角色责任、workflow intent 和证据规则。",
-        "Project high-signal objects from the /loopora-plan summary into spec, role responsibilities, workflow intent, and evidence rules."
+        "把 /loopora-plan 摘要里的高信号对象写进 spec、角色责任、运行意图和证据规则。",
+        "Project high-signal objects from the /loopora-plan summary into spec, role responsibilities, run intent, and evidence rules."
       ));
     }
     if (text.includes("evidence preferences") || text.includes("explicit host Agent evidence")) {

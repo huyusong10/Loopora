@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import typer
 
+from loopora.agent_native_coverage_summary import coverage_gap_summaries, required_coverage_summary
 from loopora.agent_native_task_proof import (
     AGENT_RUN_LIFECYCLE_SOURCE,
     AGENT_TASK_PROOF_SOURCE,
@@ -46,9 +47,9 @@ __all__ = [
 ]
 
 
-def _print_agent_loop_result(result: dict, *, json_output: bool) -> None:
-    if json_output:
-        _attach_agent_run_summary(result)
+def _print_agent_loop_result(result: dict, *, json_output: bool, compact_json_output: bool = False) -> None:
+    if json_output or compact_json_output:
+        _attach_agent_run_summary(result, include_raw=not compact_json_output, compact=compact_json_output)
         echo_json(result["agent_v3_envelope"])
         return
     _print_agent_work_panel(result)
@@ -81,9 +82,9 @@ def _print_agent_loop_start_state(result: dict) -> None:
         typer.echo("run_start: resumed_existing_agent_runner_run")
 
 
-def _print_agent_step_result(result: dict, *, json_output: bool) -> None:
-    if json_output:
-        echo_json(_agent_submit_json_payload(result))
+def _print_agent_step_result(result: dict, *, json_output: bool, compact_json_output: bool = False) -> None:
+    if json_output or compact_json_output:
+        echo_json(_agent_submit_json_payload(result, include_raw=not compact_json_output))
         return
     _print_agent_work_panel(result)
     if result.get("auto_repair_applied") is True:
@@ -95,6 +96,7 @@ def _print_agent_step_result(result: dict, *, json_output: bool) -> None:
     typer.echo(f"run_status: {run_status_from_run(run)}")
     _print_agent_native_run_surface(result)
     _print_agent_submitted_step(result.get("submitted_step"))
+    _print_agent_coverage_after_submit(result)
     print_run_contract_summary(run)
     task_verdict = task_verdict_from_run(run)
     if result.get("complete"):
@@ -109,9 +111,9 @@ def _print_agent_step_result(result: dict, *, json_output: bool) -> None:
         _print_agent_current_step(next_step)
 
 
-def _print_agent_next_result(result: dict, *, json_output: bool) -> None:
-    if json_output:
-        echo_json(_agent_next_json_payload(result))
+def _print_agent_next_result(result: dict, *, json_output: bool, compact_json_output: bool = False) -> None:
+    if json_output or compact_json_output:
+        echo_json(_agent_next_json_payload(result, include_raw=not compact_json_output))
         return
     _print_agent_step_result(result, json_output=False)
 
@@ -121,6 +123,30 @@ def _print_agent_native_run_surface(result: dict) -> None:
     surface = agent_native_run_surface_for_result(result, next_step)
     for line in native_surface_plain_lines(surface):
         typer.echo(line)
+
+
+def _print_agent_coverage_after_submit(result: dict) -> None:
+    coverage = result.get("coverage_after_submit") if isinstance(result.get("coverage_after_submit"), dict) else {}
+    if not coverage:
+        return
+    summary = required_coverage_summary(coverage)
+    if summary:
+        typer.echo(f"coverage_after_submit: {summary}")
+    source = str(coverage.get("source") or "").strip()
+    if source:
+        typer.echo(f"coverage_after_submit_source: {source}")
+    top_gaps = coverage_gap_summaries(coverage.get("top_gaps"), limit=3)
+    if not top_gaps:
+        return
+    typer.echo("coverage_after_submit_top_gaps:")
+    for gap in top_gaps:
+        target_id = str(gap.get("target_id") or "").strip()
+        status = str(gap.get("status") or "").strip()
+        reason = str(gap.get("reason") or gap.get("text") or "").strip()
+        rendered = " ".join(item for item in (target_id, status) if item)
+        if reason:
+            rendered = f"{rendered}: {reason}" if rendered else reason
+        typer.echo(f"- {rendered}")
 
 
 def _print_agent_native_terminal_state(task_verdict: object) -> None:

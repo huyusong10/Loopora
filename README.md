@@ -140,7 +140,7 @@ loopora agent codex check --workdir "$PWD"
 
 The Agent Runner capability contract is intentionally small:
 
-- Execution stays with the current host Agent in its current workdir. Loopora owns managed project entries plus `.loopora/` state, and it does not change model/provider routing, permissions, approval mode, global config, skills/plugins, MCP setup, credentials, or environment secrets.
+- Execution stays with the current host Agent in its current workdir. Loopora owns managed project entries plus `.loopora/` state, and it does not change model selection, backend routing, permissions, approval mode, global config, skills/plugins, MCP setup, credentials, or environment secrets.
 - Activation stays explicit through `/loopora-plan`, `/loopora-run`, or Loopora CLI commands. Host hooks, session-start events, status lines, remote controls, and task trackers are observation or control surfaces, not Loopora phase entries.
 - Role handoff uses the host-native mechanism and never starts a nested Codex, Claude Code, or OpenCode CLI. Handoff stays path-based, and multi-role fan-out happens only when the reviewed Loop declares a parallel group.
 - Task proof comes from submitted Loopora evidence refs and the task verdict. Approval, host memory, compact summaries, injected editor context, external tool output, hook logs, marketplace/registry state, symlinks, and session archives are hints until submitted as Loopora evidence.

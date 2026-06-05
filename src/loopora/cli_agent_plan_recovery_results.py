@@ -7,6 +7,31 @@ from loopora.cli_agent_plan_repair_hints import validation_repair_hints as _vali
 from loopora.cli_agent_runtime_support import agent_plan_cli_command as _agent_plan_cli_command
 from loopora.cli_summary_helpers import clip_inline as _clip_inline
 
+REPAIR_CLI_COMMAND_POLICY = (
+    "rerun repair_cli_command exactly with --json --compact-json; do not replace it with --json-only and do not pipe "
+    "Loopora JSON, role wrappers, result wrappers, proof artifacts, or recovery payloads through head, head -c, tail, "
+    "sed, Python string slicing, or other truncating filters; do not run loopora --help, loopora diagnose, which loopora, "
+    "find /, read alignment session artifacts or manifests, or search Loopora source/filesystem state as a repair step"
+)
+REPAIR_REFERENCE = (
+    "use validation_error plus repair_focus and the Candidate Bundle Skeleton in the managed loopora-plan-contract.md; "
+    "repair the candidate plan file directly and do not inspect alignment session artifacts, manifests, the whole "
+    "filesystem, Loopora source, or help output"
+)
+
+REPAIR_FORBIDDEN_ACTIONS = (
+    "do not inspect alignment session artifacts or manifests",
+    "do not run loopora --help, loopora diagnose, or which loopora",
+    "do not run filesystem-wide discovery such as find /",
+    "do not search Loopora source, generated preview copies, or example bundles as the repair path",
+    "do not pipe Loopora JSON or proof artifacts through head, head -c, tail, sed, or Python slicing",
+)
+
+REPAIR_NEXT_ACTION = (
+    "edit plan_file_to_repair directly using validation_error, repair_focus, repair_task_message, and the managed "
+    "Candidate Bundle Skeleton; then rerun repair_cli_command exactly"
+)
+
 
 def _attach_agent_gen_recovery_fields(result: dict) -> None:
     if result.get("ready"):
@@ -30,11 +55,29 @@ def _attach_agent_gen_recovery_fields(result: dict) -> None:
         repair_cli_command = _agent_repair_cli_command(result, plan_file=plan_file)
         if repair_cli_command:
             result["repair_cli_command"] = repair_cli_command
+            result["repair_cli_command_policy"] = REPAIR_CLI_COMMAND_POLICY
+        result["repair_reference"] = REPAIR_REFERENCE
         result["next_repair_step"] = (
             "repair the candidate plan file so it preserves repair_task_message and repair_focus in spec, roles, "
-            "workflow, and evidence rules; rerun repair_cli_command or repair_slash_command, then use /loopora-run "
+            "workflow, and evidence rules; do not inspect alignment session artifacts, manifests, Loopora source/help, "
+            "or run filesystem-wide discovery; rerun repair_cli_command or repair_slash_command, then use /loopora-run "
             "only after the preview is ready"
         )
+        action = _agent_plan_repair_action(result)
+        if action:
+            result["agent_work_panel"] = {
+                "state": "repair_candidate_plan_file",
+                "task_proven": False,
+                "task_outcome": "not_ready_repair_candidate_plan_file",
+                "next_action": action["next_action"],
+                "evidence_focus": "validation_error and repair_focus from the rejected candidate plan",
+                "todo_items": [
+                    "edit the candidate plan file",
+                    "rerun repair_cli_command exactly with compact JSON",
+                    "start /loopora-run only after preview readiness",
+                ],
+            }
+            result["repair_action"] = action
         return
     if result.get("requires_web_alignment"):
         _attach_agent_web_review_recovery_fields(result)
@@ -55,9 +98,12 @@ def _attach_agent_web_review_recovery_fields(result: dict) -> None:
         result["review_reply_preview"] = _clip_inline(reply, 260)
     result["next_review_step"] = "open the preview URL, complete the Web review checklist, then use /loopora-run only after the preview is ready"
     result["after_review_ready"] = "return to this Agent session and run /loopora-run; do not start the Agent Runner run from Web"
+    result["run_blocked_until_web_review"] = "yes"
+    result["after_review_cli_command_status"] = "blocked_until_web_review_complete"
     result["after_review_slash_command"] = _agent_entry_return_slash_command()
     command = _agent_entry_return_run_command(result)
     if command:
+        result["after_web_review_cli_command"] = command
         result["after_review_cli_command"] = command
         result["after_review_command"] = command
 
@@ -81,7 +127,30 @@ def _agent_repair_cli_command(result: dict, *, plan_file: str) -> str:
         entry_source=entry_source,
         bundle_file=plan_file,
     )
-    return f"{command} --json"
+    return f"{command} --json --compact-json"
+
+
+def _agent_plan_repair_action(result: dict) -> dict[str, object]:
+    plan_file = str(result.get("plan_file_to_repair") or "").strip()
+    next_command = str(result.get("repair_cli_command") or result.get("repair_slash_command") or "").strip()
+    action: dict[str, object] = {
+        "state": "repair_candidate_plan_file",
+        "next_action": REPAIR_NEXT_ACTION,
+        "allowed_inputs": [
+            "validation_error",
+            "repair_focus",
+            "repair_task_message",
+            "managed Candidate Bundle Skeleton",
+            "the candidate plan file itself",
+        ],
+        "forbidden_actions": list(REPAIR_FORBIDDEN_ACTIONS),
+        "stop_before": "/loopora-run until the repaired preview returns ready=true",
+    }
+    if plan_file:
+        action["file_to_edit"] = plan_file
+    if next_command:
+        action["command_after_edit"] = next_command
+    return action
 
 
 def _agent_task_message_from_session(result: dict) -> str:

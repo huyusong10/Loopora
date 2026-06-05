@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from hashlib import sha256
 import os
 from pathlib import Path
 
@@ -53,19 +54,39 @@ class ServiceWorkspaceMixin:
 
     def _capture_workspace_manifest(self, workdir: Path) -> dict:
         files = list(self._iter_user_workspace_files(workdir))
+        file_fingerprints: dict[str, dict] = {}
+        fingerprint_errors: list[dict] = []
+        for relative_path in files:
+            absolute_path = workdir / relative_path
+            try:
+                file_fingerprints[relative_path] = self._workspace_file_fingerprint(absolute_path)
+            except (OSError, UnicodeError, ValueError) as exc:
+                fingerprint_errors.append({"path": relative_path, "error": type(exc).__name__})
         return {
             "captured_at": utc_now(),
             "file_count": len(files),
             "files": files,
+            "file_fingerprints": file_fingerprints,
+            "fingerprint_errors": fingerprint_errors,
         }
 
     def _iter_user_workspace_files(self, workdir: Path):
         for root, dirs, files in os.walk(workdir):
-            dirs[:] = [name for name in dirs if name not in WORKSPACE_USER_FILE_IGNORED_DIRS]
+            dirs[:] = sorted(name for name in dirs if name not in WORKSPACE_USER_FILE_IGNORED_DIRS)
             for filename in sorted(files):
                 if filename in WORKSPACE_USER_FILE_IGNORED_FILES:
                     continue
                 yield (Path(root) / filename).relative_to(workdir).as_posix()
+
+    @staticmethod
+    def _workspace_file_fingerprint(path: Path) -> dict:
+        digest = sha256()
+        size_bytes = 0
+        with path.open("rb") as handle:
+            for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                size_bytes += len(chunk)
+                digest.update(chunk)
+        return {"sha256": digest.hexdigest(), "size_bytes": size_bytes}
 
     def _enforce_workspace_safety(self, run: dict, run_dir: Path, iter_id: int, *, role: str) -> None:
         layout = self._run_artifact_layout(run_dir)

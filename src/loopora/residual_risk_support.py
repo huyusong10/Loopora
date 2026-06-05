@@ -75,6 +75,22 @@ def residual_risk_policy_disallows_acceptance(value: object) -> bool:
     )
 
 
+def residual_risk_text_matches_or_previews_any(candidate: object, references: Iterable[object]) -> bool:
+    candidate_text = _normalized_residual_risk_preview_text(candidate)
+    if not candidate_text:
+        return False
+    candidate_prefix = _residual_risk_preview_prefix(candidate_text)
+    for reference in references:
+        reference_text = _normalized_residual_risk_preview_text(reference)
+        if not reference_text:
+            continue
+        if candidate_text == reference_text:
+            return True
+        if candidate_prefix and candidate_prefix != candidate_text and reference_text.startswith(candidate_prefix):
+            return True
+    return False
+
+
 def _residual_risk_values(values: object) -> tuple[object, ...]:
     if isinstance(values, str):
         return (values,)
@@ -85,6 +101,18 @@ def _residual_risk_values(values: object) -> tuple[object, ...]:
 
 def _normalized_residual_risk_text(value: object) -> str:
     return " ".join(str(value or "").split()).lower().strip(" .。")
+
+
+def _normalized_residual_risk_preview_text(value: object) -> str:
+    return " ".join(str(value or "").split()).lower().strip()
+
+
+def _residual_risk_preview_prefix(value: str) -> str:
+    if value.endswith("..."):
+        return value[:-3].rstrip()
+    if value.endswith("…"):
+        return value[:-1].rstrip()
+    return value
 
 
 def _has_residual_risk_exception(normalized: str) -> bool:

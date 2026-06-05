@@ -83,3 +83,15 @@ def test_run_contract_role_postures_can_fall_back_to_role_prompt_body(tmp_path: 
             "posture_notes": "Inspect the Builder handoff against fake-done risk before GateKeeper closes.",
         }
     ]
+
+
+def test_run_contract_artifacts_index_includes_workspace_baseline(tmp_path: Path) -> None:
+    contract = build_contract_snapshot(
+        tmp_path,
+        "run_prompt_workspace_baseline",
+        workspace_baseline={"file_count": 2},
+    )
+
+    assert contract["workspace_baseline"]["artifact"]["label"] == "workspace-baseline"
+    assert contract["workspace_baseline"]["artifact"]["relative_path"] == "contract/workspace_baseline.json"
+    assert contract["artifacts"]["workspace_baseline"] == contract["workspace_baseline"]["artifact"]

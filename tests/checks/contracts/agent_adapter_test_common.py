@@ -127,7 +127,7 @@ def _assert_output_contains(output: str, *snippets: str) -> None:
 
 def _assert_native_context_loading(surface: dict) -> None:
     context_loading = surface["context_loading"]
-    assert context_loading["summary_first"] == ["agent_v3_envelope.summary"]
+    assert context_loading["summary_first"] == ["summary"]
     _assert_expected_mapping_values(
         context_loading,
         EXPECTED_NATIVE_CONTEXT_LOADING,

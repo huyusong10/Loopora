@@ -6,6 +6,7 @@ import typer
 
 from loopora.cli_agent_adapter_output import (
     handle_adapter_install_conflict as _handle_adapter_install_conflict,
+    is_adapter_install_conflict as _is_adapter_install_conflict,
     print_adapter_check_result as _print_adapter_check_result,
     print_adapter_mutation_result as _print_adapter_mutation_result,
 )
@@ -57,9 +58,12 @@ def _install_adapter(adapter: str, *, workdir: Path, check: bool, json_output: b
         result = get_service().install_agent_adapter(adapter, workdir=workdir)
         _print_adapter_mutation_result(result, action="installed", json_output=json_output)
     except LooporaConflictError as exc:
-        _handle_adapter_install_conflict(adapter, workdir=workdir, exc=exc, json_output=json_output)
+        if _is_adapter_install_conflict(exc):
+            _handle_adapter_install_conflict(adapter, workdir=workdir, exc=exc, json_output=json_output)
+        else:
+            handle_error(exc, json_output=json_output)
     except LooporaError as exc:
-        handle_error(exc)
+        handle_error(exc, json_output=json_output)
 
 
 def _check_adapter(adapter: str, *, workdir: Path, json_output: bool) -> None:
@@ -69,7 +73,7 @@ def _check_adapter(adapter: str, *, workdir: Path, json_output: bool) -> None:
         if result.get("check_status") != "pass":
             raise typer.Exit(code=1)
     except LooporaError as exc:
-        handle_error(exc)
+        handle_error(exc, json_output=json_output)
 
 
 def _register_uninstall_commands(uninstall_app: typer.Typer) -> None:
@@ -94,7 +98,7 @@ def _uninstall_adapter(adapter: str, *, workdir: Path, json_output: bool) -> Non
         result = get_service().uninstall_agent_adapter(adapter, workdir=workdir)
         _print_adapter_mutation_result(result, action="uninstalled", json_output=json_output)
     except LooporaError as exc:
-        handle_error(exc)
+        handle_error(exc, json_output=json_output)
 
 
 def register_agent_check_command(adapter_app: typer.Typer, *, adapter: str) -> None:

@@ -11,6 +11,7 @@ from loopora.agent_native_submit_flow import (
     agent_native_advance_state_after_submit,
     agent_native_record_control_completion,
 )
+from loopora.context_iteration_summary import derive_latest_state_from_step_results
 from loopora.agent_native_host_dispatch_validation import validate_agent_native_host_dispatch
 from loopora.run_artifacts import RunArtifactLayout
 from loopora.service_agent_native_requests import (
@@ -24,6 +25,7 @@ from loopora.service_agent_native_submit_normalization import ServiceAgentNative
 from loopora.service_agent_native_submit_response import ServiceAgentNativeSubmitResponseMixin
 from loopora.service_types import ACTIVE_RUN_STATUSES, LooporaConflictError, LooporaError, TERMINAL_RUN_STATUSES
 from loopora.step_instruction_context import step_instruction_context_from_mapping
+from loopora.utils import read_json, write_json
 
 
 class ServiceAgentNativeSubmitMixin(ServiceAgentNativeSubmitNormalizationMixin, ServiceAgentNativeSubmitResponseMixin):
@@ -134,26 +136,8 @@ class ServiceAgentNativeSubmitMixin(ServiceAgentNativeSubmitNormalizationMixin, 
         step = submit_context.step
         iter_id = submit_context.iter_id
         step_order = submit_context.step_order
-        runtime_role = submit_context.runtime_role
-        role = submit_context.role
         host_dispatch = submit_context.host_dispatch
-        step_id = submit_context.step_id
         submitted_step = normalized.submitted_step
-        self.append_run_event(
-            run["id"],
-            "agent_native_step_submitted",
-            {
-                "adapter": kind,
-                "iter": iter_id,
-                "step_id": step_id,
-                "step_order": step_order,
-                "role_name": role["name"],
-                "archetype": role["archetype"],
-                "entry_source": str(request.entry_source or "").strip(),
-                "host_dispatch": host_dispatch,
-            },
-            role=runtime_role,
-        )
 
         state.update(agent_native_state_from_iteration(iteration))
         state["control_fire_counts"] = dict(context.control_fire_counts)
@@ -170,6 +154,8 @@ class ServiceAgentNativeSubmitMixin(ServiceAgentNativeSubmitNormalizationMixin, 
                 is_control_step=normalized.is_control_step,
             )
         )
+        if normalized.finish_result is None:
+            self._agent_native_refresh_latest_state(layout, iteration)
         write_agent_native_state(layout, state)
         return self._agent_native_submit_response(
             AgentNativeSubmitResponseRequest(
@@ -183,6 +169,29 @@ class ServiceAgentNativeSubmitMixin(ServiceAgentNativeSubmitNormalizationMixin, 
             )
         )
 
+    def _append_agent_native_step_submitted_event(
+        self,
+        request: AgentNativeStepSubmitRequest,
+        *,
+        submit_context: AgentNativeSubmitContext,
+    ) -> None:
+        role = submit_context.role
+        self.append_run_event(
+            submit_context.run["id"],
+            "agent_native_step_submitted",
+            {
+                "adapter": submit_context.kind,
+                "iter": submit_context.iter_id,
+                "step_id": submit_context.step_id,
+                "step_order": submit_context.step_order,
+                "role_name": role["name"],
+                "archetype": role["archetype"],
+                "entry_source": str(request.entry_source or "").strip(),
+                "host_dispatch": submit_context.host_dispatch,
+            },
+            role=submit_context.runtime_role,
+        )
+
     def _agent_native_advance_state_after_submit(self, request: AgentNativeStepAdvanceRequest) -> None:
         agent_native_advance_state_after_submit(request, append_run_event=self.append_run_event)
 
@@ -190,5 +199,24 @@ class ServiceAgentNativeSubmitMixin(ServiceAgentNativeSubmitNormalizationMixin, 
         return agent_native_record_control_completion(run, result, append_run_event=self.append_run_event)
 
     @staticmethod
+    def _agent_native_refresh_latest_state(layout: RunArtifactLayout, iteration: Any) -> None:
+        previous_state = _safe_read_json_object(layout.latest_state_path)
+        latest_state = derive_latest_state_from_step_results(
+            previous_state,
+            layout=layout,
+            iter_id=iteration.iter_id,
+            step_results=list(iteration.step_results),
+        )
+        write_json(layout.latest_state_path, latest_state)
+
+    @staticmethod
     def _validate_agent_native_host_dispatch(context: dict[str, Any], dispatch: dict[str, Any] | None) -> dict[str, Any]:
         return validate_agent_native_host_dispatch(context, dispatch)
+
+
+def _safe_read_json_object(path: Path) -> dict:
+    try:
+        payload = read_json(path)
+    except (OSError, UnicodeError, ValueError):
+        return {}
+    return payload if isinstance(payload, dict) else {}

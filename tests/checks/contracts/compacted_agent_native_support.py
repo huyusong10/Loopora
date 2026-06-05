@@ -36,7 +36,7 @@ def assert_packaging_boundary(packaging: dict) -> None:
 
 def assert_context_loading_boundary(context_loading: dict) -> None:
     assert context_loading["entry_prompt"] == "thin_dispatcher"
-    assert context_loading["summary_first"] == ["agent_v3_envelope.summary"]
+    assert context_loading["summary_first"] == ["summary"]
     assert context_loading["reference_loading"] == "on_demand_from_reference_paths"
     assert context_loading["host_memory"] == "host_owned_hint_not_loopora_context_or_evidence"
     _assert_keys_present(
@@ -630,7 +630,7 @@ def assert_native_surface_payload(payload: dict, *, adapter: str, entry_paths: s
     assert ".loopora/" in surface["owned_state"]
     assert surface["packaging"] == EXPECTED_NATIVE_PACKAGING
     context_loading = surface["context_loading"]
-    assert context_loading["summary_first"] == ["agent_v3_envelope.summary"]
+    assert context_loading["summary_first"] == ["summary"]
     assert context_loading == EXPECTED_NATIVE_CONTEXT_LOADING
     assert surface["health_check"]["adapter_check"] == f"loopora agent {adapter} check --workdir <project>"
     assert surface["health_check"]["side_effects"] == "check_commands_do_not_install_or_overwrite"

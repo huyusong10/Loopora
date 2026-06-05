@@ -12,6 +12,9 @@ from agent_adapter_test_support import (
     pytest,
 )
 
+RESULT_TEMPLATE_CONTRACT_PREFIX = "result_template_contract: Result file must contain one wrapper JSON object with loopora_host_dispatch"
+RESULT_TEMPLATE_FILL_PREFIX = "result_template_fill: in the main Agent session, open the template, replace null placeholders in result"
+
 
 def test_agent_native_claim_rejects_corrupted_active_step_view(
     service_factory,
@@ -171,7 +174,7 @@ def test_claude_native_surface_marks_only_loopora_session_context_hook_as_owned(
     assert surface["health_check"]["host_reload"] == "restart_or_new_host_session_may_be_required_for_entry_discovery"
 
 # Merged from test_agent_native_cli_damaged_binding_recovery.py
-from agent_native_v3_helpers import assert_agent_v3_envelope
+from agent_native_v3_helpers import assert_agent_v3_compact_envelope, assert_agent_v3_envelope
 from agent_adapter_test_support import (
     CliRunner,
     agent_adapters,
@@ -222,6 +225,23 @@ def test_cli_agent_next_json_summary_reports_compact_step_contract(monkeypatch, 
 
     assert result.exit_code == 0, result.stdout
     assert_agent_next_json_summary(result.stdout)
+
+
+def test_cli_agent_next_compact_json_omits_raw_but_keeps_handoff(monkeypatch, tmp_path: Path) -> None:
+    result, _layout = invoke_agent_next_step_view(monkeypatch, tmp_path, json_output=True, compact_json_output=True)
+
+    assert result.exit_code == 0, result.stdout
+    payload = json.loads(result.stdout)
+    summary = assert_agent_v3_compact_envelope(
+        payload,
+        kind="agent_next",
+        summary_key="agent_next_summary",
+        status="active",
+    )
+    assert summary["next_step"]["coverage_target_ids"] == ["done_when.check_001", "gatekeeper.finish"]
+    assert summary["next_step"]["submit_command"] == "loopora agent codex submit --run-id run_next"
+    assert payload["technical_handoff"]["next_step_contract_path"].endswith("step_contract.json")
+    assert "next_role_dispatch_message" not in payload["technical_handoff"]
 
 # Merged from test_agent_native_cli_next_run_contract_view.py
 from agent_native_cli_next_step_view_test_support import (
@@ -278,10 +298,10 @@ def test_cli_agent_next_prints_next_step_handoff_view(monkeypatch, tmp_path: Pat
     assert "before asking GateKeeper to pass again." in result.stdout
     assert "known_evidence_refs:" in result.stdout
     assert "ev_contract result=blocked support=non_supporting reason=result is blocked" in result.stdout
-    assert "result_template_contract: Write one wrapper JSON object with loopora_host_dispatch" in result.stdout
+    assert RESULT_TEMPLATE_CONTRACT_PREFIX in result.stdout
     assert "schema-shaped result" in result.stdout
     assert "replace null placeholders before submit" in result.stdout
-    assert "result_template_fill: open the template, replace null placeholders in result" in result.stdout
+    assert RESULT_TEMPLATE_FILL_PREFIX in result.stdout
     assert "keep loopora_host_dispatch, then submit the filled copy" in result.stdout
     assert_cli_handoff_contract_paths(
         result.stdout,
@@ -472,7 +492,7 @@ def test_cli_agent_submit_schema_error_json_reports_result_repair_guidance(monke
     assert summary["active_role"] == "GateKeeper"
     assert summary["active_target_agent"] == "loopora-gatekeeper"
     assert "$.priority_failures[0] must be an object with required fields: error_code, summary" in summary["repair_focus"]
-    assert summary["schema_lookup"].endswith("--run-id run_schema --json --entry-source codex_project_skill")
+    assert summary["schema_lookup"].endswith("--run-id run_schema --json --compact-json --entry-source codex_project_skill")
 
 # Merged from test_agent_native_cli_submit_repair_schema_guidance_plain.py
 from agent_native_cli_submit_repair_core_blockers_test_support import (

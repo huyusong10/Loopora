@@ -7,14 +7,15 @@ from typing import Any
 from loopora.agent_adapter_check_utils import adapter_check, markdown_frontmatter, read_text_or_empty
 
 CODEX_ROLE_CONTRACT_SNIPPETS = (
-    "Return exactly one wrapper JSON object with `loopora_host_dispatch` and `result`.",
+    "Return exactly one raw wrapper JSON object with `loopora_host_dispatch` and `result`.",
+    "Do not wrap it in Markdown fences, prose, a code block, or a trailing explanation.",
     "Do not launch codex, claude, or opencode from inside this role.",
 )
 CODEX_ORCHESTRATOR_CONTRACT_SNIPPETS = (
     "You do not perform Builder, Inspector, GateKeeper, or Guide work yourself.",
     "read next_step.role_dispatch.target_agent and invoke that exact host-native role agent",
-    "next_step.judgment_contract",
-    "next_step.output_schema",
+    "compact role-dispatch message",
+    "open those local paths for the full prompt, output schema, judgment contract",
     "task_next_action.kind=continue_evidence",
 )
 CLAUDE_ROLE_TOOL_ALLOWLISTS = {

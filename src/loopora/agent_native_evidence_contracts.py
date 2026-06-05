@@ -91,8 +91,7 @@ def _agent_native_unknown_coverage_target_ids(output: dict[str, Any], *, active:
     return [target_id for target_id in _agent_native_output_coverage_target_ids(output) if target_id not in known_target_ids]
 
 
-def _agent_native_step_view_coverage_targets(step_view: dict[str, Any]) -> list[dict[str, Any]]:
-    judgment_contract = step_view.get("judgment_contract") if isinstance(step_view.get("judgment_contract"), dict) else {}
+def agent_native_coverage_targets_from_judgment_contract(judgment_contract: dict[str, Any]) -> list[dict[str, Any]]:
     targets: list[dict[str, Any]] = []
     for item in list(judgment_contract.get("coverage_targets") or []):
         if not isinstance(item, dict):
@@ -109,6 +108,11 @@ def _agent_native_step_view_coverage_targets(step_view: dict[str, Any]) -> list[
             }
         )
     return targets
+
+
+def _agent_native_step_view_coverage_targets(step_view: dict[str, Any]) -> list[dict[str, Any]]:
+    judgment_contract = step_view.get("judgment_contract") if isinstance(step_view.get("judgment_contract"), dict) else {}
+    return agent_native_coverage_targets_from_judgment_contract(judgment_contract)
 
 
 AGENT_NATIVE_WORKSPACE_ARTIFACT_FIELDS = ("changed_files", "generated_files", "proof_files", "proof_artifacts", "artifact_paths")

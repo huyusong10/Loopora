@@ -94,7 +94,7 @@ def parse_target_verify_ref(value: object) -> tuple[str, str] | None:
         parts = text.split(":", 2)
         if len(parts) == 3 and parts[1].strip():
             return parts[1].strip(), parts[2].strip() or "unknown"
-    if text.startswith(("check_results:", "dynamic_checks:")):
+    if text.startswith("check_results:"):
         parts = text.split(":", 2)
         if len(parts) >= 2 and parts[1].strip():
             return f"done_when.{parts[1].strip()}", parts[2].strip() if len(parts) == 3 else "unknown"

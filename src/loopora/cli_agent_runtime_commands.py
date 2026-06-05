@@ -9,8 +9,10 @@ from loopora.cli_agent_command_options import (
     AdapterMessageOption,
     AdapterWorkdirOption,
     BundleFileOption,
+    CompactJsonOutputOption,
     ContextIdOption,
     EntrySourceOption,
+    NextStepIdCompatOption,
     NoWebOption,
     ResultFileOption,
     RunIdOption,
@@ -63,6 +65,7 @@ def _register_agent_runtime_for(agent_app: typer.Typer, *, adapter: str, help_te
         entry_source: EntrySourceOption = "",
         *,
         json_output: JsonOutputOption = False,
+        compact_json_output: CompactJsonOutputOption = False,
         no_web: NoWebOption = False,
     ) -> None:
         """Validate a generated Loop plan and return the Loop preview URL."""
@@ -77,7 +80,7 @@ def _register_agent_runtime_for(agent_app: typer.Typer, *, adapter: str, help_te
             )
             result = get_service().create_agent_bundle_candidate(request)
             attach_web_url(result, path_key="preview_path", url_key="preview_url", no_web=no_web)
-            _print_agent_gen_result(result, json_output=json_output)
+            _print_agent_gen_result(result, json_output=json_output, compact_json_output=compact_json_output)
         except (LooporaError, StrategySourceError) as exc:
             handle_agent_plan_error(
                 exc,
@@ -86,7 +89,7 @@ def _register_agent_runtime_for(agent_app: typer.Typer, *, adapter: str, help_te
                     workdir=workdir,
                     context_id=context_id,
                     entry_source=resolved_entry_source(entry_source),
-                    json_output=json_output,
+                    json_output=json_output or compact_json_output,
                 ),
             )
 
@@ -98,6 +101,7 @@ def _register_agent_runtime_for(agent_app: typer.Typer, *, adapter: str, help_te
         entry_source: EntrySourceOption = "",
         *,
         json_output: JsonOutputOption = False,
+        compact_json_output: CompactJsonOutputOption = False,
         no_web: NoWebOption = False,
     ) -> None:
         """Start or reuse the Loopora run associated with the current ready Loop preview."""
@@ -117,7 +121,7 @@ def _register_agent_runtime_for(agent_app: typer.Typer, *, adapter: str, help_te
             )
             spawn_agent_loop_worker_if_needed(service, result)
             attach_web_url(result, path_key="run_path", url_key="run_url", no_web=no_web)
-            _print_agent_loop_result(result, json_output=json_output)
+            _print_agent_loop_result(result, json_output=json_output, compact_json_output=compact_json_output)
         except (LooporaError, StrategySourceError) as exc:
             if _print_agent_loop_unready_guidance(
                 exc,
@@ -127,7 +131,7 @@ def _register_agent_runtime_for(agent_app: typer.Typer, *, adapter: str, help_te
                 context_id=context_id,
                 entry_source=resolved_source,
                 no_web=no_web,
-                json_output=json_output,
+                json_output=json_output or compact_json_output,
             ):
                 raise typer.Exit(code=1) from exc
             handle_error(exc)
@@ -137,9 +141,11 @@ def _register_agent_runtime_for(agent_app: typer.Typer, *, adapter: str, help_te
         workdir: AdapterWorkdirOption = Path(),
         context_id: ContextIdOption = "",
         run_id: RunIdOption = "",
+        _step_id: NextStepIdCompatOption = "",
         entry_source: EntrySourceOption = "",
         *,
         json_output: JsonOutputOption = False,
+        compact_json_output: CompactJsonOutputOption = False,
         no_web: NoWebOption = False,
     ) -> None:
         """Claim the next Loopora step contract for the host Agent to execute natively."""
@@ -151,6 +157,7 @@ def _register_agent_runtime_for(agent_app: typer.Typer, *, adapter: str, help_te
                 run_id=run_id,
                 entry_source=entry_source,
                 json_output=json_output,
+                compact_json_output=compact_json_output,
                 no_web=no_web,
             ),
         )
@@ -165,6 +172,7 @@ def _register_agent_runtime_for(agent_app: typer.Typer, *, adapter: str, help_te
         entry_source: EntrySourceOption = "",
         *,
         json_output: JsonOutputOption = False,
+        compact_json_output: CompactJsonOutputOption = False,
         no_web: NoWebOption = False,
     ) -> None:
         """Submit a host Agent's structured step result back to Loopora Core."""
@@ -196,7 +204,7 @@ def _register_agent_runtime_for(agent_app: typer.Typer, *, adapter: str, help_te
                 result["auto_repair_applied"] = True
                 result["auto_repair_actions"] = auto_repair_actions
             attach_web_url(result, path_key="run_path", url_key="run_url", no_web=no_web)
-            _print_agent_step_result(result, json_output=json_output)
+            _print_agent_step_result(result, json_output=json_output, compact_json_output=compact_json_output)
         except (LooporaError, StrategySourceError) as exc:
             handle_agent_submit_error(
                 exc,
@@ -208,7 +216,7 @@ def _register_agent_runtime_for(agent_app: typer.Typer, *, adapter: str, help_te
                     entry_source=resolved_source,
                     result_file=result_file,
                     workdir=workdir,
-                    json_output=json_output,
+                    json_output=json_output or compact_json_output,
                     auto_repair_actions=auto_repair_actions,
                 ),
             )

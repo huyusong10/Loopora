@@ -46,8 +46,20 @@ def agent_plan_context_guidance_fields(
     context_id: str = "",
     entry_source: str = "",
 ) -> dict:
+    message_cli_command = _agent_plan_message_cli_command(
+        adapter=adapter,
+        workdir=workdir,
+        context_id=context_id,
+        entry_source=entry_source,
+    )
     return {
         **agent_plan_context_request_fields(),
+        "message_source_policy": (
+            "If the current host user prompt already contains the goal, fake-done risks, required evidence, "
+            "and judgment tradeoffs, use that prompt as --message instead of asking again."
+        ),
+        "message_cli_command": message_cli_command,
+        "next_plan_cli_command": message_cli_command,
         "task_message_template": "Goal: ...; Fake-done risks: ...; Required evidence: ...; Judgment tradeoffs: ...",
         "first_task_message_example": adapter_first_task_message_example(),
         "debug_cli_example_command": _agent_plan_debug_cli_example_command(
@@ -127,6 +139,12 @@ def print_agent_plan_context_request_fields(result: dict) -> None:
     example = str(result.get("example_user_reply") or "").strip()
     if example:
         typer.echo(f"example_user_reply: {example}")
+    policy = str(result.get("message_source_policy") or "").strip()
+    if policy:
+        typer.echo(f"message_source_policy: {policy}")
+    command = str(result.get("message_cli_command") or result.get("next_plan_cli_command") or "").strip()
+    if command:
+        typer.echo(f"message_cli_command: {command}")
 
 
 def print_agent_plan_context_guidance_fields(result: dict) -> None:
@@ -156,6 +174,26 @@ def _agent_plan_debug_cli_example_command(
         message=message,
         context_id=context_id,
         entry_source=entry_source,
+    )
+
+
+def _agent_plan_message_cli_command(
+    *,
+    adapter: str,
+    workdir: Path,
+    context_id: str = "",
+    entry_source: str = "",
+) -> str:
+    message = "<replace with current user task: goal, fake-done risks, required evidence, judgment tradeoffs>"
+    return (
+        agent_plan_cli_command(
+            adapter=adapter,
+            workdir=workdir,
+            message=message,
+            context_id=context_id,
+            entry_source=entry_source,
+        )
+        + " --json --compact-json"
     )
 
 

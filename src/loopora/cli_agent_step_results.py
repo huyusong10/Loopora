@@ -9,6 +9,7 @@ from loopora.agent_native_next_step_summary import (
 )
 from loopora.agent_native_surface import attach_native_run_surface
 from loopora.agent_native_task_proof import agent_task_proof_summary
+from loopora.agent_native_experience_artifacts import write_agent_v3_experience_artifact as _write_agent_v3_experience_artifact
 from loopora.agent_native_v3 import AGENT_NATIVE_V3_SCHEMA_VERSION
 from loopora.agent_native_v3 import agent_v3_envelope as _agent_v3_envelope
 from loopora.agent_native_v3 import agent_v3_legacy_raw as _agent_v3_legacy_raw
@@ -17,12 +18,13 @@ from loopora.agent_native_v3 import agent_v3_technical_handoff as _agent_v3_tech
 from loopora.cli_agent_work_panel import agent_work_panel as _agent_work_panel
 from loopora.cli_summary_helpers import (
     clip_inline as _clip_inline,
+    set_summary_before as _set_summary_before,
     set_summary_text as _set_summary_text,
 )
 from loopora.run_projection_fields import run_status_from_run, task_verdict_from_run
 
 
-def _attach_agent_run_summary(result: dict) -> None:
+def _attach_agent_run_summary(result: dict, *, include_raw: bool = True, compact: bool = False) -> None:
     summary = result.get("agent_run_summary") if isinstance(result.get("agent_run_summary"), dict) else {}
     next_step = result.get("next_step") if isinstance(result.get("next_step"), dict) else {}
     role_dispatch = next_step.get("role_dispatch") if isinstance(next_step.get("role_dispatch"), dict) else {}
@@ -57,64 +59,74 @@ def _attach_agent_run_summary(result: dict) -> None:
             normalize_next_evidence_focus=_agent_task_proof_focus,
         )
     )
-    attach_native_run_surface(summary, adapter=adapter)
+    attach_native_run_surface(summary, adapter=adapter, compact=compact)
     if not role_dispatch:
-        summary["agent_work_panel"] = _agent_work_panel(result, summary=summary)
-        _attach_agent_v3_run_envelope(result, summary)
+        _set_summary_before(summary, "agent_work_panel", _agent_work_panel(result, summary=summary), "agent_surface")
+        _attach_agent_v3_run_envelope(result, summary, include_raw=include_raw)
         return
     target_config = str(role_dispatch.get("target_agent_config_absolute_path") or role_dispatch.get("target_agent_config_path") or "").strip()
     if target_config:
         summary["next_target_agent_config"] = target_config
     if "target_agent_config_exists" in role_dispatch:
         summary["next_target_agent_config_exists"] = role_dispatch.get("target_agent_config_exists") is True
-    next_step_summary = _agent_next_step_summary(next_step, adapter=adapter, workdir=workdir)
+    next_step_summary = _agent_next_step_summary(next_step, adapter=adapter, workdir=workdir, compact=compact)
     if next_step_summary:
-        summary["next_step"] = next_step_summary
+        role_dispatch_message = next_step_summary.get("role_dispatch_message")
+        displayed_next_step_summary = _compact_next_step_summary(next_step_summary) if compact else next_step_summary
+        summary["next_step"] = displayed_next_step_summary
         _set_summary_text(summary, "dispatch_next", next_step_summary.get("dispatch_next"))
         _set_summary_text(summary, "next_context_path", next_step_summary.get("context_path"))
         _set_summary_text(summary, "next_step_contract_path", next_step_summary.get("step_contract_path"))
         _set_summary_text(summary, "next_result_template", next_step_summary.get("result_template"))
         _set_summary_text(summary, "next_submit_command", next_step_summary.get("submit_command"))
+        _set_summary_text(summary, "next_role_dispatch_message", role_dispatch_message)
     dispatch_unavailable = _agent_dispatch_unavailable_summary(adapter=adapter, workdir=workdir, role_dispatch=role_dispatch)
     if dispatch_unavailable:
         summary["dispatch_unavailable"] = dispatch_unavailable
     summary.update(_agent_next_step_continuation_summary(next_step))
-    summary["agent_work_panel"] = _agent_work_panel(result, summary=summary)
-    _attach_agent_v3_run_envelope(result, summary)
+    _set_summary_before(summary, "agent_work_panel", _agent_work_panel(result, summary=summary), "agent_surface")
+    _attach_agent_v3_run_envelope(result, summary, include_raw=include_raw)
 
 
-def _attach_agent_v3_run_envelope(result: dict, summary: dict) -> None:
+def _attach_agent_v3_run_envelope(result: dict, summary: dict, *, include_raw: bool = True) -> None:
+    extras = {
+        "technical_handoff": _agent_v3_technical_handoff(summary),
+        "diagnostics": {"legacy_summary_key": "agent_run_summary"},
+    }
+    if include_raw:
+        extras["raw"] = _agent_v3_legacy_raw(summary_key="agent_run_summary", summary=summary, payload=result)
     result["agent_v3_envelope"] = _agent_v3_envelope(
         kind="agent_run",
         status=_agent_v3_status(complete=result.get("complete")),
         summary=summary,
-        extras={
-            "technical_handoff": _agent_v3_technical_handoff(summary),
-            "diagnostics": {"legacy_summary_key": "agent_run_summary"},
-            "raw": _agent_v3_legacy_raw(summary_key="agent_run_summary", summary=summary, payload=result),
-        },
+        extras=extras,
     )
+    _write_agent_v3_experience_artifact(result, result["agent_v3_envelope"])
 
 
 def _attach_agent_run_dispatch_summary(result: dict) -> None:
     _attach_agent_run_summary(result)
 
 
-def _agent_next_json_payload(result: dict) -> dict:
-    summary = _agent_next_summary(result)
-    return _agent_v3_envelope(
+def _agent_next_json_payload(result: dict, *, include_raw: bool = True) -> dict:
+    summary = _agent_next_summary(result, compact=not include_raw)
+    extras = {
+        "technical_handoff": _agent_v3_technical_handoff(summary),
+        "diagnostics": {"legacy_summary_key": "agent_next_summary"},
+    }
+    if include_raw:
+        extras["raw"] = _agent_v3_legacy_raw(summary_key="agent_next_summary", summary=summary, payload=result)
+    envelope = _agent_v3_envelope(
         kind="agent_next",
         status=_agent_v3_status(complete=result.get("complete")),
         summary=summary,
-        extras={
-            "technical_handoff": _agent_v3_technical_handoff(summary),
-            "diagnostics": {"legacy_summary_key": "agent_next_summary"},
-            "raw": _agent_v3_legacy_raw(summary_key="agent_next_summary", summary=summary, payload=result),
-        },
+        extras=extras,
     )
+    _write_agent_v3_experience_artifact(result, envelope)
+    return envelope
 
 
-def _agent_next_summary(result: dict) -> dict:
+def _agent_next_summary(result: dict, *, compact: bool = False) -> dict:
     run = result.get("run") if isinstance(result.get("run"), dict) else {}
     next_step = result.get("next_step") if isinstance(result.get("next_step"), dict) else {}
     adapter = str(result.get("adapter") or next_step.get("adapter") or "").strip() or "codex"
@@ -127,10 +139,20 @@ def _agent_next_summary(result: dict) -> dict:
         "complete": bool(result.get("complete")),
         "handoff_kind": "current_step",
     }
-    next_summary = _agent_next_step_summary(next_step, adapter=adapter, workdir=workdir)
+    next_summary = _agent_next_step_summary(next_step, adapter=adapter, workdir=workdir, compact=compact)
     if next_summary:
-        summary["next_step"] = next_summary
-    attach_native_run_surface(summary, adapter=adapter)
+        role_dispatch_message = next_summary.get("role_dispatch_message")
+        displayed_next_summary = _compact_next_step_summary(next_summary) if compact else next_summary
+        summary["next_step"] = displayed_next_summary
+        _set_summary_text(summary, "next_step_id", next_summary.get("step_id"))
+        _set_summary_text(summary, "next_target_agent", next_summary.get("target_agent"))
+        _set_summary_text(summary, "dispatch_next", next_summary.get("dispatch_next"))
+        _set_summary_text(summary, "next_context_path", next_summary.get("context_path"))
+        _set_summary_text(summary, "next_step_contract_path", next_summary.get("step_contract_path"))
+        _set_summary_text(summary, "next_result_template", next_summary.get("result_template"))
+        _set_summary_text(summary, "next_submit_command", next_summary.get("submit_command"))
+        _set_summary_text(summary, "next_role_dispatch_message", role_dispatch_message)
+    attach_native_run_surface(summary, adapter=adapter, compact=compact)
     _set_summary_text(summary, "run_url", result.get("run_url") or result.get("run_path"))
     verdict_status = _task_verdict_status(task_verdict)
     _set_summary_text(summary, "task_verdict_status", verdict_status)
@@ -148,7 +170,7 @@ def _agent_next_summary(result: dict) -> dict:
             normalize_next_evidence_focus=_agent_task_proof_focus,
         )
     )
-    summary["agent_work_panel"] = _agent_work_panel(result, summary=summary)
+    _set_summary_before(summary, "agent_work_panel", _agent_work_panel(result, summary=summary), "agent_surface")
     return {key: value for key, value in summary.items() if value not in ("", [], {})}
 
 
@@ -156,6 +178,12 @@ def _task_verdict_status(task_verdict: object) -> str:
     if isinstance(task_verdict, dict):
         return str(task_verdict.get("status") or "").strip()
     return ""
+
+
+def _compact_next_step_summary(summary: dict) -> dict:
+    compact_summary = dict(summary)
+    compact_summary.pop("role_dispatch_message", None)
+    return compact_summary
 
 
 def _agent_task_proof_focus(value: str) -> str:

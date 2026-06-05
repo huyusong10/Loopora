@@ -73,7 +73,10 @@ def test_cli_agent_gen_reports_auto_started_web_review_url(sample_workdir: Path,
     assert "review_recommended_action: Continue evidence-first review (Recommended)" in result.stdout
     assert "review_focus:" in result.stdout
     assert "preview_url: http://127.0.0.1:9876/loops/new/bundle?alignment_session_id=" in result.stdout
+    assert "run_blocked_until_web_review: yes" in result.stdout
+    assert "after_review_cli_command_status: blocked_until_web_review_complete" in result.stdout
     assert "after_review_slash_command: /loopora-run" in result.stdout
+    _assert_labeled_loopora_agent_command(result.stdout, "after_web_review_cli_command", "run")
     _assert_labeled_loopora_agent_command(result.stdout, "after_review_cli_command", "run")
     _assert_labeled_loopora_agent_command(result.stdout, "after_review_command", "run")
     assert "web: started http://127.0.0.1:9876" in result.stdout
@@ -119,7 +122,10 @@ def test_cli_agent_loop_after_web_review_fallback_reprints_review_url_and_focus(
     assert "review_recommended_action: Continue evidence-first review (Recommended)" in output_text
     assert "next_review_step: open the preview URL" in output_text
     assert "after_review_ready: return to this Agent session and run /loopora-run" in output_text
+    assert "run_blocked_until_web_review: yes" in output_text
+    assert "after_review_cli_command_status: blocked_until_web_review_complete" in output_text
     assert "after_review_slash_command: /loopora-run" in output_text
+    _assert_labeled_loopora_agent_command(output_text, "after_web_review_cli_command", "run")
     _assert_labeled_loopora_agent_command(output_text, "after_review_cli_command", "run")
     _assert_labeled_loopora_agent_command(output_text, "after_review_command", "run")
     assert "preview_url: http://127.0.0.1:9988/loops/new/bundle?alignment_session_id=" in output_text

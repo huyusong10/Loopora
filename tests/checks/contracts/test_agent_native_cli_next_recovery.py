@@ -71,16 +71,16 @@ def test_cli_agent_next_without_exact_binding_reports_direct_run_recovery(
     assert summary["choice_count"] == 1
     assert summary["runnable_choice_count"] == 1
     assert summary["next_active_run_command"].endswith(
-        f"--run-id {started['run']['id']} --json --entry-source codex_project_skill"
+        f"--run-id {started['run']['id']} --json --compact-json --entry-source codex_project_skill"
     )
     assert summary["choices"][0]["choice_status"] == "active_run"
     assert summary["choices"][0]["next_agent_command"].endswith(
-        f"--run-id {started['run']['id']} --json --entry-source codex_project_skill"
+        f"--run-id {started['run']['id']} --json --compact-json --entry-source codex_project_skill"
     )
     assert summary["loop_recovery"] == "choose_recoverable_context"
     assert summary["choices"][0]["linked_run_id"] == started["run"]["id"]
     assert summary["choices"][0]["next_agent_command"].endswith(
-        f"--run-id {started['run']['id']} --json --entry-source codex_project_skill"
+        f"--run-id {started['run']['id']} --json --compact-json --entry-source codex_project_skill"
     )
 
     text_result = runner.invoke(

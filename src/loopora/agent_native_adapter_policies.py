@@ -65,7 +65,7 @@ def agent_adapter_context_loading_policy(adapter: str) -> dict[str, list[str] | 
     return {
         "entry_prompt": "thin_dispatcher",
         "summary_first": [
-            "agent_v3_envelope.summary",
+            "summary",
         ],
         "reference_loading": "on_demand_from_reference_paths",
         "full_payload": "open_after_compact_summary",
@@ -207,4 +207,3 @@ def agent_adapter_ownership_boundary(adapter: str) -> dict[str, list[str] | str]
         "credential_policy": "host_credentials_env_and_secrets_not_collected_or_used_as_task_proof",
         "repair_policy": "check_then_reinstall_loopora_managed_entries_only",
     }
-

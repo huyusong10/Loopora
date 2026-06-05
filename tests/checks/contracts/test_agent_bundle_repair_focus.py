@@ -63,6 +63,31 @@ def test_agent_plan_repair_focus_explains_common_semantic_lint_issues() -> None:
     assert "add # Residual Risk guidance naming accepted risks, owners/follow-ups, or fail-closed conditions" in hints
 
 
+def test_agent_plan_repair_focus_explains_project_local_governance_marker_lint() -> None:
+    hints = cli_agent_adapter_commands._validation_repair_hints(
+        "bundle semantic lint failed: alignment bundle must convert project-local governance markers into "
+        "Builder reading, Inspector or Custom verification, and GateKeeper gating responsibilities"
+    )
+
+    assert (
+        "add local governance responsibility sentences near the marker text: Builder reads and follows applicable "
+        "project-local governance before edits; Inspector verifies related design/tests/governance evidence; "
+        "GateKeeper treats skipped governance or missing expected validation as Weak, Unproven, or Blocking"
+    ) in hints
+
+
+def test_agent_plan_repair_focus_explains_yaml_control_characters() -> None:
+    hints = cli_agent_adapter_commands._validation_repair_hints(
+        'invalid bundle YAML: unacceptable character #x0000: special characters are not allowed in "<unicode string>", '
+        "position 13857"
+    )
+
+    assert (
+        "remove hidden YAML control characters such as NUL bytes from the plan file, especially inside quoted ids"
+        in hints
+    )
+
+
 def test_cli_agent_gen_json_repair_focus_explains_structural_plan_errors(tmp_path: Path, sample_workdir: Path) -> None:
     bundle_file = tmp_path / "bad-bundle.yml"
     bundle_file.write_text("version: 1\nspec:\n  name: Refund admin\n", encoding="utf-8")
@@ -78,6 +103,30 @@ def test_cli_agent_gen_json_repair_focus_explains_structural_plan_errors(tmp_pat
     assert summary["loop_recovery"] == "repair_candidate_plan_file"
     assert summary["validation_error"] == "bundle metadata.name is required"
     assert "add metadata.name so the plan has a stable reviewable identity" in summary["repair_focus"]
+
+
+def test_cli_agent_gen_json_repair_focus_explains_control_character_yaml_errors(
+    tmp_path: Path, sample_workdir: Path
+) -> None:
+    bundle_file = tmp_path / "nul-bundle.yml"
+    bundle_file.write_text('version: 1\nmetadata:\n  name: "bad\x00id"\n', encoding="utf-8")
+    result = invoke_agent_plan_json(
+        sample_workdir,
+        bundle_file,
+        "Build a refund admin workflow with audit and provider-failure evidence.",
+    )
+
+    assert result.exit_code == 0, result.stdout
+    payload = json.loads(result.stdout)
+    summary, _legacy = assert_agent_v3_envelope(
+        payload, kind="agent_plan", summary_key="agent_plan_summary", status="blocked"
+    )
+    assert summary["loop_recovery"] == "repair_candidate_plan_file"
+    assert "invalid bundle YAML:" in summary["validation_error"]
+    assert (
+        "remove hidden YAML control characters such as NUL bytes from the plan file, especially inside quoted ids"
+        in summary["repair_focus"]
+    )
 
 
 def test_cli_agent_gen_json_repair_focus_explains_semantic_lint_issues(tmp_path: Path, sample_workdir: Path) -> None:

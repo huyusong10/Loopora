@@ -44,7 +44,7 @@ def test_agent_native_result_template_uses_schema_shaped_null_scaffold() -> None
             "submit_hint": {
                 "command": (
                     "loopora agent codex submit --run-id run-scaffold --step-id builder_step "
-                    "--result-file /tmp/builder.result.json --json"
+                    "--result-file /tmp/builder.result.json --json --compact-json"
                 ),
                 "result_file_absolute_path": "/tmp/builder.result.json",
                 "result_template_absolute_path": "/tmp/builder.result.template.json",
@@ -93,7 +93,7 @@ def test_agent_native_result_template_uses_schema_shaped_null_scaffold() -> None
         contract["result_file_to_write"],
         contract["result_template_path"],
     ) == ("/tmp/builder.result.json", "/tmp/builder.result.template.json")
-    assert contract["submit_command"].endswith("--json")
+    assert contract["submit_command"].endswith("--json --compact-json")
     assert (contract["native_todo"]["not_evidence"], contract["native_trace_contract"]["field"]) == (True, "native_trace")
     assert (dispatch["native_trace"]["available"], dispatch["native_tool_name"], dispatch["native_trace_ref"]) == (False, "", "")
     assert template["result"] == {
@@ -102,6 +102,38 @@ def test_agent_native_result_template_uses_schema_shaped_null_scaffold() -> None
         "nested": {"status": None, "notes": [None]},
         "optional_flag": None,
     }
+
+
+def test_agent_native_result_template_reuses_step_view_coverage_projection() -> None:
+    template = agent_native_step_view_result_template(
+        {
+            "adapter": "codex",
+            "run_id": "run-scaffold",
+            "step_id": "gatekeeper_step",
+            "role_dispatch": {"target_agent": "loopora-gatekeeper"},
+            "coverage_target_ids": ["done_when.check_001"],
+            "coverage_targets": [
+                {
+                    "id": "done_when.check_001",
+                    "kind": "done_when",
+                    "required": True,
+                    "text": "The primary user flow works end to end.",
+                }
+            ],
+            "judgment_contract": {"coverage_targets": []},
+            "output_schema": {"type": "object", "properties": {}, "additionalProperties": False},
+        }
+    )
+
+    assert template["loopora_result_contract"]["coverage_target_ids"] == ["done_when.check_001"]
+    assert template["loopora_result_contract"]["coverage_targets"] == [
+        {
+            "id": "done_when.check_001",
+            "kind": "done_when",
+            "required": True,
+            "text": "The primary user flow works end to end.",
+        }
+    ]
 
 
 def test_agent_native_result_template_projects_active_iteration_repair_focus() -> None:

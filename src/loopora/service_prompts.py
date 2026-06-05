@@ -21,6 +21,14 @@ from loopora.service_prompt_schemas import (
     TESTER_SCHEMA as TESTER_SCHEMA,
     VERIFIER_SCHEMA as VERIFIER_SCHEMA,
 )
+from loopora.proof_command_prompt_guidance import (
+    INSPECTOR_PRIMARY_PROOF_PROMPT_GUIDANCE,
+    PROOF_COMMAND_OUTPUT_PROMPT_GUIDANCE,
+)
+from loopora.residual_risk_prompt_guidance import (
+    GATEKEEPER_RESIDUAL_RISK_PROMPT_GUIDANCE,
+    GATEKEEPER_UPSTREAM_EVIDENCE_PROMPT_GUIDANCE,
+)
 from loopora.specs import resolve_role_note
 
 
@@ -102,6 +110,7 @@ class ServiceRunPromptMixin:
             "Treat existing non-.loopora files as user-owned. Never wipe the whole workdir, bulk-delete existing files, or reset the project from scratch.\n"
             "Prefer targeted in-place edits and additive changes. Delete a file only when that deletion is narrowly necessary to your change.\n"
             f"{FROZEN_CONTRACT_GUIDANCE}"
+            f"{PROOF_COMMAND_OUTPUT_PROMPT_GUIDANCE}\n"
             f"{action_guidance}"
             f"{bootstrap_guidance}"
             f"{prior_iteration_feedback}"
@@ -162,6 +171,8 @@ class ServiceRunPromptMixin:
             "Keep notes concise and evidence-focused. Prefer concrete commands, files, and observed outputs over restating the whole spec.\n"
             "Use the stable evidence buckets in notes when useful: Proven, Weak, Unproven, Blocking, and Residual risk.\n"
             f"{FROZEN_CONTRACT_GUIDANCE}"
+            f"{PROOF_COMMAND_OUTPUT_PROMPT_GUIDANCE}\n"
+            f"{INSPECTOR_PRIMARY_PROOF_PROMPT_GUIDANCE}\n"
             "When fresh project-owned benchmark artifacts already exist, inspect them first and reuse them as primary evidence before rerunning an expensive end-to-end flow.\n"
             "If a long-running evaluation appears stalled, confirm that with live status files, logs, or preserved artifacts instead of guessing from silent stdout alone.\n"
             f"Iteration: {iter_id}\n"
@@ -171,6 +182,9 @@ class ServiceRunPromptMixin:
             "Inside `execution_summary`, return `total_checks`, `passed`, `failed`, `errored`, and `total_duration_ms`.\n"
             "For every `check_results` item and every `dynamic_checks` item, return `id`, `title`, `status`, and `notes`.\n"
             "Return `check_results`, `dynamic_checks`, and `coverage_results` as empty lists when there are no items.\n"
+            "Leave `dynamic_checks` empty unless you performed a new reproducible check that is not already represented by `check_results` or `coverage_results`. "
+            "If a command verifies a listed Done When/check id, Fake Done, Evidence Preference, scope, checksum, or coverage target, put that evidence in `check_results`, `coverage_results`, or `tester_observations` instead of `dynamic_checks`; do not duplicate file-read, artifact-presence, checksum/scope, or command-success facts there. "
+            "Each `dynamic_checks` item must name the extra nonduplicated claim it proves.\n"
             "Only populate `coverage_results` when you can explicitly verify or reject Fake Done or Evidence Preferences coverage targets; "
             "entries must include target_id, status, evidence_refs, and note. Use coverage status words such as `covered`, `weak`, `blocked`, or `missing`; keep Proven/Weak/Unproven/Blocking/Residual risk as note buckets, not status values.\n"
             "Return JSON with execution_summary, check_results, dynamic_checks, tester_observations, and coverage_results."
@@ -187,6 +201,7 @@ class ServiceRunPromptMixin:
             "Distinguish product or knowledge failures from harness-process defects, and surface harness defects as first-class failures when they block trustworthy evaluation.\n"
             "Separate run status from task verdict. Organize evidence as Proven, Weak, Unproven, Blocking, and Residual risk; do not treat a normal run lifecycle as task proof.\n"
             f"{FROZEN_CONTRACT_GUIDANCE}"
+            f"{PROOF_COMMAND_OUTPUT_PROMPT_GUIDANCE}\n"
             "Return `coverage_results` as an empty list unless you can explicitly verify or reject Fake Done or Evidence Preferences coverage targets; entries must include target_id, status, evidence_refs, and note. Use coverage status words such as `covered`, `weak`, `blocked`, or `missing`; keep Proven/Weak/Unproven/Blocking/Residual risk as verdict buckets, not status values.\n"
             f"Iteration: {iter_id}\n"
             f"Mode: {mode}\n"
@@ -201,7 +216,9 @@ class ServiceRunPromptMixin:
             "For every `coverage_results` item, return `target_id`, `status`, `evidence_refs`, and `note`; use `covered` for a verified target.\n"
             "When passing, cite concrete supporting Evidence ledger item ids in `evidence_refs`; a plain Builder handoff is not support unless it carries a proof artifact or measured evidence. "
             "If this GateKeeper step is the first evidence reader, prose claims alone are not enough; include measured `metric_scores` and put concise proof statements in `evidence_claims`.\n"
+            f"{GATEKEEPER_UPSTREAM_EVIDENCE_PROMPT_GUIDANCE}\n"
             "Accepted `residual_risks` must name the risk plus an owner, follow-up, or acceptance path; vague residual risk keeps the pass blocked.\n"
+            f"{GATEKEEPER_RESIDUAL_RISK_PROMPT_GUIDANCE}\n"
             "Return `metrics`, `blocking_issues`, `hard_constraint_violations`, `failed_check_ids`, `priority_failures`, `evidence_refs`, `evidence_claims`, `residual_risks`, and `coverage_results` as arrays; "
             "use empty arrays when there are no items.\n"
             "Return JSON with passed, decision_summary, composite_score, metrics, metric_scores, blocking_issues, "

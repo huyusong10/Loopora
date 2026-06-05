@@ -14,10 +14,10 @@ def agent_native_todo_contract(*, step_id: str, target_agent: str) -> dict[str, 
             "the step contract and result template. Todo state is user-visible progress only, not Loopora evidence."
         ),
         "items": [
-            f"Read agent_v3_envelope.summary and the step contract for {step_text}.",
+            f"Read top-level summary and the step contract for {step_text}.",
             f"Invoke {target_text} through the host's official subagent/task mechanism.",
             "Fill the provided result template without changing Loopora's frozen contract fields.",
-            "Submit the filled result and read agent_v3_envelope.summary before deciding whether the task is proven.",
+            "Submit the filled result and read top-level summary before deciding whether the task is proven.",
         ],
     }
 
