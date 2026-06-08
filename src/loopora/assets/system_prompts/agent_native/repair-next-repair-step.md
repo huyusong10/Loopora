@@ -1,0 +1,1 @@
+repair the candidate plan file so it preserves repair_task_message and repair_focus in spec, roles, workflow, and evidence rules; do not inspect alignment session artifacts, manifests, Loopora source/help, or run filesystem-wide discovery; rerun repair_cli_command or repair_slash_command, then use /loopora-run only after the preview is ready

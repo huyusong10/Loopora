@@ -3,6 +3,8 @@ from __future__ import annotations
 import re
 from collections.abc import Collection
 
+from loopora.alignment_semantics import text_mentions_loop_fit_contradiction
+
 
 def alignment_needs_user_input(output: dict) -> bool:
     return output.get("needs_user_input") is True
@@ -68,24 +70,71 @@ def alignment_decision_options_are_visible(options: list[dict]) -> bool:
     return len(options) >= 2 and any(option.get("recommended") is True for option in options)
 
 
-def visible_alignment_decision_options(output: dict, *, has_bundle: bool, prefers_chinese: bool) -> list[dict]:
+def visible_alignment_decision_options(
+    output: dict,
+    *,
+    has_bundle: bool,
+    prefers_chinese: bool,
+    display_language: str = "",
+) -> list[dict]:
     if has_bundle:
         return []
     phase = str(output.get("alignment_phase", "") or "").strip().lower()
     status = str(output.get("status", "") or "").strip().lower()
     if not alignment_needs_user_input(output) and phase != "blocked" and status != "blocked":
         return []
+    if alignment_output_is_not_fit(output) or phase == "blocked" or status == "blocked":
+        return not_fit_alignment_decision_options(
+            prefers_chinese=prefers_chinese,
+            display_language=display_language,
+        )
     options = normalize_alignment_decision_options(output.get("decision_options"))
     if alignment_decision_options_are_visible(options):
         return options
     if phase == "agreement":
-        return agreement_confirmation_decision_options(prefers_chinese=prefers_chinese)
-    if phase == "blocked" or status == "blocked":
-        return not_fit_alignment_decision_options(prefers_chinese=prefers_chinese)
-    return default_alignment_decision_options(prefers_chinese=prefers_chinese)
+        return agreement_confirmation_decision_options(
+            prefers_chinese=prefers_chinese,
+            display_language=display_language,
+        )
+    return default_alignment_decision_options(
+        prefers_chinese=prefers_chinese,
+        display_language=display_language,
+    )
 
 
-def default_alignment_decision_options(*, prefers_chinese: bool) -> list[dict]:
+def alignment_output_is_not_fit(output: dict) -> bool:
+    checklist = output.get("readiness_checklist")
+    if not isinstance(checklist, dict) or checklist.get("loop_fit") is not False:
+        return False
+    text_parts: list[str] = [
+        str(output.get("assistant_message") or ""),
+        str(output.get("review_reply_preview") or ""),
+        str(output.get("review_status") or ""),
+        str(output.get("review_recommended_action") or ""),
+    ]
+    evidence = output.get("readiness_evidence")
+    if isinstance(evidence, dict):
+        text_parts.extend(
+            str(evidence.get(key) or "")
+            for key in (
+                "loop_fit",
+                "workflow_shape",
+                "execution_strategy",
+                "residual_risk_policy",
+                "open_questions",
+            )
+        )
+    raw_options = output.get("decision_options")
+    if isinstance(raw_options, list):
+        for option in raw_options:
+            if isinstance(option, dict):
+                text_parts.extend(
+                    str(option.get(key) or "") for key in ("id", "label", "description", "user_reply")
+                )
+    return text_mentions_loop_fit_contradiction(" ".join(text_parts))
+
+
+def default_alignment_decision_options(*, prefers_chinese: bool, display_language: str = "") -> list[dict]:
     if prefers_chinese:
         return [
             {
@@ -108,6 +157,30 @@ def default_alignment_decision_options(*, prefers_chinese: bool) -> list[dict]:
                 "description": "我想说明另一种更重要的完成标准或风险。",
                 "recommended": False,
                 "user_reply": "我想补充另一种判断：",
+            },
+        ]
+    if str(display_language or "").strip().lower() == "es":
+        return [
+            {
+                "id": "evidence_first",
+                "label": "Bloquear falso terminado (recomendado)",
+                "description": "Un resultado menor es aceptable, pero el camino central debe quedar probado.",
+                "recommended": True,
+                "user_reply": "Uso la recomendación: bloquear resultados que parecen terminados pero no tienen evidencia, aunque la primera versión sea menor.",
+            },
+            {
+                "id": "speed_first",
+                "label": "Avanzar más rápido",
+                "description": "Entregar una primera versión pragmática y mantener visibles los riesgos residuales.",
+                "recommended": False,
+                "user_reply": "Elijo avanzar más rápido y acepto riesgos residuales visibles.",
+            },
+            {
+                "id": "add_judgment",
+                "label": "Agregaré juicio",
+                "description": "Quiero nombrar otro estándar de cierre o riesgo importante.",
+                "recommended": False,
+                "user_reply": "Quiero agregar otro juicio:",
             },
         ]
     return [
@@ -135,7 +208,7 @@ def default_alignment_decision_options(*, prefers_chinese: bool) -> list[dict]:
     ]
 
 
-def agreement_confirmation_decision_options(*, prefers_chinese: bool) -> list[dict]:
+def agreement_confirmation_decision_options(*, prefers_chinese: bool, display_language: str = "") -> list[dict]:
     if prefers_chinese:
         return [
             {
@@ -151,6 +224,23 @@ def agreement_confirmation_decision_options(*, prefers_chinese: bool) -> list[di
                 "description": "先修改其中一个判断，再生成方案。",
                 "recommended": False,
                 "user_reply": "我想调整这份工作协议：",
+            },
+        ]
+    if str(display_language or "").strip().lower() == "es":
+        return [
+            {
+                "id": "confirm_agreement",
+                "label": "Usar esta dirección (recomendado)",
+                "description": "Generar el Loop desde este acuerdo de trabajo.",
+                "recommended": True,
+                "user_reply": "Confirmo; usa esta dirección.",
+            },
+            {
+                "id": "adjust_agreement",
+                "label": "Quiero cambios",
+                "description": "Revisar un juicio antes de generar el plan.",
+                "recommended": False,
+                "user_reply": "Quiero ajustar este acuerdo de trabajo:",
             },
         ]
     return [
@@ -171,7 +261,7 @@ def agreement_confirmation_decision_options(*, prefers_chinese: bool) -> list[di
     ]
 
 
-def not_fit_alignment_decision_options(*, prefers_chinese: bool) -> list[dict]:
+def not_fit_alignment_decision_options(*, prefers_chinese: bool, display_language: str = "") -> list[dict]:
     if prefers_chinese:
         return [
             {
@@ -187,6 +277,23 @@ def not_fit_alignment_decision_options(*, prefers_chinese: bool) -> list[dict]:
                 "description": "我会说明需要继承的反复判断或新证据。",
                 "recommended": False,
                 "user_reply": "仍然需要编排，因为这套判断需要被后续运行继承：",
+            },
+        ]
+    if str(display_language or "").strip().lower() == "es":
+        return [
+            {
+                "id": "skip_loop",
+                "label": "Omitir Loop por ahora (recomendado)",
+                "description": "Esto parece una tarea puntual que no necesita gobernanza adicional.",
+                "recommended": True,
+                "user_reply": "De acuerdo, no generes un Loop por ahora.",
+            },
+            {
+                "id": "still_compile",
+                "label": "Aun así componerlo",
+                "description": "Explicaré el juicio repetido o la nueva evidencia que debe heredar la ejecución.",
+                "recommended": False,
+                "user_reply": "Aun así necesito un Loop porque este juicio debe heredarse en la ejecución:",
             },
         ]
     return [

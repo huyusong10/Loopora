@@ -7,6 +7,7 @@ from loopora.agent_native_adapter_contracts import (
     agent_adapter_accepted_native_tools,
     agent_adapter_native_dispatch_mechanism,
 )
+from loopora.system_prompt_assets import load_system_prompt_asset
 
 ACCEPTED_NATIVE_DISPATCH_MODES = ("host_subagent", "host_task", "host_agent")
 ROLE_ARCHETYPE_TARGET_AGENTS = {
@@ -83,8 +84,5 @@ def agent_native_trace_contract() -> dict[str, Any]:
         "field": "native_trace",
         "trace_ref_field": "native_trace_ref",
         "tool_name_field": "native_tool_name",
-        "purpose": (
-            "Cite the host's official subagent/task invocation trace when available; "
-            "absence does not by itself fail submit."
-        ),
+        "purpose": load_system_prompt_asset("agent_native/native-trace-contract-purpose.md").strip(),
     }

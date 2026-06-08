@@ -9,7 +9,6 @@ from loopora.service_alignment_artifacts import (
     alignment_user_message_record,
     write_alignment_transcript_log,
 )
-from loopora.service_alignment_language import alignment_prefers_chinese
 from loopora.utils import utc_now
 
 
@@ -25,8 +24,8 @@ class AlignmentTranscriptContext:
     get_session: Callable[[str], dict]
 
 
-class AlignmentLocalizedSystemMessageAppender(Protocol):
-    def __call__(self, session_id: str, zh: str, en: str) -> dict: ...
+class AlignmentNoticeAppender(Protocol):
+    def __call__(self, session_id: str, content: str) -> dict: ...
 
 
 @dataclass(frozen=True)
@@ -48,21 +47,20 @@ class AlignmentAssistantMessageEffect:
     missing_items: list[str] | None = None
 
 
-def localized_alignment_system_message_appender(
+def alignment_notice_appender(
     context: AlignmentTranscriptContext,
     *,
     now: Callable[[], str] = utc_now,
-) -> AlignmentLocalizedSystemMessageAppender:
-    def append_system_message(session_id: str, zh: str, en: str) -> dict:
-        return append_localized_alignment_system_message(
+) -> AlignmentNoticeAppender:
+    def append_notice(session_id: str, content: str) -> dict:
+        return append_alignment_notice_message(
             context,
             session_id,
-            zh=zh,
-            en=en,
+            content=content,
             created_at=now(),
         )
 
-    return append_system_message
+    return append_notice
 
 
 def apply_alignment_user_message(
@@ -73,15 +71,15 @@ def apply_alignment_user_message(
     transcript = list(effect.session.get("transcript") or [])
     record = alignment_user_message_record(effect.message, created_at=effect.created_at)
     transcript.append(record.entry)
-    context.repository.update_alignment_session(
-        session_id,
-        transcript=transcript,
-        error_message="",
-        stop_requested=False,
-        repair_attempts=0,
-        finished_at=None,
-        **effect.update_fields,
-    )
+    update_fields = {
+        "transcript": transcript,
+        "error_message": "",
+        "stop_requested": False,
+        "repair_attempts": 0,
+        "finished_at": None,
+    }
+    update_fields.update(effect.update_fields)
+    context.repository.update_alignment_session(session_id, **update_fields)
     context.repository.append_alignment_event(session_id, "alignment_user_message", record.event_payload)
     if effect.stage_event_type:
         context.repository.append_alignment_event(
@@ -112,7 +110,7 @@ def record_alignment_assistant_message(
     context.repository.append_alignment_event(session_id, "alignment_message", record.event_payload)
 
 
-def append_alignment_system_message(
+def append_alignment_notice_message(
     context: AlignmentTranscriptContext,
     session_id: str,
     *,
@@ -126,21 +124,3 @@ def append_alignment_system_message(
     updated = context.get_session(session_id)
     write_alignment_transcript_log(updated)
     return updated
-
-
-def append_localized_alignment_system_message(
-    context: AlignmentTranscriptContext,
-    session_id: str,
-    *,
-    zh: str,
-    en: str,
-    created_at: str,
-) -> dict:
-    session = context.get_session(session_id)
-    content = zh if alignment_prefers_chinese(session) else en
-    return append_alignment_system_message(
-        context,
-        session_id,
-        content=content,
-        created_at=created_at,
-    )

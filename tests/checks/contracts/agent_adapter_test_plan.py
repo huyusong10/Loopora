@@ -75,7 +75,7 @@ def _invoke_codex_plan(runner: CliRunner, workdir: Path, **options):
         args.append("--json")
     if options.get("compact_json_output"):
         args.append("--compact-json")
-    return runner.invoke(cli.app, args)
+    return runner.invoke(cli.app, args, env=options.get("env"))
 
 def _assert_web_review_plain_output(output: str, *, task_message: str) -> None:
     assert "Loopora Loop preview needs Web review" in output
@@ -86,11 +86,22 @@ def _assert_web_review_plain_output(output: str, *, task_message: str) -> None:
     assert f"task_anchor_preview: {task_message}" in output
     assert "review_scope: review_focus lists Loop surfaces to compile" in output
     assert "not missing chat input" in output
-    for expected in ("review_focus:", "Success surface:", "Fake-done risks:", "Evidence expectations:"):
+    for expected in (
+        "review_focus:",
+        "Success surface:",
+        "Fake-done risks:",
+        "Evidence expectations:",
+        "Execution strategy and tradeoffs:",
+        "Residual risk and local governance:",
+    ):
         assert expected in output
+    assert "prove, repair, narrow, expand, or defer first" in output
     assert "review_recommended_action: Continue evidence-first review (Recommended)" in output
     assert "review_reply_preview: Continue Web review from this /loopora-plan task anchor:" in output
     assert "\nUse the evidence-first path:" not in output
+    command = _assert_labeled_loopora_agent_command(output, "next_plan_cli_command", "plan")
+    assert "--message" in command
+    assert "Continue Web review from this /loopora-plan task anchor:" in command
     assert "next_review_step: open the preview URL" in output
     assert "after_review_ready: return to this Agent session and run /loopora-run" in output
     assert "run_blocked_until_web_review: yes" in output
@@ -113,7 +124,17 @@ def _assert_web_review_json_payload(payload: dict, *, task_message: str) -> None
     assert summary["task_anchor_preview"] == task_message
     assert summary["review_scope"] == "review_focus lists Loop surfaces to compile from the task anchor, not missing chat input"
     assert summary["review_recommended_action"] == "Continue evidence-first review (Recommended)"
+    assert (
+        "Execution strategy and tradeoffs: say what to prove, repair, narrow, expand, or defer first"
+        in summary["review_focus"]
+    )
+    assert "Residual risk and local governance: name what may remain, who owns it, and which project rules must be read or gated" in summary["review_focus"]
+    assert summary["review_reply_message"].startswith("Continue Web review from this /loopora-plan task anchor:")
+    assert task_message in summary["review_reply_message"]
     assert summary["review_reply_preview"].startswith("Continue Web review from this /loopora-plan task anchor:")
+    assert summary["message_cli_command"] == summary["next_plan_cli_command"]
+    _assert_loopora_agent_command(summary["next_plan_cli_command"], "plan")
+    assert "--message" in summary["next_plan_cli_command"]
     assert summary["after_review_ready"].startswith("return to this Agent session")
     assert summary["run_blocked_until_web_review"] == "yes"
     assert summary["after_review_cli_command_status"] == "blocked_until_web_review_complete"
@@ -154,7 +175,8 @@ def _assert_ready_plan_payload(payload: dict) -> None:
     assert payload["requires_candidate_repair"] is False
 
 def _assert_ready_review_projection(review: dict) -> None:
-    assert "Future iterations stay anchored" in review["loopora_fit_reasons"][0]
+    assert "final feedback is too slow to be the only control signal" in review["loopora_fit_reasons"][0]
+    assert any("weak-proof control points" in item for item in review["loopora_fit_reasons"])
     assert "happy-path claim" in review["fake_done_risks"][0]
     assert "project-owned checks" in review["evidence_preferences"][0]
     assert review["coverage"]["check_count"] == EXPECTED_READY_REVIEW_CHECK_COUNT
@@ -177,7 +199,7 @@ def _assert_invalid_candidate_repair_plain_output(output: str, *, task_message: 
     assert "next_action: edit plan_file_to_repair directly" in output
     assert "do not inspect alignment session artifacts or manifests" in output
     assert "Loopora source/help" in output
-    assert "host Agent task summary" in output
+    assert "host Agent task context" in output
     assert "add these missing task objects from --message" in output
     assert all(item in output for item in ("refund", "authorization"))
     _assert_codex_native_surface_plain(output)

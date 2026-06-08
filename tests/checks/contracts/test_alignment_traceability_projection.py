@@ -98,3 +98,13 @@ def test_alignment_governance_marker_responsibility_issues_require_runtime_owner
     ]
     assert alignment_governance_marker_responsibilities_present(connected_runtime)
     assert alignment_governance_marker_responsibility_issues(evidence, normalized_runtime_text=connected_runtime) == []
+
+
+def test_alignment_governance_marker_responsibilities_accept_locate_design_language() -> None:
+    runtime_text = normalize_alignment_traceability_text(
+        "Builder must locate design/README.md and identify the relevant design/ boundary before changing work. "
+        "Inspector verifies design/tests/schema obligations against the result. "
+        "GateKeeper treats skipped project-local design/tests/schema validation as Weak, Unproven, or Blocking."
+    )
+
+    assert alignment_governance_marker_responsibilities_present(runtime_text)

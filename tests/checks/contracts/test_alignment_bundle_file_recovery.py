@@ -62,7 +62,7 @@ def test_alignment_bundle_preview_revalidates_current_file_without_mutating_sess
     bundle_path = Path(session["bundle_path"])
     ready_bundle = load_bundle_text(bundle_path.read_text(encoding="utf-8"))
     ready_bundle["spec"]["markdown"] = ready_bundle["spec"]["markdown"].replace(
-        "Accept minor polish gaps only when they are explicitly named and tracked as an owned follow-up; fail closed on unproven primary-flow behavior or weak verification evidence.",
+        "Accept minor polish gaps or residual risks only when they are explicitly named, visible, tracked, and owned as a follow-up; fail closed on unproven primary-flow behavior or weak verification evidence.",
         "Some risk is fine.",
     )
     bundle_path.write_text(bundle_to_yaml(ready_bundle), encoding="utf-8")

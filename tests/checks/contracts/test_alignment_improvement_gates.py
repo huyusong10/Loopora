@@ -77,6 +77,53 @@ def test_alignment_improvement_readiness_accepts_loop_verdict_marker_for_complet
     assert "improvement_completion_mode_delta" not in issues
 
 
+def test_alignment_improvement_readiness_requires_task_scoped_refactor_delta_for_directional_critique() -> None:
+    session = {
+        "working_agreement": {
+            "mode": "improvement",
+            "source": {"source_completion_mode": "gatekeeper"},
+        },
+        "transcript": [{"role": "user", "content": "这份 Loop 太保守，不够重构，帮我改激进一点。"}],
+    }
+    output = {
+        "agreement_summary": "保留来源 Loop 的稳定意图，只基于用户反馈调整证据、角色和 workflow 治理面。",
+        "readiness_evidence": {
+            "task_scope": "保留来源 bundle 的用户目标、workdir 和 executor 默认值，只在反馈指向的治理面内调整。",
+            "execution_strategy": "先保留稳定意图，再修复反馈证明薄弱的证据、角色、workflow 或 GateKeeper 面。",
+            "role_posture": "保留 Builder 谨慎，调整 Inspector 责任，并让 GateKeeper 继续严格裁决。",
+        },
+    }
+
+    issues = alignment_improvement_readiness_issues(session, output)
+
+    assert "improvement_refactor_delta" in issues
+
+
+def test_alignment_improvement_readiness_accepts_task_scoped_refactor_delta_for_directional_critique() -> None:
+    session = {
+        "working_agreement": {
+            "mode": "improvement",
+            "source": {"source_completion_mode": "gatekeeper"},
+        },
+        "transcript": [{"role": "user", "content": "这份 Loop 太保守，不够重构，帮我改激进一点。"}],
+    }
+    output = {
+        "agreement_summary": (
+            "保留来源 Loop 的稳定用户行为和 workdir，只允许任务范围内的重构 delta；"
+            "如果复杂度只是换地方、用户行为回归或证据路径仍无法复验，GateKeeper 必须阻断。"
+        ),
+        "readiness_evidence": {
+            "task_scope": "保留来源 bundle 的用户目标、workdir 和 executor 默认值，只改变任务边界内的重构风险。",
+            "execution_strategy": "先锁定可维护性证据，再调整 roles/workflow，让复杂度、行为回归和证据路径脆弱性提前暴露。",
+            "role_posture": "Inspector 验证重构证据、复杂度没有只是换地方，并确认用户行为没有回归。",
+        },
+    }
+
+    issues = alignment_improvement_readiness_issues(session, output)
+
+    assert "improvement_refactor_delta" not in issues
+
+
 def test_alignment_improvement_bundle_rejects_reusing_source_bundle_id(
     sample_workdir: Path,
 ) -> None:

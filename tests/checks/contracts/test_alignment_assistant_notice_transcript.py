@@ -5,12 +5,12 @@ from pathlib import Path
 from alignment_transcript_test_support import FakeAlignmentTranscriptRepository, transcript_context
 from loopora.service_alignment_transcript import (
     AlignmentAssistantMessageEffect,
-    append_alignment_system_message,
+    append_alignment_notice_message,
     record_alignment_assistant_message,
 )
 
 
-def test_alignment_assistant_and_system_message_effects_update_transcript_and_artifact(tmp_path: Path) -> None:
+def test_alignment_assistant_and_notice_message_effects_update_transcript_and_artifact(tmp_path: Path) -> None:
     bundle_path = tmp_path / "align_1" / "artifacts" / "bundle.yml"
     repo = FakeAlignmentTranscriptRepository(
         {
@@ -41,7 +41,7 @@ def test_alignment_assistant_and_system_message_effects_update_transcript_and_ar
             missing_items=["run_context_boundary"],
         ),
     )
-    updated = append_alignment_system_message(
+    updated = append_alignment_notice_message(
         context,
         "align_1",
         content="Failed to reload bundle.yml: invalid YAML",

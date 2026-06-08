@@ -108,6 +108,32 @@ def alignment_clarifying_question_issues(output: dict) -> list[str]:
     )
     if has_any_marker(normalized, generic_patterns):
         issues.append("generic_alignment_question")
+    internal_alignment_terms = (
+        "readiness_evidence",
+        "alignment_stage",
+        "alignment_phase",
+        "agreement_summary",
+        "evidence_buckets",
+    )
+    if has_any_marker(normalized, internal_alignment_terms) or (
+        "evidence buckets" in normalized
+        and not has_any_marker(
+            normalized,
+            (
+                "proven",
+                "weak",
+                "unproven",
+                "blocking",
+                "residual",
+                "已证明",
+                "弱证据",
+                "未证明",
+                "阻断",
+                "残余",
+            ),
+        )
+    ):
+        issues.append("internal_alignment_term_question")
     if not alignment_has_recommended_decision_options(output):
         issues.append("missing_recommended_decision_options")
     return issues

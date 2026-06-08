@@ -170,7 +170,7 @@ def _agent_next_step_view_payload(layout: RunArtifactLayout) -> dict:
                     "id": "done_when.check_001",
                     "kind": "done_when",
                     "required": True,
-                    "text": "The primary user flow works end to end.",
+                    "text": "The primary user-facing flow works end to end for the target user.",
                 },
                 {
                     "id": "gatekeeper.finish",
@@ -221,7 +221,7 @@ def _agent_next_step_view_payload(layout: RunArtifactLayout) -> dict:
                         "status": "blocked",
                         "source_section": "Done When",
                         "reason": "Evidence reported this target as blocked.",
-                        "text": "The primary user flow works end to end.",
+                        "text": "The primary user-facing flow works end to end for the target user.",
                         "evidence_refs": ["ev_gatekeeper_block"],
                     }
                 ],

@@ -14,7 +14,7 @@ def test_bundle_control_summary_projects_execution_strategy(sample_workdir: Path
 
     summary = build_bundle_control_summary(bundle)
 
-    assert any("Build one focused starter slice" in item for item in summary["execution_strategy"])
+    assert any("Future iterations build the focused starter slice first" in item for item in summary["execution_strategy"])
     assert any(item["key"] == "execution_strategy" and item["mapped"] for item in summary["traceability"]["items"])
 
 

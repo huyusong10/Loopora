@@ -41,7 +41,7 @@ def _assert_alignment_stage_blocked_for_key(service, session_id: str, key: str) 
     events = service.list_alignment_events(session_id)
     assert any(
         event["event_type"] == "alignment_stage_blocked"
-        and key in event["payload"].get("error", "")
+        and (key in event["payload"].get("missing", []) or key in event["payload"].get("error", ""))
         for event in events
     )
 
@@ -84,7 +84,8 @@ def _assert_alignment_preview_control_summary(preview: dict) -> None:
     assert any("fail closed" in item for item in control_summary["residual_risk_policy"])
     assert any("smaller proven flow" in item for item in control_summary["judgment_tradeoffs"])
     assert any("Focused Builder (builder): Keep implementation narrow" in item for item in control_summary["role_postures"])
-    assert any("Future iterations stay anchored" in item for item in control_summary["loop_fit_reasons"])
+    assert any("final feedback is too slow to be the only control signal" in item for item in control_summary["loop_fit_reasons"])
+    assert any("weak-proof control points" in item for item in control_summary["loop_fit_reasons"])
     assert preview["traceability"] == control_summary["traceability"]
     assert any(item["key"] == "loop_fit" and item["mapped"] for item in preview["traceability"]["items"])
     assert any(item["key"] == "coverage_targets" and item["mapped"] for item in preview["traceability"]["items"])

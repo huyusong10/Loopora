@@ -93,6 +93,28 @@ def alignment_bundle_agreement_projection_text(bundle: dict) -> str:
     return "\n".join(parts)
 
 
+def alignment_bundle_runnable_projection_text(bundle: dict) -> str:
+    spec = bundle.get("spec") if isinstance(bundle.get("spec"), dict) else {}
+    workflow = bundle.get("workflow") if isinstance(bundle.get("workflow"), dict) else {}
+    parts = [
+        str(spec.get("markdown", "") or ""),
+        str(workflow.get("collaboration_intent", "") or ""),
+    ]
+    for role in bundle.get("role_definitions", []):
+        if not isinstance(role, dict):
+            continue
+        parts.extend(
+            [
+                str(role.get("description", "") or ""),
+                str(role.get("prompt_markdown", "") or ""),
+                str(role.get("posture_notes", "") or ""),
+            ]
+        )
+    if isinstance(workflow, dict):
+        parts.append(json.dumps(_alignment_workflow_traceability_projection(workflow), ensure_ascii=False, sort_keys=True))
+    return "\n".join(parts)
+
+
 def alignment_bundle_runtime_responsibility_projection_text(bundle: dict) -> str:
     spec_role_notes = alignment_bundle_spec_role_notes_projection_text(bundle)
     workflow = bundle.get("workflow") if isinstance(bundle.get("workflow"), dict) else {}

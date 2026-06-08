@@ -2577,16 +2577,21 @@ document.addEventListener("DOMContentLoaded", () => {
         "Make # Task state the real user outcome and domain object, not only governance or internal process."
       ));
     }
-    if (text.includes("must follow Chinese user language")) {
+    if (text.includes("must follow the user-facing task language")) {
       hints.push(localeText(
-        "中文任务的可见名称、任务契约、角色名称和角色姿态都要使用中文；Loopora 专有词可以保留。",
+        "可见名称、任务契约、角色名称和角色姿态都要使用用户面对的任务语言；Loopora 专有词可以保留。",
         "Keep visible names, task contract, role names, and role posture in the user's language; Loopora terms may remain."
       ));
     }
-    if (text.includes("host Agent task summary") || text.includes("project the host Agent task summary")) {
+    if (
+      text.includes("host Agent task context") ||
+      text.includes("project the host Agent task context") ||
+      text.includes("host Agent task summary") ||
+      text.includes("project the host Agent task summary")
+    ) {
       hints.push(localeText(
-        "把 /loopora-plan 摘要里的高信号对象写进 spec、角色责任、运行意图和证据规则。",
-        "Project high-signal objects from the /loopora-plan summary into spec, role responsibilities, run intent, and evidence rules."
+        "把 /loopora-plan 任务上下文里的高信号对象写进 spec、角色责任、运行意图和证据规则。",
+        "Project high-signal objects from the /loopora-plan task context into spec, role responsibilities, run intent, and evidence rules."
       ));
     }
     if (text.includes("evidence preferences") || text.includes("explicit host Agent evidence")) {

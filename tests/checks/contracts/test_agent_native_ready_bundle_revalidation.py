@@ -32,7 +32,7 @@ def test_agent_loop_revalidates_ready_bundle_file_before_start(
     ready_path = Path(generated["session"]["bundle_path"])
     ready_bundle = yaml.safe_load(ready_path.read_text(encoding="utf-8"))
     ready_bundle["spec"]["markdown"] = ready_bundle["spec"]["markdown"].replace(
-        "Accept minor polish gaps only when they are explicitly named and tracked as an owned follow-up; fail closed on unproven primary-flow behavior or weak verification evidence.",
+        "Accept minor polish gaps or residual risks only when they are explicitly named, visible, tracked, and owned as a follow-up; fail closed on unproven primary-flow behavior or weak verification evidence.",
         "Some risk is fine.",
     )
     assert "Some risk is fine." in ready_bundle["spec"]["markdown"]

@@ -26,7 +26,10 @@ def test_alignment_service_reuses_executor_session_ref_between_turns(service_fac
     assert any(event["event_type"] == "alignment_executor_session_ref" for event in events)
 
 
-def test_alignment_service_falls_back_when_native_resume_fails(service_factory, sample_workdir: Path) -> None:
+def test_alignment_codex_service_uses_schema_preserving_transcript_context(
+    service_factory,
+    sample_workdir: Path,
+) -> None:
     service = service_factory(scenario="alignment_resume_failure")
 
     session = service.create_alignment_session(
@@ -47,7 +50,7 @@ def test_alignment_service_falls_back_when_native_resume_fails(service_factory, 
 
     assert ready["validation"]["ok"] is True
     events = service.list_alignment_events(session["id"])
-    assert any(event["event_type"] == "alignment_native_resume_fallback" for event in events)
+    assert not any(event["event_type"] == "alignment_native_resume_fallback" for event in events)
 
 
 def test_alignment_service_repairs_invalid_bundle_once(service_factory, sample_workdir: Path) -> None:

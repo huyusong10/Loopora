@@ -7,7 +7,7 @@ from loopora.service_alignment_prompting import AlignmentPromptBuildContext, bui
 
 
 READY_POLICY_TEXT = (
-    "Accept minor polish gaps only when they are explicitly named and tracked as an owned follow-up; "
+    "Accept minor polish gaps or residual risks only when they are explicitly named, visible, tracked, and owned as a follow-up; "
     "fail closed on unproven primary-flow behavior or weak verification evidence."
 )
 WEAK_READY_POLICY_TEXT = "Some risk is fine."

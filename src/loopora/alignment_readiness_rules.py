@@ -120,23 +120,32 @@ def open_questions_readiness_issue(evidence: dict) -> bool:
     }
     closed_markers = (
         "no open questions",
+        "no-open-questions",
         "no unresolved questions",
+        "no unresolved bundle-shaping questions",
+        "no unresolved bundle shaping questions",
         "no remaining questions",
         "no remaining task-shaping questions",
         "none beyond explicit confirmation",
         "explicit confirmation only",
+        "explicit-confirmation-only",
+        "only remaining step is explicit confirmation",
         "无未解决问题",
         "没有未解决问题",
         "没有开放问题",
         "没有剩余问题",
         "只等待明确确认",
         "仅等待明确确认",
+        "仅剩明确确认",
     )
     confirmation_only_markers = (
         "waiting for explicit user confirmation of the working agreement",
         "waiting for explicit user confirmation of the improvement agreement",
         "waiting for user confirmation of the working agreement",
         "waiting for user confirmation of the improvement agreement",
+        "esperando confirmación explícita del usuario sobre el acuerdo de trabajo",
+        "esperando confirmación del usuario sobre el acuerdo de trabajo",
+        "solo falta confirmación explícita del usuario sobre el acuerdo de trabajo",
         "等待用户明确确认这份工作协议",
         "等待用户明确确认这份改进协议",
         "等待用户确认这份工作协议",
@@ -177,11 +186,29 @@ def loop_fit_evidence_contradiction_issue(value: str) -> bool:
 
 
 def success_surface_evidence_placeholder_issue(value: str) -> bool:
+    if success_surface_evidence_has_concrete_anchor(value):
+        return False
     generic_patterns = (
         r"\b(?:good and useful|works? well|high[- ]quality result|successful result|good result)\b",
-        r"(?:好用|有用|效果好|高质量|结果好)",
+        r"(?:好用|有用(?:的|性|处|价值|结果|产物|成果|且|并|又|、|，|。|；|,|\.|;|\s|$)|效果好|高质量|结果好)",
     )
     return any(re.search(pattern, value, re.IGNORECASE) for pattern in generic_patterns)
+
+
+def success_surface_evidence_has_concrete_anchor(value: str) -> bool:
+    observable_markers = (
+        r"\b(?:primary path|primary flow|journey|audit record|provider|permission|refund|download|export|"
+        r"register|sign[- ]up|onboard|checkout|payment|upload|import|search|error|recovery|fallback)\b",
+        r"新用户|主流程|核心路径|关键操作|注册|进入|错误|恢复路径|失败时|权限|退款|下载|导出|支付|上传|导入|搜索|审计记录|provider|fallback",
+    )
+    proof_markers = (
+        r"\b(?:prove|proves|verified|verifiable|evidence|artifact|audit|runnable|check|checks|test|tests|"
+        r"command|log|gatekeeper|handoff)\b",
+        r"证明|可验证|证据|产物|审计|可审计|可追踪|可运行|检查|测试|命令|日志|gatekeeper|handoff|裁决",
+    )
+    return any(re.search(pattern, value, re.IGNORECASE) for pattern in observable_markers) and any(
+        re.search(pattern, value, re.IGNORECASE) for pattern in proof_markers
+    )
 
 
 def fake_done_evidence_placeholder_issue(value: str) -> bool:
@@ -227,6 +254,8 @@ def role_posture_without_gatekeeper_judgment_issue(value: str) -> bool:
     gatekeeper_judgment = re.search(
         r"\bgatekeeper\b.{0,80}\b(?:judges?|decides?|verdict|blocks?|blockers?|closes?|finishes?|fails?[- ]closed|final|strict)\b|"
         r"\b(?:judges?|decides?|verdict|blocks?|blockers?|closes?|finishes?|fails?[- ]closed|final|strict)\b.{0,80}\bgatekeeper\b|"
+        r"\bgatekeeper\b.{0,80}\b(?:juzga|decide|veredicto|bloquea|cierra|finaliza|falla\s+cerrado|final|estricto)\b|"
+        r"\b(?:juzga|decide|veredicto|bloquea|cierra|finaliza|falla\s+cerrado|final|estricto)\b.{0,80}\bgatekeeper\b|"
         r"gatekeeper.{0,40}(?:裁决|判定|判断|阻断|收束|关闭|严格|失败关闭|最终)",
         value,
         re.IGNORECASE,

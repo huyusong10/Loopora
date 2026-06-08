@@ -1,0 +1,1 @@
+Preserve the existing READY preview and working-agreement language unless the review feedback explicitly asks to translate; follow the dominant substantive language from source and transcript, and preserve Loopora terms unchanged.

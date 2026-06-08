@@ -118,7 +118,7 @@ def test_service_agent_bundle_candidate_intake_has_dedicated_boundary() -> None:
         "def create_agent_bundle_candidate",
         "def _append_missing_agent_candidate_message",
         "candidate_yaml_provenance(",
-        "localized_alignment_system_message_appender",
+        "alignment_notice_appender",
     ):
         assert marker in candidate_source
         assert marker not in adapter_source

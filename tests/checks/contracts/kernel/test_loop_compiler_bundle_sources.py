@@ -53,7 +53,7 @@ def test_compile_loopfile_source_accepts_normalized_bundle_payload(sample_workdi
     )
 
     assert definition.id == "loopfile_bundle"
-    assert definition.contract.done_when[0].title.startswith("The primary user flow works end to end")
+    assert definition.contract.done_when[0].title.startswith("The primary user-facing flow works end to end")
     assert definition.strategy.roles[0].name == "Focused Builder"
     assert definition.strategy.roles[0].responsibility == "Implements the smallest maintainable change."
 

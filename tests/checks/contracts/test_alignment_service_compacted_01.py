@@ -189,17 +189,7 @@ def test_alignment_service_blocks_global_persona_readiness_evidence(
         message="Build a starter experience without turning task judgment into memory.",
     )
 
-    assert not Path(session["bundle_path"]).exists()
-    assert "task_scoped_judgment" in session["transcript"][-1]["content"]
-    events = service.list_alignment_events(session_id)
-    assert any(
-        event["event_type"] in {"alignment_evidence_incomplete", "alignment_stage_blocked"}
-        and (
-            "task_scoped_judgment" in event["payload"].get("missing", [])
-            or "task_scoped_judgment" in event["payload"].get("error", "")
-        )
-        for event in events
-    )
+    assert_readiness_key_blocked(service, session_id, session, "task_scoped_judgment")
 
 # Merged from test_alignment_service_workdir_fact_grounding.py
 
@@ -220,8 +210,7 @@ def test_alignment_service_blocks_invented_workdir_facts_readiness_evidence(
     service.append_alignment_message(created["id"], "确认")
     session = _wait_for_status(service, created["id"], "waiting_user")
 
-    assert not Path(session["bundle_path"]).exists()
-    assert "workdir_facts" in session["transcript"][-1]["content"]
+    assert_readiness_key_blocked(service, created["id"], session, "workdir_facts")
 
 
 def test_alignment_service_blocks_observed_stack_claims_not_in_workdir_snapshot(
@@ -238,8 +227,7 @@ def test_alignment_service_blocks_observed_stack_claims_not_in_workdir_snapshot(
     service.append_alignment_message(created["id"], "确认")
     session = _wait_for_status(service, created["id"], "waiting_user")
 
-    assert not Path(session["bundle_path"]).exists()
-    assert "workdir_facts" in session["transcript"][-1]["content"]
+    assert_readiness_key_blocked(service, created["id"], session, "workdir_facts")
     prompt_text = (Path(session["artifact_dir"]) / "invocations" / "0001" / "prompt.md").read_text(encoding="utf-8")
     assert "package.json" not in prompt_text
     assert "tests/ exists: no" in prompt_text

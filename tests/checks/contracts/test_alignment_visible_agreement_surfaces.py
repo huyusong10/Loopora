@@ -57,6 +57,8 @@ def test_alignment_agreement_text_snippet_collapses_space_and_truncates() -> Non
 def test_alignment_message_confirmation_allows_no_change_clause() -> None:
     assert alignment_message_confirms_agreement("可以，不需要修改，继续。") is True
     assert alignment_message_confirms_agreement("可以，但是不需要修改，继续。") is True
+    assert alignment_message_confirms_agreement("确认，采用这份调整后的工作协议。") is True
+    assert alignment_message_confirms_agreement("同意采用调整后的方案。") is True
     assert alignment_message_confirms_agreement("Approved, no changes, proceed.") is True
 
 

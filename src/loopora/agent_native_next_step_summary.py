@@ -23,6 +23,7 @@ from loopora.summary_projection_helpers import (
     non_bool_int,
     set_summary_text,
 )
+from loopora.system_prompt_assets import load_system_prompt_asset
 
 ROLE_DISPATCH_MESSAGE_LIMIT = 1000
 ROLE_DISPATCH_LIST_ITEM_LIMIT = 8
@@ -77,25 +78,12 @@ def _role_dispatch_message(summary: dict[str, object], *, workdir: str = "") -> 
     if not target:
         return ""
     is_gatekeeper = "gatekeeper" in target.lower()
-    base_prefix = (
-        "Use this exact string as the whole Agent/Task prompt; do not prepend `You are running as`, "
-        "append `Do the following`, or wrapper examples. "
+    prefix_asset = (
+        "agent_native/role-dispatch-message-gatekeeper-prefix.md"
+        if is_gatekeeper
+        else "agent_native/role-dispatch-message-standard-prefix.md"
     )
-    if is_gatekeeper:
-        prefix = (
-            base_prefix
-            + "return one raw wrapper JSON object only. Main session writes/submits result. Open local paths. "
-            + "GateKeeper evidence reuse rule: inspect known evidence; decide from exact ids if sufficient; "
-            + "do not rerun same successful command or proof detours. "
-        )
-    else:
-        prefix = (
-            base_prefix
-            + "Invoke the named host-native role agent; return one raw wrapper JSON object only. "
-            + "Main session writes/submits result. Open local paths. "
-        )
-        prefix += "direct .loopora/agent_artifacts; no /tmp staging or wc/count-only probes. "
-        prefix += "Do not paste full CLI JSON/full schemas/large evidence ledgers. "
+    prefix = load_system_prompt_asset(prefix_asset).strip() + " "
     anchors = [f"target_agent={target}"]
     for label, key in (
         ("context_path", "context_path"),
@@ -191,9 +179,7 @@ def _attach_agent_next_step_submit_summary(summary: dict[str, object], next_step
     set_summary_text(summary, "result_file_to_write", submit_hint.get("result_file_absolute_path") or submit_hint.get("result_file_path"))
     set_summary_text(summary, "result_template_contract", submit_hint.get("result_file_contract"))
     if submit_hint.get("result_file_contract") or submit_hint.get("result_template_absolute_path") or submit_hint.get("result_template_path"):
-        summary["result_template_fill"] = (
-            "in the main Agent session, open the template, save a filled copy to result_file_to_write, replace null placeholders in result, keep loopora_host_dispatch, then submit"
-        )
+        summary["result_template_fill"] = load_system_prompt_asset("agent_native/result-template-fill-save-copy.md").strip()
     set_summary_text(summary, "result_outbox_dir", submit_hint.get("result_outbox_absolute_dir") or submit_hint.get("result_outbox_dir"))
     set_summary_text(summary, "submit_command", submit_hint.get("command"))
 

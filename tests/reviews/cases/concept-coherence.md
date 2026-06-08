@@ -18,7 +18,7 @@ targets:
       - design/contracts.md
       - design/decisions/*.md
       - src/loopora/assets/alignment/product-primer.md
-      - src/loopora/assets/alignment/system-prompt.md
+      - src/loopora/assets/system_prompts/alignment/web-alignment-agent.md
       - src/loopora/templates/tutorial.html
       - assets/diagrams/*.svg
     max_bytes_per_file: 8000

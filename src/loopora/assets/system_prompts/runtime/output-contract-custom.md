@@ -1,0 +1,1 @@
+Output contract: return JSON with status, summary, blocking_items, recommended_next_action, observations, recommendations, risks, and handoff_note. Use empty arrays for blocking_items, observations, recommendations, and risks when there are no items.

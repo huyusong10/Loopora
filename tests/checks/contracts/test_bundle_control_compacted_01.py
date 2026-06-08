@@ -107,11 +107,11 @@ def test_bundle_control_summary_projects_explicit_judgment_tradeoffs(sample_work
     tradeoff_item = traceability_item(summary, "judgment_tradeoffs")
     role_item = traceability_item(summary, "role_posture")
 
-    assert any("Future iterations stay anchored" in item for item in summary["loop_fit_reasons"])
+    assert any("final feedback is too slow to be the only control signal" in item for item in summary["loop_fit_reasons"])
     assert loop_fit_item["mapped"] is True
-    assert any("Future iterations stay anchored" in item for item in loop_fit_item["evidence"])
+    assert any("weak-proof control points" in item for item in loop_fit_item["evidence"])
     assert "loop_fit" not in summary["traceability"]["missing"]
-    assert any("primary user flow is understandable" in item for item in summary["success_surface"])
+    assert any("target user can complete the primary flow" in item for item in summary["success_surface"])
     assert any("happy-path claim" in item for item in summary["fake_done_risks"])
     assert any("project-owned checks" in item for item in summary["evidence_preferences"])
     assert success_item["mapped"] is True
@@ -132,7 +132,7 @@ def test_bundle_control_summary_does_not_treat_done_when_as_success_surface(samp
     bundle = load_bundle_text(alignment_bundle_yaml(str(sample_workdir.resolve())))
     bundle["spec"]["markdown"] = bundle["spec"]["markdown"].replace(
         "\n# Success Surface\n\n"
-        "- The primary user flow is understandable, maintainable, and easy to extend after the first pass.\n",
+        "- The target user can complete the primary flow, and the result is understandable, maintainable, and easy to extend after the first pass.\n",
         "\n",
     )
 
@@ -178,7 +178,7 @@ def test_bundle_control_summary_projects_residual_risk_policy(sample_workdir: Pa
 def test_bundle_control_summary_does_not_map_unmanaged_residual_risk_policy(sample_workdir: Path) -> None:
     bundle = load_bundle_text(alignment_bundle_yaml(str(sample_workdir.resolve())))
     bundle["spec"]["markdown"] = bundle["spec"]["markdown"].replace(
-        "Accept minor polish gaps only when they are explicitly named and tracked as an owned follow-up; fail closed on unproven primary-flow behavior or weak verification evidence.",
+        "Accept minor polish gaps or residual risks only when they are explicitly named, visible, tracked, and owned as a follow-up; fail closed on unproven primary-flow behavior or weak verification evidence.",
         "Some risk is fine.",
     )
 

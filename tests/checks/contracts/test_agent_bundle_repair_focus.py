@@ -27,7 +27,7 @@ def test_agent_plan_repair_focus_explains_semantic_projection_categories() -> No
 
 def test_agent_plan_repair_focus_explains_multiple_semantic_projection_categories() -> None:
     hints = cli_agent_adapter_commands._validation_repair_hints(
-        "bundle semantic lint failed: agent-first candidate must project the host Agent task summary "
+        "bundle semantic lint failed: agent-first candidate must project the host Agent task context "
         "into runnable surfaces: missing soc2, vendor, rollout; "
         "agent-first candidate must project explicit host Agent fake-done risks into runnable surfaces: "
         "missing permission/audit, download/export-only; "
@@ -134,11 +134,11 @@ def test_cli_agent_gen_json_repair_focus_explains_semantic_lint_issues(tmp_path:
     payload["collaboration_summary"] = "Coordinate a starter slice."
     markdown = payload["spec"]["markdown"]
     markdown = markdown.replace(
-        "# Success Surface\n\n- The primary user flow is understandable, maintainable, and easy to extend after the first pass.\n\n",
+        "# Success Surface\n\n- The target user can complete the primary flow, and the result is understandable, maintainable, and easy to extend after the first pass.\n\n",
         "",
     )
     markdown = markdown.replace(
-        "Accept minor polish gaps only when they are explicitly named and tracked as an owned follow-up; "
+        "Accept minor polish gaps or residual risks only when they are explicitly named, visible, tracked, and owned as a follow-up; "
         "fail closed on unproven primary-flow behavior or weak verification evidence.",
         "Some risk remains.",
     )

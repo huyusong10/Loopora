@@ -35,6 +35,7 @@ def run_executor_process(process_request: ExecutorProcessRequest) -> int:
                 line_handler=process_request.line_handler,
                 terminate_process=terminate_executor_process,
             ),
+            stdin_text=process_request.stdin_text,
         )
     except ProcessStreamStoppedError as exc:
         raise ExecutionStopped(str(exc)) from exc

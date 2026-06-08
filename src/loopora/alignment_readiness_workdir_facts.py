@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+
 from loopora.alignment_readiness_shared import has_any_marker
 
 
@@ -39,16 +41,101 @@ def workdir_facts_claims_unsupported_observed_stack(text: str, *, workdir_snapsh
         return False
     snapshot = str(workdir_snapshot or "").lower()
     support_markers = {
-        "package.json": ("react", "vue", "svelte", "next", "vite", "node", "npm", "pnpm", "yarn", "javascript", "typescript", "frontend", "前端"),
-        "pyproject.toml": ("python", "pytest", "ruff", "uv", "fastapi", "django", "flask"),
-        "requirements.txt": ("python", "pytest", "fastapi", "django", "flask"),
-        "cargo.toml": ("rust", "cargo"),
-        "go.mod": ("go ", "golang"),
-        "tests/ exists: yes": ("test", "tests", "testing", "测试"),
+        "package.json": (
+            r"\breact\b",
+            r"\bvue\b",
+            r"\bsvelte\b",
+            r"\bnext(?:\.js|js)\b",
+            r"\bvite\b",
+            r"\bnode(?:\.js|js)?\b",
+            r"\bnpm\b",
+            r"\bpnpm\b",
+            r"\byarn\b",
+            r"\bjavascript\b",
+            r"\btypescript\b",
+            r"\bfrontend\b",
+            "前端",
+        ),
+        "pyproject.toml": (
+            r"\bpython\b",
+            r"\bpytest\b",
+            r"\bruff\b",
+            r"\buv\b",
+            r"\bfastapi\b",
+            r"\bdjango\b",
+            r"\bflask\b",
+        ),
+        "requirements.txt": (r"\bpython\b", r"\bpytest\b", r"\bfastapi\b", r"\bdjango\b", r"\bflask\b"),
+        "cargo.toml": (r"\brust\b", r"\bcargo\b"),
+        "go.mod": (r"\bgolang\b", r"\bgo\s+(?:service|backend|app|module|project|codebase|stack|server)\b"),
     }
-    unsupported_terms = []
+    unsupported_terms: list[str] = []
     for marker, terms in support_markers.items():
-        if marker in snapshot:
+        if _snapshot_supports_marker(snapshot, marker):
             continue
-        unsupported_terms.extend(term for term in terms if term in text)
+        unsupported_terms.extend(term for term in terms if _term_has_unsupported_stack_claim(term, text))
     return bool(unsupported_terms)
+
+
+def _term_has_unsupported_stack_claim(term_pattern: str, text: str) -> bool:
+    for match in re.finditer(term_pattern, text):
+        context = text[max(0, match.start() - 140) : match.end() + 140]
+        if not has_any_marker(context, ("observed", "snapshot", "appears", "观察", "看到", "快照", "看起来")):
+            continue
+        if _stack_term_context_is_fake_done_or_negated(context):
+            continue
+        return True
+    return False
+
+
+def _stack_term_context_is_fake_done_or_negated(context: str) -> bool:
+    return has_any_marker(
+        context,
+        (
+            "fake done",
+            "fake-done",
+            "fail closed",
+            "fails closed",
+            "must fail",
+            "must not pass",
+            "cannot pass",
+            "block ",
+            "blocking",
+            "do not accept",
+            "not accept",
+            "do not claim",
+            "shallow",
+            "frontend-only",
+            "ui-only",
+            "screenshot-only",
+            "mock-only",
+            "happy-path-only",
+            "status-only",
+            "prose-only",
+            "missing ",
+            "缺失",
+            "阻断",
+            "浅层",
+            "只前端",
+            "仅前端",
+            "只.*界面",
+            "solo frontend",
+            "frontend-only",
+        ),
+    )
+
+
+def _snapshot_supports_marker(snapshot: str, marker: str) -> bool:
+    marker_text = marker.lower()
+    marker_pattern = re.escape(marker_text)
+    if re.search(rf"(?m)^\s*-\s*{marker_pattern}\s*$", snapshot):
+        return True
+    if re.search(rf"(?m)^\s*{marker_pattern}\s*$", snapshot):
+        return True
+    for line in snapshot.splitlines():
+        label, separator, value = line.partition(":")
+        if separator and label.strip().lower() == "detected markers":
+            detected = {item.strip().lower() for item in value.split(",")}
+            if marker_text in detected:
+                return True
+    return False

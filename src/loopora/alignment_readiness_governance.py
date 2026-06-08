@@ -5,7 +5,10 @@ import re
 from loopora.service_alignment_workdir_snapshot import alignment_workdir_snapshot_has_governance_markers
 
 
-GOVERNANCE_MARKER_PATTERN = r"agents\.md|design/readme\.md|design/|tests/|project-local|project local|项目本地|本地治理"
+GOVERNANCE_MARKER_PATTERN = (
+    r"agents\.md|design/readme\.md|design/|tests/|project-local|project local|"
+    r"local\s+design/test|design/test\s+obligations?|skipped\s+local\s+governance|项目本地"
+)
 
 
 def local_governance_evidence_issue(text: str, *, workdir_snapshot: str = "") -> bool:
@@ -19,20 +22,23 @@ def local_governance_evidence_issue(text: str, *, workdir_snapshot: str = "") ->
 def alignment_governance_marker_responsibilities_present(text: str) -> bool:
     builder_reads = alignment_governance_marker_responsibility_present(
         text,
-        actor_pattern=r"\b(?:builder|generator)\b|构建者|构建",
-        action_pattern=r"\b(?:read|reads|consult|consults|follow|follows|respect|respects)\b|读取|查阅|遵守|遵循",
+        actor_pattern=r"\b(?:builder|generator)\b|构建者|构建|执行方|实施方",
+        action_pattern=(
+            r"\b(?:read|reads|consult|consults|follow|follows|respect|respects|use|uses|using|locate|locates|identify|identifies)\b"
+            r"|读取|查阅|查找|定位|识别|遵守|遵循|使用|读"
+        ),
     )
     review_checks = alignment_governance_marker_responsibility_present(
         text,
-        actor_pattern=r"\b(?:inspector|custom|review|reviewer)\b|检查者|巡检|检查|审查|验证",
-        action_pattern=r"\b(?:verify|verifies|check|checks|review|reviews|validate|validates|test|tests)\b|检查|审查|验证|测试",
+        actor_pattern=r"\b(?:inspector|inspectors|custom|review|reviewer|reviewers)\b|检查者|巡检|检查|审查|验证|检视方|评审方",
+        action_pattern=r"\b(?:verify|verifies|verification|check|checks|review|reviews|validate|validates|test|tests)\b|检查|审查|验证|测试|核对",
     )
     gatekeeper_gates = alignment_governance_marker_responsibility_present(
         text,
-        actor_pattern=r"\b(?:gatekeeper|gate keeper|verifier)\b|守门|裁决",
+        actor_pattern=r"\b(?:gatekeeper|gate keeper|verifier)\b|守门|裁决|最终判断|最终裁决|收口|验收",
         action_pattern=(
-            r"\b(?:weak|unproven|blocking|block|blocks|missing|skipped|fail closed|reject|rejects)\b"
-            r"|弱证据|未证明|阻断|缺少|跳过|拒绝"
+            r"\b(?:weak|unproven|blocking|block|blocks|missing|skipped|fail closed|reject|rejects|gate|gates|gating)\b"
+            r"|弱证据|未证明|阻断|缺少|跳过|拒绝|视为"
         ),
     )
     return builder_reads and review_checks and gatekeeper_gates
@@ -47,8 +53,8 @@ def alignment_governance_marker_responsibility_present(
     segments = re.split(r"[\n.;。；]+", text)
     marker_windows: list[str] = []
     for match in re.finditer(GOVERNANCE_MARKER_PATTERN, text, flags=re.IGNORECASE):
-        start = max(0, match.start() - 180)
-        end = min(len(text), match.end() + 180)
+        start = max(0, match.start() - 320)
+        end = min(len(text), match.end() + 320)
         marker_windows.append(text[start:end])
     for segment in [*segments, *marker_windows]:
         if (

@@ -5,9 +5,11 @@ import re
 _LOOP_FIT_GOVERNANCE_PATTERNS = (
     r"\b(?:multi[- ]?round|long[- ]?(?:running|term))\b.{0,120}\b(?:evidence|proof|handoffs?|judg(?:e|ment)|verdict|gatekeeper|blockers?|governance|auditable|run-owned)\b",
     r"\b(?:iterations?|rounds?)\b.{0,80}\b(?:new evidence|evidence|proof|handoffs?|blockers?|repair|anchor|anchored|survive|verdict|gatekeeper|judgment)\b",
+    r"\b(?:later|downstream|subsequent)\s+(?:execution|work|steps?|passes?)\b.{0,100}\b(?:evidence|proof|handoffs?|repair|block(?:ing|ers?)?|verdict|gatekeeper|judgment)\b",
     r"\b(?:one|single)\s+(?:agent\s+)?(?:pass|round|review)\b.{0,80}\b(?:not enough|insufficient|isn't enough|is not enough|cannot|can't|as enough)\b",
     r"\b(?:survive(?:s)?\s+(?:this|one)\s+chat|exportable|auditable|run-owned)\b",
-    r"(?:多轮|后续轮次|下一轮|长期|持续).{0,80}(?:证据|判断|阻断|交接|修复|收束|裁决|运行)",
+    r"(?:多轮|长链|后续轮次|下一轮|长期|持续).{0,120}"
+    r"(?:evidence|proof|handoffs?|verdict|gatekeeper|governance|证据|证明|判断|阻断|交接|修复|收束|裁决|运行|治理)",
     r"(?:一次|单轮).{0,30}(?:不够|不足|不能|不应|不是|当成足够)",
     r"(?:活过本次聊天|可导出|可审计|运行期|运行中持续)",
 )
@@ -68,9 +70,10 @@ def text_mentions_loop_fit_contradiction(text: object) -> bool:
         r"\b(?:stable|existing)?\s*benchmark\b.{0,48}\b(?:fully|completely|already)\s+(?:captures|covers|expresses)\b",
         r"\b(?:benchmark[- ]only|benchmark only|stable benchmark|existing benchmark|simple benchmark)\b.{0,48}\b(?:is|was)?\s*(?:enough|sufficient)\b",
         r"\bbenchmark\b.{0,40}\b(?:whole|entire|only)\s+(?:acceptance|proof|validation|judgment)\b",
+        r"\b(?:as\s+long\s+as|only\s+need|only\s+needs|just\s+need|just\s+needs)\b.{0,48}\b(?:benchmarks?|unit\s+tests?|test\s+suite|contract\s+tests?)\b.{0,48}\b(?:pass|passes|passed|green)\b.{0,32}\b(?:done|complete|completion|acceptance)\b",
         r"\buse\s+the\s+benchmark\s+first\b.{0,64}\b(?:instead\s+of|rather\s+than|skip|do\s+not|don't)\b.{0,32}\b(?:loopora|loop)\b",
         r"\b(?:stable|existing)?\s*(?:proof\s+harness|test\s+harness|contract\s+tests?|test\s+suite|tests?)\b.{0,48}\b(?:fully|completely|already)\s+(?:captures|covers|expresses|proves)\b",
-        r"\b(?:proof[- ]?harness|test[- ]?harness|contract[- ]?tests?|test[- ]?suite|tests?)\b.{0,48}\b(?:is|are|was|were)?\s*(?:enough|sufficient)\b",
+        r"\b(?:proof[- ]?harness|test[- ]?harness|contract[- ]?tests?|test[- ]?suite|tests?)\b\s+(?:is|are|was|were)\s+(?:enough|sufficient)\b",
         r"\b(?:use|run)\s+the\s+(?:proof\s+harness|test\s+harness|contract\s+tests?|test\s+suite|tests?)\s+first\b.{0,64}\b(?:instead\s+of|rather\s+than|skip|do\s+not|don't)\b.{0,32}\b(?:loopora|loop)\b",
         r"\bjudgment\b.{0,48}\b(?:does\s+not|doesn't|need\s+not|won't)\s+survive\s+(?:one|this)\s+chat\b",
         r"一次\s*agent.{0,16}(?:人工\s*)?(?:review|审查|评审).{0,16}(?:足够|够了|即可|就行)",
@@ -83,6 +86,7 @@ def text_mentions_loop_fit_contradiction(text: object) -> bool:
         r"只(?:跑|看)?基准.{0,16}(?:足够|够了|即可|就行)",
         r"(?:稳定|现有)?(?:测试|测试套件|契约测试|证明工具|验证工具|proof harness).{0,16}(?:完全覆盖|已经覆盖|足够表达|足够|够了|就行|即可)",
         r"只(?:跑|看)?(?:测试|测试套件|契约测试|证明工具|验证工具).{0,16}(?:足够|够了|即可|就行)",
+        r"(?:只要|只需|只需要).{0,24}(?:benchmark|benchmarks?|基准|单元测试|测试套件|测试|契约测试).{0,32}(?:通过|pass|passes|passed|green).{0,16}(?:就算|就是|即可|就可以|算作)?.{0,12}(?:完成|done|acceptance|验收)",
         r"(?:一轮|单轮|一次|跑一遍|跑一次|做一遍).{0,12}(?:足够|够了|就够|就行|即可|可以)",
         r"(?:不需要|不用|无需|不必).{0,12}(?:多轮|后续轮次|后续迭代|循环)",
         r"(?:一次性任务|一次性请求|一次性修改|一次性修复).{0,16}(?:不需要|不用|无需|不必|不要(?!把)).{0,12}(?:长期|持续|多轮|循环|loopora|loop)",

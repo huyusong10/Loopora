@@ -9,6 +9,7 @@ from agent_bundle_candidates_test_support import (
     _wait_for_alignment_status,
     pytest,
 )
+from loopora.service_alignment_session_lifecycle import alignment_thread_key
 
 DEFAULT_TASK_MESSAGE = "Prepare a governed implementation loop from the host Agent context."
 
@@ -59,6 +60,105 @@ def test_agent_bundle_candidate_without_yaml_opens_prefill_without_starting_alig
     assert candidate_event["payload"]["ready_candidate_bytes"] == 0
     assert not any(event["event_type"] == "alignment_started" for event in events)
     assert_start_agent_loop_requires_web_review(service, sample_workdir, "/loopora-plan")
+
+
+def test_agent_bundle_candidate_missing_yaml_can_complete_interactive_review_then_run(
+    service_factory,
+    sample_workdir: Path,
+) -> None:
+    service = service_factory(scenario="success")
+
+    generated = create_missing_candidate(service, sample_workdir, DEFAULT_TASK_MESSAGE)
+    assert generated["binding"]["requires_web_alignment"] is True
+    assert_start_agent_loop_requires_web_review(service, sample_workdir, "/loopora-plan")
+
+    service.append_alignment_message(
+        generated["session"]["id"],
+        generated["session"]["agent_entry_review"]["suggested_reply"],
+    )
+    agreement = _wait_for_alignment_status(service, generated["session"]["id"], "waiting_user")
+    assert agreement["alignment_stage"] == "agreement_ready"
+    assert not Path(agreement["bundle_path"]).exists()
+
+    service.append_alignment_message(generated["session"]["id"], "确认，采用这份工作协议。")
+    ready = _wait_for_alignment_status(service, generated["session"]["id"], "ready")
+    assert ready["validation"]["ok"] is True
+    assert ready.get("agent_entry_review", {}) == {}
+    assert Path(ready["bundle_path"]).exists()
+
+    started = service.start_agent_loop("codex", workdir=sample_workdir, entry_source="codex_project_skill", execute_async=False)
+
+    assert started["execution_plane"] == "agent_native"
+    assert started["started_new_run"] is True
+    assert started["run"]["status"] == "awaiting_agent"
+    assert started["next_step"]["step_id"] == "builder_step"
+    assert started["binding"]["requires_web_alignment"] is False
+    assert started["binding"]["alignment_status"] == "running_loop"
+    assert started["binding"]["linked_run_id"] == started["run"]["id"]
+    assert [item["action"] for item in started["binding"]["entry_invocations"][-2:]] == ["plan", "run"]
+
+
+def test_agent_bundle_candidate_missing_yaml_plan_message_continues_same_alignment_session(
+    service_factory,
+    sample_workdir: Path,
+) -> None:
+    service = service_factory(scenario="success")
+
+    generated = create_missing_candidate(service, sample_workdir, DEFAULT_TASK_MESSAGE)
+    first_session_id = generated["session"]["id"]
+
+    continued = service.create_agent_bundle_candidate(
+        AgentBundleCandidateRequest(
+            adapter="codex",
+            workdir=sample_workdir,
+            message=generated["session"]["agent_entry_review"]["suggested_reply"],
+            entry_source="codex_project_skill",
+        )
+    )
+
+    assert continued["continued_alignment_session"] is True
+    assert continued["session"]["id"] == first_session_id
+    assert continued["status"] == "waiting_user"
+    assert continued["session"]["alignment_stage"] == "agreement_ready"
+    assert continued["session"].get("active_child_pid") in {None, ""}
+    assert alignment_thread_key(first_session_id) not in service._threads
+    assert continued["requires_web_alignment"] is True
+    assert continued["binding"]["alignment_session_id"] == first_session_id
+    assert continued["binding"]["requires_web_alignment"] is True
+    assert [item["action"] for item in continued["binding"]["entry_invocations"][-2:]] == ["plan", "plan"]
+
+    confirmed = service.create_agent_bundle_candidate(
+        AgentBundleCandidateRequest(
+            adapter="codex",
+            workdir=sample_workdir,
+            message="确认，采用这份工作协议。",
+            entry_source="codex_project_skill",
+        )
+    )
+
+    assert confirmed["continued_alignment_session"] is True
+    assert confirmed["session"]["id"] == first_session_id
+    assert confirmed["ready"] is True
+    assert confirmed["status"] == "ready"
+    assert confirmed["requires_web_alignment"] is False
+    assert confirmed["binding"]["requires_web_alignment"] is False
+    assert Path(confirmed["session"]["bundle_path"]).exists()
+
+
+def test_agent_bundle_candidate_missing_yaml_new_task_message_starts_new_alignment_session(
+    service_factory,
+    sample_workdir: Path,
+) -> None:
+    service = service_factory(scenario="success")
+
+    first = create_missing_candidate(service, sample_workdir, DEFAULT_TASK_MESSAGE)
+    second = create_missing_candidate(service, sample_workdir, "Prepare a second governed implementation loop.")
+
+    assert second.get("continued_alignment_session") is not True
+    assert second["session"]["id"] != first["session"]["id"]
+    assert second["session"]["transcript"][0]["content"] == "Prepare a second governed implementation loop."
+    assert second["status"] == "idle"
+    assert second["requires_web_alignment"] is True
 
 
 def test_agent_bundle_candidate_without_yaml_uses_chinese_prefill_message(

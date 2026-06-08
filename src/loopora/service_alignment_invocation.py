@@ -12,7 +12,7 @@ from loopora.service_alignment_artifacts import (
     finalize_alignment_invocation_files,
     write_alignment_invocation_input_files,
 )
-from loopora.service_alignment_language import alignment_generation_prefers_chinese
+from loopora.service_alignment_language import alignment_generation_display_language, alignment_generation_prefers_chinese
 from loopora.service_alignment_execution import (
     alignment_executor_role_request,
     alignment_executor_session_ref_event_payload,
@@ -147,6 +147,7 @@ def run_alignment_executor_invocation(
         idle_timeout_seconds=config.idle_timeout_seconds,
         validation_error=validation_error,
         prefers_chinese=alignment_generation_prefers_chinese(session),
+        display_language=alignment_generation_display_language(session),
     )
     executor = config.executor_factory()
     output = execute_alignment_request_with_resume_fallback(repository, session_id, executor, request)

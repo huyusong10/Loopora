@@ -8,6 +8,7 @@ from loopora.service_alignment_transcript import (
     AlignmentTranscriptContext,
     AlignmentUserMessageEffect,
     apply_alignment_user_message,
+    append_alignment_notice_message,
 )
 from loopora.service_types import LooporaConflictError, LooporaError
 from loopora.utils import utc_now
@@ -54,5 +55,13 @@ def append_alignment_message(
             stage_event_payload=stage_plan.event_payload,
         ),
     )
-    context.start_session_async(session_id)
+    if stage_plan.assistant_message:
+        append_alignment_notice_message(
+            context.transcript_context(),
+            session_id,
+            content=stage_plan.assistant_message,
+            created_at=context.now(),
+        )
+    if stage_plan.start_session:
+        context.start_session_async(session_id)
     return context.get_session(session_id)

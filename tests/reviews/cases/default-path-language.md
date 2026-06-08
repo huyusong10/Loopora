@@ -30,7 +30,7 @@ targets:
       - src/loopora/assets/alignment/alignment-playbook.md
       - src/loopora/assets/alignment/compiler-policy.md
       - src/loopora/assets/alignment/product-primer.md
-      - src/loopora/assets/alignment/system-prompt.md
+      - src/loopora/assets/system_prompts/alignment/web-alignment-agent.md
     max_bytes_per_file: 6000
   - id: expert-language-hints
     type: term_hints

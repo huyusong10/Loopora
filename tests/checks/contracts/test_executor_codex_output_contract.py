@@ -15,8 +15,12 @@ def test_real_codex_executor_can_parse_resume_output_without_schema(
     fake_bin = tmp_path / "bin"
     fake_bin.mkdir()
     codex_path = fake_bin / "codex"
+    captured_args = tmp_path / "codex_args.txt"
+    captured_stdin = tmp_path / "codex_stdin.txt"
     codex_path.write_text(
         "#!/bin/sh\n"
+        "printf '%s\\n' \"$@\" > \"$CAPTURE_CODEX_ARGS\"\n"
+        "cat > \"$CAPTURE_CODEX_STDIN\"\n"
         "output=''\n"
         "while [ \"$#\" -gt 0 ]; do\n"
         "  if [ \"$1\" = \"--output-last-message\" ]; then\n"
@@ -32,6 +36,8 @@ def test_real_codex_executor_can_parse_resume_output_without_schema(
     )
     codex_path.chmod(0o755)
     monkeypatch.setenv("PATH", f"{fake_bin}{os.pathsep}{os.environ.get('PATH', '')}")
+    monkeypatch.setenv("CAPTURE_CODEX_ARGS", str(captured_args))
+    monkeypatch.setenv("CAPTURE_CODEX_STDIN", str(captured_stdin))
 
     run_dir = tmp_path / "run"
     run_dir.mkdir()
@@ -60,6 +66,8 @@ def test_real_codex_executor_can_parse_resume_output_without_schema(
 
     assert payload == {"ok": True, "mode": "resume"}
     assert ("codex_event", {"type": "stdout", "message": "resume ok"}) in emitted
+    assert "Return JSON only." not in captured_args.read_text(encoding="utf-8").splitlines()
+    assert captured_stdin.read_text(encoding="utf-8") == "Return JSON only."
 
 
 def test_real_codex_executor_rejects_non_object_json_output(

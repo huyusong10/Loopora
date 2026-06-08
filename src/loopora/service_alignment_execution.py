@@ -139,6 +139,14 @@ def alignment_resume_session_id(session_ref: dict) -> str:
     return str((session_ref or {}).get("session_id", "") or "").strip()
 
 
+def alignment_native_resume_id_for_request(session: dict, session_ref: dict) -> str:
+    executor_kind = str(session.get("executor_kind", "codex") or "codex").strip().lower()
+    executor_mode = str(session.get("executor_mode", "preset") or "preset").strip().lower()
+    if executor_kind == "codex" and executor_mode != "command":
+        return ""
+    return alignment_resume_session_id(session_ref)
+
+
 def alignment_executor_role_request(  # noqa: PLR0913 - executor request construction exposes the full runtime boundary.
     session_id: str,
     session: dict,
@@ -150,8 +158,10 @@ def alignment_executor_role_request(  # noqa: PLR0913 - executor request constru
     idle_timeout_seconds: float | None,
     validation_error: str = "",
     prefers_chinese: bool = False,
+    display_language: str = "",
 ) -> RoleRequest:
     executor_session_ref = alignment_executor_session_ref(session)
+    resume_session_id = alignment_native_resume_id_for_request(session, executor_session_ref)
     return RoleRequest(
         run_id=f"alignment:{session_id}",
         role="alignment",
@@ -169,7 +179,7 @@ def alignment_executor_role_request(  # noqa: PLR0913 - executor request constru
         command_cli=session.get("command_cli", ""),
         command_args_text=session.get("command_args_text", ""),
         inherit_session=True,
-        resume_session_id=alignment_resume_session_id(executor_session_ref),
+        resume_session_id=resume_session_id,
         sandbox="read-only",
         idle_timeout_seconds=idle_timeout_seconds,
         extra_context={
@@ -182,6 +192,7 @@ def alignment_executor_role_request(  # noqa: PLR0913 - executor request constru
             "session_ref": executor_session_ref,
             "invocation_id": invocation_dir.name,
             "prefers_chinese": prefers_chinese,
+            "display_language": display_language,
         },
     )
 

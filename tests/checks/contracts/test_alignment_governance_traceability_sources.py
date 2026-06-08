@@ -59,7 +59,7 @@ def test_alignment_traceability_checks_governance_markers_across_readiness_evide
 ) -> None:
     bundle = load_bundle_text(
         alignment_bundle_yaml(str(sample_workdir)).replace(
-            "Ship the focused starter experience in the target workdir with small, maintainable changes that preserve the primary user flow.",
+            "Ship the focused starter experience for the target user in the target workdir with small, maintainable changes that preserve the primary user-facing flow.",
             "Workdir Snapshot detected AGENTS.md and tests/. Ship the focused starter experience.",
         )
     )

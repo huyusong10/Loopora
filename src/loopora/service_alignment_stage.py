@@ -31,6 +31,8 @@ from loopora.service_alignment_stage_messages import (
     alignment_clarifying_reframe_message as alignment_clarifying_reframe_message,
     alignment_clarifying_stage_plan as alignment_clarifying_stage_plan,
     alignment_fallback_assistant_message as alignment_fallback_assistant_message,
+    alignment_missing_item_label as alignment_missing_item_label,
+    alignment_missing_items_followup_question as alignment_missing_items_followup_question,
     alignment_output_message_plan as alignment_output_message_plan,
 )
 from loopora.service_alignment_stage_bundle_issues import (
@@ -89,27 +91,52 @@ def alignment_bundle_stage_error(gate: AlignmentBundleStageGate) -> str:
             else "I need the alignment readiness checklist before generating the Loop plan."
         )
     elif missing:
-        labels = ", ".join(missing)
+        labels = ", ".join(alignment_missing_item_label(item, prefers_chinese=gate.prefers_chinese) for item in missing)
         error = (
             f"我还不能直接生成 Loop 方案；对齐检查还缺：{labels}。请先补齐这些信息。"
             if gate.prefers_chinese
             else f"I can't generate the Loop plan yet; these readiness checks are incomplete: {labels}. Please fill in this information first."
         )
     elif gate.evidence_issues:
-        labels = ", ".join(gate.evidence_issues)
+        labels = ", ".join(alignment_missing_item_label(item, prefers_chinese=gate.prefers_chinese) for item in gate.evidence_issues)
         error = (
             f"我还不能直接生成 Loop 方案；这些对齐证据还不够具体：{labels}。请先补齐这些信息。"
             if gate.prefers_chinese
             else f"I can't generate the Loop plan yet; this readiness evidence is not specific enough: {labels}. Please fill in this information first."
         )
     elif gate.improvement_issues:
-        labels = ", ".join(gate.improvement_issues)
+        labels = ", ".join(alignment_missing_item_label(item, prefers_chinese=gate.prefers_chinese) for item in gate.improvement_issues)
         error = (
             f"我还不能直接生成 Loop 方案；这些改进判断还不够具体：{labels}。请先补齐这些信息。"
             if gate.prefers_chinese
             else f"I can't generate the Loop plan yet; these improvement judgments are not specific enough: {labels}. Please fill in this information first."
         )
     elif gate.language_issues:
-        labels = ", ".join(gate.language_issues)
-        error = f"我还不能直接生成 Loop 方案；这些用户可见对齐证据需要使用中文：{labels}。请先补齐这些信息。"
+        labels = ", ".join(alignment_missing_item_label(item, prefers_chinese=gate.prefers_chinese) for item in gate.language_issues)
+        error = (
+            f"我还不能直接生成 Loop 方案；这些用户可见对齐证据需要使用中文：{labels}。请先补齐这些信息。"
+            if gate.prefers_chinese
+            else f"I can't generate the Loop plan yet; these user-facing alignment fields need the user's language: {labels}. Please fill in this information first."
+        )
     return error
+
+
+def alignment_bundle_stage_missing_items(gate: AlignmentBundleStageGate) -> list[str]:
+    items: list[str] = []
+    ready_for_bundle_gate = (
+        gate.stage in gate.confirmed_stages
+        and gate.phase == "bundle"
+        and bool(gate.agreement_summary)
+        and isinstance(gate.checklist, dict)
+    )
+    if ready_for_bundle_gate and isinstance(gate.checklist, dict):
+        missing = [key for key in gate.readiness_keys if gate.checklist.get(key) is not True]
+        if missing:
+            items = missing
+        elif gate.evidence_issues:
+            items = list(gate.evidence_issues)
+        elif gate.improvement_issues:
+            items = list(gate.improvement_issues)
+        elif gate.language_issues:
+            items = list(gate.language_issues)
+    return items

@@ -1,0 +1,1 @@
+use validation_error plus repair_focus and the Candidate Bundle Skeleton in the managed loopora-plan-contract.md; repair the candidate plan file directly and do not inspect alignment session artifacts, manifests, the whole filesystem, Loopora source, or help output

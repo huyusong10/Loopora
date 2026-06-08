@@ -60,7 +60,8 @@ def test_agent_bundle_candidate_rejects_accessibility_and_locale_fake_done_risk_
     assert generated["ready"] is False
     assert generated["status"] == "failed"
     assert "fake-done risks" in generated["session"]["error_message"]
-    assert "accessibility/i18n" in generated["session"]["error_message"]
+    assert "accessibility/a11y" in generated["session"]["error_message"]
+    assert "locale/i18n" in generated["session"]["error_message"]
 
 # Merged from test_agent_bundle_accessibility_locale_success_criteria.py
 from agent_bundle_candidates_test_support import (
@@ -105,7 +106,7 @@ def test_agent_bundle_candidate_accepts_accessibility_and_locale_success_criteri
     service = service_factory(scenario="success")
     bundle = yaml.safe_load(alignment_bundle_yaml(str(sample_workdir.resolve())))
     bundle["spec"]["markdown"] = bundle["spec"]["markdown"].replace(
-        "Ship the focused starter experience in the target workdir with small, maintainable changes that preserve the primary user flow.",
+        "Ship the focused starter experience for the target user in the target workdir with small, maintainable changes that preserve the primary user-facing flow.",
         (
             "Ship the checkout path so keyboard users can complete checkout, screen reader labels are available, "
             "and Chinese and English variants preserve the same action."
@@ -144,7 +145,7 @@ def test_agent_bundle_candidate_rejects_explicit_fake_done_risk_missing_from_run
     service = service_factory(scenario="success")
     bundle = yaml.safe_load(alignment_bundle_yaml(str(sample_workdir.resolve())))
     bundle["spec"]["markdown"] = bundle["spec"]["markdown"].replace(
-        "Ship the focused starter experience in the target workdir with small, maintainable changes that preserve the primary user flow.",
+        "Ship the focused starter experience for the target user in the target workdir with small, maintainable changes that preserve the primary user-facing flow.",
         "Ship the billing export in the target workdir with small, maintainable changes that preserve the primary user flow.",
     )
     bundle_file = tmp_path / "bundle.yml"
@@ -177,7 +178,7 @@ def test_agent_bundle_candidate_accepts_explicit_fake_done_risk_in_runtime_surfa
     service = service_factory(scenario="success")
     bundle = yaml.safe_load(alignment_bundle_yaml(str(sample_workdir.resolve())))
     bundle["spec"]["markdown"] = bundle["spec"]["markdown"].replace(
-        "Ship the focused starter experience in the target workdir with small, maintainable changes that preserve the primary user flow.",
+        "Ship the focused starter experience for the target user in the target workdir with small, maintainable changes that preserve the primary user-facing flow.",
         "Ship the billing export in the target workdir with small, maintainable changes that preserve the primary user flow.",
     )
     bundle["spec"]["markdown"] += (
@@ -234,7 +235,7 @@ def test_agent_bundle_candidate_without_yaml_requires_task_summary(
 ) -> None:
     service = service_factory(scenario="success")
 
-    with pytest.raises(LooporaError, match="--message task summary"):
+    with pytest.raises(LooporaError, match="--message task context"):
         service.create_agent_bundle_candidate(
             AgentBundleCandidateRequest(
                 adapter="codex",
@@ -254,7 +255,7 @@ def test_agent_bundle_candidate_rejects_explicit_evidence_preferences_missing_fr
     service = service_factory(scenario="success")
     bundle = yaml.safe_load(alignment_bundle_yaml(str(sample_workdir.resolve())))
     bundle["spec"]["markdown"] = bundle["spec"]["markdown"].replace(
-        "Ship the focused starter experience in the target workdir with small, maintainable changes that preserve the primary user flow.",
+        "Ship the focused starter experience for the target user in the target workdir with small, maintainable changes that preserve the primary user-facing flow.",
         "Ship the checkout instrumentation in the target workdir with small, maintainable changes.",
     )
     bundle_file = tmp_path / "bundle.yml"
@@ -287,7 +288,7 @@ def test_agent_bundle_candidate_accepts_explicit_evidence_preferences_in_runtime
     service = service_factory(scenario="success")
     bundle = yaml.safe_load(alignment_bundle_yaml(str(sample_workdir.resolve())))
     bundle["spec"]["markdown"] = bundle["spec"]["markdown"].replace(
-        "Ship the focused starter experience in the target workdir with small, maintainable changes that preserve the primary user flow.",
+        "Ship the focused starter experience for the target user in the target workdir with small, maintainable changes that preserve the primary user-facing flow.",
         "Ship the checkout instrumentation in the target workdir with small, maintainable changes.",
     )
     bundle["spec"]["markdown"] += (
@@ -603,7 +604,7 @@ def test_agent_bundle_candidate_accepts_payment_evidence_preferences_in_runtime_
     service = service_factory(scenario="success")
     bundle = yaml.safe_load(alignment_bundle_yaml(str(sample_workdir.resolve())))
     bundle["spec"]["markdown"] = bundle["spec"]["markdown"].replace(
-        "Ship the focused starter experience in the target workdir with small, maintainable changes that preserve the primary user flow.",
+        "Ship the focused starter experience for the target user in the target workdir with small, maintainable changes that preserve the primary user-facing flow.",
         "Ship the refund payment flow in the target workdir with small, maintainable changes.",
     )
     bundle["spec"]["markdown"] += (

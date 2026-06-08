@@ -23,6 +23,11 @@ from loopora.cli_agent_plan_recovery import (
 from loopora.cli_agent_runtime_support import attach_recoverable_context_preview_urls as _attach_recoverable_context_preview_urls
 from loopora.cli_agent_runtime_support import attach_web_url as _attach_web_url
 from loopora.service import LooporaError
+from loopora.system_prompt_assets import load_system_prompt_asset
+
+
+PLAN_FIRST_NEXT = load_system_prompt_asset("agent_native/plan-first-next.md").strip()
+PLAN_FIRST_BOUND_NEXT = load_system_prompt_asset("agent_native/plan-first-bound-next.md").strip()
 
 
 def _agent_next_recovery_result(
@@ -65,7 +70,7 @@ def _agent_next_recovery_result(
         )
     elif result.get("loop_recovery") == "plan_first":
         result["message"] = "No Loopora run is bound to this Agent context/workdir; plan and start a Loop before claiming a step."
-        result["next"] = "Ask the user for task context, run /loopora-plan, review the READY preview, then run /loopora-run."
+        result["next"] = PLAN_FIRST_NEXT
     return result
 
 
@@ -198,7 +203,7 @@ def _agent_loop_unbound_recovery_result(
                 "No ready Loop preview or recoverable run context is bound to this Agent session/workdir; "
                 "run /loopora-plan first."
             ),
-            "next": "Ask the user the ask_user question, then run /loopora-plan with the user's task context.",
+            "next": PLAN_FIRST_BOUND_NEXT,
         }
         result.update(
             _agent_plan_context_guidance_fields(

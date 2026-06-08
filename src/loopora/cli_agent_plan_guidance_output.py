@@ -8,15 +8,19 @@ from loopora.cli_agent_plan_recovery_results import (
     REPAIR_CLI_COMMAND_POLICY,
     REPAIR_FORBIDDEN_ACTIONS,
     REPAIR_NEXT_ACTION,
+    REPAIR_NEXT_REPAIR_STEP,
     REPAIR_REFERENCE,
+    _agent_after_review_ready_message,
     _agent_entry_return_run_command,
     _agent_entry_return_slash_command,
     _agent_entry_review,
     _agent_gen_error_summary,
     _agent_plan_repair_action,
     _agent_repair_cli_command,
+    _agent_review_message_cli_command,
     _agent_task_message_from_session,
     _agent_web_review_focus,
+    _agent_web_review_next_step,
     _agent_web_review_status,
     _agent_web_review_task_anchor_fields,
     _recommended_review_option,
@@ -32,10 +36,10 @@ def _print_agent_web_review_guidance(result: dict) -> None:
     typer.echo("review_focus:")
     for item in _agent_web_review_focus(result):
         typer.echo(f"- {item}")
-    typer.echo(
-        "next_review_step: open the preview URL, complete the Web review checklist, "
-        "then use /loopora-run only after the preview is ready"
-    )
+    if result.get("loopora_fit_contradiction"):
+        typer.echo(f"next_review_step: {_agent_web_review_next_step(result, not_fit=True)}")
+        return
+    typer.echo(f"next_review_step: {_agent_web_review_next_step(result, not_fit=False)}")
     _print_agent_web_review_return_command(result)
 
 
@@ -50,6 +54,11 @@ def _print_agent_web_review_recommended_action(result: dict) -> None:
     reply = str(recommended.get("user_reply") or review.get("suggested_reply") or "").strip()
     if reply:
         typer.echo(f"review_reply_preview: {_clip_inline(reply, 260)}")
+    message_cli_command = str(result.get("message_cli_command") or result.get("next_plan_cli_command") or "").strip()
+    if not message_cli_command and reply:
+        message_cli_command = _agent_review_message_cli_command(result, reply=reply)
+    if message_cli_command:
+        typer.echo(f"next_plan_cli_command: {message_cli_command}")
 
 
 def _print_agent_web_review_task_anchor(result: dict) -> None:
@@ -62,7 +71,7 @@ def _print_agent_web_review_task_anchor(result: dict) -> None:
 
 def _print_agent_web_review_return_command(result: dict) -> None:
     command = _agent_entry_return_run_command(result)
-    typer.echo("after_review_ready: return to this Agent session and run /loopora-run; do not start the Agent Runner run from Web")
+    typer.echo(f"after_review_ready: {_agent_after_review_ready_message(result)}")
     typer.echo("run_blocked_until_web_review: yes")
     typer.echo("after_review_cli_command_status: blocked_until_web_review_complete")
     typer.echo(f"after_review_slash_command: {_agent_entry_return_slash_command()}")
@@ -105,12 +114,7 @@ def _print_agent_repair_guidance(result: dict) -> None:
         typer.echo(f"repair_cli_command: {repair_cli_command}")
         typer.echo(f"repair_cli_command_policy: {REPAIR_CLI_COMMAND_POLICY}")
     typer.echo(f"repair_reference: {REPAIR_REFERENCE}")
-    typer.echo(
-        "next_repair_step: repair the candidate plan file so it preserves repair_task_message and repair_focus in "
-        "spec, roles, workflow, and evidence rules; do not inspect alignment session artifacts, manifests, Loopora "
-        "source/help, or run filesystem-wide discovery; rerun repair_cli_command or repair_slash_command, then use "
-        "/loopora-run only after the preview is ready"
-    )
+    typer.echo(f"next_repair_step: {REPAIR_NEXT_REPAIR_STEP}")
 
 
 def _print_agent_plan_repair_panel(result: dict) -> None:

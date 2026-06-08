@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from loopora.event_redaction import redact_sensitive_value
 from loopora.run_projection_fields import task_verdict_from_run
+from loopora.system_prompt_assets import load_system_prompt_asset
 
 
 AGENT_CONTEXT_BINDING_RECOVERY_KEYS = {
@@ -21,6 +22,10 @@ AGENT_CONTEXT_BINDING_RECOVERY_KEYS = {
     "preview_path",
     "run_path",
 }
+
+RECOVERABLE_CONTEXT_REPAIR_NEXT_STEP = load_system_prompt_asset(
+    "agent_native/recoverable-context-repair-next-step.md"
+).strip()
 
 
 def agent_exact_binding_recovery_action(choice: dict) -> str:
@@ -50,7 +55,7 @@ def agent_failed_preview_choice_repair_fields(
         "validation_error": validation_error,
         "plan_file_to_repair": source_path or preview_plan_copy,
         "preview_plan_copy": preview_plan_copy,
-        "next_repair_step": "repair the candidate plan file, rerun /loopora-plan, then use /loopora-run only after the preview is ready",
+        "next_repair_step": RECOVERABLE_CONTEXT_REPAIR_NEXT_STEP,
     }
     return {key: value for key, value in summary.items() if value not in ("", [], {})}
 

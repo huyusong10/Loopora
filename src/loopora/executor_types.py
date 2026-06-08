@@ -58,3 +58,4 @@ class ExecutorProcessRequest:
     should_stop: Callable[[], bool]
     set_child_pid: Callable[[int | None], None]
     line_handler: Callable[[str], None]
+    stdin_text: str | None = None

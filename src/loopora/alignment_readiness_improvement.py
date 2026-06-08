@@ -76,6 +76,8 @@ def alignment_improvement_readiness_issues(session: dict, output: dict) -> list[
         ),
     ):
         issues.append("improvement_surface")
+    if improvement_refactor_delta_issue(session, combined):
+        issues.append("improvement_refactor_delta")
     source = previous_agreement.get("source") if isinstance(previous_agreement.get("source"), dict) else {}
     has_run_context = str(source.get("source_type") or "") == "run" and (
         source.get("coverage_summary") or source.get("evidence_summary") or source.get("task_verdict") or source.get("gatekeeper_verdict")
@@ -127,3 +129,69 @@ def alignment_improvement_readiness_issues(session: dict, output: dict) -> list[
         if not has_source_completion_mode_delta:
             issues.append("improvement_completion_mode_delta")
     return issues
+
+
+def improvement_refactor_delta_issue(session: dict, combined_output_text: str) -> bool:
+    feedback = _improvement_user_feedback_text(session).lower()
+    if not has_any_marker(
+        feedback,
+        (
+            "too conservative",
+            "not enough refactor",
+            "not refactor-heavy",
+            "be more aggressive",
+            "more aggressive",
+            "aggressive refactor",
+            "太保守",
+            "不够重构",
+            "更激进",
+            "激进一点",
+            "大刀阔斧",
+        ),
+    ):
+        return False
+    has_refactor_frame = has_any_marker(
+        combined_output_text,
+        (
+            "task-scoped refactor",
+            "refactor delta",
+            "refactor risk",
+            "refactor evidence",
+            "重构 delta",
+            "重构风险",
+            "重构证据",
+            "任务边界",
+            "任务范围内的重构",
+        ),
+    )
+    has_refactor_evidence_or_blocker = has_any_marker(
+        combined_output_text,
+        (
+            "complexity only moved",
+            "complexity moved elsewhere",
+            "maintainability",
+            "public behavior regressed",
+            "behavior regressed",
+            "evidence path",
+            "regression",
+            "complexity",
+            "复杂度只是换地方",
+            "复杂度",
+            "可维护",
+            "用户行为回归",
+            "行为回归",
+            "证据路径",
+            "无法复验",
+            "回归",
+        ),
+    )
+    return not (has_refactor_frame and has_refactor_evidence_or_blocker)
+
+
+def _improvement_user_feedback_text(session: dict) -> str:
+    transcript = session.get("transcript") if isinstance(session.get("transcript"), list) else []
+    return " ".join(
+        str(item.get("content") or "")
+        for item in transcript
+        if isinstance(item, dict) and str(item.get("role") or "").strip() == "user"
+    )

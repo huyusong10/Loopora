@@ -1,0 +1,3 @@
+{{INSPECTOR_PRIMARY_PROOF_PROMPT_GUIDANCE}}
+
+For Inspector output, leave `dynamic_checks` empty unless you performed a new reproducible check that is not already represented by `check_results` or `coverage_results`. If a command verifies a listed Done When/check id, Fake Done, Evidence Preference, scope, checksum, or coverage target, put that evidence in check_results, coverage_results, or tester_observations instead of dynamic_checks. Do not duplicate file-read, artifact-presence, checksum/scope, or command-success facts as dynamic checks. Each dynamic_checks item must name the extra nonduplicated claim it proves.

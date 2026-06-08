@@ -232,7 +232,7 @@ def test_alignment_bundle_stage_error_prioritizes_stage_and_readiness_gates() ->
     assert "readiness checklist" in alignment_bundle_stage_error(
         AlignmentBundleStageGate(stage="confirmed", **{**kwargs, "checklist": []})
     )
-    assert "readiness checks are incomplete: loop_fit" in alignment_bundle_stage_error(
+    assert "readiness checks are incomplete: Loopora fit" in alignment_bundle_stage_error(
         AlignmentBundleStageGate(stage="confirmed", **{**kwargs, "checklist": {"loop_fit": False}}),
     )
     assert alignment_bundle_stage_error(AlignmentBundleStageGate(stage="confirmed", **kwargs)) == ""
@@ -249,14 +249,22 @@ def test_alignment_bundle_stage_error_reports_evidence_improvement_and_language_
         "prefers_chinese": True,
     }
 
-    assert "readiness_evidence" in alignment_bundle_stage_error(
+    assert "对齐证据" in alignment_bundle_stage_error(
         AlignmentBundleStageGate(**kwargs, evidence_issues=["readiness_evidence"], improvement_issues=[], language_issues=[]),
     )
-    assert "improvement_delta" in alignment_bundle_stage_error(
+    assert "改进变化" in alignment_bundle_stage_error(
         AlignmentBundleStageGate(**kwargs, evidence_issues=[], improvement_issues=["improvement_delta"], language_issues=[]),
     )
-    assert "需要使用中文：agreement_summary" in alignment_bundle_stage_error(
+    assert "需要使用中文：工作协议摘要" in alignment_bundle_stage_error(
         AlignmentBundleStageGate(**kwargs, evidence_issues=[], improvement_issues=[], language_issues=["agreement_summary"]),
+    )
+    assert "need the user's language: agreement summary" in alignment_bundle_stage_error(
+        AlignmentBundleStageGate(
+            **{**kwargs, "prefers_chinese": False},
+            evidence_issues=[],
+            improvement_issues=[],
+            language_issues=["agreement_summary"],
+        ),
     )
 
 # Merged from test_alignment_bundle_stage_progression.py

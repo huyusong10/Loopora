@@ -50,7 +50,7 @@ def test_codex_agent_gen_validates_ready_bundle_and_loop_starts_run(
     _assert_agent_run_summary_for_started_run(started)
     assert started["next_step"]["step_id"] == "builder_step"
     assert started["judgment_contract"]["contract_path"] == "contract/run_contract.json"
-    assert "Prefer a smaller proven flow" in started["judgment_contract"]["collaboration_summary"]
+    assert "final feedback is too slow" in started["judgment_contract"]["collaboration_summary"]
     assert started["judgment_contract"]["judgment_tradeoffs"]
     assert started["judgment_contract"]["execution_strategy"]
     assert started["judgment_contract"]["local_governance"]

@@ -57,7 +57,7 @@ NextStepIdCompatOption = Annotated[
 ]
 AdapterMessageOption = Annotated[
     str,
-    typer.Option("--message", help="Short task summary for the Loop preview; required for Agent-first traceability."),
+    typer.Option("--message", help="Task context for the Loop preview; required for Agent-first traceability."),
 ]
 NoWebOption = Annotated[bool, typer.Option("--no-web", hidden=True, help="Skip local Web service startup.")]
 CheckOption = Annotated[bool, typer.Option("--check", help="Check the Loopora Agent entry without installing or repairing files.")]

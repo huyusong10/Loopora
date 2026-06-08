@@ -164,8 +164,8 @@ def _task_projection_repair_hints(error: str) -> list[str]:
         terms = [term.strip() for term in match.group("terms").split(",") if term.strip()]
         if not terms:
             continue
-        area = str(match.group("area") or "task summary").strip()
-        if area == "task summary":
+        area = str(match.group("area") or "task context").strip()
+        if area in {"task context", "task summary"}:
             hints.extend(
                 [
                     "add these missing task objects from --message to runnable plan surfaces: " + ", ".join(terms[:8]),
@@ -218,8 +218,16 @@ _VALIDATION_REPAIR_HINT_RULES: tuple[tuple[tuple[str, ...], str], ...] = (
         "include role_definitions and workflow steps so the Loop can run through Builder, reviewers, and GateKeeper",
     ),
     (("spec Task must describe the concrete user-facing task",), "make # Task name the concrete user-facing outcome, not only internal governance language"),
-    (("must follow Chinese user language",), "keep user-facing plan names, spec prose, role names, and posture notes in the user's language"),
-    (("host Agent task summary", "project the host Agent task summary"), "project the task objects from --message into spec, roles, workflow intent, and evidence rules"),
+    (("must follow the user-facing task language",), "keep user-facing plan names, spec prose, role names, and posture notes in the user's language"),
+    (
+        (
+            "host Agent task context",
+            "project the host Agent task context",
+            "host Agent task summary",
+            "project the host Agent task summary",
+        ),
+        "project the task objects from --message into spec, roles, workflow intent, and evidence rules",
+    ),
     (("evidence preferences", "explicit host Agent evidence"), "compile required evidence modes into runnable surfaces, not only the CLI summary"),
     (
         ("Loopora fit", "one-off", "no-new-evidence"),

@@ -10,6 +10,7 @@ from loopora.agent_adapter_claude_hook import (
     CLAUDE_SESSION_HOOK_RELATIVE_PATH,
     CLAUDE_SESSION_HOOK_SETTINGS_REF,
     CLAUDE_SETTINGS_RELATIVE_PATH,
+    claude_session_additional_context as claude_session_additional_context,
     claude_session_hook_script as claude_session_hook_script,
 )
 from loopora.service_types import LooporaConflictError, LooporaError

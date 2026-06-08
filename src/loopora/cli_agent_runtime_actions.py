@@ -90,7 +90,7 @@ def claim_agent_next_from_cli(request: AgentNextCliRequest) -> None:
             no_web=request.no_web,
             json_output=request.json_output or request.compact_json_output,
         ):
-            raise typer.Exit(code=1) from exc
+            raise typer.Exit(code=1)
         handle_error(exc)
 
 
@@ -110,7 +110,7 @@ def handle_agent_submit_error(
         json_output=request.json_output,
         auto_repair_actions=request.auto_repair_actions or [],
     ):
-        raise typer.Exit(code=1) from exc
+        raise typer.Exit(code=1)
     handle_error(exc)
 
 
@@ -126,7 +126,7 @@ def handle_agent_plan_error(
         entry_source=request.entry_source,
         json_output=request.json_output,
     ):
-        raise typer.Exit(code=1) from exc
+        raise typer.Exit(code=1)
     handle_error(exc)
 
 

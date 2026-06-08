@@ -18,6 +18,7 @@ playwright-report/
 *.log
 *.prof
 artifacts/real_search_loop_e2e/
+.loopora_manual_cases/
 /tmp/
 .DS_Store
 *.egg

@@ -70,7 +70,7 @@ def test_cli_serve_reports_v3_reset_without_traceback(monkeypatch, tmp_path: Pat
     _create_legacy_app_db(app_home / "app.db")
     monkeypatch.setenv("LOOPORA_HOME", str(app_home))
 
-    result = CliRunner().invoke(cli.app, ["serve"])
+    result = CliRunner(mix_stderr=False).invoke(cli.app, ["serve"])
     error_text = result.stderr or result.output
 
     assert result.exit_code == 1
@@ -89,7 +89,7 @@ def test_cli_init_json_reports_v3_reset_without_adapter_conflict(monkeypatch, tm
     _create_legacy_app_db(app_home / "app.db")
     monkeypatch.setenv("LOOPORA_HOME", str(app_home))
 
-    runner = CliRunner()
+    runner = CliRunner(mix_stderr=False)
     for args in (
         ["init", "codex", "--workdir", str(workdir), "--json"],
         ["init", "codex", "--workdir", str(workdir), "--check", "--json"],

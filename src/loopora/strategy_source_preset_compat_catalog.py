@@ -137,7 +137,7 @@ def build_strategy_source_compat_presets(
                     step_id="builder_step",
                     role_id="builder",
                     archetype="builder",
-                    inputs={"handoffs_from": ["guide_step"], "iteration_memory": "summary_only"},
+                    inputs={"handoffs_from": ["inspector_step", "guide_step"], "iteration_memory": "summary_only"},
                 ),
                 preset_step(
                     step_id="gatekeeper_step",
@@ -222,7 +222,14 @@ def build_strategy_source_compat_presets(
                     step_id="builder_repair_step",
                     role_id="builder",
                     archetype="builder",
-                    inputs={"handoffs_from": ["guide_step"], "iteration_memory": "summary_only"},
+                    inputs={
+                        "handoffs_from": [
+                            "regression_inspection_step",
+                            "contract_inspection_step",
+                            "guide_step",
+                        ],
+                        "iteration_memory": "summary_only",
+                    },
                 ),
                 preset_step(
                     step_id="gatekeeper_step",

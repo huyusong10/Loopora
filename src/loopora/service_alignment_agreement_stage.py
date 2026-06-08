@@ -15,6 +15,8 @@ class AlignmentUserMessageStagePlan:
     update_fields: dict
     event_type: str = ""
     event_payload: dict | None = None
+    start_session: bool = True
+    assistant_message: str = ""
 
 
 @dataclass(frozen=True)
@@ -50,7 +52,12 @@ def alignment_merge_improvement_context(previous: object, working_agreement: dic
     return merged
 
 
-def alignment_visible_agreement_message(working_agreement: dict, *, prefers_chinese: bool) -> str:
+def alignment_visible_agreement_message(
+    working_agreement: dict,
+    *,
+    prefers_chinese: bool,
+    display_language: str = "",
+) -> str:
     evidence = working_agreement.get("readiness_evidence")
     if not isinstance(evidence, dict):
         evidence = {}
@@ -92,6 +99,26 @@ def alignment_visible_agreement_message(working_agreement: dict, *, prefers_chin
                 f"项目事实：{values['workdir_facts']}",
             ]
         )
+    if str(display_language or "").strip().lower() == "es":
+        return "\n".join(
+            [
+                "Confirma primero este acuerdo de trabajo. Después generaré el plan Loop; si algún juicio está mal, nombra el punto que quieres ajustar.",
+                "",
+                f"Resumen: {summary}",
+                f"Encaje con Loopora: {values['loop_fit']}",
+                f"Alcance de tarea: {values['task_scope']}",
+                f"Superficie de éxito: {values['success_surface']}",
+                f"Riesgos de falso terminado: {values['fake_done_risks']}",
+                f"Preferencias de evidencia: {values['evidence_preferences']}",
+                f"Estrategia de ejecución: {values['execution_strategy']}",
+                f"Riesgo residual: {values['residual_risk_policy']}",
+                f"Tradeoffs de juicio: {values['judgment_tradeoffs']}",
+                f"Gobernanza local: {values['local_governance']}",
+                f"Postura de roles: {values['role_posture']}",
+                f"Forma del flujo de ejecución: {values['workflow_shape']}",
+                f"Hechos del proyecto: {values['workdir_facts']}",
+            ]
+        )
     return "\n".join(
         [
             "Please confirm this working agreement. After confirmation I will generate the Loop plan; if any judgment is wrong, name the item to adjust.",
@@ -125,6 +152,7 @@ def alignment_agreement_ready_stage_plan(
     *,
     assistant_message: str,
     prefers_chinese: bool,
+    display_language: str = "",
 ) -> AlignmentAgreementReadyStagePlan:
     return AlignmentAgreementReadyStagePlan(
         update_fields={
@@ -135,7 +163,10 @@ def alignment_agreement_ready_stage_plan(
             "assistant_message": assistant_message,
             "needs_user_input": True,
             "bundle_yaml": "",
-            "decision_options": agreement_confirmation_decision_options(prefers_chinese=prefers_chinese),
+            "decision_options": agreement_confirmation_decision_options(
+                prefers_chinese=prefers_chinese,
+                display_language=display_language,
+            ),
         },
         event_type="alignment_agreement_ready",
         event_payload={
@@ -152,8 +183,24 @@ def alignment_user_message_stage_plan(
     captured_at: str,
     confirmed_stages: set[str],
 ) -> AlignmentUserMessageStagePlan:
+    if alignment_message_selects_skip_loop(session, message):
+        return AlignmentUserMessageStagePlan(
+            update_fields={
+                "status": "skipped",
+                "alignment_stage": "clarifying",
+                "finished_at": captured_at,
+                "working_agreement": {
+                    "skipped": True,
+                    "skip_message": message,
+                    "skipped_at": captured_at,
+                },
+            },
+            event_type="alignment_skipped",
+            event_payload={"status": "skipped", "reason": "user_selected_skip_loop"},
+            start_session=False,
+            assistant_message=alignment_skip_loop_confirmation_message(message),
+        )
     stage = str(session.get("alignment_stage", "") or "clarifying")
-    status = str(session.get("status", "") or "")
     if stage == "agreement_ready":
         agreement = dict(session.get("working_agreement") or {})
         checklist = dict(agreement.get("readiness_checklist") or {})
@@ -176,6 +223,23 @@ def alignment_user_message_stage_plan(
             event_type="alignment_agreement_reopened",
             event_payload={"alignment_stage": "clarifying"},
         )
+    return alignment_non_agreement_user_message_stage_plan(
+        session,
+        message,
+        captured_at=captured_at,
+        confirmed_stages=confirmed_stages,
+    )
+
+
+def alignment_non_agreement_user_message_stage_plan(
+    session: dict,
+    message: str,
+    *,
+    captured_at: str,
+    confirmed_stages: set[str],
+) -> AlignmentUserMessageStagePlan:
+    status = str(session.get("status", "") or "")
+    stage = str(session.get("alignment_stage", "") or "clarifying")
     if status == "ready":
         agreement = dict(session.get("working_agreement") or {})
         ready_review = dict(agreement.get("ready_review") or {})
@@ -216,6 +280,77 @@ def alignment_message_confirms_agreement(message: str) -> bool:
     if any(token in negative_scan for token in AGREEMENT_ADJUSTMENT_TOKENS):
         return False
     return any(token in normalized for token in AGREEMENT_CONFIRMATION_TOKENS)
+
+
+def alignment_message_selects_skip_loop(session: dict, message: str) -> bool:
+    if not alignment_latest_assistant_offered_skip_loop(session):
+        return False
+    normalized = " ".join(str(message or "").strip().lower().split())
+    if not normalized:
+        return False
+    skip_patterns = (
+        "do not generate a loop",
+        "don't generate a loop",
+        "do not generate a loop plan",
+        "don't generate a loop plan",
+        "skip loop",
+        "skip the loop",
+        "skip loopora",
+        "end loopora-plan",
+        "end /loopora-plan",
+        "先不生成 loop",
+        "不生成 loop",
+        "不生成 loop 方案",
+        "跳过 loop",
+        "跳过 loopora",
+        "结束 /loopora-plan",
+        "结束 loopora-plan",
+        "结束 loopora plan",
+    )
+    return any(pattern in normalized for pattern in skip_patterns)
+
+
+def alignment_latest_assistant_offered_skip_loop(session: dict) -> bool:
+    for entry in reversed(list(session.get("transcript") or [])):
+        if not isinstance(entry, dict):
+            continue
+        if entry.get("role") != "assistant":
+            continue
+        options = entry.get("decision_options")
+        if isinstance(options, list) and any(
+            isinstance(option, dict)
+            and str(option.get("id") or "") in {"skip_loop", "end_loopora_plan", "end_loopora_alignment"}
+            for option in options
+        ):
+            return True
+        return alignment_assistant_content_offers_skip_loop(entry.get("content"))
+    return False
+
+
+def alignment_assistant_content_offers_skip_loop(content: object) -> bool:
+    normalized = " ".join(str(content or "").strip().lower().split())
+    if not normalized:
+        return False
+    skip_markers = (
+        "not a runnable loop",
+        "not fit for loopora",
+        "not suitable for loopora",
+        "not suitable to compose as a loop",
+        "skip loop for now",
+        "不适合 loopora",
+        "不适合编排成 loopora loop",
+        "不适合编排成 loop",
+        "先不生成 loop",
+        "不会伪装成可运行 loop",
+        "不是可运行 loop",
+    )
+    return any(marker in normalized for marker in skip_markers)
+
+
+def alignment_skip_loop_confirmation_message(message: str) -> str:
+    if any("\u4e00" <= char <= "\u9fff" for char in str(message or "")):
+        return "已按你的选择停止生成 Loop 方案；这条对齐会话不会写入 bundle，也不会启动运行。"
+    return "Understood. I won't generate a Loop plan for this alignment session, and no bundle or run will start."
 
 
 def alignment_agreement_readiness_checklist_issues(checklist: object, *, readiness_keys: list[str]) -> list[str]:

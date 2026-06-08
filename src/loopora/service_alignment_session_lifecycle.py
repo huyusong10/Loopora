@@ -76,6 +76,26 @@ def start_alignment_session_async(context: AlignmentSessionLifecycleContext, ses
         raise
 
 
+def start_alignment_session_sync(context: AlignmentSessionLifecycleContext, session_id: str, *, active_statuses: set[str]) -> None:
+    session = context.get_session(session_id)
+    if session["status"] in active_statuses:
+        raise LooporaConflictError("alignment session is already running")
+    key = context.thread_key(session_id)
+    thread = context.threads.get(key)
+    if thread and thread.is_alive():
+        raise LooporaConflictError("alignment session is already running")
+    context.repository.update_alignment_session(
+        session_id,
+        status="running",
+        stop_requested=False,
+        clear_active_child_pid=True,
+        finished_at=None,
+        error_message="",
+    )
+    context.repository.append_alignment_event(session_id, "alignment_started", {"status": "running"})
+    context.execute_session(session_id)
+
+
 def cancel_alignment_session(
     context: AlignmentSessionLifecycleContext,
     session_id: str,

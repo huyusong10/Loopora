@@ -18,12 +18,14 @@ from loopora.service_alignment_agreement_stage import (
 )
 from loopora.service_alignment_language import (
     alignment_agreement_language_issues,
+    alignment_generation_display_language,
     alignment_generation_prefers_chinese,
     alignment_prefers_chinese,
 )
 from loopora.service_alignment_stage import (
     AlignmentBundleStageGate,
     alignment_bundle_stage_error,
+    alignment_bundle_stage_missing_items,
 )
 from loopora.service_alignment_stage_messages import (
     AlignmentAgreementBlockCandidate,
@@ -40,6 +42,12 @@ class AlignmentOutputStagePlan:
     output_updates: dict
     event_type: str = ""
     event_payload: dict | None = None
+
+
+@dataclass(frozen=True)
+class AlignmentOutputBundleStageCheck:
+    error: str
+    missing_items: list[str]
 
 
 class AlignmentOutputStageRepository(Protocol):
@@ -108,7 +116,7 @@ def alignment_output_stage_plan(
                         readiness_keys=readiness_keys,
                     ),
                     event_type="alignment_checklist_incomplete",
-                    fallback_message="我还不能整理确认协议；这些对齐检查还没完成：{missing}。请先问一个会改变 Loop 方案的问题。",
+                    fallback_message="我还不能整理确认协议；这些对齐检查还没完成：{missing}。",
                 ),
                 AlignmentAgreementBlockCandidate(
                     issues=readiness_evidence_issues(
@@ -116,24 +124,27 @@ def alignment_output_stage_plan(
                         workdir_snapshot=alignment_workdir_snapshot(Path(session["workdir"])),
                     ),
                     event_type="alignment_evidence_incomplete",
-                    fallback_message="我还不能整理确认协议；这些对齐证据还不够具体：{missing}。请先补一个会改变 Loop 方案的问题。",
+                    fallback_message="我还不能整理确认协议；这些对齐证据还不够具体：{missing}。",
                 ),
                 AlignmentAgreementBlockCandidate(
                     issues=alignment_improvement_readiness_issues(session, output),
                     event_type="alignment_improvement_incomplete",
-                    fallback_message="我还不能整理改进协议；这些基于已有方案的改进判断还不够具体：{missing}。请先补一个会改变 Loop 方案的问题。",
+                    fallback_message="我还不能整理改进协议；这些基于已有方案的改进判断还不够具体：{missing}。",
                 ),
                 AlignmentAgreementBlockCandidate(
                     issues=alignment_agreement_language_issues(
                         output,
                         evidence_keys=readiness_evidence_keys,
                         prefers_chinese=alignment_generation_prefers_chinese(session),
+                        display_language=alignment_generation_display_language(session),
                     ),
                     event_type="alignment_language_mismatch",
                     fallback_message="我还不能整理确认协议；用户可见工作协议需要使用中文：{missing}。请用中文重写这些判断。",
                 ),
             ],
             prefers_chinese=alignment_prefers_chinese(session),
+            display_language=alignment_generation_display_language(session),
+            not_fit_source_text=alignment_not_fit_source_text(session, output),
         )
         if block_plan is not None:
             return AlignmentOutputStagePlan(
@@ -152,8 +163,10 @@ def alignment_output_stage_plan(
             assistant_message=alignment_visible_agreement_message(
                 working_agreement,
                 prefers_chinese=alignment_prefers_chinese(session),
+                display_language=alignment_generation_display_language(session),
             ),
             prefers_chinese=alignment_prefers_chinese(session),
+            display_language=alignment_generation_display_language(session),
         )
         return AlignmentOutputStagePlan(
             update_fields=ready_plan.update_fields,
@@ -165,6 +178,7 @@ def alignment_output_stage_plan(
         clarifying_plan = alignment_clarifying_stage_plan(
             output,
             prefers_chinese=alignment_prefers_chinese(session),
+            display_language=alignment_generation_display_language(session),
         )
         return AlignmentOutputStagePlan(
             update_fields=clarifying_plan.update_fields,
@@ -175,14 +189,33 @@ def alignment_output_stage_plan(
     return None
 
 
-def alignment_output_bundle_stage_error(
+def alignment_not_fit_source_text(session: dict, output: dict) -> str:
+    transcript = session.get("transcript") if isinstance(session.get("transcript"), list) else []
+    text_parts = [
+        str(entry.get("content") or "")
+        for entry in transcript
+        if isinstance(entry, dict) and str(entry.get("role") or "").strip() in {"user", "assistant"}
+    ]
+    text_parts.extend(
+        [
+            str(output.get("assistant_message") or ""),
+            str(output.get("agreement_summary") or ""),
+        ]
+    )
+    evidence = output.get("readiness_evidence")
+    if isinstance(evidence, dict):
+        text_parts.extend(str(value or "") for value in evidence.values())
+    return " ".join(part for part in text_parts if part)
+
+
+def alignment_output_bundle_stage_check(
     session: dict,
     output: dict,
     *,
     confirmed_stages: set[str],
     readiness_keys: list[str],
     readiness_evidence_keys: list[str],
-) -> str:
+) -> AlignmentOutputBundleStageCheck:
     stage = str(session.get("alignment_stage", "") or "clarifying").strip()
     phase = str(output.get("alignment_phase", "") or "").strip()
     agreement_summary = str(output.get("agreement_summary", "") or "").strip()
@@ -196,18 +229,38 @@ def alignment_output_bundle_stage_error(
         output,
         evidence_keys=readiness_evidence_keys,
         prefers_chinese=alignment_generation_prefers_chinese(session),
+        display_language=alignment_generation_display_language(session),
     )
-    return alignment_bundle_stage_error(
-        AlignmentBundleStageGate(
-            stage=stage,
-            confirmed_stages=confirmed_stages,
-            phase=phase,
-            agreement_summary=agreement_summary,
-            checklist=checklist,
-            readiness_keys=readiness_keys,
-            evidence_issues=evidence_issues,
-            improvement_issues=improvement_issues,
-            language_issues=language_issues,
-            prefers_chinese=alignment_prefers_chinese(session),
-        )
+    gate = AlignmentBundleStageGate(
+        stage=stage,
+        confirmed_stages=confirmed_stages,
+        phase=phase,
+        agreement_summary=agreement_summary,
+        checklist=checklist,
+        readiness_keys=readiness_keys,
+        evidence_issues=evidence_issues,
+        improvement_issues=improvement_issues,
+        language_issues=language_issues,
+        prefers_chinese=alignment_prefers_chinese(session),
     )
+    return AlignmentOutputBundleStageCheck(
+        error=alignment_bundle_stage_error(gate),
+        missing_items=alignment_bundle_stage_missing_items(gate),
+    )
+
+
+def alignment_output_bundle_stage_error(
+    session: dict,
+    output: dict,
+    *,
+    confirmed_stages: set[str],
+    readiness_keys: list[str],
+    readiness_evidence_keys: list[str],
+) -> str:
+    return alignment_output_bundle_stage_check(
+        session,
+        output,
+        confirmed_stages=confirmed_stages,
+        readiness_keys=readiness_keys,
+        readiness_evidence_keys=readiness_evidence_keys,
+    ).error

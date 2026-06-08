@@ -3,6 +3,7 @@ from __future__ import annotations
 # Merged from test_alignment_prompt_build_context.py
 from pathlib import Path
 
+from loopora.alignment_guidance import load_alignment_guidance_assets
 from loopora.service_alignment_prompting import AlignmentPromptBuildContext, build_alignment_prompt
 
 
@@ -170,8 +171,187 @@ def test_alignment_markdown_h2_sections_collects_section_bodies() -> None:
         "Repair": "B",
     }
 
+
+def test_alignment_relevant_examples_prompt_text_selects_core_and_task_examples() -> None:
+    assets = load_alignment_guidance_assets()
+
+    selected = alignment_relevant_examples_prompt_text(
+        assets.examples,
+        context_text=(
+            "Migrate SaaS subscription billing from legacy invoices to an event-sourced ledger. "
+            "Preserve Stripe webhook idempotency, refunds, chargebacks, tax adjustments, payout "
+            "reconciliation, MRR reporting, audit export, backward compatibility, and rollback proof."
+        ),
+    )
+
+    assert len(selected) < len(assets.examples)
+    assert "Good creation example: English learning website" in selected
+    assert "Private traceability checklist example" in selected
+    assert "Long-chain multi-Builder example" in selected
+    assert "Payment webhook reconciliation example" in selected
+    assert "Dispute chargeback lifecycle example" in selected
+    assert "Tax calculation compliance example" in selected
+    assert "Marketplace payout settlement example" in selected
+    assert "Migration rollback example" in selected
+    assert "MRR metric reconciliation example" in selected
+    assert "Compliance audit trail example" in selected
+    assert "Price cache invalidation example" not in selected
+    assert "RAG grounding and tool safety example" not in selected
+    assert "AI quality evaluation example" not in selected
+    assert "Consent preference governance example" not in selected
+    assert "Async job queue example" not in selected
+
+
+def test_alignment_relevant_examples_prompt_text_selects_rag_long_chain_example() -> None:
+    assets = load_alignment_guidance_assets()
+
+    selected = alignment_relevant_examples_prompt_text(
+        assets.examples,
+        context_text=(
+            "Enterprise RAG support chatbot with citation span verification, retrieval ACL, tenant filtering, "
+            "prompt injection documents, tool gating, PII redaction, eval set, human review, and monitoring."
+        ),
+    )
+
+    assert "RAG grounding and tool safety example" in selected
+    assert "Long-chain RAG grounding workflow example" in selected
+    assert "Long-chain multi-Builder example" in selected
+    assert "Support impersonation break-glass example" not in selected
+    assert "Sensitive export example" not in selected
+
+
+def test_alignment_relevant_examples_prompt_text_selects_breakglass_without_generic_support_false_positive() -> None:
+    assets = load_alignment_guidance_assets()
+
+    generic_support_selected = alignment_relevant_examples_prompt_text(
+        assets.examples,
+        context_text=(
+            "Build a customer support ticket dashboard with assignment, notes, SLA filters, and response templates. "
+            "Success means agents can triage tickets and managers can review queue health."
+        ),
+    )
+    breakglass_selected = alignment_relevant_examples_prompt_text(
+        assets.examples,
+        context_text=(
+            "Add support impersonation / break-glass admin access with approved ticket, customer consent, "
+            "supervisor approval, acting_as attribution, PII masking, revoke, expiry, tenant isolation, and audit proof."
+        ),
+    )
+
+    assert "Support impersonation break-glass example" not in generic_support_selected
+    assert "Support impersonation break-glass example" in breakglass_selected
+
+
+def test_alignment_relevant_examples_prompt_text_avoids_generic_audit_compliance_token_false_positives() -> None:
+    assets = load_alignment_guidance_assets()
+
+    support_dashboard_selected = alignment_relevant_examples_prompt_text(
+        assets.examples,
+        context_text=(
+            "Build a customer support ticket dashboard with assignment, notes, SLA filters, response templates, "
+            "queue health, and audit notes for manager review."
+        ),
+    )
+    token_analytics_selected = alignment_relevant_examples_prompt_text(
+        assets.examples,
+        context_text=(
+            "Build API token usage analytics showing token volume by customer, rate limits, anomaly monitoring, "
+            "audit export, and usage trends. This is not password reset or secret rotation."
+        ),
+    )
+    consent_selected = alignment_relevant_examples_prompt_text(
+        assets.examples,
+        context_text=(
+            "Build consent preference governance for marketing email, privacy consent, unsubscribe, audit trail, "
+            "data deletion request, and regional compliance."
+        ),
+    )
+    consent_merge_selected = alignment_relevant_examples_prompt_text(
+        assets.examples,
+        context_text=(
+            "Build consent preference governance where anonymous cookie consent can merge into the user's account "
+            "preference ledger after login."
+        ),
+    )
+
+    assert "Compliance audit trail example" not in support_dashboard_selected
+    assert "Async job queue example" not in support_dashboard_selected
+    assert "Incident remediation example" not in token_analytics_selected
+    assert "Password reset token lifecycle example" not in token_analytics_selected
+    assert "API key rotation lifecycle example" not in token_analytics_selected
+    assert "Tax calculation compliance example" not in consent_selected
+    assert "KYC AML sanctions screening example" not in consent_selected
+    assert "Consent preference governance example" in consent_selected
+    assert "Collaborative edit conflict example" not in consent_merge_selected
+    assert "Consent preference governance example" in consent_merge_selected
+
+
+def test_alignment_relevant_examples_prompt_text_still_selects_specific_audit_tax_password_incident_examples() -> None:
+    assets = load_alignment_guidance_assets()
+
+    password_reset_selected = alignment_relevant_examples_prompt_text(
+        assets.examples,
+        context_text="Implement password reset token lifecycle with expiry, single-use token, audit log, and account recovery.",
+    )
+    incident_selected = alignment_relevant_examples_prompt_text(
+        assets.examples,
+        context_text="Create incident remediation workflow with root cause analysis, postmortem, owner handoff, and regression guard evidence.",
+    )
+    tax_selected = alignment_relevant_examples_prompt_text(
+        assets.examples,
+        context_text="Implement tax calculation for VAT and sales tax jurisdiction rules with invoice reconciliation proof.",
+    )
+    audit_selected = alignment_relevant_examples_prompt_text(
+        assets.examples,
+        context_text="Build immutable audit log and audit trail retention for compliance audit review.",
+    )
+    async_job_selected = alignment_relevant_examples_prompt_text(
+        assets.examples,
+        context_text="Build an async job queue with background job retry, queue worker visibility, and dead-letter handling.",
+    )
+    collaborative_edit_selected = alignment_relevant_examples_prompt_text(
+        assets.examples,
+        context_text="Build collaborative editing with same-paragraph merge conflict handling and offline replay.",
+    )
+
+    assert "Password reset token lifecycle example" in password_reset_selected
+    assert "Incident remediation example" in incident_selected
+    assert "Tax calculation compliance example" in tax_selected
+    assert "Compliance audit trail example" in audit_selected
+    assert "Async job queue example" in async_job_selected
+    assert "Collaborative edit conflict example" in collaborative_edit_selected
+
+
+def test_alignment_relevant_examples_prompt_text_selects_run_evidence_improvement_example() -> None:
+    assets = load_alignment_guidance_assets()
+
+    selected = alignment_relevant_examples_prompt_text(
+        assets.examples,
+        context_text=(
+            "Improve this Loop from run evidence: GateKeeper found weak browser journey proof, "
+            "missing refund audit reconciliation, and residual risk without owner."
+        ),
+    )
+
+    assert "Improvement from run evidence example" in selected
+    assert "Payment webhook reconciliation example" in selected
+    assert "Compliance audit trail example" in selected
+    assert "Improvement from vague refactor critique example" not in selected
+
+
+def test_alignment_relevant_examples_prompt_text_selects_vague_refactor_only_for_refactor_feedback() -> None:
+    assets = load_alignment_guidance_assets()
+
+    selected = alignment_relevant_examples_prompt_text(
+        assets.examples,
+        context_text="这份 Loop 太保守，不够重构，帮我改激进一点。",
+    )
+
+    assert "Improvement from vague refactor critique example" in selected
+    assert "Improvement from run evidence example" not in selected
+
 # Merged from test_alignment_prompt_text_rendering.py
-from loopora.service_alignment_prompting import build_alignment_prompt_text
+from loopora.service_alignment_prompting import alignment_relevant_examples_prompt_text, build_alignment_prompt_text
 
 
 def test_build_alignment_prompt_text_renders_repair_context_and_redacts_session_values() -> None:

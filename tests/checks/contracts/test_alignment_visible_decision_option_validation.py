@@ -48,6 +48,30 @@ def test_alignment_visible_decision_options_accept_complete_custom_choice_set() 
     assert _visible_option_ids(clarifying_output(*complete_custom_choices())) == ["evidence_path", "speed_path"]
 
 
+def test_alignment_visible_decision_options_canonicalize_not_fit_custom_choices() -> None:
+    output = clarifying_output(
+        custom_choice(
+            "end_loopora_plan",
+            recommended=True,
+            description="这是一次性小修，一次 Agent pass 加现有检查足够。",
+        ),
+        custom_choice(
+            "redefine_as_loop",
+            recommended=False,
+            description="如果后续轮次会产生新证据，再重新定义为 Loop。",
+        ),
+    )
+    output["assistant_message"] = "不适合 Loopora：这是一次性任务，不需要后续轮次。"
+    output["readiness_checklist"] = {"loop_fit": False}
+    output["readiness_evidence"] = {
+        "loop_fit": "一次 Agent 执行加一次人工 review 足够。",
+        "workflow_shape": "后续轮次不会产生新证据、新交接或新裁决。",
+        "execution_strategy": "直接处理一次并运行现有检查即可。",
+    }
+
+    assert _visible_option_ids(output, prefers_chinese=True) == ["skip_loop", "still_compile"]
+
+
 def test_alignment_visible_decision_options_use_stage_specific_choice_sets() -> None:
     assert _visible_option_ids(
         {"alignment_phase": "blocked", "assistant_message": "Not a fit."},

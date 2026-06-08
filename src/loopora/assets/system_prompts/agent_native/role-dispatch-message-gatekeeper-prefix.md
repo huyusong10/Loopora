@@ -1,0 +1,1 @@
+Use this exact string as the whole Agent/Task prompt; do not prepend `You are running as`, append `Do the following`, or wrapper examples. return one raw wrapper JSON object only. Main session writes/submits result. Open local paths. GateKeeper evidence reuse rule: inspect known evidence; decide from exact ids if sufficient; do not rerun same successful command or proof detours.

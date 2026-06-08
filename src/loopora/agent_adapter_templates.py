@@ -14,9 +14,11 @@ from loopora.agent_adapter_entry_templates import (
     opencode_loopora_gen_command as _entry_opencode_loopora_gen_command,
     opencode_loopora_loop_command as _entry_opencode_loopora_loop_command,
 )
+from loopora.agent_adapter_claude_hook import CLAUDE_SESSION_CONTEXT_RELATIVE_PATH
 from loopora.agent_adapter_run_contract import agent_native_loop_body as _entry_agent_native_loop_body
 from loopora.agent_adapter_host_config import (
     CLAUDE_SESSION_HOOK_RELATIVE_PATH,
+    claude_session_additional_context as _claude_session_additional_context,
     claude_session_hook_script as _claude_session_hook_script,
 )
 from loopora.agent_adapter_role_contracts import (
@@ -24,6 +26,7 @@ from loopora.agent_adapter_role_contracts import (
     role_agent_description,
 )
 from loopora.service_types import LooporaError
+from loopora.system_prompt_assets import render_system_prompt_asset
 
 ADAPTER_MANAGED_SCHEMA_VERSION = 3
 ADAPTER_VERSION = 73
@@ -89,6 +92,7 @@ def _claude_managed_templates() -> dict[str, str]:
             marker=CLAUDE_MANAGED_MARKER,
             version=CLAUDE_ADAPTER_VERSION,
         ),
+        CLAUDE_SESSION_CONTEXT_RELATIVE_PATH: _claude_session_additional_context(),
         ".claude/agents/loopora-builder.md": _claude_role_agent("builder"),
         ".claude/agents/loopora-inspector.md": _claude_role_agent("inspector"),
         ".claude/agents/loopora-gatekeeper.md": _claude_role_agent("gatekeeper"),
@@ -115,14 +119,12 @@ def _opencode_managed_templates() -> dict[str, str]:
 
 
 def _codex_role_agent(role: str) -> str:
-    return f"""# {MANAGED_MARKER} version={CODEX_ADAPTER_VERSION} role={role}
-
-name = "loopora-{role}"
-description = "{role_agent_description(role)}"
-developer_instructions = \"\"\"
-{role_agent_body(role).rstrip()}
-\"\"\"
-"""
+    return _render_managed_role_agent(
+        "agent_native/managed-role-codex.md",
+        role=role,
+        marker=MANAGED_MARKER,
+        version=CODEX_ADAPTER_VERSION,
+    )
 
 
 def _claude_role_frontmatter(role: str) -> str:
@@ -137,18 +139,13 @@ maxTurns: 12"""
 
 
 def _claude_role_agent(role: str) -> str:
-    return f"""---
-name: loopora-{role}
-description: "{role_agent_description(role)}"
-{_claude_role_frontmatter(role)}
----
-
-<!-- {CLAUDE_MANAGED_MARKER} version={CLAUDE_ADAPTER_VERSION} role={role} -->
-
-# Loopora {role.capitalize() if role != "gatekeeper" else "GateKeeper"}
-
-{role_agent_body(role)}
-"""
+    return _render_managed_role_agent(
+        "agent_native/managed-role-claude.md",
+        role=role,
+        marker=CLAUDE_MANAGED_MARKER,
+        version=CLAUDE_ADAPTER_VERSION,
+        frontmatter=_claude_role_frontmatter(role),
+    )
 
 
 def _opencode_role_frontmatter(role: str) -> str:
@@ -167,17 +164,35 @@ permission:
 
 
 def _opencode_role_agent(role: str) -> str:
-    return f"""---
-description: "{role_agent_description(role)}"
-{_opencode_role_frontmatter(role)}
----
+    return _render_managed_role_agent(
+        "agent_native/managed-role-opencode.md",
+        role=role,
+        marker=OPENCODE_MANAGED_MARKER,
+        version=OPENCODE_ADAPTER_VERSION,
+        frontmatter=_opencode_role_frontmatter(role),
+    )
 
-<!-- {OPENCODE_MANAGED_MARKER} version={OPENCODE_ADAPTER_VERSION} role={role} -->
 
-# Loopora {role.capitalize() if role != "gatekeeper" else "GateKeeper"}
-
-{role_agent_body(role)}
-"""
+def _render_managed_role_agent(
+    asset_ref: str,
+    *,
+    role: str,
+    marker: str,
+    version: int,
+    frontmatter: str = "",
+) -> str:
+    return render_system_prompt_asset(
+        asset_ref,
+        {
+            "marker": marker,
+            "version": version,
+            "role": role,
+            "description": role_agent_description(role),
+            "frontmatter": frontmatter,
+            "label": role.capitalize() if role != "gatekeeper" else "GateKeeper",
+            "body": role_agent_body(role).rstrip(),
+        },
+    )
 
 
 def _agent_native_loop_body(*, adapter: str, marker_source: str, context_arg: str = "") -> str:

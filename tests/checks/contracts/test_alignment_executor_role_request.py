@@ -64,4 +64,5 @@ def test_alignment_executor_role_request_projects_session_runtime_boundary(tmp_p
         "session_ref": {"session_id": "native-123", "provider": "claude"},
         "invocation_id": "0007",
         "prefers_chinese": True,
+        "display_language": "",
     }

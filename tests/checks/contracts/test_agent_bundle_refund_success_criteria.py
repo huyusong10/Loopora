@@ -16,7 +16,7 @@ def test_agent_bundle_candidate_rejects_explicit_success_criteria_missing_from_r
     service = service_factory(scenario="success")
     bundle = yaml.safe_load(alignment_bundle_yaml(str(sample_workdir.resolve())))
     bundle["spec"]["markdown"] = bundle["spec"]["markdown"].replace(
-        "Ship the focused starter experience in the target workdir with small, maintainable changes that preserve the primary user flow.",
+        "Ship the focused starter experience for the target user in the target workdir with small, maintainable changes that preserve the primary user-facing flow.",
         "Ship the refund approval path so Support admin can approve a refund and audit log records the actor.",
     )
     bundle_file = tmp_path / "bundle.yml"
@@ -75,7 +75,7 @@ def test_agent_bundle_candidate_accepts_explicit_success_criteria_in_runtime_sur
     service = service_factory(scenario="success")
     bundle = yaml.safe_load(alignment_bundle_yaml(str(sample_workdir.resolve())))
     bundle["spec"]["markdown"] = bundle["spec"]["markdown"].replace(
-        "Ship the focused starter experience in the target workdir with small, maintainable changes that preserve the primary user flow.",
+        "Ship the focused starter experience for the target user in the target workdir with small, maintainable changes that preserve the primary user-facing flow.",
         (
             "Ship the refund approval path so Support admin can approve a refund, audit log records the actor, "
             "and the customer receives an email notification."

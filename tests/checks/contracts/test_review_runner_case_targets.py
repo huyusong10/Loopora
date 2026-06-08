@@ -18,7 +18,7 @@ def test_default_path_language_case_keeps_hint_scope_on_default_surfaces() -> No
     hint_terms = target_terms(targets["expert-language-hints"])
 
     assert "src/loopora/assets/alignment/product-primer.md" in text_globs
-    assert "src/loopora/assets/alignment/system-prompt.md" in text_globs
+    assert "src/loopora/assets/system_prompts/alignment/web-alignment-agent.md" in text_globs
     assert "README.md" in text_globs
     assert "README.zh-CN.md" in text_globs
     assert "src/loopora/templates/partials/*.html" in text_globs
@@ -64,7 +64,7 @@ def test_concept_coherence_case_keeps_core_concepts_out_of_drift_hints() -> None
     assert "judgment" not in drift_terms
     assert "GateKeeper" not in drift_terms
     assert "design/contracts.md" in source_globs
-    assert "src/loopora/assets/alignment/system-prompt.md" in source_globs
+    assert "src/loopora/assets/system_prompts/alignment/web-alignment-agent.md" in source_globs
     assert "design/detailed-design/08-bundles-and-alignment.md" not in source_globs
     assert "design/detailed-design/10-agent-adapters.md" not in source_globs
     assert plan_run_globs == {"design/contracts.md"}
@@ -92,6 +92,7 @@ def test_agent_native_case_keeps_core_concepts_out_of_shortcut_hints() -> None:
     assert ".loopora/real-probes/**/*phase-report.json" in risk_globs
     assert "design/contracts.md" in handbook_globs
     assert "design/decisions/agent-native-execution-plane.md" in handbook_globs
+    assert "src/loopora/assets/system_prompts/agent_native/*.md" in handbook_globs
     assert "tests/probes/real_environment/README.md" in handbook_globs
     assert "tests/probes/real_environment/test_real_agent_adapter_probe.py" in handbook_globs
     assert targets["agent-native-handbook"]["max_bytes_per_file"] >= AGENT_NATIVE_HANDBOOK_MIN_BYTES_PER_FILE

@@ -77,6 +77,9 @@ loopora = [
   "assets/prompts/*.md",
   "assets/spec_practices/*.md",
   "assets/alignment/*.md",
+  "assets/alignment/*.json",
+  "assets/alignment/*.yml",
+  "assets/system_prompts/**/*.md",
 ]
 
 [tool.pytest.ini_options]

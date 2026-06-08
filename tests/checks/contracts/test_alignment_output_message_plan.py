@@ -50,6 +50,7 @@ def test_alignment_output_message_plan_blocks_stage_error_before_bundle_handling
             "bundle_yaml": "version: 1\n",
         },
         stage_error="需要先确认协议。",
+        stage_missing_items=["agreement_summary"],
         missing_items=["agreement_summary"],
         prefers_chinese=True,
     )
@@ -59,6 +60,6 @@ def test_alignment_output_message_plan_blocks_stage_error_before_bundle_handling
     assert plan.missing_items is None
     assert plan.has_bundle_for_options is False
     assert plan.event_type == "alignment_stage_blocked"
-    assert plan.event_payload == {"status": "waiting_user", "error": "需要先确认协议。"}
+    assert plan.event_payload == {"status": "waiting_user", "error": "需要先确认协议。", "missing": ["agreement_summary"]}
     assert plan.force_needs_user_input is True
     assert plan.use_default_decision_options is True

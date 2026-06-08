@@ -9,6 +9,7 @@ from loopora.agent_native_coverage_summary import (
 )
 from loopora.agent_native_next_step_sections import (
     action_policy_summary as _action_policy_summary,
+    agent_dispatch_next_summary as _agent_dispatch_next_summary,
     agent_dispatch_unavailable_summary as _agent_dispatch_unavailable_summary,
 )
 from loopora.agent_native_step_view_paths import agent_native_step_contract_path_text as _agent_native_step_contract_path_text
@@ -25,6 +26,7 @@ from loopora.cli_agent_current_step_evidence_output import (
 from loopora.cli_agent_current_step_iteration_output import print_agent_iteration_context as _print_agent_iteration_context
 from loopora.cli_summary_helpers import clip as _clip
 from loopora.cli_summary_helpers import non_bool_int as _non_bool_int
+from loopora.system_prompt_assets import load_system_prompt_asset
 
 
 def _print_agent_current_step(next_step: dict) -> None:
@@ -60,9 +62,7 @@ def _print_agent_current_step(next_step: dict) -> None:
                 f"and repair with {repair_command} before dispatching this role"
             )
         else:
-            typer.echo(
-                f"dispatch_next: invoke {target_agent} with the next context and step contract paths below; do not perform this role inline"
-            )
+            typer.echo(f"dispatch_next: {_agent_dispatch_next_summary(role_dispatch)}")
             _print_agent_native_dispatch_contract(next_step, target_agent)
     _print_agent_native_todo(next_step.get("native_todo"))
     _print_agent_continuation(next_step.get("continuation"))
@@ -150,15 +150,10 @@ def _print_agent_current_step_submit_hint(submit_hint: dict) -> None:
         typer.echo(f"result_file_to_write: {result_file_path}")
     if result_template_path or result_contract:
         if result_file_path:
-            typer.echo(
-                "result_template_fill: in the main Agent session, open the template, save a filled copy to result_file_to_write, "
-                "replace null placeholders in result, keep loopora_host_dispatch, then submit"
-            )
+            template_fill = load_system_prompt_asset("agent_native/result-template-fill-save-copy.md").strip()
         else:
-            typer.echo(
-                "result_template_fill: in the main Agent session, open the template, replace null placeholders in result, "
-                "keep loopora_host_dispatch, then submit the filled copy"
-            )
+            template_fill = load_system_prompt_asset("agent_native/result-template-fill-submit-copy.md").strip()
+        typer.echo(f"result_template_fill: {template_fill}")
     result_outbox_dir = str(submit_hint.get("result_outbox_absolute_dir") or submit_hint.get("result_outbox_dir") or "").strip()
     if result_outbox_dir:
         typer.echo(f"result_outbox_dir: {result_outbox_dir}")

@@ -249,6 +249,7 @@ def test_cli_agent_adapter_check_validates_opencode_role_permission_boundary(tmp
 
 # Merged from test_agent_adapter_entry_template_architecture.py
 from agent_adapter_architecture_test_support import (
+    REPO_ROOT,
     assert_design_mentions,
     assert_markers_absent,
     assert_markers_present,
@@ -260,8 +261,13 @@ def test_agent_adapter_templates_delegate_shared_entry_contracts() -> None:
     templates_source = loopora_source("agent_adapter_templates")
     contracts_source = loopora_source("agent_adapter_entry_contracts")
     run_contract_source = loopora_source("agent_adapter_run_contract")
-    entry_sections_source = loopora_source("agent_adapter_entry_sections")
     entry_templates_source = loopora_source("agent_adapter_entry_templates")
+    plan_contract_asset = (
+        REPO_ROOT / "src" / "loopora" / "assets" / "system_prompts" / "agent_native" / "plan-contract.md"
+    ).read_text(encoding="utf-8")
+    run_contract_asset = (
+        REPO_ROOT / "src" / "loopora" / "assets" / "system_prompts" / "agent_native" / "run-contract.md"
+    ).read_text(encoding="utf-8")
     contract_markers = (
         "def agent_plan_contract",
         "def agent_recovery_matrix",
@@ -283,25 +289,27 @@ def test_agent_adapter_templates_delegate_shared_entry_contracts() -> None:
     assert "from loopora.agent_adapter_entry_contracts import" in templates_source
     assert "from loopora.agent_adapter_run_contract import agent_native_loop_body" in templates_source
     assert "from loopora.agent_adapter_entry_templates import" in templates_source
+    assert "from loopora.system_prompt_assets import" in contracts_source
+    assert "from loopora.system_prompt_assets import" in run_contract_source
+    assert "from loopora.system_prompt_assets import" in entry_templates_source
     assert "def managed_templates" in templates_source
     assert_markers_present(contracts_source, contract_markers)
     assert_markers_absent(templates_source, contract_markers)
     assert_markers_present(run_contract_source, run_contract_markers)
     assert_markers_absent(contracts_source, run_contract_markers)
     assert_markers_absent(templates_source, run_contract_markers)
-    assert "def render_adapter_entry_sections" in entry_sections_source
-    assert "from loopora.agent_adapter_entry_sections import" in contracts_source
-    assert "from loopora.agent_adapter_entry_sections import" in run_contract_source
     assert_markers_present(entry_templates_source, entry_template_markers)
     assert_markers_absent(templates_source, entry_template_markers)
-    assert "## Detailed Contract" in contracts_source
-    assert "## Detailed Contract" in run_contract_source
+    assert "Enter Loopora's planning stage" not in contracts_source
+    assert "Enter Loopora's run stage" not in run_contract_source
+    assert "Enter Loopora's planning stage" in plan_contract_asset
+    assert "Enter Loopora's run stage" in run_contract_asset
     assert "## Detailed Contract" not in entry_templates_source
     assert "## Detailed Contract" not in templates_source
     assert_design_mentions(
+        "system_prompt_assets.py",
         "agent_adapter_entry_contracts.py",
         "agent_adapter_run_contract.py",
-        "agent_adapter_entry_sections.py",
         "agent_adapter_entry_templates.py",
     )
 

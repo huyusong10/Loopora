@@ -28,7 +28,7 @@ def test_bundle_detail_diagnostic_projection_remains_available(service_factory, 
 
     assert governance["success_surface"]
     assert governance["loop_fit_reasons"]
-    assert any("primary user flow is understandable" in item for item in governance["success_surface"])
+    assert any("target user can complete the primary flow" in item for item in governance["success_surface"])
     assert governance["gatekeeper"]["enabled"] is True
 
 

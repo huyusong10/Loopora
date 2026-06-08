@@ -7,10 +7,18 @@ import typer
 from loopora.agent_adapters import adapter_first_task_message_example, resolve_adapter_project_root
 from loopora.agent_native_surface import agent_native_run_surface_for_result, native_surface_plain_lines
 from loopora.cli_agent_runtime_support import agent_plan_cli_command
+from loopora.system_prompt_assets import load_system_prompt_asset
+
+
+PLAN_MESSAGE_SOURCE_POLICY = load_system_prompt_asset("agent_native/plan-message-source-policy.md").strip()
+PLAN_QUESTION_DECISION_IMPACT = load_system_prompt_asset("agent_native/plan-question-decision-impact.md").strip()
+PLAN_QUESTION_NATIVE_TOOL_POLICY = load_system_prompt_asset("agent_native/plan-question-native-tool-policy.md").strip()
+PLAN_QUESTION_SUBAGENT_POLICY = load_system_prompt_asset("agent_native/plan-question-subagent-policy.md").strip()
+PLAN_MESSAGE_REQUIRED_NEXT = load_system_prompt_asset("agent_native/plan-message-required-next.md").strip()
 
 
 def agent_plan_error_requires_message(error: str) -> bool:
-    return "--message task summary" in error
+    return "--message task summary" in error or "--message task context" in error
 
 
 def agent_plan_message_required_result(
@@ -32,10 +40,10 @@ def agent_plan_message_required_result(
         "workdir": str(root),
         "ready": False,
         "loop_recovery": "plan_message_required",
-        "message": "A non-empty task summary is required before /loopora-plan can create or review a Loop preview.",
+        "message": "A non-empty task context is required before /loopora-plan can create or review a Loop preview.",
         **context_request,
         "next_plan_command": "/loopora-plan",
-        "next": "Ask the user the ask_user question, then rerun /loopora-plan with the user's task context.",
+        "next": PLAN_MESSAGE_REQUIRED_NEXT,
     }
 
 
@@ -54,10 +62,7 @@ def agent_plan_context_guidance_fields(
     )
     return {
         **agent_plan_context_request_fields(),
-        "message_source_policy": (
-            "If the current host user prompt already contains the goal, fake-done risks, required evidence, "
-            "and judgment tradeoffs, use that prompt as --message instead of asking again."
-        ),
+        "message_source_policy": PLAN_MESSAGE_SOURCE_POLICY,
         "message_cli_command": message_cli_command,
         "next_plan_cli_command": message_cli_command,
         "task_message_template": "Goal: ...; Fake-done risks: ...; Required evidence: ...; Judgment tradeoffs: ...",
@@ -89,15 +94,9 @@ def agent_plan_context_request_fields() -> dict:
             "target": "main_agent_session",
             "prompt": ask_user,
             "recommended_reply_shape": "Goal: ...; Fake-done risks: ...; Required evidence: ...; Judgment tradeoffs: ...",
-            "decision_impact": (
-                "This answer decides the Loop's task contract, evidence strategy, GateKeeper strictness, "
-                "and whether Loopora is a better fit than one direct Agent pass."
-            ),
-            "native_tool_policy": (
-                "Use the host's official user-question or follow-up capability when available; "
-                "otherwise ask this question in the main chat."
-            ),
-            "subagent_policy": "Do not ask user questions from a role subagent; collect missing judgment in the parent Agent session.",
+            "decision_impact": PLAN_QUESTION_DECISION_IMPACT,
+            "native_tool_policy": PLAN_QUESTION_NATIVE_TOOL_POLICY,
+            "subagent_policy": PLAN_QUESTION_SUBAGENT_POLICY,
         },
         "example_user_reply": (
             "Build the account-deletion audit flow; fake done would be UI-only deletion or missing provider-failure handling; "

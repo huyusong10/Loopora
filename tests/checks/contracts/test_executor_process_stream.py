@@ -120,6 +120,74 @@ def test_stream_process_terminates_child_when_line_handler_fails(tmp_path: Path)
     assert terminated_pids == [child_pids[0]]
 
 
+def test_stream_process_ignores_codex_loader_warnings_for_idle_timeout(tmp_path: Path) -> None:
+    child_pids: list[int | None] = []
+    terminated_pids: list[int] = []
+    lines: list[str] = []
+
+    with pytest.raises(ProcessStreamIdleTimeoutError, match="produced no output"):
+        stream_process(
+            context=ProcessStreamContext(
+                run_id="run_test",
+                role="tester",
+                workdir=tmp_path,
+                idle_timeout_seconds=0.35,
+            ),
+            args=[
+                sys.executable,
+                "-c",
+                (
+                    "import time\n"
+                    "for _ in range(20):\n"
+                    "    print('2026-06-07T16:19:50Z  WARN codex_core_skills::loader: "
+                    "ignoring interface.icon_large: icon path must not contain ..', flush=True)\n"
+                    "    time.sleep(0.1)\n"
+                ),
+            ],
+            command_event_payload={"type": "command", "message": "python"},
+            callbacks=ProcessStreamCallbacks(
+                emit_event=lambda _event_type, _payload: None,
+                should_stop=lambda: False,
+                set_child_pid=child_pids.append,
+                line_handler=lines.append,
+                terminate_process=terminate_process_recorder(terminated_pids),
+            ),
+        )
+
+    assert lines
+    assert child_pids[0] is not None
+    assert child_pids[-1] is None
+    assert terminated_pids == [child_pids[0]]
+
+
+def test_stream_process_can_write_prompt_through_stdin(tmp_path: Path) -> None:
+    child_pids: list[int | None] = []
+    lines: list[str] = []
+
+    return_code = stream_process(
+        context=process_stream_context(tmp_path),
+        args=[
+            sys.executable,
+            "-c",
+            "import sys; print(sys.stdin.read(), flush=True)",
+        ],
+        command_event_payload={"type": "command", "message": "python -"},
+        callbacks=ProcessStreamCallbacks(
+            emit_event=lambda _event_type, _payload: None,
+            should_stop=lambda: False,
+            set_child_pid=child_pids.append,
+            line_handler=lines.append,
+            terminate_process=terminate_process_recorder([]),
+        ),
+        stdin_text="prompt over stdin",
+    )
+
+    assert return_code == 0
+    assert lines == ["prompt over stdin"]
+    assert child_pids[0] is not None
+    assert child_pids[-1] is None
+
+
 def process_stream_context(tmp_path: Path) -> ProcessStreamContext:
     return ProcessStreamContext(run_id="run_test", role="tester", workdir=tmp_path, idle_timeout_seconds=None)
 

@@ -1,0 +1,1 @@
+Every coverage_results.target_id must be copied exactly from loopora_result_contract.coverage_target_ids or active judgment_contract.coverage_targets[].id; do not invent or rename coverage target IDs.

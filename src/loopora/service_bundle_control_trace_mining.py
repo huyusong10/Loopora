@@ -7,6 +7,7 @@ import re
 from loopora.alignment_semantics import loop_fit_governance_trace
 from loopora.residual_risk_support import residual_risk_is_unmanaged
 from loopora.service_bundle_control_local_governance import (
+    local_governance_candidate_chain_complete,
     local_governance_markers_present as local_governance_markers_present_for_candidates,
     local_governance_runtime_chain_complete as local_governance_runtime_chain_complete,
     select_local_governance_trace,
@@ -106,16 +107,11 @@ def build_runtime_local_governance_trace(
         strategy_source=strategy_source,
         workflow=workflow,
     )
-    traces = _local_governance_trace(
-        bundle={},
-        raw_sections=raw_sections_payload,
-        roles=role_items,
-        strategy_source=strategy_payload,
-        runtime_only=True,
-    )
-    if not local_governance_runtime_chain_complete(traces):
+    source = _trace_text_source(bundle={}, raw_sections=raw_sections_payload, roles=role_items, strategy_source=strategy_payload)
+    candidates = _local_governance_runtime_candidates(source)
+    if not local_governance_candidate_chain_complete(candidates):
         return []
-    return traces
+    return select_local_governance_trace(candidates)
 
 
 def build_loop_fit_trace(collaboration_summary: object = "") -> list[str]:
@@ -151,6 +147,8 @@ def _judgment_tradeoff_trace(
 
 
 def _tradeoff_trace_priority(text: str) -> int:
+    if re.search(r"\btradeoff\s*:|判断取舍\s*[:：]|取舍\s*[:：]", text, re.IGNORECASE):
+        return -1
     if any(re.search(pattern, text, re.IGNORECASE) for pattern in HIGH_SIGNAL_TRADEOFF_PATTERNS):
         return 0
     if re.search(r"\bprefer\b|优先|先于|高于", text, re.IGNORECASE):
@@ -193,6 +191,37 @@ def _local_governance_trace(
     return select_local_governance_trace(
         _trace_text_candidates(source, include_step_inputs=True, runtime_only=runtime_only)
     )
+
+
+def _local_governance_runtime_candidates(source: TraceTextSource) -> list[str]:
+    candidates = _role_context_trace_candidates(source.roles)
+    candidates.extend(_trace_text_candidates(source, include_step_inputs=True, runtime_only=True))
+    return candidates
+
+
+def _role_context_trace_candidates(roles: list[dict]) -> list[str]:
+    candidates: list[str] = []
+    for role in roles:
+        if not isinstance(role, dict):
+            continue
+        role_context = _role_context_label(role)
+        for field in ("posture_notes", "prompt_markdown", "description"):
+            role_source = str(role.get(field) or "").strip()
+            if not role_source:
+                continue
+            role_units = _trace_text_candidates(
+                _trace_text_source(bundle={}, raw_sections={}, roles=[{field: role_source}], strategy_source={})
+            )
+            candidates.extend(f"{role_context}: {unit}" for unit in role_units if str(unit or "").strip())
+    return candidates
+
+
+def _role_context_label(role: dict) -> str:
+    for field_name in ("name", "key", "archetype"):
+        label = str(role.get(field_name) or "").strip()
+        if label:
+            return label
+    return "role"
 
 
 def local_governance_markers_present(

@@ -38,7 +38,6 @@ from loopora.service_alignment_run_context import AlignmentRunContextResolverCon
 from loopora.service_alignment_run_recovery import (
     agent_recovery_agent_entry_candidate_event,
     agent_recovery_agent_entry_ready_event,
-    agent_recovery_session_has_candidate_yaml,
 )
 from loopora.service_alignment_session_creation import AlignmentSessionCreationContext, alignment_session_dir
 from loopora.service_alignment_session_lifecycle import AlignmentSessionLifecycleContext, alignment_thread_key
@@ -54,7 +53,7 @@ from loopora.service_alignment_status import ALIGNMENT_ACTIVE_STATUSES
 from loopora.service_alignment_sync import AlignmentSyncContext
 from loopora.service_alignment_transcript import (
     AlignmentTranscriptContext,
-    localized_alignment_system_message_appender,
+    alignment_notice_appender,
 )
 from loopora.service_alignment_validation import AlignmentBundleTextValidationContext, alignment_validated_bundle_text_loader
 from loopora.service_alignment_workdir_context import (
@@ -207,22 +206,29 @@ class AlignmentServiceContextFactory:
         service = self.service
         return AlignmentSyncContext(
             get_session=service.get_alignment_session,
-            load_validated_bundle_text=self.bundle_text_loader(),
-            append_system_message=localized_alignment_system_message_appender(self.transcript_context()),
+            load_validated_bundle_text=self.sync_bundle_text_loader(),
+            append_notice_message=alignment_notice_appender(self.transcript_context()),
             bundle_lifecycle_context=self.bundle_lifecycle_context,
             build_preview=service._bundle_preview_payload,
         )
 
     def bundle_text_loader(self) -> Callable[[dict, str, list[str]], tuple[dict, str]]:
+        return alignment_validated_bundle_text_loader(AlignmentBundleTextValidationContext())
+
+    def sync_bundle_text_loader(self) -> Callable[[dict, str, list[str]], tuple[dict, str]]:
         service = self.service
-        return alignment_validated_bundle_text_loader(
-            AlignmentBundleTextValidationContext(
-                has_agent_candidate_yaml=lambda session_id: agent_recovery_session_has_candidate_yaml(
-                    service.repository,
-                    session_id,
-                ),
+
+        def load_bundle(session: dict, bundle_yaml: str, semantic_issues: list[str]) -> tuple[dict, str]:
+            candidate_event = agent_recovery_agent_entry_candidate_event(service.repository, str(session.get("id") or ""))
+            payload = candidate_event.get("payload") if isinstance(candidate_event.get("payload"), dict) else {}
+            has_agent_candidate_yaml = payload.get("has_candidate_yaml") is True
+            context = AlignmentBundleTextValidationContext(
+                include_agent_candidate_loop_fit_contradiction=has_agent_candidate_yaml,
+                include_agent_candidate_contract_issues=has_agent_candidate_yaml,
             )
-        )
+            return alignment_validated_bundle_text_loader(context)(session, bundle_yaml, semantic_issues)
+
+        return load_bundle
 
     def session_lifecycle_context(self) -> AlignmentSessionLifecycleContext:
         service = self.service

@@ -1,0 +1,9 @@
+Codex native dispatch guidance:
+- When using Codex `spawn_agent`, set `agent_type` to the exact `role_dispatch.target_agent` and omit `fork_context`; do not combine a custom agent type with a full-history fork.
+- Pass only the step/context/template paths plus compact anchors such as coverage target IDs, action policy, required coverage status, known evidence IDs, and relevant artifact paths to the role agent. Tell it to open local paths for the full prompt, output schema, judgment contract, evidence rules, and known evidence details. Do not pass the full conversation, full CLI JSON, full run payload, large file contents, full schemas, full evidence ledger rows, or unrelated run history.
+- Ask the role agent to return the required raw JSON object directly, with no Markdown fence or prose. The main session writes the Loopora submit wrapper after the role returns; do not ask the role agent to save outbox result files. Prefer empty proof arrays over creating extra proof files unless the step contract requires an artifact.
+- Use Codex's official todo/progress-list capability when available to create or update the current Loopora handoff, but never cite the todo list as evidence.
+- If Codex exposes a `spawn_agent` trace or tool-call id, copy it into `loopora_host_dispatch.native_trace`; otherwise leave the optional trace fields empty.
+- Treat Codex todo/progress, native trace, and host status as experience projection only; Loopora proof still comes only from submitted evidence refs, coverage, and task verdict.
+- Wait for the role agent with a bounded timeout that is shorter than the surrounding command timeout. If native dispatch cannot complete, report that as unavailable instead of waiting indefinitely or submitting inline work.
+- If the role agent returns no wrapper or no structured output, report native dispatch output unavailable and stop before submit.

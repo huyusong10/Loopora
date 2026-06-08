@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any
 
 from loopora.agent_adapters import agent_loop_command, agent_loop_json_command
-from loopora.agent_native_next_step_sections import agent_next_step_continuation_summary
+from loopora.agent_native_next_step_sections import agent_dispatch_next_summary, agent_next_step_continuation_summary
 from loopora.agent_native_surface import attach_native_run_surface
 from loopora.agent_native_task_proof import agent_task_proof_summary
 from loopora.run_takeaway_judgment import build_judgment_contract
@@ -115,9 +115,7 @@ def agent_loop_summary(adapter: str, run: dict[str, Any], run_result: dict[str, 
     }
     attach_native_run_surface(summary, adapter=adapter)
     if target_agent and role_dispatch.get("target_agent_config_exists") is not False:
-        summary["dispatch_next"] = (
-            f"invoke {target_agent} with the next context and step contract paths below; do not perform this role inline"
-        )
+        summary["dispatch_next"] = agent_dispatch_next_summary(role_dispatch)
     native_todo = next_step.get("native_todo") if isinstance(next_step.get("native_todo"), dict) else {}
     if native_todo:
         summary["native_todo"] = native_todo

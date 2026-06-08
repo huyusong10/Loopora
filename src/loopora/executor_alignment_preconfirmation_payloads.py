@@ -115,9 +115,9 @@ def _alignment_preconfirmation_agreement_payload_for_scenario(
 ) -> dict:
     if is_improvement and scenario != "alignment_improvement_missing_delta":
         payload = alignment_chinese_improvement_agreement_response() if prefers_chinese else alignment_improvement_agreement_response()
-    elif scenario == "alignment_chinese_refund_agreement_generic_bundle":
+    elif scenario in {"alignment_chinese_refund_agreement_generic_bundle", "alignment_chinese_refund_agreement_repair_bundle"}:
         payload = alignment_chinese_refund_agreement_response()
-    elif scenario == "alignment_refund_agreement_generic_bundle":
+    elif scenario in {"alignment_refund_agreement_generic_bundle", "alignment_refund_agreement_repair_bundle"}:
         payload = alignment_refund_agreement_response()
     else:
         payload = alignment_chinese_agreement_response() if prefers_chinese else alignment_agreement_response()

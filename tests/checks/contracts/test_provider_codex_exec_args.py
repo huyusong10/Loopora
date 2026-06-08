@@ -12,6 +12,8 @@ def test_codex_exec_args_include_output_schema_and_reasoning(tmp_path: Path) -> 
     args = build_codex_exec_args(request, request.run_dir / "schema.json")
 
     assert args[:3] == ["codex", "exec", "--json"]
+    assert args[-1] == "-"
+    assert request.prompt not in args
     assert "--output-schema" in args
     assert "--output-last-message" in args
     assert "--model" in args
@@ -34,6 +36,8 @@ def test_codex_exec_args_omit_model_and_reasoning_when_blank(tmp_path: Path) -> 
     args = build_codex_exec_args(request, request.run_dir / "schema.json")
 
     assert args[:3] == ["codex", "exec", "--json"]
+    assert args[-1] == "-"
+    assert request.prompt not in args
     assert "--output-schema" in args
     assert "--output-last-message" in args
     assert "--model" not in args
@@ -69,4 +73,5 @@ def test_codex_exec_args_can_resume_previous_session_and_append_extra_args(tmp_p
     assert "--output-last-message" in args
     assert "--search" in args
     assert "--verbose" in args
-    assert args[-1] == "Return JSON only."
+    assert request.prompt not in args
+    assert args[-1] == "-"

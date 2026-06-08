@@ -71,6 +71,24 @@ def test_alignment_semantic_lint_requires_specific_task_contract(sample_workdir:
     assert "spec Task must describe the concrete user-facing task" in issues
 
 
+def test_alignment_semantic_lint_allows_specific_user_requested_task_contract(sample_workdir: Path) -> None:
+    bundle = load_bundle_text(alignment_bundle_yaml(str(sample_workdir.resolve())))
+    markdown = str(bundle["spec"]["markdown"])
+    bundle["spec"]["markdown"] = re.sub(
+        r"# Task\n\n.+?(?=\n\n# Done When)",
+        "# Task\n\n"
+        "User-requested task: migrate a SaaS subscription billing ledger from a legacy invoices table "
+        "to an event-sourced ledger while preserving Stripe webhook idempotency, refunds, chargebacks, "
+        "tax adjustments, payout reconciliation, audit export, and backward-compatible reporting.",
+        markdown,
+        flags=re.DOTALL,
+    )
+
+    issues = lint_alignment_bundle_semantics(bundle)
+
+    assert "spec Task must describe the concrete user-facing task" not in issues
+
+
 def test_alignment_semantic_lint_requires_done_when_checks(sample_workdir: Path) -> None:
     valid_bundle = load_bundle_text(alignment_bundle_yaml(str(sample_workdir.resolve())))
     assert "spec must include at least one Done When bullet" not in lint_alignment_bundle_semantics(valid_bundle)

@@ -16,6 +16,7 @@ targets:
     globs:
       - design/contracts.md
       - design/decisions/agent-native-execution-plane.md
+      - src/loopora/assets/system_prompts/agent_native/*.md
       - src/loopora/agent_adapter_role_contracts.py
       - tests/probes/real_environment/README.md
       - tests/probes/real_environment/test_real_agent_adapter_probe.py

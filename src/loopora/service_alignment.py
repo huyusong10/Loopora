@@ -22,6 +22,7 @@ from loopora.service_alignment_session_creation import create_alignment_session 
 from loopora.service_alignment_session_lifecycle import (
     cancel_alignment_session as cancel_alignment_session_lifecycle,
     start_alignment_session_async as start_alignment_session_lifecycle,
+    start_alignment_session_sync as start_alignment_session_sync_lifecycle,
 )
 from loopora.service_alignment_session_projection import (
     get_alignment_session as get_alignment_session_command,
@@ -66,6 +67,27 @@ class ServiceAlignmentMixin:
     def append_alignment_message(self, session_id: str, message: str) -> dict:
         return append_alignment_message_command(
             self._alignment_context_factory().message_context(),
+            session_id,
+            message,
+            active_statuses=ALIGNMENT_ACTIVE_STATUSES,
+            confirmed_stages=ALIGNMENT_CONFIRMED_STAGES,
+        )
+
+    def append_alignment_message_sync(self, session_id: str, message: str) -> dict:
+        context_factory = self._alignment_context_factory()
+        message_context = context_factory.message_context()
+        sync_message_context = message_context.__class__(
+            get_session=message_context.get_session,
+            transcript_context=message_context.transcript_context,
+            start_session_async=lambda target_session_id: start_alignment_session_sync_lifecycle(
+                context_factory.session_lifecycle_context(),
+                target_session_id,
+                active_statuses=ALIGNMENT_ACTIVE_STATUSES,
+            ),
+            now=message_context.now,
+        )
+        return append_alignment_message_command(
+            sync_message_context,
             session_id,
             message,
             active_statuses=ALIGNMENT_ACTIVE_STATUSES,

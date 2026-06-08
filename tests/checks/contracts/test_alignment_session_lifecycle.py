@@ -7,6 +7,7 @@ from loopora.service_alignment_session_lifecycle import (
     alignment_thread_key,
     cancel_alignment_session,
     start_alignment_session_async,
+    start_alignment_session_sync,
 )
 from loopora.service_types import LooporaConflictError
 
@@ -90,6 +91,32 @@ def test_start_alignment_session_lifecycle_updates_state_event_and_thread() -> N
     assert repo.events == [{"event_type": "alignment_started", "payload": {"status": "running"}}]
     assert threads["alignment:align_1"] is thread
     assert thread.started is True
+
+
+def test_start_alignment_session_sync_runs_without_background_thread() -> None:
+    repo = lifecycle_repo("align_sync", "idle", active_child_pid=123)
+    executed: list[str] = []
+    context, threads, thread, _diagnostic_events = lifecycle_context(repo)
+    context = AlignmentSessionLifecycleContext(
+        repository=context.repository,
+        get_session=context.get_session,
+        execute_session=executed.append,
+        threads=context.threads,
+        thread_key=context.thread_key,
+        append_diagnostic_event=context.append_diagnostic_event,
+        thread_factory=context.thread_factory,
+        signal_process=context.signal_process,
+    )
+
+    start_alignment_session_sync(context, "align_sync", active_statuses={"running", "validating"})
+
+    assert executed == ["align_sync"]
+    assert repo.session["status"] == "running"
+    assert repo.session["stop_requested"] is False
+    assert repo.session["active_child_pid"] is None
+    assert repo.events == [{"event_type": "alignment_started", "payload": {"status": "running"}}]
+    assert threads == {}
+    assert thread.started is False
 
 
 def test_alignment_thread_key_is_stable_worker_identity() -> None:

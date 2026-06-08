@@ -116,14 +116,109 @@ def long_chain_multi_builder_bundle(workdir: Path) -> dict:
 
     bundle["metadata"]["name"] = BUNDLE_NAME
     bundle["loop"]["name"] = BUNDLE_NAME
+    local_governance_sentence = (
+        " If AGENTS.md, design/README.md, design/, or tests/ are present, route those local governance "
+        "markers into Builder reading, Inspector verification, and GateKeeper Weak / Unproven / Blocking "
+        "treatment without inventing marker contents."
+    )
     bundle["collaboration_summary"] = (
         "Compile the search refactor into a long-chain workflow because query rewriting, retrieval, "
         "ranking, regression review, and evidence hardening each create distinct artifacts, handoffs, "
         "and proof targets. Future iterations stay anchored to these phase contracts as new evidence "
         "and blockers appear. GateKeeper must judge from phase evidence rather than only the final "
-        f"Builder story, separating {PHASE_EVIDENCE_LABELS} claims."
+        f"Builder story, separating {PHASE_EVIDENCE_LABELS} claims. Each final search claim must be "
+        "auditable through baseline artifacts, phase handoffs, command output or logs, and exact evidence IDs."
+        f"{local_governance_sentence}"
     )
-    bundle["role_definitions"] = [_role_definition(*spec) for spec in ROLE_SPECS]
+    bundle["spec"]["markdown"] = f"""# Task
+
+Roll out a search relevance improvement in phases: baseline the current behavior, implement query rewrite, retrieval, and ranking separately, then harden evidence before GateKeeper closure. Keep broad personalization, full search UI redesign, and unrelated tuning out of scope.
+
+# Done When
+
+- Baseline inspection pins the current behavior and the first reproducible proof path.
+- Query rewrite, retrieval, and ranking phases each leave distinct handoffs and exact evidence IDs.
+- Regression review compares phase evidence to the baseline and names {PHASE_EVIDENCE_LABELS} claims.
+- GateKeeper can audit baseline, phase, regression, and evidence-hardening handoffs before finishing.
+
+# Guardrails
+
+- Do not hide recall regressions behind ranking polish.
+- Keep each Builder scoped to its phase and preserve upstream phase contracts.
+- Treat local governance markers such as AGENTS.md, design/README.md, design/, or tests/ as runtime responsibilities when present.
+
+# Success Surface
+
+- A reviewer can trace each final search claim to baseline artifacts, phase handoffs, command output or logs, and exact evidence IDs.
+- GateKeeper can see which claims are Proven, Weak, Unproven, Blocking, or Residual risk before closure.
+
+# Fake Done
+
+- Do not pass a final ranking story with no baseline, phase proof, audit trail, command log, or evidence ID.
+- Do not pass when retrieval or recall risk is masked by top-result polish.
+- Do not pass unsupported query, retrieval, ranking, or regression claims.
+- Do not pass a happy-path-only search demo that leaves recall, retrieval, or phase evidence unverified.
+
+# Evidence Preferences
+
+- Prefer baseline artifacts, project-owned checks, command output or logs, exact evidence IDs, and phase handoffs.
+- Regression review should mark weak proof as Weak, unsupported claims as Unproven, closure blockers as Blocking, and accepted tuning leftovers as Residual risk.
+- Evidence-hardening work should repair missing proof only; it must not broaden product scope.
+
+# Residual Risk
+
+Minor tuning risk may remain only when labeled as Residual risk and assigned to a follow-up owner or acceptance path. Missing baseline evidence, unproven recall regressions, unsupported phase claims, skipped local governance, or missing audit / log evidence must fail closed.
+
+# Role Notes
+
+## Search Baseline Inspector Notes
+
+Pin current behavior before implementation, identify the first reproducible proof path, and mark unsupported baseline claims as Unproven.
+
+## Query Rewrite Builder Notes
+
+Implement only query rewrite behavior from the baseline handoff, preserve upstream evidence IDs, and leave a narrow handoff for retrieval work.
+
+## Retrieval Builder Notes
+
+Implement only retrieval behavior from the query handoff, preserve query contracts, and leave retrieval evidence that regression review can audit.
+
+## Ranking Builder Notes
+
+Implement only ranking behavior from retrieval evidence, avoid masking recall regressions, and expose Weak or Unproven proof plainly.
+
+## Search Regression Inspector Notes
+
+Compare query, retrieval, and ranking handoffs against the baseline, verify local governance obligations when present, and mark regressions or missing proof as Blocking.
+
+## Evidence Hardening Builder Notes
+
+Add only proof harness, command output, logs, or artifact links requested by regression review; do not widen search behavior.
+
+## Search Evidence GateKeeper Notes
+
+Finish only when baseline, phase, regression, local-governance, and evidence-hardening handoffs prove the task contract; fail closed on Blocking gaps or unmanaged Residual risk.
+"""
+    role_definitions = []
+    for spec in ROLE_SPECS:
+        role = _role_definition(*spec)
+        if role["archetype"] == "builder":
+            role["prompt_markdown"] = role["prompt_markdown"].rstrip() + (
+                "\n\nBuilder reads AGENTS.md, design/README.md, design/, and tests/ before editing when present, "
+                "then preserves applicable obligations in the phase handoff instead of inventing marker contents.\n"
+            )
+        elif role["archetype"] == "inspector":
+            role["prompt_markdown"] = role["prompt_markdown"].rstrip() + (
+                "\n\nInspector verifies AGENTS.md, design/README.md, design/, and tests/ obligations against the result when present, "
+                "then classifies skipped obligations as Weak, Unproven, or Blocking.\n"
+            )
+        elif role["archetype"] == "gatekeeper":
+            role["prompt_markdown"] = role["prompt_markdown"].rstrip() + (
+                "\n\nGateKeeper treats skipped AGENTS.md, design/README.md, design/, or tests/ evidence as Weak, Unproven, or Blocking. "
+                "Treat missing audit/log evidence or uncited evidence IDs as Blocking unless explicitly accepted as managed Residual risk.\n"
+            )
+        role_definitions.append(role)
+    bundle["role_definitions"] = role_definitions
     bundle["workflow"] = {
         "version": 1,
         "preset": "",

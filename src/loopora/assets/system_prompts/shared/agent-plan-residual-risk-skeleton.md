@@ -1,0 +1,1 @@
+- Residual risk: only accepted risks that still remain after evidence is inspected; put verified baseline, fixture, artifact, or run-context facts in Evidence Preferences or GateKeeper evidence_claims, not in Residual Risk. Future-scope notes are not residual risk unless they name an accepted current-scope risk with an owner, follow-up, or acceptance path.

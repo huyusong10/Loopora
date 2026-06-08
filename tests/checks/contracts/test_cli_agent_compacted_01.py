@@ -106,6 +106,7 @@ def test_agent_plan_message_required_recovery_keeps_single_question_and_native_s
     )
 
     assert agent_plan_error_requires_message("missing --message task summary") is True
+    assert agent_plan_error_requires_message("missing --message task context") is True
     assert agent_plan_error_requires_message("different validation error") is False
     assert result["loop_recovery"] == "plan_message_required"
     assert result["required_inputs"] == ["task_goal", "fake_done_risks", "required_evidence", "judgment_tradeoffs"]

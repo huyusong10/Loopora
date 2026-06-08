@@ -8,8 +8,12 @@ from loopora.service_alignment_decision_options import (
     normalize_alignment_missing_items,
     visible_alignment_decision_options,
 )
-from loopora.service_alignment_language import alignment_generation_prefers_chinese, alignment_prefers_chinese
-from loopora.service_alignment_output_stage import alignment_output_bundle_stage_error
+from loopora.service_alignment_language import (
+    alignment_generation_display_language,
+    alignment_generation_prefers_chinese,
+    alignment_prefers_chinese,
+)
+from loopora.service_alignment_output_stage import alignment_output_bundle_stage_check
 from loopora.service_alignment_stage_messages import alignment_output_message_plan
 
 
@@ -52,8 +56,8 @@ def alignment_output_message_bundle_and_options(
         output.get("alignment_missing_items"),
         allowed_item_ids=request.missing_item_ids,
     )
-    stage_error = (
-        alignment_output_bundle_stage_error(
+    stage_check = (
+        alignment_output_bundle_stage_check(
             session,
             output,
             confirmed_stages=request.confirmed_stages,
@@ -61,13 +65,15 @@ def alignment_output_message_bundle_and_options(
             readiness_evidence_keys=request.readiness_evidence_keys,
         )
         if bundle_yaml
-        else ""
+        else None
     )
     message_plan = alignment_output_message_plan(
         output,
-        stage_error=stage_error,
+        stage_error=stage_check.error if stage_check else "",
+        stage_missing_items=stage_check.missing_items if stage_check else [],
         missing_items=missing_items,
         prefers_chinese=alignment_generation_prefers_chinese(session),
+        display_language=alignment_generation_display_language(session),
     )
     if message_plan.force_needs_user_input:
         output["needs_user_input"] = True
@@ -78,11 +84,15 @@ def alignment_output_message_bundle_and_options(
             message_plan.event_payload or {},
         )
     if message_plan.use_default_decision_options:
-        output["decision_options"] = default_alignment_decision_options(prefers_chinese=alignment_prefers_chinese(session))
+        output["decision_options"] = default_alignment_decision_options(
+            prefers_chinese=alignment_prefers_chinese(session),
+            display_language=alignment_generation_display_language(session),
+        )
     decision_options = visible_alignment_decision_options(
         output,
         has_bundle=message_plan.has_bundle_for_options,
         prefers_chinese=alignment_prefers_chinese(session),
+        display_language=alignment_generation_display_language(session),
     )
     return AlignmentOutputMessageResult(
         assistant_message=message_plan.assistant_message,

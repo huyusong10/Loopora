@@ -15,13 +15,14 @@ from loopora.summary_projection_helpers import (
     set_summary_list,
     set_summary_text,
 )
+from loopora.system_prompt_assets import load_system_prompt_asset, render_system_prompt_asset
 
 
 def agent_dispatch_next_summary(role_dispatch: dict) -> str:
     target_agent = str(role_dispatch.get("target_agent") or "").strip()
     if not target_agent or role_dispatch.get("target_agent_config_exists") is False:
         return ""
-    return f"invoke {target_agent} with the next context and step contract paths below; do not perform this role inline"
+    return render_system_prompt_asset("agent_native/dispatch-next-summary.md", {"target_agent": target_agent}).strip()
 
 
 def agent_dispatch_unavailable_summary(*, adapter: str, workdir: str, role_dispatch: dict) -> dict[str, object]:
@@ -39,7 +40,7 @@ def agent_dispatch_unavailable_summary(*, adapter: str, workdir: str, role_dispa
         "target_agent_config": target_config,
         "check_command": prefix_loopora_command(f"loopora agent {normalized_adapter} check --workdir {workdir_arg}"),
         "repair_command": prefix_loopora_command(f"loopora init {normalized_adapter} --workdir {workdir_arg}"),
-        "next": "repair the managed role agent config before dispatching this role; do not submit inline role work",
+        "next": load_system_prompt_asset("agent_native/dispatch-unavailable-next.md").strip(),
     }
 
 

@@ -19,6 +19,7 @@ from loopora.context_prompt_sections import (
     render_previous_iteration_summary,
 )
 from loopora.specs import resolve_role_note
+from loopora.system_prompt_assets import render_system_prompt_asset
 
 
 @dataclass(frozen=True)
@@ -44,7 +45,7 @@ def build_headless_prompt(request: HeadlessPromptRequest) -> str:
     role_posture = str(role.get("posture_notes", "") or "").strip()
     role_guidance = _combine_role_guidance(role_note, role_posture)
     sections = [
-        f"You are {role['name']} inside Loopora.",
+        render_system_prompt_asset("runtime/headless-role-intro.md", {"role_name": role["name"]}),
         system_prompt_prefix(role["archetype"]),
         output_contract_prompt(role["archetype"]),
         prompt_body.strip(),

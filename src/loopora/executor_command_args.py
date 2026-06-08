@@ -55,7 +55,7 @@ def build_codex_exec_args(request: RoleRequest, schema_path: Path) -> list[str]:
             args.extend(["-c", f'model_reasoning_effort="{reasoning_effort}"'])
         args.extend(extra_args)
         args.append(resume_session_id)
-        args.append(request.prompt)
+        args.append("-")
         return args
 
     args = [
@@ -77,7 +77,7 @@ def build_codex_exec_args(request: RoleRequest, schema_path: Path) -> list[str]:
     if reasoning_effort:
         args.extend(["-c", f'model_reasoning_effort="{reasoning_effort}"'])
     args.extend(extra_args)
-    args.append(request.prompt)
+    args.append("-")
     return args
 
 

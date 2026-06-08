@@ -6,9 +6,11 @@ from agent_bundle_candidates_test_support import (
     alignment_bundle_yaml,
     yaml,
 )
+from loopora.alignment_traceability_categories import agent_candidate_residual_risk_policy_categories
+from loopora.executor_alignment_bundle_fixtures import alignment_chinese_bundle_yaml
 
 BASE_RESIDUAL_RISK_POLICY = (
-    "Accept minor polish gaps only when they are explicitly named and tracked as an owned follow-up; "
+    "Accept minor polish gaps or residual risks only when they are explicitly named, visible, tracked, and owned as a follow-up; "
     "fail closed on unproven primary-flow behavior or weak verification evidence."
 )
 MISSING_OWNER_RESIDUAL_RISK_POLICY = (
@@ -22,6 +24,12 @@ SUPPORT_OWNED_RESIDUAL_RISK_POLICY = (
 SUPPORT_OWNED_MESSAGE = (
     "Accept manual billing export as a residual risk only when Support owns the follow-up; "
     "unverified primary flow must fail closed."
+)
+BASE_CHINESE_RESIDUAL_RISK_POLICY = (
+    "可接受的轻微 polish 缺口或残余风险必须明确点名、可见、已跟踪且有人接手 follow-up；主流程行为未证明或验证证据薄弱时必须 fail closed。"
+)
+MISSING_OWNER_CHINESE_RESIDUAL_RISK_POLICY = (
+    "手动账单导出作为残余风险只有明确点名时才可接受；主流程行为未证明或验证证据薄弱时必须 fail closed。"
 )
 
 
@@ -37,13 +45,27 @@ def test_agent_bundle_candidate_rejects_residual_risk_policy_missing_owner_path(
     _assert_residual_risk_failure(generated, "owner/follow-up")
 
 
+def test_chinese_residual_risk_owner_category_does_not_accept_generic_future_rounds() -> None:
+    labels = [
+        label
+        for label, _pattern in agent_candidate_residual_risk_policy_categories(
+            "残余风险只能在后续轮次保持可见；未验证主流程必须失败关闭。"
+        )
+    ]
+
+    assert "owner/follow-up" not in labels
+
+
 def test_agent_bundle_candidate_rejects_chinese_residual_risk_missing_owner_path(
     service_factory,
     tmp_path: Path,
     sample_workdir: Path,
 ) -> None:
     service = service_factory(scenario="success")
-    bundle_file = _write_bundle_file(tmp_path, _bundle_with_policy(sample_workdir, MISSING_OWNER_RESIDUAL_RISK_POLICY))
+    bundle_file = _write_bundle_file(
+        tmp_path,
+        _chinese_bundle_with_policy(sample_workdir, MISSING_OWNER_CHINESE_RESIDUAL_RISK_POLICY),
+    )
     generated = _create_candidate(
         service,
         sample_workdir,
@@ -105,6 +127,12 @@ def _assert_residual_risk_failure(generated: dict, detail: str) -> None:
 def _bundle_with_policy(sample_workdir: Path, replacement: str) -> dict:
     bundle = yaml.safe_load(alignment_bundle_yaml(str(sample_workdir.resolve())))
     bundle["spec"]["markdown"] = bundle["spec"]["markdown"].replace(BASE_RESIDUAL_RISK_POLICY, replacement)
+    return bundle
+
+
+def _chinese_bundle_with_policy(sample_workdir: Path, replacement: str) -> dict:
+    bundle = yaml.safe_load(alignment_chinese_bundle_yaml(str(sample_workdir.resolve())))
+    bundle["spec"]["markdown"] = bundle["spec"]["markdown"].replace(BASE_CHINESE_RESIDUAL_RISK_POLICY, replacement)
     return bundle
 
 

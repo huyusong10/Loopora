@@ -66,6 +66,7 @@ def build_bundle_control_summary(bundle: dict) -> dict:
     )
     residual_risk_policy = _residual_risk_policy_trace(raw_sections)
     role_postures = _role_posture_trace(roles)
+    task_scope = preview_list_items(str(raw_sections.get("Task") or ""), limit=2)
     success_surface = preview_list_items(str(raw_sections.get("Success Surface") or ""), limit=3)
     fake_done_risks = preview_list_items(str(raw_sections.get("Fake Done") or ""), limit=3)
     evidence_preferences = preview_list_items(str(raw_sections.get("Evidence Preferences") or ""), limit=3)
@@ -112,6 +113,7 @@ def build_bundle_control_summary(bundle: dict) -> dict:
         ),
         "evidence": _evidence_titles(compiled_spec),
         "coverage": coverage,
+        "task_scope": task_scope,
         "success_surface": success_surface,
         "fake_done_risks": fake_done_risks,
         "evidence_preferences": evidence_preferences,

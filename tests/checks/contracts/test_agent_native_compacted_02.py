@@ -146,8 +146,8 @@ def test_agent_native_submit_preserves_optional_official_native_trace(
     service = service_factory(scenario="success")
     bundle_file = tmp_path / "bundle.yml"
     bundle_yaml = alignment_bundle_yaml(str(sample_workdir.resolve())).replace(
-        "Future iterations stay anchored to this contract",
-        "Preserve native subagent trace proof when the host exposes it. Future iterations stay anchored to this contract",
+        "Because final feedback is too slow to be the only control signal",
+        "Preserve native subagent trace proof when the host exposes it. Because final feedback is too slow to be the only control signal",
     )
     bundle_file.write_text(bundle_yaml, encoding="utf-8")
     service.create_agent_bundle_candidate(

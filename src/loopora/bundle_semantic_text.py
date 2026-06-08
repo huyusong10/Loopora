@@ -9,21 +9,26 @@ def _semantic_text_is_specific(text: object, *, min_chars: int = 48) -> bool:
     value = str(text or "").strip()
     if len(value) < min_chars:
         return False
-    generic_patterns = [
-        r"requested behavior",
-        r"do the task",
-        r"task is done",
-        r"\bit works\b",
-        r"make it work",
-        r"works well",
-        r"requested task",
-        r"alignment agreement",
-        r"按需求完成",
-        r"完成任务",
-        r"实现需求",
-    ]
     lower = value.lower()
-    return not any(re.search(pattern, lower) for pattern in generic_patterns)
+    whole_value_generic_patterns = [
+        r"(?:ship|build|complete|do|implement)?\s*(?:the\s+)?requested behavior(?:\s+without\s+.+)?\.?",
+        r"(?:ship|build|complete|do|implement)?\s*(?:the\s+)?requested task\.?",
+        r"do the task\.?",
+        r"task is done\.?",
+        r"it works\.?",
+        r"make it work\.?",
+        r"works well\.?",
+        r"按需求完成\.?",
+        r"完成任务\.?",
+        r"实现需求\.?",
+    ]
+    if any(re.fullmatch(pattern, lower) for pattern in whole_value_generic_patterns):
+        return False
+    embedded_generic_patterns = [
+        r"described only by the alignment agreement",
+        r"\balignment agreement\b",
+    ]
+    return not any(re.search(pattern, lower) for pattern in embedded_generic_patterns)
 
 
 def _semantic_text_mentions_evidence(text: object) -> bool:
@@ -39,6 +44,12 @@ def _semantic_text_mentions_evidence(text: object) -> bool:
         "artifact",
         "handoff",
         "blocker",
+        "evidencia",
+        "prueba",
+        "verificar",
+        "verificación",
+        "artefacto",
+        "bloqueo",
         "证据",
         "验证",
         "测试",
@@ -69,17 +80,20 @@ def _semantic_text_mentions_workflow_judgment_flow(text: object) -> bool:
     if not value:
         return False
     evidence_flow = re.search(
-        r"\b(?:evidence|proof|handoffs?|inspect(?:ion|or)?|review)\b|证据|证明|交接|检查|审查|评审",
+        r"\b(?:evidence|proof|handoffs?|inspect(?:ion|or)?|review|evidencia|prueba|handoffs?|inspecci[oó]n|revisi[oó]n)\b"
+        r"|证据|证明|交接|检查|审查|评审",
         value,
         re.IGNORECASE,
     )
     gatekeeper_closure = re.search(
-        r"\b(?:gatekeeper|gate keeper|final judgment|finish|closure|verdict)\b|守门|裁决|收束|结论",
+        r"\b(?:gatekeeper|gate keeper|final judgment|finish|closure|verdict|juicio\s+final|cierre|veredicto|decisi[oó]n)\b"
+        r"|守门|裁决|收束|结论",
         value,
         re.IGNORECASE,
     )
     early_exposure = re.search(
-        r"\b(?:weak|unproven|fake[- ]?done|fake completion|drift|block(?:ing|er)?|gap|unsupported)\b"
+        r"\b(?:weak|unproven|fake[- ]?done|fake completion|drift|block(?:ing|er)?|gap|unsupported|"
+        r"d[eé]bil|no\s+probado|falso\s+terminado|falsa\s+finalizaci[oó]n|deriva|bloqueo|brecha|sin\s+soporte)\b"
         r"|弱证据|未证明|假完成|偏差|漂移|阻断|缺口|无支撑",
         value,
         re.IGNORECASE,

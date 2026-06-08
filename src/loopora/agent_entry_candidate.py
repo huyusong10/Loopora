@@ -57,6 +57,7 @@ def agent_ready_review_projection(preview: dict[str, Any]) -> dict[str, Any]:
     gatekeeper = summary.get("gatekeeper") if isinstance(summary.get("gatekeeper"), dict) else {}
     return {
         "loopora_fit_reasons": first_review_items(summary.get("loop_fit_reasons")),
+        "task_scope": first_review_items(summary.get("task_scope")),
         "success_surface": first_review_items(summary.get("success_surface")),
         "fake_done_risks": first_review_items(summary.get("fake_done_risks")),
         "evidence_preferences": first_review_items(summary.get("evidence_preferences")),

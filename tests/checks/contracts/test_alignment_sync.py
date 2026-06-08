@@ -40,12 +40,12 @@ def sync_context(repo: FakeAlignmentSyncRepository, *, validation_error: Excepti
             raise validation_error
         return {"loop": {"name": "Synced Loop"}}, raw_yaml.rstrip() + "\n# normalized\n"
 
-    def append_system_message(session_id: str, zh: str, _en: str) -> dict:
+    def append_notice_message(session_id: str, content: str) -> dict:
         assert session_id == repo.session["id"]
         transcript = list(repo.session.get("transcript") or [])
-        transcript.append({"role": "assistant", "content": zh, "created_at": "2026-05-30T00:00:00Z"})
+        transcript.append({"role": "assistant", "content": content, "created_at": "2026-05-30T00:00:00Z"})
         repo.session["transcript"] = transcript
-        repo.append_alignment_event(session_id, "alignment_message", {"role": "assistant", "content": zh})
+        repo.append_alignment_event(session_id, "alignment_message", {"role": "assistant", "content": content})
         return dict(repo.session)
 
     def lifecycle_context() -> AlignmentBundleLifecycleContext:
@@ -62,7 +62,7 @@ def sync_context(repo: FakeAlignmentSyncRepository, *, validation_error: Excepti
     context = AlignmentSyncContext(
         get_session=get_session,
         load_validated_bundle_text=load_validated_bundle_text,
-        append_system_message=append_system_message,
+        append_notice_message=append_notice_message,
         bundle_lifecycle_context=lifecycle_context,
         build_preview=build_preview,
         now=lambda: "2026-05-30T00:00:00Z",
@@ -89,7 +89,7 @@ def test_alignment_sync_command_reloads_normalizes_logs_and_returns_preview(tmp_
     assert bundle_path.read_text(encoding="utf-8") == "version: 1\n# normalized\n"
     assert repo.session["error_message"] == ""
     assert repo.session["finished_at"] is None
-    assert repo.session["transcript"][-1]["content"] == "已重新读取 bundle.yml，并校验通过。"
+    assert repo.session["transcript"][-1]["content"] == "Reloaded bundle.yml and validation passed."
     assert preview_requests == [{"bundle": {"loop": {"name": "Synced Loop"}}, "source_path": str(bundle_path), "validation": result["validation"]}]
     assert validation_logs[0]["validation"]["ok"] is True
     assert_event_types(repo, "alignment_message", "alignment_bundle_synced")
@@ -106,7 +106,7 @@ def test_alignment_sync_command_records_missing_file_failure(tmp_path: Path) -> 
     assert repo.session["status"] == "failed"
     assert repo.session["validation"]["ok"] is False
     assert "alignment bundle does not exist" in repo.session["error_message"]
-    assert repo.session["transcript"][-1]["content"].startswith("重新读取 bundle.yml 失败：")
+    assert repo.session["transcript"][-1]["content"].startswith("Failed to reload bundle.yml:")
     assert validation_logs[0]["validation"]["semantic_lint"]["ok"] is False
     assert_event_types(repo, "alignment_message", "alignment_bundle_sync_failed")
 

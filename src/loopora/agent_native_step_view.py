@@ -16,6 +16,7 @@ from loopora.agent_native_step_view_refresh import refresh_agent_native_step_vie
 from loopora.agent_native_submit_hints import agent_native_result_artifact_stem, agent_native_submit_command
 from loopora.agent_native_known_evidence_refs import _agent_native_compact_known_evidence_refs
 from loopora.run_artifacts import RunArtifactLayout
+from loopora.system_prompt_assets import load_system_prompt_asset
 
 
 @dataclass(frozen=True)
@@ -115,7 +116,7 @@ def agent_native_step_view(request: AgentNativeStepViewRequest) -> dict[str, Any
                 entry_source=normalized_entry_source,
                 result_file=str(result_file_path.resolve()),
             ),
-            "result_file_contract": "Result file must contain one wrapper JSON object with loopora_host_dispatch and a schema-shaped result; replace null placeholders before submit.",
+            "result_file_contract": load_system_prompt_asset("agent_native/result-file-contract.md").strip(),
             "result_outbox_dir": request.layout.workspace_relative(result_outbox_dir),
             "result_outbox_absolute_dir": str(result_outbox_dir.resolve()),
             "result_file_path": request.layout.workspace_relative(result_file_path),

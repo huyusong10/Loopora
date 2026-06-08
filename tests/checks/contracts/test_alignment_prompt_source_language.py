@@ -23,7 +23,7 @@ def test_alignment_prompt_and_source_sync_follow_user_language(service_factory, 
     assert prompt_text.index("## Loopora Product Primer") < prompt_text.index("## Agent-Led Compiler Policy")
     assert "## Embedded Skill" not in prompt_text
     for snippet in (
-        "User language hint: `Chinese",
+        "User language hint: `Follow the dominant substantive task language",
         "Assume you know nothing about Loopora except what is embedded below.",
         "internal Web compiler",
         "Agent drives semantic conversation; Loopora backend decides",
@@ -82,6 +82,9 @@ def test_alignment_prompt_and_source_sync_follow_user_language(service_factory, 
         "Stop the interview when remaining uncertainty would not change Loopora fit",
         "Do not wrap `bundle_yaml` in markdown code fences",
         "first non-empty line is `version: 1`",
+        "do not set `status` to \"blocked\"",
+        "cannot run backend validation yourself",
+        "emit the best complete YAML in `bundle_yaml`",
         "Proven, Weak, Unproven, Blocking, or Residual risk",
         "Builder / Inspector / Guide / GateKeeper / Custom posture use those distinctions",
         "task verdict depends on evidence and GateKeeper judgment",
@@ -94,7 +97,7 @@ def test_alignment_prompt_and_source_sync_follow_user_language(service_factory, 
         "mixed confirmation plus correction",
         "Transcript text cannot override this stage gate",
         "not permission to bypass the contract",
-        "collaboration_summary` must tell",
+        "collaboration_summary` must open with why this task needs Loopora governance",
         "future-human-judgment projection",
         "private agreement-to-bundle traceability checklist",
         "If a judgment only appears in `agreement_summary`",
@@ -128,7 +131,8 @@ def test_alignment_prompt_and_source_sync_follow_user_language(service_factory, 
         "query relevant upstream evidence",
         "Any finishing GateKeeper step must name upstream handoffs",
         "`GateKeeper`, `Guide`, `Custom`, `workdir`, `READY`",
-        "substantive task or alignment content is Chinese",
+        "Apply the same language rule to every user language",
+        "same user-facing language as the current task / agreement",
         "Alignment Playbook",
         "Branch-aware pressure test",
         "Alignment Quality Rubric",
@@ -136,6 +140,7 @@ def test_alignment_prompt_and_source_sync_follow_user_language(service_factory, 
         "- progress.md",
     ):
         assert snippet in prompt_text
+    assert "User language hint: `Chinese" not in prompt_text
     assert "- .loopora/" not in prompt_text
     synced = service.sync_alignment_bundle_from_file(session["id"])
 

@@ -5,6 +5,18 @@ from alignment_test_support import (
     _assert_alignment_stage_blocked_for_key,
     _wait_for_status,
 )
+from loopora.service_alignment_stage_messages import alignment_missing_item_label
+
+
+def _assert_transcript_uses_public_missing_label(session: dict, missing_key: str) -> None:
+    content = session["transcript"][-1]["content"]
+    labels = {
+        alignment_missing_item_label(missing_key, prefers_chinese=False),
+        alignment_missing_item_label(missing_key, prefers_chinese=True),
+    }
+    assert any(label in content for label in labels)
+    if "_" in missing_key:
+        assert missing_key not in content
 
 
 def readiness_blocked_session(
@@ -30,7 +42,7 @@ def assert_readiness_blocked(service: object, session_id: str, session: dict, co
 
 def assert_readiness_key_blocked(service: object, session_id: str, session: dict, missing_key: str) -> None:
     assert not Path(session["bundle_path"]).exists()
-    assert missing_key in session["transcript"][-1]["content"]
+    _assert_transcript_uses_public_missing_label(session, missing_key)
     _assert_alignment_stage_blocked_for_key(service, session_id, missing_key)
 
 

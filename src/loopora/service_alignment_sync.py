@@ -14,6 +14,7 @@ from loopora.service_alignment_bundle_lifecycle import (
     apply_alignment_bundle_sync_failure,
     apply_alignment_bundle_sync_success,
 )
+from loopora.service_alignment_language import alignment_prefers_chinese
 from loopora.service_types import LooporaConflictError, LooporaError
 from loopora.utils import utc_now
 
@@ -30,7 +31,7 @@ class AlignmentBundlePreviewBuilder(Protocol):
 class AlignmentSyncContext:
     get_session: Callable[[str], dict]
     load_validated_bundle_text: AlignmentBundleTextLoader
-    append_system_message: Callable[[str, str, str], dict]
+    append_notice_message: Callable[[str, str], dict]
     bundle_lifecycle_context: Callable[[], AlignmentBundleLifecycleContext]
     build_preview: AlignmentBundlePreviewBuilder
     now: Callable[[], str] = utc_now
@@ -71,10 +72,9 @@ def sync_alignment_bundle_from_file(
         checked_at=context.now(),
         normalized_yaml=normalized_yaml,
     )
-    context.append_system_message(
+    context.append_notice_message(
         session_id,
-        "已重新读取 bundle.yml，并校验通过。",
-        "Reloaded bundle.yml and validation passed.",
+        _alignment_sync_notice(session, "success"),
     )
     session = apply_alignment_bundle_sync_success(
         context.bundle_lifecycle_context(),
@@ -93,10 +93,10 @@ def sync_alignment_bundle_from_file(
 
 def _record_alignment_bundle_sync_failure(context: AlignmentSyncContext, session_id: str, validation: dict) -> dict:
     error = str(validation.get("error", "") or "bundle validation failed")
-    context.append_system_message(
+    session = context.get_session(session_id)
+    context.append_notice_message(
         session_id,
-        f"重新读取 bundle.yml 失败：{error}",
-        f"Failed to reload bundle.yml: {error}",
+        _alignment_sync_notice(session, "failure", error=error),
     )
     return apply_alignment_bundle_sync_failure(
         context.bundle_lifecycle_context(),
@@ -104,3 +104,13 @@ def _record_alignment_bundle_sync_failure(context: AlignmentSyncContext, session
         validation=validation,
         finished_at=context.now(),
     )
+
+
+def _alignment_sync_notice(session: dict, kind: str, *, error: str = "") -> str:
+    if kind == "success":
+        if alignment_prefers_chinese(session):
+            return "已重新读取 bundle.yml，并校验通过。"
+        return "Reloaded bundle.yml and validation passed."
+    if alignment_prefers_chinese(session):
+        return f"重新读取 bundle.yml 失败：{error}"
+    return f"Failed to reload bundle.yml: {error}"

@@ -73,6 +73,30 @@ def test_alignment_semantic_lint_requires_builder_after_guide_to_read_guide_hand
     assert ("Builder step after Guide must name a Guide handoff in inputs.handoffs_from: builder_repair_step") in issues
 
 
+def test_alignment_semantic_lint_requires_builder_after_guide_to_read_review_handoff(
+    sample_workdir: Path,
+) -> None:
+    bundle = add_repair_guide_flow(load_default_alignment_bundle(sample_workdir))
+    gatekeeper_step = bundle["workflow"]["steps"].pop()
+    bundle["workflow"]["steps"].append(
+        {
+            "id": "builder_repair_step",
+            "role_id": "builder",
+            "inputs": {
+                "handoffs_from": ["repair_guide_step"],
+                "iteration_memory": "summary_only",
+            },
+            "on_pass": "continue",
+        }
+    )
+    gatekeeper_step["inputs"]["handoffs_from"].append("builder_repair_step")
+    bundle["workflow"]["steps"].append(gatekeeper_step)
+
+    issues = lint_alignment_bundle_semantics(bundle)
+
+    assert ("Builder step after Guide must also include review handoffs in inputs.handoffs_from: builder_repair_step") in issues
+
+
 def test_alignment_semantic_lint_requires_builder_after_guide_iteration_memory(
     sample_workdir: Path,
 ) -> None:

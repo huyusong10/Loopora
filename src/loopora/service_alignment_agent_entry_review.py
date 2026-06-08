@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from loopora.agent_adapters import agent_loop_json_command
 from loopora.service_alignment_agreement_stage import alignment_agreement_text_snippet
-from loopora.service_alignment_language import alignment_prefers_chinese
+from loopora.service_alignment_language import alignment_prefers_chinese, alignment_prefers_spanish
 from loopora.structured_numbers import structured_non_negative_int
 
 
@@ -14,9 +14,18 @@ def agent_entry_candidate_adapter(session: dict, payload: dict) -> str:
     return str(payload.get("adapter") or session.get("executor_kind") or "").strip()
 
 
+def agent_entry_review_language(session: dict) -> str:
+    if alignment_prefers_chinese(session):
+        return "zh"
+    if alignment_prefers_spanish(session):
+        return "es"
+    return "en"
+
+
 def agent_entry_review_suggested_reply(session: dict, *, review_mode: str, task_message: str) -> str:
     task_anchor = alignment_agreement_text_snippet(task_message, limit=520)
-    if alignment_prefers_chinese(session):
+    language = agent_entry_review_language(session)
+    if language == "zh":
         if review_mode == "not_fit":
             return (
                 "请先按这次 /loopora-plan 的任务锚点重新判断是否适合 Loopora："
@@ -30,6 +39,22 @@ def agent_entry_review_suggested_reply(session: dict, *, review_mode: str, task_
             "推荐采用证据优先路径：先确认 Loopora fit，再把完成标准、伪完成风险、证据预期、"
             "执行策略、判断取舍、残余风险和本地治理责任整理成可确认的工作协议；"
             "确认后再生成可审查的 Loop 预览。"
+        )
+    if language == "es":
+        if review_mode == "not_fit":
+            return (
+                "Primero vuelve a comprobar si este ancla de tarea de /loopora-plan encaja con Loopora: "
+                f"{task_anchor}\n"
+                "Si debemos continuar, explica qué evidencia posterior, handoffs o juicio de GateKeeper aportarán valor; "
+                "si no encaja, no generes un Loop ejecutable."
+            )
+        return (
+            "Continuar Web review desde este ancla de tarea de /loopora-plan: "
+            f"{task_anchor}\n"
+            "Usa el camino de evidencia primero: confirma primero el encaje con Loopora y luego convierte los criterios "
+            "de éxito, riesgos de falso terminado, expectativas de evidencia, estrategia de ejecución, tradeoffs de "
+            "juicio, política de riesgo residual y gobernanza local en un acuerdo de trabajo confirmable antes de "
+            "generar una vista previa revisable del Loop."
         )
     if review_mode == "not_fit":
         return (
@@ -50,7 +75,8 @@ def agent_entry_review_suggested_reply(session: dict, *, review_mode: str, task_
 def agent_entry_review_decision_options(session: dict, *, review_mode: str, task_message: str) -> list[dict]:
     suggested_reply = agent_entry_review_suggested_reply(session, review_mode=review_mode, task_message=task_message)
     task_anchor = alignment_agreement_text_snippet(task_message, limit=420)
-    if alignment_prefers_chinese(session):
+    language = agent_entry_review_language(session)
+    if language == "zh":
         if review_mode == "not_fit":
             return [
                 {
@@ -84,6 +110,43 @@ def agent_entry_review_decision_options(session: dict, *, review_mode: str, task
                 "user_reply": (
                     "请先重新判断这个任务是否适合 Loopora，而不是直接生成 Loop。"
                     f"任务锚点：{task_anchor}"
+                ),
+            },
+        ]
+    if language == "es":
+        if review_mode == "not_fit":
+            return [
+                {
+                    "id": "skip_loop",
+                    "label": "Omitir Loop por ahora (recomendado)",
+                    "description": "El ancla parece una tarea puntual o ya cubierta por comprobaciones duras; evita empaquetarla como Loop de larga duración.",
+                    "recommended": True,
+                    "user_reply": f"De acuerdo; no generes un plan Loop por ahora. Ancla de tarea: {task_anchor}",
+                },
+                {
+                    "id": "reframe_as_loop",
+                    "label": "Reformular como Loop",
+                    "description": "Explicaré por qué la evidencia posterior, los handoffs o el juicio de GateKeeper deben conservarse.",
+                    "recommended": False,
+                    "user_reply": suggested_reply,
+                },
+            ]
+        return [
+            {
+                "id": "continue_web_review_evidence_first",
+                "label": "Continuar revisión con evidencia primero (recomendado)",
+                "description": "Convierte el ancla del Agent anfitrión en un acuerdo de trabajo confirmable y luego genera la vista previa del Loop.",
+                "recommended": True,
+                "user_reply": suggested_reply,
+            },
+            {
+                "id": "recheck_loop_fit",
+                "label": "Revisar primero el encaje con Loopora",
+                "description": "Si basta una sola pasada o las comprobaciones duras ya deciden, bloquea la composición primero.",
+                "recommended": False,
+                "user_reply": (
+                    "Primero revisa si esta tarea realmente encaja con Loopora antes de generar un Loop. "
+                    f"Ancla de tarea: {task_anchor}"
                 ),
             },
         ]

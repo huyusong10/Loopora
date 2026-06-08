@@ -16,7 +16,7 @@ def test_agent_bundle_candidate_rejects_explicit_execution_strategy_missing_from
     service = service_factory(scenario="success")
     bundle = yaml.safe_load(alignment_bundle_yaml(str(sample_workdir.resolve())))
     bundle["spec"]["markdown"] = bundle["spec"]["markdown"].replace(
-        "Ship the focused starter experience in the target workdir with small, maintainable changes that preserve the primary user flow.",
+        "Ship the focused starter experience for the target user in the target workdir with small, maintainable changes that preserve the primary user-facing flow.",
         "Ship the billing refund path in the target workdir with small, maintainable changes.",
     )
     bundle_file = tmp_path / "bundle.yml"
@@ -49,7 +49,7 @@ def test_agent_bundle_candidate_rejects_labeled_single_execution_strategy_missin
     service = service_factory(scenario="success")
     bundle = yaml.safe_load(alignment_bundle_yaml(str(sample_workdir.resolve())))
     bundle["spec"]["markdown"] = bundle["spec"]["markdown"].replace(
-        "Ship the focused starter experience in the target workdir with small, maintainable changes that preserve the primary user flow.",
+        "Ship the focused starter experience for the target user in the target workdir with small, maintainable changes that preserve the primary user-facing flow.",
         "Ship the billing refund path in the target workdir with small, maintainable changes.",
     )
     bundle_file = tmp_path / "bundle.yml"
@@ -79,7 +79,7 @@ def test_agent_bundle_candidate_accepts_explicit_execution_strategy_in_runtime_s
     service = service_factory(scenario="success")
     bundle = yaml.safe_load(alignment_bundle_yaml(str(sample_workdir.resolve())))
     bundle["spec"]["markdown"] = bundle["spec"]["markdown"].replace(
-        "Ship the focused starter experience in the target workdir with small, maintainable changes that preserve the primary user flow.",
+        "Ship the focused starter experience for the target user in the target workdir with small, maintainable changes that preserve the primary user-facing flow.",
         "Ship the billing refund path in the target workdir with small, maintainable changes.",
     )
     bundle["spec"]["markdown"] += (

@@ -34,9 +34,10 @@ def _agent_gen_json_payload(result: dict, *, include_raw: bool = True) -> dict:
 
 def _agent_plan_summary(result: dict, *, compact: bool = False) -> dict:
     _attach_agent_ready_run_handoff_fields(result)
+    status = str(result.get("status") or "").strip()
     summary: dict[str, object] = {
         "ready": bool(result.get("ready")),
-        "status": str(result.get("status") or "").strip(),
+        "status": status,
         "loop_recovery": str(result.get("loop_recovery") or "").strip(),
         "requires_web_alignment": bool(result.get("requires_web_alignment")),
         "requires_candidate_repair": bool(result.get("requires_candidate_repair")),
@@ -56,7 +57,10 @@ def _agent_plan_summary(result: dict, *, compact: bool = False) -> dict:
     _set_summary_text(summary, "first_task_message_example", result.get("first_task_message_example"))
     _set_summary_text(summary, "debug_cli_example_command", result.get("debug_cli_example_command"))
     _set_summary_text(summary, "next", result.get("next"))
-    _set_summary_text(summary, "preview_url", result.get("preview_url") or result.get("preview_path"))
+    _attach_alignment_session_summary_fields(summary, result)
+    _attach_alignment_dialogue_summary_fields(summary, result)
+    if status != "skipped":
+        _set_summary_text(summary, "preview_url", result.get("preview_url") or result.get("preview_path"))
     attach_native_run_surface(summary, result, compact=compact)
     _set_summary_text(summary, "next_review_step", result.get("next_review_step"))
     _set_summary_text(summary, "review_status", result.get("review_status"))
@@ -65,6 +69,7 @@ def _agent_plan_summary(result: dict, *, compact: bool = False) -> dict:
     _set_summary_text(summary, "task_anchor_preview", result.get("task_anchor_preview"))
     _set_summary_text(summary, "review_scope", result.get("review_scope"))
     _set_summary_text(summary, "review_recommended_action", result.get("review_recommended_action"))
+    _set_summary_text(summary, "review_reply_message", result.get("review_reply_message"))
     _set_summary_text(summary, "review_reply_preview", result.get("review_reply_preview"))
     _set_summary_text(summary, "after_review_ready", result.get("after_review_ready"))
     _set_summary_text(summary, "run_blocked_until_web_review", result.get("run_blocked_until_web_review"))
@@ -81,6 +86,36 @@ def _agent_plan_summary(result: dict, *, compact: bool = False) -> dict:
         _set_summary_text(summary, "ready_cli_command", result.get("ready_cli_command"))
         _set_summary_text(summary, "ready_run_command", result.get("ready_run_command"))
     return {key: value for key, value in summary.items() if value not in ("", [], {})}
+
+
+def _attach_alignment_session_summary_fields(summary: dict[str, object], result: dict) -> None:
+    session = result.get("session") if isinstance(result.get("session"), dict) else {}
+    _set_summary_text(summary, "alignment_session_id", session.get("id"))
+    _set_summary_text(summary, "alignment_stage", session.get("alignment_stage"))
+
+
+def _attach_alignment_dialogue_summary_fields(summary: dict[str, object], result: dict) -> None:
+    if result.get("continued_alignment_session") is not True:
+        return
+    session = result.get("session") if isinstance(result.get("session"), dict) else {}
+    summary["continued_alignment_session"] = True
+    latest = _latest_alignment_assistant_turn(session)
+    _set_summary_text(summary, "alignment_assistant_message", latest.get("content"))
+    options = latest.get("decision_options")
+    if isinstance(options, list) and options:
+        summary["alignment_decision_options"] = options
+    missing_items = latest.get("missing_items")
+    if isinstance(missing_items, list) and missing_items:
+        summary["alignment_missing_items"] = [str(item).strip() for item in missing_items if str(item).strip()]
+    _set_summary_text(summary, "next_alignment_step", result.get("next_alignment_step"))
+
+
+def _latest_alignment_assistant_turn(session: dict) -> dict:
+    transcript = session.get("transcript") if isinstance(session.get("transcript"), list) else []
+    for item in reversed(transcript):
+        if isinstance(item, dict) and str(item.get("role") or "").strip() == "assistant":
+            return item
+    return {}
 
 
 def _attach_plan_repair_summary_fields(summary: dict[str, object], result: dict) -> None:

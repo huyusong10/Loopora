@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
-from typer.testing import CliRunner
+from typer.testing import CliRunner as _TyperCliRunner
 import yaml
 
 from loopora import cli
@@ -33,6 +33,12 @@ from agent_adapter_expected import (
     EXPECTED_NATIVE_PERMISSION_BOUNDARY,
     EXPECTED_NATIVE_TOOLING_BOUNDARY,
 )
+
+
+class CliRunner(_TyperCliRunner):
+    def __init__(self, *args, **kwargs):
+        kwargs.setdefault("mix_stderr", False)
+        super().__init__(*args, **kwargs)
 
 from agent_adapter_test_common import (
     _assert_expected_mapping_values,

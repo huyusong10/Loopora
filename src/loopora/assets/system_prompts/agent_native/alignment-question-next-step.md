@@ -1,0 +1,1 @@
+ask the user alignment_assistant_message in this Agent session and stop; do not infer or probe the answer. After the user replies, rerun /loopora-plan with the user's next --message only to append that answer to the same alignment_session_id, not to start a new plan

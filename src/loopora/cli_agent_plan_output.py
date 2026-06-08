@@ -15,6 +15,7 @@ from loopora.cli_agent_plan_recovery_results import (
     _agent_repair_cli_command,
     _agent_task_message_from_session,
     _agent_web_review_focus,
+    _agent_web_review_language,
     _agent_web_review_status,
     _agent_web_review_task_anchor_fields,
     _attach_agent_gen_recovery_fields,
@@ -43,6 +44,7 @@ __all__ = [
     "_agent_repair_cli_command",
     "_agent_task_message_from_session",
     "_agent_web_review_focus",
+    "_agent_web_review_language",
     "_agent_web_review_status",
     "_agent_web_review_task_anchor_fields",
     "_attach_agent_gen_recovery_fields",
@@ -78,14 +80,14 @@ def _print_agent_gen_result(result: dict, *, json_output: bool, compact_json_out
         if error:
             typer.echo(f"validation_error: {error}")
         _print_agent_repair_guidance(result)
+    elif str(result.get("status") or "").strip() == "skipped":
+        _print_agent_skipped_result(result)
+        return
+    elif result.get("continued_alignment_session") and result.get("requires_web_alignment"):
+        typer.echo("Loopora planning conversation is waiting for user input")
+        _print_agent_alignment_dialogue_guidance(result)
     elif result.get("requires_web_alignment"):
-        typer.echo("Loopora Loop preview needs Web review before /loopora-run")
-        if result.get("loopora_fit_contradiction"):
-            typer.echo(
-                "not_fit: task summary says this looks like one-off, direct-answer, no-new-evidence, "
-                "or benchmark/test-harness-only work; "
-                "define later evidence, handoff, or GateKeeper value before generating a runnable Loop"
-            )
+        _print_agent_web_alignment_header(result)
         _print_agent_web_review_guidance(result)
     else:
         typer.echo(f"Loopora Loop preview status: {result.get('status')}")
@@ -95,12 +97,84 @@ def _print_agent_gen_result(result: dict, *, json_output: bool, compact_json_out
     _print_web_status(result)
 
 
+def _print_agent_skipped_result(result: dict) -> None:
+    typer.echo("Loopora plan generation skipped")
+    latest = _latest_alignment_assistant_turn(result.get("session") if isinstance(result.get("session"), dict) else {})
+    message = str(latest.get("content") or "").strip()
+    if message:
+        typer.echo(f"alignment_assistant_message: {_clip(message, 1000)}")
+    typer.echo(f"session_id: {result['session']['id']}")
+
+
+def _print_agent_web_alignment_header(result: dict) -> None:
+    language = _agent_web_review_language(result)
+    if result.get("loopora_fit_contradiction"):
+        if language == "es":
+            typer.echo("El encaje con Loopora necesita una decisión del usuario antes de generar un Loop ejecutable")
+            typer.echo(
+                "not_fit: el resumen de la tarea parece una tarea puntual, una respuesta directa, sin evidencia nueva "
+                "o solo cubierta por benchmarks/pruebas; define evidencia posterior, handoff o valor de GateKeeper "
+                "antes de generar un Loop ejecutable"
+            )
+            return
+        typer.echo("Loopora fit needs a user decision before generating a runnable Loop")
+        typer.echo(
+            "not_fit: task summary says this looks like one-off, direct-answer, no-new-evidence, "
+            "or benchmark/test-harness-only work; "
+            "define later evidence, handoff, or GateKeeper value before generating a runnable Loop"
+        )
+        return
+    if language == "es":
+        typer.echo("La vista previa de Loopora necesita Web review antes de /loopora-run")
+        return
+    typer.echo("Loopora Loop preview needs Web review before /loopora-run")
+
+
+def _print_agent_alignment_dialogue_guidance(result: dict) -> None:
+    session = result.get("session") if isinstance(result.get("session"), dict) else {}
+    latest = _latest_alignment_assistant_turn(session)
+    session_id = str(session.get("id") or "").strip()
+    stage = str(session.get("alignment_stage") or "").strip()
+    if session_id:
+        typer.echo(f"alignment_session_id: {session_id}")
+    if stage:
+        typer.echo(f"alignment_stage: {stage}")
+    message = str(latest.get("content") or "").strip()
+    if message:
+        typer.echo(f"alignment_assistant_message: {_clip(message, 1000)}")
+    options = latest.get("decision_options") if isinstance(latest.get("decision_options"), list) else []
+    if options:
+        typer.echo("alignment_decision_options:")
+        for option in options:
+            if not isinstance(option, dict):
+                continue
+            label = str(option.get("label") or option.get("id") or "").strip()
+            reply = str(option.get("user_reply") or "").strip()
+            recommended = " (Recommended)" if option.get("recommended") is True else ""
+            if label and reply:
+                typer.echo(f"- {label}{recommended}: {_clip(reply, 360)}")
+            elif label:
+                typer.echo(f"- {label}{recommended}")
+    next_step = str(result.get("next_alignment_step") or "").strip()
+    if next_step:
+        typer.echo(f"next_alignment_step: {_clip(next_step, 500)}")
+
+
+def _latest_alignment_assistant_turn(session: dict) -> dict:
+    transcript = session.get("transcript") if isinstance(session.get("transcript"), list) else []
+    for item in reversed(transcript):
+        if isinstance(item, dict) and str(item.get("role") or "").strip() == "assistant":
+            return item
+    return {}
+
+
 def _print_agent_ready_review_projection(projection: object) -> None:
     review = projection if isinstance(projection, dict) else {}
     if not review:
         return
     typer.echo("ready_review:")
     _print_ready_review_items("loopora_fit", review.get("loopora_fit_reasons"))
+    _print_ready_review_items("task_scope", review.get("task_scope"))
     _print_ready_review_items("success_surface", review.get("success_surface"))
     _print_ready_review_items("fake_done_risks", review.get("fake_done_risks"))
     _print_ready_review_items("evidence_preferences", review.get("evidence_preferences"))

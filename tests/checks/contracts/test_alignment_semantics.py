@@ -13,6 +13,7 @@ def test_loop_fit_contradiction_detector_covers_shared_readiness_and_bundle_case
         "Direct chat would be enough because the judgment is only needed once.",
         "A future round would not produce new evidence for this task.",
         "The existing benchmark already fully captures the judgment.",
+        "As long as the benchmark and unit tests pass, the task is complete.",
         "The stable proof harness already fully captures the judgment.",
         "The contract tests are enough for this task.",
         "This is a one-off task; no Loopora loop is needed.",
@@ -27,6 +28,7 @@ def test_loop_fit_contradiction_detector_covers_shared_readiness_and_bundle_case
         "这是一次性任务，不要长期循环。",
         "直接回答就够了。",
         "现有基准已经完全覆盖这次判断，直接跑基准就够了。",
+        "只要现有 benchmark 和单元测试全部通过就算完成。",
         "现有契约测试已经完全覆盖这次判断，直接跑测试就够了。",
         "单次人工审查即可，不必开 Loop。",
         "不用 Loopora，直接让 Agent 做完再人工看一眼就行。",
@@ -51,6 +53,7 @@ def test_loop_fit_contradiction_detector_respects_negated_antipatterns() -> None
     artifact_backed_output = (
         "Test-harness output alone is insufficient evidence because Inspectors still need artifact-backed proof."
     )
+    evidence_quality_review = "Check whether tests are migration-specific enough before treating evidence as Proven."
 
     assert not text_mentions_loop_fit_contradiction(
         "One Agent pass plus human review is not enough because later rounds create new proof artifacts."
@@ -67,6 +70,7 @@ def test_loop_fit_contradiction_detector_respects_negated_antipatterns() -> None
     assert not text_mentions_loop_fit_contradiction(exact_id_rule)
     assert not text_mentions_loop_fit_contradiction(governed_one_pass)
     assert not text_mentions_loop_fit_contradiction(artifact_backed_output)
+    assert not text_mentions_loop_fit_contradiction(evidence_quality_review)
 
 
 def test_loop_fit_governance_detector_supports_shared_lint_and_projection() -> None:
@@ -80,6 +84,22 @@ def test_loop_fit_governance_detector_supports_shared_lint_and_projection() -> N
         "One Agent pass must not be treated as enough.",
         "Future iterations keep new proof artifacts and GateKeeper judgment alive across the run.",
     ]
+
+    later_execution_text = (
+        "The workflow routes handoffs and evidence explicitly so weak proof changes later execution "
+        "into repair or blocking instead of allowing lifecycle completion to masquerade as task success."
+    )
+    assert text_mentions_multiround_loopora_governance(later_execution_text)
+
+
+def test_loop_fit_governance_detector_supports_chinese_mixed_technical_terms() -> None:
+    text = (
+        "这个 RAG 任务需要多轮 Loopora governance，因为后续 ingestion、retrieval ACL、eval review "
+        "会产生新的 proof、handoff 和 GateKeeper verdict context。"
+    )
+
+    assert text_mentions_multiround_loopora_governance(text)
+    assert loop_fit_governance_trace(text) == [text]
 
 
 def test_loop_fit_governance_detector_rejects_generic_multiround_complexity() -> None:

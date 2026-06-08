@@ -86,6 +86,7 @@ def test_cli_claude_adapter_install_uninstall_are_idempotent_and_preserve_user_c
     assert not skill_paths["plan"].exists()
     assert not skill_paths["run"].exists()
     assert not (workdir / ".claude" / "hooks" / "loopora-session-context.py").exists()
+    assert not (workdir / ".claude" / "hooks" / "loopora-session-context.additional-context.md").exists()
     assert claude_md.exists()
     assert claude_settings.exists()
     settings_after_uninstall = json.loads(claude_settings.read_text(encoding="utf-8"))

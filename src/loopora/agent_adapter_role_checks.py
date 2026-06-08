@@ -5,19 +5,10 @@ import tomllib
 from typing import Any
 
 from loopora.agent_adapter_check_utils import adapter_check, markdown_frontmatter, read_text_or_empty
+from loopora.system_prompt_assets import load_system_prompt_asset
 
-CODEX_ROLE_CONTRACT_SNIPPETS = (
-    "Return exactly one raw wrapper JSON object with `loopora_host_dispatch` and `result`.",
-    "Do not wrap it in Markdown fences, prose, a code block, or a trailing explanation.",
-    "Do not launch codex, claude, or opencode from inside this role.",
-)
-CODEX_ORCHESTRATOR_CONTRACT_SNIPPETS = (
-    "You do not perform Builder, Inspector, GateKeeper, or Guide work yourself.",
-    "read next_step.role_dispatch.target_agent and invoke that exact host-native role agent",
-    "compact role-dispatch message",
-    "open those local paths for the full prompt, output schema, judgment contract",
-    "task_next_action.kind=continue_evidence",
-)
+CODEX_ROLE_CONTRACT_SNIPPETS_ASSET = "agent_native/codex-role-contract-check-snippets.md"
+CODEX_ORCHESTRATOR_CONTRACT_SNIPPETS_ASSET = "agent_native/codex-orchestrator-contract-check-snippets.md"
 CLAUDE_ROLE_TOOL_ALLOWLISTS = {
     "orchestrator": {"Agent", "Task", "Read", "Write", "Bash"},
     "builder": {"Read", "Glob", "Grep", "Bash", "Write", "Edit", "MultiEdit"},
@@ -119,13 +110,18 @@ def _codex_role_agent_gaps(role: str, payload: dict[str, Any]) -> list[str]:
     if not developer_instructions.strip():
         gaps.append("developer_instructions")
         return gaps
-    expected_snippets = CODEX_ORCHESTRATOR_CONTRACT_SNIPPETS if role == "orchestrator" else CODEX_ROLE_CONTRACT_SNIPPETS
+    expected_snippets = _codex_contract_check_snippets(role)
     gaps.extend(
         f"developer_instructions contains {snippet}"
         for snippet in expected_snippets
         if snippet not in developer_instructions
     )
     return gaps
+
+
+def _codex_contract_check_snippets(role: str) -> tuple[str, ...]:
+    asset_ref = CODEX_ORCHESTRATOR_CONTRACT_SNIPPETS_ASSET if role == "orchestrator" else CODEX_ROLE_CONTRACT_SNIPPETS_ASSET
+    return tuple(line.strip() for line in load_system_prompt_asset(asset_ref).splitlines() if line.strip())
 
 
 def _read_toml_or_error(path: Path) -> tuple[dict[str, Any], str]:

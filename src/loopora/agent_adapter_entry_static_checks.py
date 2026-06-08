@@ -88,7 +88,16 @@ def adapter_entry_shape_checks(kind: str, root: Path) -> list[dict[str, str]]:
         except (OSError, UnicodeDecodeError):
             text = ""
         checks.append(adapter_check("entry_frontmatter", ok=text.startswith("---\n") and "\n---\n" in text[4:], path=entry_path))
-        checks.append(adapter_check("entry_is_thin_dispatcher", ok=len(text.splitlines()) <= 80 and "thin dispatcher" in text, path=entry_path))
+        if entry_path_is_plan_entry(entry_path):
+            checks.append(
+                adapter_check(
+                    "entry_is_interactive_plan_dispatcher",
+                    ok=len(text.splitlines()) <= 80 and "interactive planning dispatcher" in text,
+                    path=entry_path,
+                )
+            )
+        else:
+            checks.append(adapter_check("entry_is_thin_dispatcher", ok=len(text.splitlines()) <= 80 and "thin dispatcher" in text, path=entry_path))
         if entry_path_is_run_entry(entry_path):
             native_contract_ok = entry_has_native_run_contract(text)
             checks.append(
@@ -100,6 +109,10 @@ def adapter_entry_shape_checks(kind: str, root: Path) -> list[dict[str, str]]:
                 )
             )
     return checks
+
+
+def entry_path_is_plan_entry(entry_path: str) -> bool:
+    return "/loopora-plan/" in entry_path or entry_path.endswith("/loopora-plan.md")
 
 
 def entry_path_is_run_entry(entry_path: str) -> bool:

@@ -168,21 +168,29 @@ def _lint_alignment_builder_guide_inputs(
     steps = [step for step in workflow.get("steps", []) if isinstance(step, Mapping)]
     workflow_role_archetype = _alignment_workflow_role_archetype(workflow, role_by_key=role_by_key)
     guide_steps_since_builder: list[str] = []
+    review_steps_since_builder: list[str] = []
     issues: list[str] = []
     for step in steps:
         step_id = str(step.get("id", "") or "").strip()
         archetype = workflow_role_archetype.get(str(step.get("role_id", "") or ""))
+        if archetype in {"inspector", "custom"}:
+            if step_id:
+                review_steps_since_builder.append(step_id)
+            continue
         if archetype == "guide":
-            guide_steps_since_builder.append(step_id)
+            if step_id:
+                guide_steps_since_builder.append(step_id)
             continue
         if archetype != "builder":
             continue
-        if not guide_steps_since_builder:
-            continue
-        inputs = step.get("inputs") if isinstance(step.get("inputs"), Mapping) else {}
-        handoffs_from = {str(handoff or "").strip() for handoff in (inputs.get("handoffs_from") if isinstance(inputs, Mapping) else []) or []}
-        if not handoffs_from.intersection(guide_steps_since_builder):
-            issues.append("Builder step after Guide must name a Guide handoff in inputs.handoffs_from: " + step_id)
+        if guide_steps_since_builder:
+            inputs = step.get("inputs") if isinstance(step.get("inputs"), Mapping) else {}
+            handoffs_from = {str(handoff or "").strip() for handoff in (inputs.get("handoffs_from") if isinstance(inputs, Mapping) else []) or []}
+            if not handoffs_from.intersection(guide_steps_since_builder):
+                issues.append("Builder step after Guide must name a Guide handoff in inputs.handoffs_from: " + step_id)
+            missing_review_handoffs = [review_step_id for review_step_id in review_steps_since_builder if review_step_id not in handoffs_from]
+            if missing_review_handoffs:
+                issues.append("Builder step after Guide must also include review handoffs in inputs.handoffs_from: " + step_id)
         guide_steps_since_builder = []
+        review_steps_since_builder = []
     return issues
-

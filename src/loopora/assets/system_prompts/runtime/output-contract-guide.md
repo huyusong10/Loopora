@@ -1,0 +1,1 @@
+Output contract: return JSON with created_at_iter, mode, consumed, analysis, seed_question, and meta_note. Inside analysis, turn Blocking or Unproven gaps into the smallest repair direction, strengthen Weak evidence only when it changes the decision, and keep Residual risk visible.

@@ -2,12 +2,55 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from loopora.strategy_source import builtin_strategy_prompt_markdown
+from loopora.system_prompt_assets import SYSTEM_PROMPT_ASSET_DIR
+
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
+SOURCE_ROOT = REPO_ROOT / "src" / "loopora"
+PROMPT_ASSET_ROOT = SOURCE_ROOT / "assets" / "prompts"
 
 
 def _loopora_source(*parts: str) -> str:
-    return (REPO_ROOT / "src" / "loopora" / Path(*parts)).read_text(encoding="utf-8")
+    return (SOURCE_ROOT / Path(*parts)).read_text(encoding="utf-8")
+
+
+def _python_source_text() -> str:
+    return "\n".join(path.read_text(encoding="utf-8") for path in sorted(SOURCE_ROOT.rglob("*.py")))
+
+
+def _prompt_asset_text() -> str:
+    return "\n".join(path.read_text(encoding="utf-8") for path in sorted(PROMPT_ASSET_ROOT.rglob("*.md")))
+
+
+def test_builtin_strategy_role_prompt_bodies_live_in_prompt_assets_not_code() -> None:
+    prompt_snippets = (
+        "You are the Builder inside Loopora.",
+        "You are the GateKeeper inside Loopora.",
+        "你是 Loopora 内部的 Builder。",
+        "你是 Loopora 内部的 GateKeeper。",
+    )
+    python_source = _python_source_text()
+    prompt_assets = _prompt_asset_text()
+
+    for snippet in prompt_snippets:
+        assert snippet not in python_source
+        assert snippet in prompt_assets
+
+    assert "You are the Builder inside Loopora." in builtin_strategy_prompt_markdown("builder.md", locale="en")
+    assert "你是 Loopora 内部的 Builder。" in builtin_strategy_prompt_markdown("builder.md", locale="zh")
+    assert "archetype: builder" in builtin_strategy_prompt_markdown("builder.md", locale="zh")
+
+
+def test_strategy_prompt_locale_assets_stay_outside_fixed_system_prompt_assets() -> None:
+    assert PROMPT_ASSET_ROOT != SYSTEM_PROMPT_ASSET_DIR
+    assert (PROMPT_ASSET_ROOT / "builder.zh.md").is_file()
+    assert not (SYSTEM_PROMPT_ASSET_DIR / "builder.zh.md").exists()
+
+    strategy_source_assets = _loopora_source("strategy_source_prompt_assets.py")
+    system_prompt_loader = _loopora_source("system_prompt_assets.py")
+    assert "localized_prompt_ref" in strategy_source_assets
+    assert "localized_prompt_ref" not in system_prompt_loader
 
 
 def test_asset_catalog_uses_strategy_source_boundary_for_strategy_templates() -> None:

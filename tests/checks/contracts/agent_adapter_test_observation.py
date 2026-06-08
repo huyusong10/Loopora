@@ -219,7 +219,7 @@ def _assert_result_template_contract_targets(template: dict) -> None:
         "id": PRIMARY_COVERAGE_TARGET_ID,
         "kind": "done_when",
         "required": True,
-        "text": "The primary user flow works end to end.",
+        "text": "The primary user-facing flow works end to end for the target user.",
     }
 
 def _assert_submit_hint_command_requests_json(command: str) -> None:

@@ -6,6 +6,7 @@ from typing import Any
 from loopora.run_takeaway_judgment import build_judgment_contract
 from loopora.run_projection_fields import run_status_from_run, task_verdict_from_run
 from loopora.service_types import TERMINAL_RUN_STATUSES
+from loopora.system_prompt_assets import load_system_prompt_asset
 from loopora.task_verdicts import PASSING_TASK_VERDICT_STATUSES
 
 AGENT_TASK_PROOF_SOURCE = "run.task_verdict"
@@ -38,7 +39,7 @@ def agent_native_task_next_action(result: dict[str, Any]) -> dict[str, Any]:
             "run_status": run_status,
             "task_verdict_status": status,
             "task_verdict_summary": summary,
-            "guidance": "Task verdict already passed; no new evidence pass will start unless the task scope changes.",
+            "guidance": load_system_prompt_asset("agent_native/task-verdict-already-passed.md").strip(),
         }
     return {
         "kind": "continue_evidence",
@@ -48,10 +49,7 @@ def agent_native_task_next_action(result: dict[str, Any]) -> dict[str, Any]:
         "task_verdict_summary": summary,
         "next_loop_command": "/loopora-run",
         "plan_action": "open_run_url_improve_with_evidence_if_loop_needs_adjustment",
-        "guidance": (
-            "Run lifecycle is complete, but the task is not proven. Run /loopora-run again in the same "
-            "Agent session to start the next evidence pass from this verdict."
-        ),
+        "guidance": load_system_prompt_asset("agent_native/task-verdict-continue-evidence.md").strip(),
     }
 
 

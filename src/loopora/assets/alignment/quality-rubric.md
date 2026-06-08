@@ -42,6 +42,7 @@ A working agreement is ready only when it includes:
 - if the workflow is a 5+ role or multi-Builder long chain, why each phase creates a new artifact, proof target, handoff, or review boundary instead of role-zoo complexity
 - role-to-role and iteration-to-iteration information flow when the workflow has more than one reviewer or repair pass
 - an agreement-to-bundle traceability check: every confirmed judgment item can be mapped to `collaboration_summary`, `spec.markdown` / `# Role Notes`, `role_definitions`, `workflow.collaboration_intent`, step `inputs`, or GateKeeper evidence rules; metadata and loop names do not count
+- if project-local governance is relevant, the responsibility chain reaches closure: Builder reads the markers, Inspector / Custom verifies relevant design or test obligations, and GateKeeper treats skipped local rules, skipped `design/README.md` / `design/` / `tests/` responsibilities, or missing expected validation as Weak, Unproven, Blocking, or fail-closed outcomes
 - a private complete-run rehearsal: Builder, Inspector / Custom review, optional Guide repair direction, any second Builder pass, GateKeeper verdict, and user evidence audit can all be followed through explicit handoffs, evidence queries, and evidence buckets
 - a private failed-round pressure test: at least one plausible fake-done, weak-proof, drift, or residual-risk failure would be exposed, repaired, or blocked by the proposed `spec`, roles, workflow, handoffs, evidence queries, and GateKeeper rules
 - advanced workflow fields, if present, are justified by explicit expert/source compatibility and a concrete risk boundary
@@ -92,6 +93,7 @@ Treat this section as quality guidance, not a fixed regex vocabulary. Loopora's 
 - Custom review roles state low-permission or read-only specialized review / advisory responsibility and do not claim workdir writes or final pass/fail authority.
 - Guide after review reads review handoffs and queries review evidence before giving repair guidance.
 - Builder after Guide reads the Guide handoff before making the next implementation pass.
+- Builder after a review-shaped Guide also reads the review handoffs that shaped that Guide, so repair implementation can audit the original Weak / Unproven / Blocking evidence instead of trusting a detached summary.
 - any finishing GateKeeper names upstream handoffs and queries relevant evidence from Builder, Inspector, Custom, or Guide steps as applicable.
 - finishing GateKeeper reads Inspector / Custom / Guide review handoffs and queries review evidence whenever review happened before final judgment; a final verdict based only on Builder evidence is not enough after review.
 - default bundles keep advanced workflow fields out of the main path; complexity should usually live in role posture, `inputs`, evidence queries, and GateKeeper strictness.
@@ -99,7 +101,8 @@ Treat this section as quality guidance, not a fixed regex vocabulary. Loopora's 
 - the candidate Loop has survived a private complete-run rehearsal: Builder, Inspector / Custom review, optional Guide repair direction, any second Builder pass, GateKeeper verdict, and user evidence audit are connected by explicit handoffs, evidence queries, and evidence buckets rather than ambient chat memory.
 - the candidate Loop has survived a private failed-round pressure test: a plausible shallow completion, weak proof, drift, or unacceptable residual risk would not slip through as a pass.
 - user-facing names and prose follow the user's language while Loopora domain terms stay stable.
-- a Chinese user's working agreement and readiness evidence are written in Chinese prose, not English prose under Chinese labels.
+- working agreement and readiness evidence use the same user-facing language as the task or agreement, not one language's prose behind another language's labels.
+- role names keep Loopora terms stable but express task-specific phase, risk, and responsibility words in the user's language; merely appending `Builder`, `Inspector`, `GateKeeper`, `Guide`, or `Custom` to a role label from another display language is not compliant.
 
 ## Common failure patterns
 
@@ -135,7 +138,7 @@ Reject these patterns:
 - every step receiving all previous context when a focused input policy is needed
 - expert controls used as generic timers, cron, webhook-like automation, or implicit Builder repair
 - “confirm” treated as enough when the agreement is still vague
-- Chinese labels wrapped around English working-agreement evidence
+- one language's labels wrapped around another language's working-agreement evidence
 - evidence described as “tests or screenshots” without saying which one should persuade this task
 - evidence that is flattened into a generic summary instead of distinguishing Proven, Weak, Unproven, Blocking, and Residual risk
 - bundles that mention proof types but never expose the five stable evidence buckets used for the final task verdict

@@ -33,6 +33,7 @@ class RealExecutorProviderFlowMixin:
             if request.executor_mode == "command"
             else build_codex_exec_args(request, schema_path)
         )
+        stdin_text = None if request.executor_mode == "command" else request.prompt
         if request.inherit_session:
             request.extra_context.setdefault("session_ref", {})
         return_code = self._stream_process(
@@ -43,6 +44,7 @@ class RealExecutorProviderFlowMixin:
                 should_stop=should_stop,
                 set_child_pid=set_child_pid,
                 line_handler=lambda line: self._handle_codex_line(line, request, emit_event),
+                stdin_text=stdin_text,
             )
         )
 

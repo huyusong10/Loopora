@@ -54,7 +54,7 @@ def test_agent_native_result_template_uses_schema_shaped_null_scaffold() -> None
                     {
                         "id": "done_when.check_001",
                         "kind": "done_when",
-                        "text": "The primary user flow works end to end.",
+                        "text": "The primary user-facing flow works end to end for the target user.",
                         "required": True,
                     },
                     {
@@ -80,7 +80,7 @@ def test_agent_native_result_template_uses_schema_shaped_null_scaffold() -> None
             "id": "done_when.check_001",
             "kind": "done_when",
             "required": True,
-            "text": "The primary user flow works end to end.",
+            "text": "The primary user-facing flow works end to end for the target user.",
         },
         {
             "id": "success_surface.surface_001",
@@ -117,7 +117,7 @@ def test_agent_native_result_template_reuses_step_view_coverage_projection() -> 
                     "id": "done_when.check_001",
                     "kind": "done_when",
                     "required": True,
-                    "text": "The primary user flow works end to end.",
+                    "text": "The primary user-facing flow works end to end for the target user.",
                 }
             ],
             "judgment_contract": {"coverage_targets": []},
@@ -131,7 +131,7 @@ def test_agent_native_result_template_reuses_step_view_coverage_projection() -> 
             "id": "done_when.check_001",
             "kind": "done_when",
             "required": True,
-            "text": "The primary user flow works end to end.",
+            "text": "The primary user-facing flow works end to end for the target user.",
         }
     ]
 

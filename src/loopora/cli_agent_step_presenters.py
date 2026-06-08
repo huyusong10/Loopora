@@ -30,6 +30,7 @@ from loopora.cli_run_output import print_run_contract_summary, print_task_verdic
 from loopora.cli_shared import echo_json
 from loopora.cli_summary_helpers import clip as _clip
 from loopora.run_projection_fields import run_status_from_run, task_verdict_from_run
+from loopora.system_prompt_assets import load_system_prompt_asset
 
 __all__ = [
     "_agent_next_json_payload",
@@ -174,7 +175,7 @@ def _print_terminal_task_next_action(task_verdict: object, task_next_action: obj
     if isinstance(task_verdict, dict):
         summary = str(task_verdict.get("summary") or "").strip()
     if status in PASSING_TASK_VERDICT_STATUSES:
-        typer.echo("task_next_action: task verdict already passed; no new evidence pass will start unless the task scope changes")
+        typer.echo(f"task_next_action: {_lowercase_first(load_system_prompt_asset('agent_native/task-verdict-already-passed.md').strip())}")
         return
     if not status:
         status = "not_evaluated"
@@ -182,7 +183,7 @@ def _print_terminal_task_next_action(task_verdict: object, task_next_action: obj
     typer.echo(
         "task_next_action: "
         + (
-            guidance or "run lifecycle is complete but the task is not proven; run /loopora-run again in this Agent session to start the next evidence pass"
+            guidance or load_system_prompt_asset("agent_native/task-verdict-continue-evidence-terminal.md").strip()
         )
     )
     typer.echo(f"next_loop_command: {(action.get('next_loop_command') or '/loopora-run')!s}")
@@ -198,3 +199,7 @@ def _print_terminal_task_next_action(task_verdict: object, task_next_action: obj
         summary = action_summary
     if summary:
         typer.echo(f"next_evidence_focus: {_clip(summary, 220)}")
+
+
+def _lowercase_first(text: str) -> str:
+    return text[:1].lower() + text[1:] if text else ""
