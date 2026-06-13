@@ -17,6 +17,8 @@ def result_error_text(result) -> str:
 def assert_readme_entry_points(readmes: list[str], documented_adapters: list[set[str]]) -> None:
     assert documented_adapters == [{"codex", "claude", "opencode"}, {"codex", "claude", "opencode"}]
     assert all("loopora serve " in readme for readme in readmes)
+    assert all('loopora doctor --workdir "$PWD"' in readme for readme in readmes)
+    assert all("loopora diagnose doctor" in readme for readme in readmes)
     assert "After the preview looks right, run `/loopora-run`" in readmes[0]
     assert "预览看起来正确后，运行 `/loopora-run`" in readmes[1]
     assert all("confirmed Loop" not in readme for readme in readmes)
@@ -81,17 +83,20 @@ def assert_documented_cli_entries_available(documented_adapters: list[set[str]])
 
     help_result = runner.invoke(cli.app, ["--help"])
     assert help_result.exit_code == 0, result_error_text(help_result)
+    normalized_help = re.sub(r"\s+", " ", help_result.stdout)
     assert "Start here:" in help_result.stdout
     assert re.search(r"loopora\s+init\s+codex", help_result.stdout)
-    assert "task goal" in help_result.stdout
+    assert "task goal" in normalized_help
     assert "fake-done risk" in help_result.stdout
-    assert "required evidence" in help_result.stdout
+    assert "required evidence" in normalized_help
+    assert "loopora doctor" in normalized_help
     assert "/loopora-plan" in help_result.stdout
     assert "/loopora-run" in help_result.stdout
     assert "same" in help_result.stdout
     assert "Agent session" in help_result.stdout
     assert help_result.stdout.index("Start here:") < help_result.stdout.index("Expert: create and run")
     assert help_result.stdout.index("│ init") < help_result.stdout.index("│ run")
+    assert help_result.stdout.index("│ init") < help_result.stdout.index("│ doctor") < help_result.stdout.index("│ serve")
     assert help_result.stdout.index("│ serve") < help_result.stdout.index("│ run")
     assert help_result.stdout.index("Install /loopora-plan") < help_result.stdout.index(
         "Expert: create and inspect reusable run flows"

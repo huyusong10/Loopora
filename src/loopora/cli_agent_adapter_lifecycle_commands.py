@@ -11,7 +11,8 @@ from loopora.cli_agent_adapter_output import (
     print_adapter_mutation_result as _print_adapter_mutation_result,
 )
 from loopora.cli_agent_command_options import AdapterWorkdirOption, CheckOption
-from loopora.cli_shared import JsonOutputOption, get_service, handle_error
+from loopora.cli_shared import JsonOutputOption, handle_error
+from loopora.agent_adapters import check_agent_adapter, install_agent_adapter, uninstall_agent_adapter
 from loopora.service import LooporaError
 from loopora.service_types import LooporaConflictError
 
@@ -55,7 +56,7 @@ def _install_adapter(adapter: str, *, workdir: Path, check: bool, json_output: b
         if check:
             _check_adapter(adapter, workdir=workdir, json_output=json_output)
             return
-        result = get_service().install_agent_adapter(adapter, workdir=workdir)
+        result = install_agent_adapter(adapter, workdir=workdir)
         _print_adapter_mutation_result(result, action="installed", json_output=json_output)
     except LooporaConflictError as exc:
         if _is_adapter_install_conflict(exc):
@@ -68,7 +69,7 @@ def _install_adapter(adapter: str, *, workdir: Path, check: bool, json_output: b
 
 def _check_adapter(adapter: str, *, workdir: Path, json_output: bool) -> None:
     try:
-        result = get_service().check_agent_adapter(adapter, workdir=workdir)
+        result = check_agent_adapter(adapter, workdir=workdir)
         _print_adapter_check_result(result, json_output=json_output)
         if result.get("check_status") != "pass":
             raise typer.Exit(code=1)
@@ -95,7 +96,7 @@ def _register_uninstall_commands(uninstall_app: typer.Typer) -> None:
 
 def _uninstall_adapter(adapter: str, *, workdir: Path, json_output: bool) -> None:
     try:
-        result = get_service().uninstall_agent_adapter(adapter, workdir=workdir)
+        result = uninstall_agent_adapter(adapter, workdir=workdir)
         _print_adapter_mutation_result(result, action="uninstalled", json_output=json_output)
     except LooporaError as exc:
         handle_error(exc, json_output=json_output)

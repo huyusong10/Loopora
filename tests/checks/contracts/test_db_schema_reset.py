@@ -70,7 +70,7 @@ def test_cli_serve_reports_v3_reset_without_traceback(monkeypatch, tmp_path: Pat
     _create_legacy_app_db(app_home / "app.db")
     monkeypatch.setenv("LOOPORA_HOME", str(app_home))
 
-    result = CliRunner(mix_stderr=False).invoke(cli.app, ["serve"])
+    result = CliRunner().invoke(cli.app, ["serve"])
     error_text = result.stderr or result.output
 
     assert result.exit_code == 1
@@ -81,7 +81,7 @@ def test_cli_serve_reports_v3_reset_without_traceback(monkeypatch, tmp_path: Pat
     assert "schema_version" not in error_text
 
 
-def test_cli_init_json_reports_v3_reset_without_adapter_conflict(monkeypatch, tmp_path: Path) -> None:
+def test_cli_adapter_lifecycle_bypasses_app_db_development_reset(monkeypatch, tmp_path: Path) -> None:
     app_home = tmp_path / "loopora-home"
     workdir = tmp_path / "project"
     app_home.mkdir()
@@ -89,21 +89,53 @@ def test_cli_init_json_reports_v3_reset_without_adapter_conflict(monkeypatch, tm
     _create_legacy_app_db(app_home / "app.db")
     monkeypatch.setenv("LOOPORA_HOME", str(app_home))
 
-    runner = CliRunner(mix_stderr=False)
-    for args in (
-        ["init", "codex", "--workdir", str(workdir), "--json"],
-        ["init", "codex", "--workdir", str(workdir), "--check", "--json"],
-    ):
-        result = runner.invoke(cli.app, args)
-        payload = json.loads(result.stdout)
+    runner = CliRunner()
+    check_before_install = runner.invoke(cli.app, ["init", "codex", "--workdir", str(workdir), "--check", "--json"])
+    before_payload = json.loads(check_before_install.stdout)
 
-        assert result.exit_code == 1
-        assert result.stderr == ""
-        assert payload["loop_recovery"] == "development_reset_required"
-        assert payload["reset_command"] == "loopora dev reset --workdir <project>"
-        assert "Loopora v3 development reset required" in payload["message"]
-        assert "adapter_install_conflict" not in result.stdout
-        assert "install_conflict" not in result.stdout
+    assert check_before_install.exit_code == 1
+    assert check_before_install.stderr == ""
+    assert before_payload["kind"] == "agent_check"
+    assert before_payload["summary"]["check_status"] == "fail"
+    assert before_payload["summary"]["check_recovery"]["state"] == "not_installed"
+    assert "development_reset_required" not in check_before_install.stdout
+    assert "Loopora v3 development reset required" not in check_before_install.stdout
+
+    install = runner.invoke(cli.app, ["init", "codex", "--workdir", str(workdir), "--json"])
+    install_payload = json.loads(install.stdout)
+
+    assert install.exit_code == 0
+    assert install.stderr == ""
+    assert install_payload["status"] == "installed"
+    assert install_payload["adapter"] == "codex"
+    assert "development_reset_required" not in install.stdout
+
+    check_after_install = runner.invoke(cli.app, ["init", "codex", "--workdir", str(workdir), "--check", "--json"])
+    after_payload = json.loads(check_after_install.stdout)
+
+    assert check_after_install.exit_code == 0
+    assert check_after_install.stderr == ""
+    assert after_payload["kind"] == "agent_check"
+    assert after_payload["summary"]["check_status"] == "pass"
+    assert after_payload["summary"]["check_recovery"]["state"] == "installed"
+
+
+def test_cli_diagnose_doctor_bypasses_app_db_development_reset(monkeypatch, tmp_path: Path) -> None:
+    app_home = tmp_path / "loopora-home"
+    workdir = tmp_path / "project"
+    app_home.mkdir()
+    workdir.mkdir()
+    _create_legacy_app_db(app_home / "app.db")
+    monkeypatch.setenv("LOOPORA_HOME", str(app_home))
+
+    result = CliRunner().invoke(cli.app, ["doctor", "--workdir", str(workdir), "--json"])
+    payload = json.loads(result.stdout)
+
+    assert result.exit_code == 1
+    assert result.stderr == ""
+    assert payload["diagnose_doctor_summary"]["status"] == "not_ready"
+    assert payload["agent_entries"][0]["install_state"] == "not_installed"
+    assert "Loopora v3 development reset required" not in result.stdout
 
 
 def test_run_schema_persists_task_verdict_separately_from_raw_verdict(tmp_path: Path) -> None:

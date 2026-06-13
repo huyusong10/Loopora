@@ -2,12 +2,15 @@ from __future__ import annotations
 
 from importlib.metadata import PackageNotFoundError, version
 import logging
+from pathlib import Path
 from typing import Annotated
 
 import typer
 import uvicorn
 
 from loopora.branding import APP_AUTH_ENV
+from loopora.cli_agent_command_options import AdapterWorkdirOption
+from loopora.cli_diagnose_commands import run_doctor_command
 from loopora.cli_shared import (
     BackgroundOption,
     CommandArgOption,
@@ -17,6 +20,7 @@ from loopora.cli_shared import (
     ExecutorModeOption,
     ExecutorOption,
     IterationIntervalOption,
+    JsonOutputOption,
     MaxItersOption,
     MaxRoleRetriesOption,
     ModelOption,
@@ -56,6 +60,7 @@ AllowUnsafeOpenOption = Annotated[
 
 def register_root_commands(app: typer.Typer) -> None:
     _register_main_callback(app)
+    _register_doctor_command(app)
     _register_run_command(app)
     _register_serve_command(app)
     _register_execute_run_worker_command(app)
@@ -88,6 +93,13 @@ def _version_callback(value: object) -> None:
         package_version = "unknown"
     typer.echo(f"loopora {package_version}")
     raise typer.Exit
+
+
+def _register_doctor_command(app: typer.Typer) -> None:
+    @app.command()
+    def doctor(workdir: AdapterWorkdirOption = Path(), *, json_output: JsonOutputOption = False) -> None:
+        """Report local first-use readiness without installing or repairing files."""
+        run_doctor_command(workdir=workdir, json_output=json_output)
 
 
 def _register_run_command(app: typer.Typer) -> None:

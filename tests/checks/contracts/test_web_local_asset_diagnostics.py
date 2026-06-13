@@ -6,12 +6,58 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
+from loopora.agent_adapters import install_agent_adapter
 from loopora.branding import state_dir_for_workdir
 from loopora.settings import app_home
 from loopora.web import build_app
 
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
+
+
+def test_api_doctor_reports_first_use_readiness(
+    service_factory,
+    sample_workdir: Path,
+) -> None:
+    service = service_factory(scenario="success")
+    client = TestClient(build_app(service=service, bind_host="127.0.0.1", bind_port=9123))
+
+    before_install = client.get("/api/diagnostics/doctor", params={"workdir": str(sample_workdir)})
+
+    assert before_install.status_code == HTTPStatus.OK
+    before_payload = before_install.json()
+    assert before_payload["status"] == "not_ready"
+    assert before_payload["ready"] is False
+    assert before_payload["workdir"] == str(sample_workdir.resolve())
+    assert before_payload["web"]["origin"] == "http://127.0.0.1:9123"
+    assert before_payload["recommended_adapter"] == "codex"
+    assert any(item["adapter"] == "codex" and item["next_action"] == "install_agent_entry" for item in before_payload["agent_entries"])
+
+    install_agent_adapter("codex", sample_workdir)
+    after_install = client.get("/api/diagnostics/doctor", params={"workdir": str(sample_workdir)})
+
+    assert after_install.status_code == HTTPStatus.OK
+    after_payload = after_install.json()
+    assert after_payload["status"] == "ready"
+    assert after_payload["ready"] is True
+    assert after_payload["ready_adapter_count"] == 1
+    assert any(item["adapter"] == "codex" and item["ready"] is True for item in after_payload["agent_entries"])
+
+
+def test_tools_page_surfaces_doctor_readiness_before_adapter_actions(service_factory) -> None:
+    service = service_factory(scenario="success")
+    client = TestClient(build_app(service=service))
+
+    response = client.get("/tools")
+    tools_js = (REPO_ROOT / "src" / "loopora" / "static" / "pages" / "tools.js").read_text(encoding="utf-8")
+
+    assert response.status_code == HTTPStatus.OK
+    assert response.text.index('data-testid="agent-readiness-summary"') < response.text.index(
+        'data-testid="agent-adapter-grid"'
+    )
+    assert "/api/diagnostics/doctor" in tools_js
+    assert "function renderAgentReadiness" in tools_js
+    assert "refreshAgentReadiness" in tools_js
 
 
 def test_api_local_asset_diagnostics_reports_orphans_and_missing_dirs(
@@ -95,14 +141,20 @@ def test_local_asset_diagnostics_delegate_orphan_dir_projection() -> None:
     diagnostics_source = (REPO_ROOT / "src" / "loopora" / "service_local_asset_diagnostics.py").read_text(
         encoding="utf-8"
     )
+    diagnostics_route_source = (REPO_ROOT / "src" / "loopora" / "web_route_diagnostics_api.py").read_text(
+        encoding="utf-8"
+    )
     orphans_source = (REPO_ROOT / "src" / "loopora" / "service_local_asset_orphans.py").read_text(
         encoding="utf-8"
     )
     design_source = (REPO_ROOT / "design" / "contracts.md").read_text(encoding="utf-8")
 
+    assert "from loopora.diagnose_doctor import" in diagnostics_route_source
+    assert '"/api/diagnostics/doctor"' in diagnostics_route_source
     assert "from loopora.service_local_asset_orphans import" in diagnostics_source
     for marker in ("def orphan_bundle_dirs", "def orphan_run_dirs", "def orphan_alignment_dirs"):
         assert marker in orphans_source
         assert marker not in diagnostics_source
     assert "def _records_without_dirs" in diagnostics_source
+    assert "web_route_diagnostics_api.py" in design_source
     assert "service_local_asset_orphans.py" in design_source

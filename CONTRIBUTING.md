@@ -15,16 +15,10 @@ The repository declares editor and Git text normalization through `.editorconfig
 Run the same fast gates used by CI before proposing a change:
 
 ```bash
-uv sync --locked --dry-run
-uv pip check
-find src/loopora/static -name '*.js' -print0 | xargs -0 -n1 node --check
-uv run ruff check src/loopora tests
-git diff --check
-rm -rf tmp/package-check
-mkdir -p tmp/package-check
-uv build --out-dir tmp/package-check
-uv run pytest -q tests/checks/contracts
+uv run loopora dev check
 ```
+
+Use `uv run loopora dev check --list` to inspect the expanded default-fast steps without running them.
 
 Browser journey checks are part of CI and should be run for Web behavior, route changes, templates, static assets, or anything that affects a user flow:
 

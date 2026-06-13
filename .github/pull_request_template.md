@@ -9,14 +9,7 @@
 
 ## Evidence
 
-- [ ] `find src/loopora/static -name '*.js' -print0 | xargs -0 -n1 node --check`
-- [ ] `uv pip check`
-- [ ] `uv run ruff check src/loopora tests`
-- [ ] `git diff --check`
-- [ ] `rm -rf tmp/package-check`
-- [ ] `mkdir -p tmp/package-check`
-- [ ] `uv build --out-dir tmp/package-check`
-- [ ] `uv run pytest -q tests/checks/contracts`
+- [ ] `uv run loopora dev check`
 - [ ] Focused or journey checks for the touched area:
 
 ## Risk Notes

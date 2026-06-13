@@ -15,6 +15,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const agentAdapterStatusBox = document.getElementById("agent-adapter-status");
   const agentAdapterWorkdirInput = document.getElementById("agent-adapter-workdir");
   const agentAdapterTargetNote = document.getElementById("agent-adapter-target-note");
+  const agentReadinessSummary = document.getElementById("agent-readiness-summary");
   const agentAdapterHandoff = document.getElementById("agent-adapter-handoff");
   const agentAdapterRefreshButton = document.querySelector("[data-testid='agent-adapter-refresh']");
   const agentAdapterCards = Array.from(document.querySelectorAll("[data-agent-adapter]"));
@@ -316,6 +317,139 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     renderLocalAssetDiagnostics(payload);
     showStatus(localAssetsStatusBox, "");
+  }
+
+  function agentReadinessUrl() {
+    const workdir = agentAdapterWorkdir();
+    if (!workdir) {
+      return "/api/diagnostics/doctor";
+    }
+    return `/api/diagnostics/doctor?workdir=${encodeURIComponent(workdir)}`;
+  }
+
+  function agentReadinessStatusLabel(payload) {
+    const status = String(payload?.status || "");
+    if (payload?.ready && status === "ready_with_warnings") {
+      return localeText("可开始，有需检查项", "Ready with warnings");
+    }
+    if (payload?.ready) {
+      return localeText("已可开始", "Ready");
+    }
+    return localeText("还不能开始", "Needs entry");
+  }
+
+  function agentReadinessPillClass(payload) {
+    const status = String(payload?.status || "");
+    if (payload?.ready && status === "ready_with_warnings") {
+      return "wake-lock-pill wake-lock-pill-queued";
+    }
+    if (payload?.ready) {
+      return "wake-lock-pill wake-lock-pill-held";
+    }
+    return "wake-lock-pill wake-lock-pill-warning";
+  }
+
+  function agentReadinessEntries(payload) {
+    return Array.isArray(payload?.agent_entries) ? payload.agent_entries : [];
+  }
+
+  function agentReadinessPrimaryEntry(payload) {
+    const entries = agentReadinessEntries(payload);
+    const ready = entries.find((item) => item?.ready === true);
+    if (ready) {
+      return ready;
+    }
+    const recommended = String(payload?.recommended_adapter || "codex");
+    return entries.find((item) => String(item?.adapter || "") === recommended) || entries[0] || null;
+  }
+
+  function agentReadinessCommand(entry, kind) {
+    const commands = entry?.commands && typeof entry.commands === "object" ? entry.commands : {};
+    return String(commands[kind] || "").trim();
+  }
+
+  function renderAgentReadiness(payload) {
+    if (!agentReadinessSummary) {
+      return;
+    }
+    const entry = agentReadinessPrimaryEntry(payload);
+    const adapter = String(entry?.adapter || payload?.recommended_adapter || "codex");
+    const label = String(entry?.label || agentAdapterLabel(adapter));
+    const readyCount = Number(payload?.ready_adapter_count || 0);
+    const attentionCount = Number(payload?.attention_adapter_count || 0);
+    const workdir = String(payload?.workdir || agentAdapterWorkdir() || "").trim();
+    const webOrigin = String(payload?.web?.origin || "").trim();
+    const installCommand = agentReadinessCommand(entry, "install");
+    const checkCommand = agentReadinessCommand(entry, "install_check") || agentReadinessCommand(entry, "agent_check");
+    const title = payload?.ready
+      ? localeText(`${label} 已经可以启动 Loopora`, `${label} can start Loopora`)
+      : localeText("还没有可用的 Agent 入口", "No Agent entry is ready yet");
+    const detail = payload?.ready
+      ? localeText(
+        `${readyCount} 个入口可用${attentionCount ? `，${attentionCount} 个入口需要检查` : ""}。回到 ${label} 说明任务目标、伪完成风险和必需证据。`,
+        `${readyCount} entry ${readyCount === 1 ? "is" : "are"} ready${attentionCount ? `, with ${attentionCount} needing attention` : ""}. Return to ${label} with the task goal, fake-done risk, and required evidence.`,
+      )
+      : localeText(
+        `先为目标项目安装一个入口；建议从 ${label} 开始。安装后刷新或重启对应 Agent，再回到任务里运行 /loopora-plan。`,
+        `Install one entry for the target project first; ${label} is the recommended starting point. After install, refresh or restart that Agent, then run /loopora-plan in the task.`,
+      );
+    const steps = payload?.ready
+      ? [
+        localeText("把任务判断交给 /loopora-plan。", "Give the task judgment to /loopora-plan."),
+        localeText("审查 READY Loop 预览。", "Review the READY Loop preview."),
+        localeText("在同一 Agent 会话运行 /loopora-run。", "Run /loopora-run in the same Agent session."),
+      ]
+      : [
+        localeText("确认目标项目目录。", "Confirm the target project directory."),
+        localeText("安装一个 Agent 入口。", "Install one Agent entry."),
+        localeText("回到 Agent 运行 /loopora-plan。", "Return to the Agent and run /loopora-plan."),
+      ];
+    const actionButtons = payload?.ready
+      ? `
+        <button class="agent-readiness-copy-button" type="button" data-agent-readiness-copy="/loopora-plan" data-testid="agent-readiness-copy-plan">
+          <code>/loopora-plan</code>
+        </button>
+        <button class="agent-readiness-copy-button" type="button" data-agent-readiness-copy="/loopora-run" data-testid="agent-readiness-copy-run">
+          <code>/loopora-run</code>
+        </button>
+      `
+      : `
+        ${installCommand ? `<button class="agent-readiness-copy-button" type="button" data-agent-readiness-copy="${escapeHtml(installCommand)}" data-testid="agent-readiness-copy-install"><code>${escapeHtml(installCommand)}</code></button>` : ""}
+        ${checkCommand ? `<button class="agent-readiness-copy-button" type="button" data-agent-readiness-copy="${escapeHtml(checkCommand)}" data-testid="agent-readiness-copy-check"><code>${escapeHtml(checkCommand)}</code></button>` : ""}
+      `;
+    agentReadinessSummary.dataset.readinessStatus = String(payload?.status || "");
+    agentReadinessSummary.innerHTML = `
+      <div class="agent-readiness-head">
+        <div class="agent-readiness-copy">
+          <strong data-testid="agent-readiness-title">${escapeHtml(title)}</strong>
+          <span data-testid="agent-readiness-detail">${escapeHtml(detail)}</span>
+        </div>
+        <span class="${escapeHtml(agentReadinessPillClass(payload))}" data-testid="agent-readiness-pill">${escapeHtml(agentReadinessStatusLabel(payload))}</span>
+      </div>
+      <div class="agent-readiness-meta">
+        <span>${escapeHtml(localeText("目标项目", "Target project"))}: ${escapeHtml(workdir || "-")}</span>
+        ${webOrigin ? `<span>${escapeHtml(localeText("Web 观察入口", "Web observation entry"))}: ${escapeHtml(webOrigin)}</span>` : ""}
+      </div>
+      <ol class="agent-readiness-steps" data-testid="agent-readiness-steps">
+        ${steps.map((step) => `<li>${escapeHtml(step)}</li>`).join("")}
+      </ol>
+      ${actionButtons.trim() ? `<div class="agent-readiness-actions" data-testid="agent-readiness-actions">${actionButtons}</div>` : ""}
+    `;
+  }
+
+  async function refreshAgentReadiness(options = {}) {
+    const quiet = options.quiet ?? false;
+    const {response, payload} = await fetchJson(agentReadinessUrl());
+    if (!response.ok) {
+      if (!quiet) {
+        showStatus(agentAdapterStatusBox, payload.error || localeText("无法读取本地就绪状态。", "Unable to load local readiness."), "error");
+      }
+      return;
+    }
+    renderAgentReadiness(payload);
+    if (!quiet) {
+      showStatus(agentAdapterStatusBox, "");
+    }
   }
 
   function agentAdapterStatusLabel(status) {
@@ -648,6 +782,7 @@ document.addEventListener("DOMContentLoaded", () => {
         "success",
       );
       await refreshAgentAdapters({quiet: true});
+      await refreshAgentReadiness({quiet: true});
     } catch (error) {
       showStatus(
         agentAdapterStatusBox,
@@ -972,17 +1107,42 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
+  agentReadinessSummary?.addEventListener("click", async (event) => {
+    const button = event.target?.closest?.("[data-agent-readiness-copy]");
+    if (!(button instanceof HTMLButtonElement)) {
+      return;
+    }
+    const value = String(button.dataset.agentReadinessCopy || "").trim();
+    if (!value) {
+      return;
+    }
+    try {
+      await copyText(value);
+      button.classList.add("is-copied");
+      showStatus(agentAdapterStatusBox, localeText("已复制命令。", "Command copied."), "success");
+      window.setTimeout(() => button.classList.remove("is-copied"), 1400);
+    } catch (error) {
+      showStatus(
+        agentAdapterStatusBox,
+        error?.message || localeText("无法复制命令。", "Unable to copy the command."),
+        "error",
+      );
+    }
+  });
+
   if (agentAdapterWorkdirInput) {
     agentAdapterWorkdirInput.value = readAgentAdapterWorkdirPreference();
     agentAdapterWorkdirInput.addEventListener("change", () => {
       persistAgentAdapterWorkdirPreference(agentAdapterWorkdir());
       refreshAgentAdapters().catch(() => {});
+      refreshAgentReadiness().catch(() => {});
     });
     agentAdapterWorkdirInput.addEventListener("keydown", (event) => {
       if (event.key === "Enter") {
         event.preventDefault();
         persistAgentAdapterWorkdirPreference(agentAdapterWorkdir());
         refreshAgentAdapters().catch(() => {});
+        refreshAgentReadiness().catch(() => {});
       }
     });
   }
@@ -990,6 +1150,7 @@ document.addEventListener("DOMContentLoaded", () => {
   agentAdapterRefreshButton?.addEventListener("click", () => {
     persistAgentAdapterWorkdirPreference(agentAdapterWorkdir());
     refreshAgentAdapters().catch(() => {});
+    refreshAgentReadiness().catch(() => {});
   });
 
   wakeLockToggle.addEventListener("change", async () => {
@@ -1006,6 +1167,7 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   refreshRuntimeActivity({quiet: true});
+  refreshAgentReadiness({quiet: true}).catch(() => {});
   refreshAgentAdapters({quiet: true}).catch(() => {});
   refreshLocalAssetDiagnostics({quiet: true}).catch(() => {});
   window.setInterval(() => {
@@ -1016,6 +1178,7 @@ document.addEventListener("DOMContentLoaded", () => {
     updateWakeLockRuntimePill();
     updateWakeLockHoldPill();
     renderRuntimeRuns();
+    refreshAgentReadiness({quiet: true}).catch(() => {});
     refreshAgentAdapters({quiet: true}).catch(() => {});
     refreshLocalAssetDiagnostics({quiet: true}).catch(() => {});
     syncWakeLock().catch(() => {});

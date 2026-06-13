@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import inspect
 import json
 import shlex
 import time
@@ -37,7 +38,8 @@ from agent_adapter_expected import (
 
 class CliRunner(_TyperCliRunner):
     def __init__(self, *args, **kwargs):
-        kwargs.setdefault("mix_stderr", False)
+        if "mix_stderr" in inspect.signature(_TyperCliRunner.__init__).parameters:
+            kwargs.setdefault("mix_stderr", False)
         super().__init__(*args, **kwargs)
 
 from agent_adapter_test_common import (

@@ -59,6 +59,22 @@
       <span data-lang="en">Return to that Agent with the task goal, fake-done risk, and required evidence, then run <code>/loopora-plan</code>; after the READY preview is reviewed, run <code>/loopora-run</code> in the same Agent session.</span>
     </span>
   </div>
+  <div class="agent-readiness-summary" id="agent-readiness-summary" data-testid="agent-readiness-summary" aria-live="polite">
+    <div class="agent-readiness-copy">
+      <strong>
+        <span data-lang="zh">正在读取本地就绪状态…</span>
+        <span data-lang="en">Loading local readiness…</span>
+      </strong>
+      <span>
+        <span data-lang="zh">Loopora 会只读检查当前目标项目、Web 入口和 Agent 入口。</span>
+        <span data-lang="en">Loopora checks the target project, Web entry, and Agent entries without changing files.</span>
+      </span>
+    </div>
+    <span class="wake-lock-pill wake-lock-pill-neutral">
+      <span data-lang="zh">正在读取…</span>
+      <span data-lang="en">Loading…</span>
+    </span>
+  </div>
   <div class="agent-adapter-handoff" id="agent-adapter-handoff" data-testid="agent-adapter-handoff" aria-live="polite" hidden></div>
   <div class="agent-adapter-grid" id="agent-adapter-grid" data-testid="agent-adapter-grid">
     <article class="agent-adapter-card" data-agent-adapter="codex" data-testid="agent-adapter-codex">

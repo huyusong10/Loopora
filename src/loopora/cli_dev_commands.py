@@ -6,7 +6,9 @@ from typing import Annotated
 import typer
 
 from loopora.cli_shared import JsonOutputOption, echo_json, handle_error
+from loopora.dev_check import DEFAULT_FAST_PROFILE, run_dev_check
 from loopora.dev_reset import dev_reset_loopora_state
+from loopora.service_types import LooporaError
 
 DevResetWorkdirOption = Annotated[
     Path,
@@ -18,15 +20,54 @@ DevResetWorkdirOption = Annotated[
         help="Project directory whose development Loopora state should be reset.",
     ),
 ]
+DevCheckWorkdirOption = Annotated[
+    Path,
+    typer.Option(
+        "--workdir",
+        exists=True,
+        file_okay=False,
+        dir_okay=True,
+        help="Project directory where the default-fast verification gate should run.",
+    ),
+]
 DevResetYesOption = Annotated[
     bool,
     typer.Option("--yes", help="Actually delete the planned Loopora development state. Without this flag the command is a dry run."),
+]
+DevCheckProfileOption = Annotated[
+    str,
+    typer.Option("--profile", help="Verification profile to run."),
+]
+DevCheckListOption = Annotated[
+    bool,
+    typer.Option("--list", help="List the verification steps without running commands."),
 ]
 
 DEV_RESET_SUMMARY_SCHEMA_VERSION = 3
 
 
 def register_dev_commands(dev_app: typer.Typer) -> None:
+    @dev_app.command("check")
+    def check(
+        workdir: DevCheckWorkdirOption = Path(),
+        profile: DevCheckProfileOption = DEFAULT_FAST_PROFILE,
+        *,
+        list_only: DevCheckListOption = False,
+        json_output: JsonOutputOption = False,
+    ) -> None:
+        """Run the local default-fast verification gate."""
+        try:
+            result = run_dev_check(workdir=workdir, profile=profile, list_only=list_only)
+        except (LooporaError, OSError) as exc:
+            handle_error(exc, json_output=json_output)
+            return
+        if json_output:
+            echo_json(result)
+        else:
+            _print_dev_check_result(result)
+        if result.get("status") == "fail":
+            raise typer.Exit(code=1)
+
     @dev_app.command("reset")
     def reset(
         workdir: DevResetWorkdirOption = Path(),
@@ -88,3 +129,34 @@ def _print_dev_reset_result(result: dict) -> None:
             typer.echo(f"- {item}")
     if dry_run:
         typer.echo("next: rerun with --yes to delete the planned Loopora-owned development state")
+
+
+def _print_dev_check_result(result: dict) -> None:
+    profile = str(result.get("profile") or DEFAULT_FAST_PROFILE)
+    status = str(result.get("status") or "unknown")
+    typer.echo(f"Loopora dev check: {profile}")
+    typer.echo(f"status: {status}")
+    typer.echo(f"workdir: {result.get('workdir')}")
+    steps = [step for step in list(result.get("steps") or []) if isinstance(step, dict)]
+    for step in steps:
+        line = f"- {step.get('status')}: {step.get('id')} - {step.get('command')}"
+        typer.echo(line)
+        if step.get("status") == "fail":
+            stderr = str(step.get("stderr") or "").strip()
+            stdout = str(step.get("stdout") or "").strip()
+            if stdout:
+                typer.echo("  stdout:")
+                typer.echo(_indent_block(stdout))
+            if stderr:
+                typer.echo("  stderr:")
+                typer.echo(_indent_block(stderr))
+    if status == "listed":
+        typer.echo("next: rerun without --list to execute the default-fast gate")
+    elif status == "pass":
+        typer.echo("next: default-fast gate passed")
+    elif status == "fail":
+        typer.echo("next: fix the failed step, then rerun loopora dev check")
+
+
+def _indent_block(text: str) -> str:
+    return "\n".join(f"    {line}" for line in str(text).splitlines())

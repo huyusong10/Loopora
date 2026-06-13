@@ -138,6 +138,14 @@ loopora agent codex check --workdir "$PWD"
 
 `--check` only diagnoses: it does not install, repair, or overwrite. Before install, a failing check means "not installed yet" and prints the install command; after install, failed checks mean the managed entry needs attention.
 
+For a first-use readiness summary across the local package, default Web entry, and all supported Agent entries:
+
+```bash
+loopora doctor --workdir "$PWD"
+```
+
+`doctor` is read-only. It exits non-zero when no Agent entry is ready, and reports the next install/check command instead of changing files. Add `--json` for automation. The same check is also available as `loopora diagnose doctor`.
+
 The Agent Runner capability contract is intentionally small:
 
 - Execution stays with the current host Agent in its current workdir. Loopora owns managed project entries plus `.loopora/` state, and it does not change model selection, backend routing, permissions, approval mode, global config, skills/plugins, MCP setup, credentials, or environment secrets.

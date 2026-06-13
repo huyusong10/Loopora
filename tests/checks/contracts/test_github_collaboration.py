@@ -14,16 +14,7 @@ DEPENDABOT_CONFIG = GITHUB_ROOT / "dependabot.yml"
 UV_LOCK = REPO_ROOT / "uv.lock"
 ISSUE_TEMPLATE_ROOT = GITHUB_ROOT / "ISSUE_TEMPLATE"
 PULL_REQUEST_TEMPLATE = GITHUB_ROOT / "pull_request_template.md"
-QUALITY_GATE_COMMANDS = (
-    "find src/loopora/static -name '*.js' -print0 | xargs -0 -n1 node --check",
-    "uv pip check",
-    "uv run ruff check src/loopora tests",
-    "git diff --check",
-    "rm -rf tmp/package-check",
-    "mkdir -p tmp/package-check",
-    "uv build --out-dir tmp/package-check",
-    "uv run pytest -q tests/checks/contracts",
-)
+QUALITY_GATE_COMMAND = "uv run loopora dev check"
 CODEQL_TIMEOUT_MINUTES = 20
 DEPENDABOT_OPEN_PULL_REQUEST_LIMIT = 5
 DEPENDABOT_SCHEMA_VERSION = 2
@@ -55,7 +46,7 @@ def test_github_yaml_files_are_parseable() -> None:
 def test_github_pull_request_template_keeps_boundary_and_evidence_prompts() -> None:
     template = PULL_REQUEST_TEMPLATE.read_text(encoding="utf-8")
 
-    for term in (*QUALITY_GATE_COMMANDS, "Stable Boundary", "Design updated or not needed", "journey checks"):
+    for term in (QUALITY_GATE_COMMAND, "Stable Boundary", "Design updated or not needed", "journey checks"):
         assert term in template
     for term in ("license", "maintainer approval"):
         assert term in template
@@ -93,7 +84,8 @@ def test_github_ci_workflow_keeps_default_quality_gate_contract() -> None:
         "group: ${{ github.workflow }}-${{ github.ref }}",
         "cancel-in-progress: true",
         'python-version: ["3.11", "3.12"]',
-        *QUALITY_GATE_COMMANDS,
+        "Run default-fast verification gate",
+        QUALITY_GATE_COMMAND,
         "uv run pytest tests/checks/journeys -q",
     ):
         assert term in workflow

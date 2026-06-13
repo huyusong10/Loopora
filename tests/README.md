@@ -34,6 +34,12 @@ Older labels such as L1/L2/L3 are no longer the primary taxonomy. They mixed exe
 For ordinary code work, run:
 
 ```bash
+uv run loopora dev check
+```
+
+`loopora dev check --list` prints the expanded default-fast steps without running them. The gate runs:
+
+```bash
 uv sync --locked --dry-run
 uv pip check
 find src/loopora/static -name '*.js' -print0 | xargs -0 -n1 node --check

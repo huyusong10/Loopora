@@ -133,7 +133,7 @@ def _register_agent_runtime_for(agent_app: typer.Typer, *, adapter: str, help_te
                 no_web=no_web,
                 json_output=json_output or compact_json_output,
             ):
-                raise typer.Exit(code=1)
+                raise typer.Exit(code=1) from None
             handle_error(exc)
 
     @adapter_app.command("next")

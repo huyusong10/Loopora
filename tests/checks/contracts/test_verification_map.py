@@ -10,6 +10,8 @@ def test_verification_map_keeps_default_fast_gate_aligned_with_ci() -> None:
     text = (ROOT / "tests" / "README.md").read_text(encoding="utf-8")
 
     assert "Dependency compatibility, static JS syntax, Ruff, whitespace-safe diff, package build, and contract checks" in text
+    assert "uv run loopora dev check" in text
+    assert "loopora dev check --list" in text
     assert "uv sync --locked --dry-run" in text
     assert "uv pip check" in text
     assert "find src/loopora/static -name '*.js' -print0 | xargs -0 -n1 node --check" in text

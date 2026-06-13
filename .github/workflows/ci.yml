@@ -36,27 +36,8 @@ jobs:
       - name: Install dependencies
         run: uv sync --locked
 
-      - name: Check dependency compatibility
-        run: uv pip check
-
-      - name: Check static JavaScript syntax
-        run: |
-          find src/loopora/static -name '*.js' -print0 | xargs -0 -n1 node --check
-
-      - name: Run Python static checks
-        run: uv run ruff check src/loopora tests
-
-      - name: Check whitespace-safe diff
-        run: git diff --check
-
-      - name: Build package
-        run: |
-          rm -rf tmp/package-check
-          mkdir -p tmp/package-check
-          uv build --out-dir tmp/package-check
-
-      - name: Run tests
-        run: uv run pytest -q tests/checks/contracts
+      - name: Run default-fast verification gate
+        run: uv run loopora dev check
 
   browser-journey:
     runs-on: ubuntu-latest

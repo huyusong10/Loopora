@@ -39,18 +39,19 @@ class LooporaRootHelpGroup(TyperGroup):
         names = super().list_commands(ctx)
         first_use_order = {
             "init": 0,
-            "serve": 1,
-            "uninstall": 2,
-            "loops": 3,
-            "bundles": 4,
-            "diagnose": 5,
-            "run": 6,
-            "orchestrations": 7,
-            "roles": 8,
-            "spec": 9,
-            "prompts": 10,
-            "dev": 11,
-            "agent": 12,
+            "doctor": 1,
+            "serve": 2,
+            "uninstall": 3,
+            "loops": 4,
+            "bundles": 5,
+            "diagnose": 6,
+            "run": 7,
+            "orchestrations": 8,
+            "roles": 9,
+            "spec": 10,
+            "prompts": 11,
+            "dev": 12,
+            "agent": 13,
         }
         original_order = {name: index for index, name in enumerate(names)}
         return sorted(names, key=lambda name: (first_use_order.get(name, 100), original_order[name]))
@@ -189,6 +190,7 @@ app = typer.Typer(
         f"{APP_NAME} CLI\n\n"
         "Start here: in the project where your Coding Agent will work, run "
         "`loopora init codex`, `loopora init claude`, or `loopora init opencode`, "
+        "use `loopora doctor` to confirm local readiness, "
         "then return to that Agent with the task goal, fake-done risk, and required evidence. "
         "Run `/loopora-plan`, review the Loop preview, then run `/loopora-run` in the same Agent session."
     )
@@ -199,8 +201,8 @@ roles_app = typer.Typer(help="Expert: create and inspect reusable role definitio
 bundles_app = typer.Typer(help="Import, export, and manage Loop plan files")
 spec_app = typer.Typer(help="Expert: work with Markdown Loop contracts")
 prompts_app = typer.Typer(help="Developer: validate and inspect prompt templates")
-diagnose_app = typer.Typer(help="Inspect local diagnostics and repair safe historical issues")
-dev_app = typer.Typer(help="Developer: reset incompatible development local state")
+diagnose_app = typer.Typer(help="Inspect local readiness, diagnostics, and safe historical repairs")
+dev_app = typer.Typer(help="Developer: run local checks and reset incompatible development state")
 init_app = typer.Typer(
     help=(
         "Install /loopora-plan and /loopora-run project entries, then return to the Agent "

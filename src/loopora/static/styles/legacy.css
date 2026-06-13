@@ -3358,6 +3358,122 @@ html[data-locale="zh"] .callout {
   line-height: 1.45;
 }
 
+.agent-readiness-summary {
+  display: grid;
+  gap: 10px;
+  margin: 0 0 14px;
+  padding: 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(0, 113, 227, 0.16);
+  background: rgba(0, 113, 227, 0.055);
+}
+
+.agent-readiness-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.agent-readiness-copy {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.agent-readiness-copy strong {
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.agent-readiness-copy span,
+.agent-readiness-meta {
+  color: var(--muted);
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+
+.agent-readiness-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  min-width: 0;
+}
+
+.agent-readiness-meta span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.agent-readiness-steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: agent-readiness-step;
+}
+
+.agent-readiness-steps li {
+  position: relative;
+  min-width: 0;
+  padding: 9px 10px 9px 34px;
+  border: 1px solid rgba(0, 113, 227, 0.12);
+  border-radius: var(--radius-sm);
+  background: rgba(var(--glass-rgb), 0.46);
+  color: var(--muted);
+  font-size: 0.84rem;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  counter-increment: agent-readiness-step;
+}
+
+.agent-readiness-steps li::before {
+  content: counter(agent-readiness-step);
+  position: absolute;
+  left: 10px;
+  top: 9px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: rgba(0, 113, 227, 0.12);
+  color: var(--accent);
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.agent-readiness-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+
+.agent-readiness-copy-button {
+  justify-content: flex-start;
+  min-width: 0;
+  max-width: 100%;
+  min-height: 34px;
+  padding: 7px 10px;
+  border-color: rgba(0, 113, 227, 0.18);
+  background: rgba(var(--glass-rgb), 0.64);
+  color: var(--ink);
+}
+
+.agent-readiness-copy-button code {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.agent-readiness-copy-button.is-copied {
+  border-color: rgba(13, 124, 102, 0.32);
+  background: rgba(13, 124, 102, 0.1);
+}
+
 .agent-adapter-handoff {
   display: grid;
   gap: 12px;
@@ -3598,6 +3714,14 @@ html[data-locale="zh"] .callout {
   .agent-adapter-next-steps {
     flex-direction: column;
     gap: 4px;
+  }
+
+  .agent-readiness-head {
+    flex-direction: column;
+  }
+
+  .agent-readiness-steps {
+    grid-template-columns: 1fr;
   }
 
   .agent-adapter-handoff-head {

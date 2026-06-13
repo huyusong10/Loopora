@@ -90,7 +90,7 @@ def claim_agent_next_from_cli(request: AgentNextCliRequest) -> None:
             no_web=request.no_web,
             json_output=request.json_output or request.compact_json_output,
         ):
-            raise typer.Exit(code=1)
+            raise typer.Exit(code=1) from None
         handle_error(exc)
 
 
