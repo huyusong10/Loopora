@@ -21,6 +21,7 @@ TIMELINE_EVENT_TYPES = {
     "workspace_guard_triggered",
     "stop_requested",
     "run_result_accepted",
+    "run_result_acceptance_reopened",
     "run_aborted",
     "run_finished",
 }

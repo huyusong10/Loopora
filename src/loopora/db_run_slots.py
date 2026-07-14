@@ -5,19 +5,15 @@ import logging
 from loopora.db_shared import logger
 from loopora.diagnostics import log_event, log_exception
 from loopora.utils import utc_now
+from loopora.workdir_inputs import same_workdir_identity
 
 
 class RepositoryRunSlotsMixin:
     def has_active_run_for_workdir(self, workdir: str) -> bool:
-        query = """
-            SELECT 1
-            FROM loop_runs
-            WHERE workdir = ? AND status IN ('queued', 'running', 'awaiting_agent')
-            LIMIT 1
-        """
+        query = "SELECT workdir FROM loop_runs WHERE status IN ('queued', 'running', 'awaiting_agent')"
         with self._connect() as connection:
-            row = connection.execute(query, (workdir,)).fetchone()
-        return row is not None
+            rows = connection.execute(query).fetchall()
+        return any(same_workdir_identity(row["workdir"], workdir) for row in rows)
 
     def claim_run_slot(self, run_id: str, max_concurrent_runs: int) -> bool:
         now = utc_now()
@@ -53,12 +49,15 @@ class RepositoryRunSlotsMixin:
             if active_count >= max_concurrent_runs:
                 return False
 
-            existing_lock = connection.execute(
-                "SELECT run_id FROM workdir_locks WHERE workdir = ?",
-                (run["workdir"],),
-            ).fetchone()
+            existing_locks = connection.execute("SELECT workdir, run_id FROM workdir_locks").fetchall()
+            existing_lock = next(
+                (lock for lock in existing_locks if same_workdir_identity(lock["workdir"], run["workdir"])),
+                None,
+            )
             if existing_lock and existing_lock["run_id"] != run_id:
                 return False
+            if existing_lock and existing_lock["workdir"] != run["workdir"]:
+                connection.execute("DELETE FROM workdir_locks WHERE workdir = ?", (existing_lock["workdir"],))
 
             from loopora import db as db_module
 

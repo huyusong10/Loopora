@@ -65,7 +65,7 @@ def evidence_coverage_results(value: object) -> list[dict]:
     return results[:20]
 
 
-def normalize_coverage_gap_rows(value: object) -> list[dict]:
+def normalize_coverage_gap_rows(value: object, *, limit: int = 5) -> list[dict]:
     if not isinstance(value, list):
         return []
     rows: list[dict] = []
@@ -87,7 +87,7 @@ def normalize_coverage_gap_rows(value: object) -> list[dict]:
                 "evidence_refs": string_list(item.get("evidence_refs"))[:8],
             }
         )
-    return rows[:5]
+    return rows[:limit]
 
 
 def normalize_manifest_claim_coverage_targets(value: object) -> list[dict]:

@@ -4,9 +4,14 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from loopora.bundles import BundleError, bundle_to_yaml, normalize_bundle
+from loopora.service_bundle_file_writes import write_bundle_text_atomically
 from loopora.projections import LoopfileExportProjectionInput, build_loopfile_export_projection
 from loopora.service_types import LooporaError
 from loopora.strategy_source import normalize_strategy_source, strategy_source_from_record
+
+PLAN_FILE_EXPORT_ERROR = "plan file could not be exported"
+PLAN_FILE_OUTPUT_DIRECTORY_ERROR = "plan file output must be a file, not a directory"
+PLAN_FILE_SAVE_ERROR = "plan file could not be saved"
 
 
 @dataclass(frozen=True)
@@ -94,11 +99,23 @@ class ServiceBundleExportMixin:
             raise LooporaError(str(exc)) from exc
 
     def write_bundle_file(self, bundle_id: str, path: Path) -> Path:
-        target = path.expanduser()
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(self.export_bundle_yaml(bundle_id), encoding="utf-8")
-        return target
+        return write_plan_file_yaml(path, self.export_bundle_yaml(bundle_id))
 
     def _sync_bundle_yaml(self, bundle_id: str) -> None:
-        self._bundle_yaml_path(bundle_id).parent.mkdir(parents=True, exist_ok=True)
-        self._bundle_yaml_path(bundle_id).write_text(self.export_bundle_yaml(bundle_id), encoding="utf-8")
+        try:
+            write_bundle_text_atomically(self._bundle_yaml_path(bundle_id), self.export_bundle_yaml(bundle_id))
+        except OSError as exc:
+            raise LooporaError(PLAN_FILE_SAVE_ERROR) from exc
+
+
+def write_plan_file_yaml(path: Path, yaml_text: str) -> Path:
+    target = path.expanduser()
+    try:
+        if target.is_dir():
+            raise IsADirectoryError
+        write_bundle_text_atomically(target, yaml_text)
+    except IsADirectoryError as exc:
+        raise LooporaError(PLAN_FILE_OUTPUT_DIRECTORY_ERROR) from exc
+    except OSError as exc:
+        raise LooporaError(PLAN_FILE_EXPORT_ERROR) from exc
+    return target

@@ -41,6 +41,8 @@ def test_strategy_source_definitions_own_legacy_workflow_format_implementation()
         (strategy_prompt_assets_source, "def parse_prompt_markdown"),
         (strategy_prompt_assets_source, "def builtin_strategy_prompt_markdown"),
         (strategy_execution_source, "def normalize_strategy_role_execution_settings"),
+        (strategy_execution_source, "default_loop_role_execution_options"),
+        (strategy_execution_source, "normalize_loop_role_execution_options"),
         (strategy_validation_source, "def normalize_strategy_source_identifier"),
         (strategy_validation_source, "def normalize_strategy_source_version"),
         (strategy_validation_source, "def normalize_string_list"),
@@ -97,6 +99,9 @@ def test_strategy_source_definitions_own_legacy_workflow_format_implementation()
         (strategy_source_source, "workflow_preset_copy"),
         (workflow_compat_source, "from loopora.strategy_source_definitions import *"),
         (workflow_compat_source, "def normalize_workflow"),
+        (strategy_execution_source, "validate_command_args_text"),
+        (strategy_execution_source, "normalize_executor_kind"),
+        (strategy_execution_source, "executor_profile"),
     ]
     for source, marker in excluded_markers:
         assert marker not in source

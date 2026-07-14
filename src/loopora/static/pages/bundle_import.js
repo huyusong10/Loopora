@@ -4,28 +4,34 @@ document.addEventListener("DOMContentLoaded", () => {
     return;
   }
 
-  const errorBox = document.getElementById("bundle-import-error");
-  const pathInput = document.getElementById("bundle-import-path");
-  const yamlInput = document.getElementById("bundle-import-yaml");
-  const previewButton = document.getElementById("bundle-preview-button");
-  const previewImportButton = document.getElementById("bundle-preview-import-button");
-  const readyPreview = document.getElementById("alignment-ready-preview");
-  const previewTitle = document.getElementById("bundle-preview-title");
-  const artifactName = document.getElementById("alignment-artifact-name");
-  const readyNote = document.getElementById("alignment-ready-note");
-  const artifactRoles = document.getElementById("alignment-artifact-roles");
-  const artifactVerdict = document.getElementById("alignment-artifact-verdict");
-  const artifactJudgment = document.getElementById("alignment-artifact-judgment");
-  const artifactWorkdir = document.getElementById("alignment-artifact-workdir");
-  const controlSummary = document.getElementById("alignment-control-summary");
-  const judgmentMap = document.getElementById("alignment-judgment-map");
-  const diagnosticsStrip = document.getElementById("alignment-diagnostics-strip");
-  const artifactSource = document.getElementById("alignment-artifact-source");
-  const sourcePathLabel = document.getElementById("alignment-source-path");
-  const specPreview = document.getElementById("alignment-spec-preview");
-  const roleList = document.getElementById("alignment-role-list");
-  const workflowDiagram = document.getElementById("alignment-workflow-diagram");
-  const sourceOpenButton = document.getElementById("alignment-source-open-button");
+  const importSurface =
+    form.closest("#bundle-import-form") || form.closest("#bundle-import-panel") || form.parentElement || document;
+  const byId = (id) => importSurface.querySelector(`#${id}`);
+  const errorBox = byId("bundle-import-error");
+  const recoveryPanel = form.querySelector("[data-recovery-panel]");
+  const pathInput = byId("bundle-import-path");
+  const yamlInput = byId("bundle-import-yaml");
+  const previewReviewedInput = byId("bundle-preview-reviewed");
+  const startImmediatelyInput = form.querySelector("[data-testid='bundle-import-start-immediately']");
+  const previewButton = byId("bundle-preview-button");
+  const previewImportButton = byId("bundle-preview-import-button");
+  const readyPreview = byId("alignment-ready-preview");
+  const previewTitle = byId("bundle-preview-title");
+  const artifactName = byId("alignment-artifact-name");
+  const readyNote = byId("alignment-ready-note");
+  const artifactRoles = byId("alignment-artifact-roles");
+  const artifactVerdict = byId("alignment-artifact-verdict");
+  const artifactJudgment = byId("alignment-artifact-judgment");
+  const artifactWorkdir = byId("alignment-artifact-workdir");
+  const controlSummary = byId("alignment-control-summary");
+  const judgmentMap = byId("alignment-judgment-map");
+  const diagnosticsStrip = byId("alignment-diagnostics-strip");
+  const artifactSource = byId("alignment-artifact-source");
+  const sourcePathLabel = byId("alignment-source-path");
+  const specPreview = byId("alignment-spec-preview");
+  const roleList = byId("alignment-role-list");
+  const workflowDiagram = byId("alignment-workflow-diagram");
+  const sourceOpenButton = byId("alignment-source-open-button");
   let errorTimer = null;
 
   function localeText(zh, en) {
@@ -67,6 +73,74 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
+  function currentFormAction() {
+    return form.getAttribute("action") || window.location.pathname || "";
+  }
+
+  function browserBundleImportRecoveryPayload(payload) {
+    if (!payload || !Array.isArray(payload.next_actions)) {
+      return payload;
+    }
+    return {
+      ...payload,
+      next_actions: payload.next_actions.map((action) => {
+        const kind = String(action?.kind || "").trim();
+        if (!["retry_web_compose", "retry_web_run_start"].includes(kind)) {
+          return action;
+        }
+        return {
+          ...action,
+          form_id: "bundle-import-form-fields",
+          form_action: action.form_action || currentFormAction(),
+          form_method: "POST",
+        };
+      }),
+    };
+  }
+
+  function clearImportRecovery() {
+    if (!recoveryPanel) {
+      return;
+    }
+    recoveryPanel.hidden = true;
+    recoveryPanel.innerHTML = "";
+  }
+
+  function renderBundleImportRecovery(payload) {
+    const projected = browserBundleImportRecoveryPayload(payload);
+    const actions = Array.isArray(projected?.next_actions) ? projected.next_actions : [];
+    if (!recoveryPanel || !actions.length) {
+      clearImportRecovery();
+      return false;
+    }
+    recoveryPanel.innerHTML = window.LooporaUI.recoveryPanelHtml(projected, {
+      testid: recoveryPanel.dataset.testid || "bundle-import-recovery",
+      title: localeText("修复 Plan File 输入后再继续", "Fix the Plan File input, then continue"),
+      summary: projected.error || projected.summary || "",
+    });
+    recoveryPanel.hidden = false;
+    window.LooporaUI?.bindRecoveryCommandCopy?.();
+    return true;
+  }
+
+  function bundleImportErrorFromPayload(payload, fallbackMessage) {
+    const error = new Error(payload?.error || payload?.detail || fallbackMessage);
+    error.payload = payload || {};
+    return error;
+  }
+
+  function clearPreviewReview({hidePreview = false} = {}) {
+    if (previewReviewedInput) {
+      previewReviewedInput.value = "";
+    }
+    if (hidePreview) {
+      readyPreview.hidden = true;
+      if (previewImportButton) {
+        previewImportButton.hidden = true;
+      }
+    }
+  }
+
   async function fetchJson(url, options = {}) {
     const response = await fetch(url, {
       ...options,
@@ -77,7 +151,9 @@ document.addEventListener("DOMContentLoaded", () => {
     });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) {
-      throw new Error(payload.error || payload.detail || response.statusText);
+      const error = bundleImportErrorFromPayload(payload, response.statusText);
+      error.response = response;
+      throw error;
     }
     return payload;
   }
@@ -441,8 +517,29 @@ document.addEventListener("DOMContentLoaded", () => {
     return item;
   }
 
-  async function revealSourcePath(path) {
+  async function copySourcePath(path) {
     if (!path) {
+      return;
+    }
+    window.LooporaUI?.renderGlobalManualCopy?.("");
+    try {
+      await window.LooporaUI.writeTextToClipboard(path);
+      window.LooporaUI.showAppFeedback?.(localeText("源文件路径已复制。", "Source path copied."), "success");
+    } catch (_) {
+      window.LooporaUI?.renderGlobalManualCopy?.(path, {
+        label: localeText("手动复制源文件路径", "Manual source path copy"),
+        textareaId: "bundle-source-path-manual-copy-textarea",
+      });
+      showImportError(localeText("浏览器未允许自动复制；请手动复制页面底部的源文件路径。", "The browser blocked automatic copy; copy the source path at the bottom of the page manually."));
+    }
+  }
+
+  async function revealSourcePath(path, options = {}) {
+    if (!path) {
+      return;
+    }
+    if (options.copyOnly) {
+      await copySourcePath(path);
       return;
     }
     try {
@@ -452,27 +549,35 @@ document.addEventListener("DOMContentLoaded", () => {
       });
     } catch (error) {
       try {
-        await navigator.clipboard.writeText(path);
+        await window.LooporaUI.writeTextToClipboard(path);
+        window.LooporaUI?.renderGlobalManualCopy?.("");
         showImportError(localeText("无法自动打开，路径已复制到剪贴板。", "Could not open automatically. The path was copied to your clipboard."));
       } catch (_) {
-        showImportError(error.message || localeText("无法打开源文件。", "Unable to open the source file."));
+        window.LooporaUI?.renderGlobalManualCopy?.(path, {
+          label: localeText("手动复制源文件路径", "Manual source path copy"),
+          textareaId: "bundle-source-path-manual-copy-textarea",
+        });
+        showImportError(error.message || localeText("无法自动打开或复制源文件路径；请手动复制页面底部的路径。", "Unable to open or copy the source path automatically; copy the path at the bottom of the page manually."));
       }
     }
   }
 
   function selectPreviewTab(tabName) {
-    document.querySelectorAll("[data-preview-tab]").forEach((button) => {
+    importSurface.querySelectorAll("[data-preview-tab]").forEach((button) => {
       const active = button.dataset.previewTab === tabName;
       button.classList.toggle("is-active", active);
       button.setAttribute("aria-selected", String(active));
     });
-    document.querySelectorAll("[data-preview-panel]").forEach((section) => {
+    importSurface.querySelectorAll("[data-preview-panel]").forEach((section) => {
       section.hidden = section.dataset.previewPanel !== tabName;
     });
   }
 
   function renderBundlePreview(payload) {
     readyPreview.hidden = false;
+    if (previewReviewedInput) {
+      previewReviewedInput.value = payload.preview_review_token || "";
+    }
     const metadata = payload.metadata || payload.bundle?.metadata || {};
     artifactName.textContent = metadata.name || localeText("Loop 方案", "Loop plan");
     previewTitle.textContent = localeText("方案预览已准备好", "Plan preview is ready");
@@ -517,6 +622,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
   async function previewBundle() {
     showImportError("");
+    clearImportRecovery();
+    clearPreviewReview();
     const payload = {
       bundle_path: pathInput?.value?.trim() || "",
       bundle_yaml: yamlInput?.value || "",
@@ -533,11 +640,19 @@ document.addEventListener("DOMContentLoaded", () => {
         body: JSON.stringify(payload),
       });
       if (!preview.ok) {
-        throw new Error(preview.error || localeText("方案文件预览失败。", "Plan file preview failed."));
+        throw bundleImportErrorFromPayload(
+          preview,
+          localeText("方案文件预览失败。", "Plan file preview failed."),
+        );
       }
       renderBundlePreview(preview);
     } catch (error) {
-      showImportError(error.message || localeText("方案文件预览失败。", "Plan file preview failed."));
+      clearPreviewReview({hidePreview: true});
+      const renderedRecovery = renderBundleImportRecovery(error?.payload || {});
+      showImportError(
+        error.message || localeText("方案文件预览失败。", "Plan file preview failed."),
+        {autoHide: !renderedRecovery},
+      );
     } finally {
       previewButton.disabled = false;
     }
@@ -545,18 +660,47 @@ document.addEventListener("DOMContentLoaded", () => {
 
   previewButton?.addEventListener("click", () => {
     previewBundle().catch((error) => {
-      showImportError(error.message || localeText("方案文件预览失败。", "Plan file preview failed."));
+      clearPreviewReview({hidePreview: true});
+      const renderedRecovery = renderBundleImportRecovery(error?.payload || {});
+      showImportError(
+        error.message || localeText("方案文件预览失败。", "Plan file preview failed."),
+        {autoHide: !renderedRecovery},
+      );
     });
   });
   previewImportButton?.addEventListener("click", () => form.requestSubmit());
   sourceOpenButton?.addEventListener("click", () => {
-    revealSourcePath(sourceOpenButton.dataset.sourcePath || "").catch((error) => {
+    revealSourcePath(sourceOpenButton.dataset.sourcePath || "", {
+      copyOnly: sourceOpenButton.dataset.pathActionMode === "copy",
+    }).catch((error) => {
       showImportError(error.message || localeText("无法打开源文件。", "Unable to open the source file."));
     });
   });
-  pathInput?.addEventListener("input", () => showImportError(""));
-  yamlInput?.addEventListener("input", () => showImportError(""));
-  document.querySelectorAll("[data-preview-tab]").forEach((button) => {
+  form.addEventListener("submit", (event) => {
+    if (!startImmediatelyInput?.checked || previewReviewedInput?.value) {
+      return;
+    }
+    event.preventDefault();
+    showImportError(
+      localeText(
+        "请先预览 Plan File，再立即运行导入的 Loop。",
+        "Preview the Plan File before starting the imported Loop immediately.",
+      ),
+      {autoHide: false},
+    );
+    previewButton?.focus();
+  }, {capture: true});
+  pathInput?.addEventListener("input", () => {
+    clearPreviewReview({hidePreview: true});
+    clearImportRecovery();
+    showImportError("");
+  });
+  yamlInput?.addEventListener("input", () => {
+    clearPreviewReview({hidePreview: true});
+    clearImportRecovery();
+    showImportError("");
+  });
+  importSurface.querySelectorAll("[data-preview-tab]").forEach((button) => {
     button.addEventListener("click", () => selectPreviewTab(button.dataset.previewTab || "spec"));
   });
 

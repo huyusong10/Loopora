@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 
 from agent_native_v3_helpers import assert_agent_v3_envelope
+from agent_adapter_test_common import _assert_loopora_serve_command
 from agent_adapter_test_surface import (
     _assert_codex_native_surface_summary,
 )
@@ -12,7 +14,7 @@ from agent_adapter_test_surface import (
 EXPECTED_AGENT_NEXT_KNOWN_EVIDENCE_COUNT = 4
 
 
-def _assert_agent_next_json_summary(stdout: str) -> None:
+def _assert_agent_next_json_summary(stdout: str, *, workdir: Path | None = None) -> None:
     payload = json.loads(stdout)
     summary, _legacy = assert_agent_v3_envelope(payload, kind="agent_next", summary_key="agent_next_summary", status="active")
     assert "agent_submit_summary" not in summary
@@ -20,6 +22,11 @@ def _assert_agent_next_json_summary(stdout: str) -> None:
     assert summary["run_id"] == "run_next"
     assert summary["run_status"] == "awaiting_agent"
     assert summary["run_url"] == "/runs/run_next"
+    assert summary["run_url_status"] == "relative_path_web_not_started"
+    _assert_loopora_serve_command(
+        summary["run_url_web_start_command"],
+        workdir=workdir,
+    )
     assert summary["task_verdict_status"] == "failed"
     assert summary["task_proven"] is False
     assert summary["task_outcome"] == "not_proven_continue_evidence"
@@ -139,6 +146,9 @@ def _assert_agent_work_panel_summary(panel: dict) -> None:
         "task_outcome",
         "current_role",
         "current_step_id",
+        "target_agent",
+        "role_handoff_status",
+        "role_handoff_owner",
         "next_action",
         "evidence_focus",
         "top_gaps",
@@ -152,6 +162,9 @@ def _assert_agent_work_panel_summary(panel: dict) -> None:
     assert panel["task_outcome"] == "not_proven_continue_evidence"
     assert panel["current_role"] == "Inspector"
     assert panel["current_step_id"] == "inspector_step"
+    assert panel["target_agent"] == "loopora-inspector"
+    assert panel["role_handoff_status"] == "ready_for_host_dispatch"
+    assert panel["role_handoff_owner"] == "current_host_agent"
     assert panel["next_action"] == (
         "invoke loopora-inspector with the next context and step contract paths below; do not perform this role inline"
     )

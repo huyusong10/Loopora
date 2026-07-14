@@ -97,3 +97,38 @@ def test_bundle_roles_inherit_loop_command_executor_when_role_fields_are_omitted
     assert {role["command_args_text"] for role in bundle["role_definitions"]} == {
         "{prompt}\n--output\n{output_path}\n"
     }
+
+
+def test_bundle_role_executor_alias_keeps_inherited_loop_settings_when_executor_is_same(sample_workdir: Path) -> None:
+    bundle = load_bundle_text(
+        _bundle_yaml(sample_workdir).replace(
+            '  - key: "builder"\n    name:',
+            '  - key: "builder"\n    executor_kind: "openai-codex"\n    name:',
+            1,
+        )
+    )
+
+    builder = next(role for role in bundle["role_definitions"] if role["key"] == "builder")
+
+    assert builder["executor_kind"] == "codex"
+    assert builder["executor_mode"] == "preset"
+    assert builder["model"] == "gpt-5.4"
+    assert builder["reasoning_effort"] == "medium"
+
+
+def test_bundle_role_executor_alias_resets_provider_specific_settings_when_executor_changes(sample_workdir: Path) -> None:
+    bundle = load_bundle_text(
+        _bundle_yaml(sample_workdir).replace(
+            '  - key: "builder"\n    name:',
+            '  - key: "builder"\n    executor_kind: "claude-code"\n    reasoning_effort: "xhigh"\n    name:',
+            1,
+        )
+    )
+
+    builder = next(role for role in bundle["role_definitions"] if role["key"] == "builder")
+
+    assert builder["executor_kind"] == "claude"
+    assert builder["executor_mode"] == "preset"
+    assert builder["command_cli"] == "claude"
+    assert builder["model"] == ""
+    assert builder["reasoning_effort"] == "max"

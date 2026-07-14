@@ -1,7 +1,18 @@
 include README.md README.zh-CN.md
+include setup.py
 include HUMAN-SHAPED-LOOP.md HUMAN-SHAPED-LOOP.zh-CN.md
 include CONTRIBUTING.md
+include CODE_OF_CONDUCT.md
+include CHANGELOG.md
+include GOVERNANCE.md
 include SECURITY.md
+include SUPPORT.md
+recursive-include design *.md
 recursive-include assets/diagrams *.svg *.md
+recursive-include src/loopora/templates *.html
+recursive-include src/loopora/static *.css *.js
 recursive-include src/loopora/assets/logo *.svg
-recursive-include src/loopora/static/styles *.css
+recursive-include src/loopora/assets/prompts *.md
+recursive-include src/loopora/assets/spec_practices *.md
+recursive-include src/loopora/assets/alignment *.md *.json *.yml
+recursive-include src/loopora/assets/system_prompts *.md

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from strategy_source_architecture_test_support import design_boundary_source
 from loopora.agent_native_adapter_contracts import agent_adapter_native_surface_summary
 
 
@@ -13,7 +14,7 @@ def loopora_source(*parts: str) -> str:
 
 
 def design_contracts_source() -> str:
-    return (REPO_ROOT / "design" / "contracts.md").read_text(encoding="utf-8")
+    return design_boundary_source()
 
 
 def assert_output_contains(output: str, *snippets: str) -> None:
@@ -28,10 +29,13 @@ def codex_installed_mutation_result(tmp_path: Path) -> dict:
         "workdir": str(tmp_path),
         "status": "installed",
         "next_commands": {
+            "web_start": f"loopora serve --open --workdir {tmp_path} --host 127.0.0.1 --port 8742",
+            "doctor": "loopora doctor --workdir <project>",
             "check": "loopora init codex --check",
             "agent_check": "loopora agent codex check",
+            "support": f"loopora support --workdir {tmp_path}",
         },
-        "first_task_message_example": "After /loopora-plan, send: Goal: ...",
+        "first_task_message_example": "/loopora-plan\n\nLoopora fit: ...",
         "native_surface": {
             **agent_adapter_native_surface_summary("codex"),
             "reference_paths": [

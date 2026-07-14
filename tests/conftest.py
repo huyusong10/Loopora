@@ -12,6 +12,7 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
+from loopora.agent_adapter_current_host import CURRENT_AGENT_HOST_ENV_VARS
 from loopora.branding import APP_PACKAGE
 from loopora.db import LooporaRepository
 from loopora.executor import FakeCodexExecutor
@@ -22,6 +23,9 @@ from loopora.settings import AppSettings
 @pytest.fixture(autouse=True)
 def isolate_loopora_home(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setenv("LOOPORA_HOME", str(tmp_path / "loopora-home"))
+    for names in CURRENT_AGENT_HOST_ENV_VARS.values():
+        for name in names:
+            monkeypatch.delenv(name, raising=False)
 
 
 @pytest.fixture(autouse=True)

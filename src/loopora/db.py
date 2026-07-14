@@ -30,21 +30,38 @@ class LooporaRepository(
     RepositoryAlignmentRecordsMixin,
     RepositoryRowDecodingMixin,
 ):
-    def __init__(self, path: Path) -> None:
+    def __init__(self, path: Path, *, read_only: bool = False) -> None:
         self.path = path.expanduser()
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        self._init_db()
+        self.read_only = read_only
+        if read_only:
+            self._validate_read_only_db()
+        else:
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            self._init_db()
 
     def _connect(self, *, configure_journal_mode: bool = False) -> sqlite3.Connection:
         for attempt in range(3):
             connection: sqlite3.Connection | None = None
             try:
-                self.path.parent.mkdir(parents=True, exist_ok=True)
-                connection = sqlite3.connect(self.path, timeout=30, check_same_thread=False)
+                if self.read_only:
+                    database = f"{self.path.resolve(strict=False).as_uri()}?mode=ro"
+                    connection = sqlite3.connect(
+                        database,
+                        timeout=30,
+                        check_same_thread=False,
+                        uri=True,
+                    )
+                else:
+                    self.path.parent.mkdir(parents=True, exist_ok=True)
+                    connection = sqlite3.connect(self.path, timeout=30, check_same_thread=False)
                 connection.row_factory = sqlite3.Row
                 connection.execute("PRAGMA foreign_keys=ON")
                 connection.execute("PRAGMA busy_timeout=30000")
+                if self.read_only:
+                    connection.execute("PRAGMA query_only=ON")
                 if configure_journal_mode:
+                    if self.read_only:
+                        raise sqlite3.OperationalError("journal mode cannot be configured through a read-only repository")
                     connection.execute("PRAGMA journal_mode=WAL").fetchone()
                 return connection
             except sqlite3.OperationalError as exc:
@@ -58,6 +75,7 @@ class LooporaRepository(
                         "db.connect.failed",
                         "Database connection failed",
                         error=exc,
+                        level=logging.INFO,
                         path=self.path,
                         attempt=attempt_number,
                         configure_journal_mode=configure_journal_mode,
@@ -95,6 +113,8 @@ class LooporaRepository(
 
     @contextmanager
     def transaction(self, *, configure_journal_mode: bool = False) -> Iterator[sqlite3.Connection]:
+        if self.read_only:
+            raise sqlite3.OperationalError("write transaction requested through a read-only repository")
         connection = self._connect(configure_journal_mode=configure_journal_mode)
         try:
             connection.execute("BEGIN IMMEDIATE")

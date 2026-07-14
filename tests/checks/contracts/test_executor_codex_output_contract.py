@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from loopora.executor import ExecutorError, RealCodexExecutor, RoleRequest
+from loopora.executor import ExecutionStopped, ExecutorError, RealCodexExecutor, RoleRequest
 
 
 def test_real_codex_executor_can_parse_resume_output_without_schema(
@@ -109,6 +109,58 @@ def test_real_codex_executor_rejects_non_object_json_output(
 
     executor = RealCodexExecutor()
     with pytest.raises(ExecutorError, match="codex exec did not produce a JSON object"):
+        executor.execute(
+            request,
+            lambda _event_type, _payload: None,
+            lambda: False,
+            lambda _pid: None,
+        )
+
+
+def test_real_executor_preserves_stop_intent_when_provider_exits_before_stream_observes_it(tmp_path: Path) -> None:
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    request = RoleRequest(
+        run_id="run_cancelled",
+        role="alignment",
+        prompt="Stop this invocation.",
+        workdir=tmp_path,
+        model="gpt-5.4",
+        reasoning_effort="medium",
+        output_schema={"type": "object"},
+        output_path=run_dir / "output.json",
+        run_dir=run_dir,
+    )
+    executor = RealCodexExecutor()
+    executor._stream_process = lambda _request: -9  # type: ignore[method-assign]
+
+    with pytest.raises(ExecutionStopped, match="run run_cancelled stopped while alignment was running"):
+        executor.execute(
+            request,
+            lambda _event_type, _payload: None,
+            lambda: True,
+            lambda _pid: None,
+        )
+
+
+def test_real_executor_keeps_unrequested_nonzero_exit_as_failure(tmp_path: Path) -> None:
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    request = RoleRequest(
+        run_id="run_failed",
+        role="alignment",
+        prompt="Run this invocation.",
+        workdir=tmp_path,
+        model="gpt-5.4",
+        reasoning_effort="medium",
+        output_schema={"type": "object"},
+        output_path=run_dir / "output.json",
+        run_dir=run_dir,
+    )
+    executor = RealCodexExecutor()
+    executor._stream_process = lambda _request: -9  # type: ignore[method-assign]
+
+    with pytest.raises(ExecutorError, match="codex exec failed for role=alignment exit_code=-9"):
         executor.execute(
             request,
             lambda _event_type, _payload: None,

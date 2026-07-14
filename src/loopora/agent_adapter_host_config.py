@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from contextlib import suppress
 from pathlib import Path
 from typing import Any
 
@@ -34,6 +35,12 @@ def uninstall_host_config(kind: str, root: Path) -> list[str]:
     if kind != "claude":
         return []
     return _uninstall_claude_session_hook(root)
+
+
+def preview_uninstall_host_config(kind: str, root: Path) -> list[str]:
+    if kind != "claude":
+        return []
+    return _preview_uninstall_claude_session_hook(root)
 
 
 def host_config_status(kind: str, root: Path, *, manifest_exists: bool) -> dict[str, Any] | None:
@@ -118,6 +125,17 @@ def _uninstall_claude_session_hook(root: Path) -> list[str]:
     return [CLAUDE_SESSION_HOOK_SETTINGS_REF]
 
 
+def _preview_uninstall_claude_session_hook(root: Path) -> list[str]:
+    settings_path = root / CLAUDE_SETTINGS_RELATIVE_PATH
+    if not settings_path.exists():
+        return []
+    settings = _read_claude_settings(root)
+    updated = _remove_claude_session_hook(settings)
+    if updated == settings:
+        return []
+    return [CLAUDE_SESSION_HOOK_SETTINGS_REF]
+
+
 def _read_claude_settings(root: Path) -> dict[str, Any]:
     settings_path = root / CLAUDE_SETTINGS_RELATIVE_PATH
     if not settings_path.exists():
@@ -128,10 +146,12 @@ def _read_claude_settings(root: Path) -> dict[str, Any]:
 def _read_json_object(path: Path, *, label: str) -> dict[str, Any]:
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
-        raise LooporaError(f"{label} is unreadable: {path}: {exc}") from exc
+    except (OSError, UnicodeDecodeError) as exc:
+        raise LooporaConflictError(f"{label} could not be read: {CLAUDE_SETTINGS_RELATIVE_PATH}") from exc
+    except json.JSONDecodeError as exc:
+        raise LooporaConflictError(f"{label} must be valid JSON: {CLAUDE_SETTINGS_RELATIVE_PATH}") from exc
     if not isinstance(payload, dict):
-        raise LooporaConflictError(f"{label} must be a JSON object: {path}")
+        raise LooporaConflictError(f"{label} must be a JSON object: {CLAUDE_SETTINGS_RELATIVE_PATH}")
     return payload
 
 
@@ -216,8 +236,13 @@ def _read_text_or_empty(path: Path) -> str:
 
 def _atomic_write_text(path: Path, content: str) -> None:
     tmp = path.with_name(path.name + ".tmp")
-    tmp.write_text(content, encoding="utf-8")
-    tmp.replace(path)
+    try:
+        tmp.write_text(content, encoding="utf-8")
+        tmp.replace(path)
+    except OSError:
+        with suppress(OSError):
+            tmp.unlink()
+        raise
 
 
 def _remove_empty_parents(root: Path, directory: Path) -> None:

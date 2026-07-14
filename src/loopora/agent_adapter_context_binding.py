@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+from contextlib import suppress
 from pathlib import Path
 from typing import Any
 
@@ -10,13 +11,13 @@ from loopora.agent_native_adapter_contracts import normalize_agent_adapter_kind
 from loopora.branding import state_dir_for_workdir
 from loopora.service_types import LooporaError
 from loopora.utils import utc_now
+from loopora.workdir_inputs import normalize_recoverable_workdir
+
+AGENT_CONTEXT_CARD_SAVE_ERROR = "agent context card could not be saved"
 
 
 def resolve_adapter_project_root(workdir: Path | str | None) -> Path:
-    root = Path(workdir or ".").expanduser().resolve()
-    if not root.exists() or not root.is_dir():
-        raise LooporaError(f"adapter project root does not exist: {root}")
-    return root
+    return normalize_recoverable_workdir(workdir, action="agent")
 
 
 def agent_context_binding_path(
@@ -98,9 +99,9 @@ def read_agent_binding(adapter: str, workdir: Path | str, *, context_id: str = "
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
-        raise LooporaError(f"agent context card is unreadable: {path}: {exc}") from exc
+        raise LooporaError("agent context card is unreadable; rerun /loopora-plan or choose a recoverable context") from exc
     if not isinstance(payload, dict):
-        raise LooporaError(f"agent context card is invalid: {path}")
+        raise LooporaError("agent context card is invalid; rerun /loopora-plan or choose a recoverable context")
     payload["path"] = str(path)
     return payload
 
@@ -159,5 +160,10 @@ def _adapter_session_env(kind: str) -> str:
 
 def _atomic_write_text(path: Path, content: str) -> None:
     tmp = path.with_name(path.name + ".tmp")
-    tmp.write_text(content, encoding="utf-8")
-    tmp.replace(path)
+    try:
+        tmp.write_text(content, encoding="utf-8")
+        tmp.replace(path)
+    except OSError:
+        with suppress(OSError):
+            tmp.unlink()
+        raise

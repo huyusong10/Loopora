@@ -5,8 +5,8 @@ from agent_native_cli_test_support import (
     CliRunner,
     Path,
     RunArtifactLayout,
+    _assert_agent_native_handoff_surface_plain,
     _assert_cli_list,
-    _assert_codex_native_surface_plain,
     _assert_codex_native_surface_summary,
     assert_agent_v3_envelope,
     cli,
@@ -14,7 +14,7 @@ from agent_native_cli_test_support import (
 )
 
 assert_cli_list = _assert_cli_list
-assert_codex_native_surface_plain = _assert_codex_native_surface_plain
+assert_agent_native_handoff_surface_plain = _assert_agent_native_handoff_surface_plain
 assert_codex_native_surface_summary = _assert_codex_native_surface_summary
 
 TERMINAL_RUN_ID = "run_terminal"

@@ -10,17 +10,23 @@ from loopora.context_prompt_evidence_sections import render_evidence_section as 
 from loopora.context_value_helpers import clean_text as _clean_text
 from loopora.context_value_helpers import normalize_coverage_gap_rows as _normalize_coverage_gap_rows
 from loopora.context_value_helpers import string_list as _string_list
+from loopora.run_continuation_progress import continuation_action_policy
 from loopora.structured_numbers import coerced_non_negative_int
+from loopora.system_prompt_assets import render_system_prompt_asset
 
 
-def render_continuation_section(continuation: dict) -> str:
+def render_continuation_section(continuation: dict, *, role_archetype: str = "") -> str:
     if not isinstance(continuation, dict) or continuation.get("active") is not True:
         return ""
     verdict = continuation.get("previous_task_verdict") if isinstance(continuation.get("previous_task_verdict"), dict) else {}
     coverage = continuation.get("coverage") if isinstance(continuation.get("coverage"), dict) else {}
+    progress = continuation.get("prior_run_progress") if isinstance(continuation.get("prior_run_progress"), dict) else {}
+    action_mode = str(continuation.get("action_mode") or "close_gaps").strip() or "close_gaps"
     lines = [
         "Continuation from previous terminal run:",
         f"- Reason: {continuation.get('reason') or 'previous terminal verdict requires another evidence pass'}",
+        f"- Cross-run action mode: {action_mode}",
+        f"- Action policy: {continuation_action_policy(action_mode)}",
         f"- Previous run id: {continuation.get('previous_run_id') or '-'}",
         f"- Previous run status: {continuation.get('previous_run_status') or '-'}",
         f"- Previous task verdict: {verdict.get('status') or '-'} :: {verdict.get('summary') or '-'}",
@@ -33,6 +39,19 @@ def render_continuation_section(continuation: dict) -> str:
             f"{coverage.get('blocked_target_count', 0)} blocked"
         ),
     ]
+    if progress:
+        lines.extend(
+            [
+                f"- Previous run evidence trajectory: {progress.get('status') or 'unavailable'}",
+                f"- Prior comparison run id: {progress.get('prior_run_id') or '-'}",
+                (
+                    f"- Target-level delta: {progress.get('improved_target_count', 0)} improved, "
+                    f"{progress.get('regressed_target_count', 0)} regressed, "
+                    f"{progress.get('closed_gap_count', 0)} gaps closed, "
+                    f"{progress.get('reopened_target_count', 0)} reopened"
+                ),
+            ]
+        )
     missing_check_ids = _string_list(coverage.get("missing_check_ids"))[:8]
     if missing_check_ids:
         lines.append(f"- Previous missing required check ids: {json.dumps(missing_check_ids, ensure_ascii=False)}")
@@ -42,6 +61,19 @@ def render_continuation_section(continuation: dict) -> str:
     next_focus = _contract_string_list(continuation.get("next_focus"))[:8]
     if next_focus:
         lines.append(f"- Next focus: {json.dumps(next_focus, ensure_ascii=False)}")
+    focus_targets = _normalize_coverage_gap_rows(continuation.get("focus_targets"), limit=8)
+    if focus_targets:
+        lines.append(
+            f"- Follow-up focus targets ({continuation.get('focus_target_count', len(focus_targets))} total): "
+            f"{json.dumps(focus_targets, ensure_ascii=False)}"
+        )
+    if str(continuation.get("reason") or "").strip() == "recorded_advisory_follow_up":
+        lines.extend(
+            render_system_prompt_asset(
+                "runtime/recorded-advisory-follow-up.md",
+                {"role_archetype": str(role_archetype or "custom").strip().lower() or "custom"},
+            ).splitlines()
+        )
     return "\n".join(lines)
 
 

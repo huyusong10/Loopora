@@ -32,11 +32,13 @@ def resolve_orchestration_input(request: OrchestrationResolutionRequest) -> dict
     get_orchestration = request.get_orchestration
     not_found_errors = request.not_found_errors
 
-    if orchestration_id and workflow is None and not prompt_files:
+    if orchestration_id and workflow is None:
         orchestration = request.get_orchestration(orchestration_id)
+        effective_prompt_files = dict(orchestration.get("prompt_files_json") or {})
+        effective_prompt_files.update(dict(prompt_files or {}))
         hydrated_strategy_source, hydrated_prompt_files = hydrate_strategy_role_snapshots(
             strategy_source_from_record(orchestration) or {},
-            orchestration.get("prompt_files_json") or {},
+            effective_prompt_files,
             get_role_definition=request.get_role_definition,
         )
         normalized_strategy_source = normalize_strategy_source(hydrated_strategy_source, role_models=role_models)

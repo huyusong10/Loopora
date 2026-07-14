@@ -7,8 +7,14 @@ import typer
 
 from loopora.strategy_source import strategy_source_preset_names
 
-SpecOption = Annotated[Path, typer.Option(..., exists=True, help="Path to the Markdown spec.")]
-WorkdirOption = Annotated[Path, typer.Option(..., exists=True, file_okay=False, dir_okay=True, help="Target workdir.")]
+LoopCreateSpecOption = Annotated[
+    str | None,
+    typer.Option("--spec", metavar="PATH", help="Path to the Markdown spec."),
+]
+LoopCreateWorkdirOption = Annotated[
+    str | None,
+    typer.Option("--workdir", metavar="PATH", help="Target workdir."),
+]
 ExecutorOption = Annotated[str, typer.Option("--executor", help="Execution tool: codex, claude, opencode, or custom.")]
 ExecutorModeOption = Annotated[str, typer.Option("--executor-mode", help="Execution mode: preset or command.")]
 ModelOption = Annotated[str, typer.Option(help="Default model or alias for the selected execution tool.")]
@@ -26,14 +32,36 @@ CompletionModeOption = Annotated[
     typer.Option("--completion-mode", help="Completion mode: gatekeeper or rounds."),
 ]
 IterationIntervalOption = Annotated[
-    float,
-    typer.Option("--iteration-interval-seconds", min=0.0, help="Wait this many seconds between iterations."),
+    str,
+    typer.Option(
+        "--iteration-interval-seconds",
+        metavar="SECONDS",
+        help="Wait this many seconds between iterations. Must be >= 0.",
+    ),
 ]
-MaxItersOption = Annotated[int, typer.Option(min=0, help="Maximum orchestration iterations. Use 0 to keep iterating until you stop it.")]
-MaxRoleRetriesOption = Annotated[int, typer.Option(min=0, help="Retries per role before aborting.")]
-DeltaThresholdOption = Annotated[float, typer.Option(min=0.0, help="Plateau threshold.")]
-TriggerWindowOption = Annotated[int, typer.Option(min=1, help="Plateau trigger window.")]
-RegressionWindowOption = Annotated[int, typer.Option(min=1, help="Regression trigger window.")]
+MaxItersOption = Annotated[
+    str,
+    typer.Option(
+        metavar="COUNT",
+        help="Maximum orchestration iterations. Use 0 to keep iterating until you stop it.",
+    ),
+]
+MaxRoleRetriesOption = Annotated[
+    str,
+    typer.Option(metavar="COUNT", help="Retries per role before aborting. Must be >= 0."),
+]
+DeltaThresholdOption = Annotated[
+    str,
+    typer.Option(metavar="NUMBER", help="Plateau threshold. Must be >= 0."),
+]
+TriggerWindowOption = Annotated[
+    str,
+    typer.Option(metavar="COUNT", help="Plateau trigger window. Must be >= 1."),
+]
+RegressionWindowOption = Annotated[
+    str,
+    typer.Option(metavar="COUNT", help="Regression trigger window. Must be >= 1."),
+]
 NameOption = Annotated[str | None, typer.Option(help="Optional loop name.")]
 RoleModelOption = Annotated[
     list[str] | None,
@@ -63,9 +91,9 @@ StrategyFileOption = Annotated[
     typer.Option(
         "--strategy-file",
         "--workflow-file",
-        exists=True,
+        exists=False,
         file_okay=True,
-        dir_okay=False,
+        dir_okay=True,
         help="Path to a JSON or YAML strategy source. Supports {workflow, prompt_files} or a raw strategy object.",
     ),
 ]
@@ -74,9 +102,9 @@ BundleFileOption = Annotated[
     Path,
     typer.Argument(
         ...,
-        exists=True,
+        exists=False,
         file_okay=True,
-        dir_okay=False,
+        dir_okay=True,
         help="Path to a Loop plan file (YAML).",
     ),
 ]
@@ -85,7 +113,7 @@ BundleOutputOption = Annotated[
     typer.Option(
         "--output",
         file_okay=True,
-        dir_okay=False,
+        dir_okay=True,
         help="Write the Loop plan file to this path instead of printing it.",
     ),
 ]
@@ -96,9 +124,9 @@ PromptFileOption = Annotated[
     Path | None,
     typer.Option(
         "--prompt-file",
-        exists=True,
+        exists=False,
         file_okay=True,
-        dir_okay=False,
+        dir_okay=True,
         help="Path to a Markdown prompt file.",
     ),
 ]
@@ -115,9 +143,9 @@ FromFileOption = Annotated[
     Path | None,
     typer.Option(
         "--from-file",
-        exists=True,
+        exists=False,
         file_okay=True,
-        dir_okay=False,
+        dir_okay=True,
         help="Read Markdown content from this file.",
     ),
 ]

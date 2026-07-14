@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Callable
+
 from loopora.service_alignment_revision import AlignmentRevisionContext
 from loopora.service_alignment_source_seed import redact_alignment_source_value
 
@@ -23,7 +25,11 @@ class FakeAlignmentRevisionRepository:
         return event
 
 
-def revision_context(repo: FakeAlignmentRevisionRepository):
+def revision_context(
+    repo: FakeAlignmentRevisionRepository,
+    *,
+    write_transcript_log: Callable[[dict], None] | None = None,
+):
     created_sessions: list[dict] = []
     started_sessions: list[str] = []
     logged_sessions: list[dict] = []
@@ -50,6 +56,6 @@ def revision_context(repo: FakeAlignmentRevisionRepository):
         run_source_bundle=lambda _run, _loop: ("", {}),
         start_session_async=start_session_async,
         redact_source_value=redact_alignment_source_value,
-        write_transcript_log=lambda session: logged_sessions.append(dict(session)),
+        write_transcript_log=write_transcript_log or (lambda session: logged_sessions.append(dict(session))),
     )
     return context, created_sessions, started_sessions, logged_sessions

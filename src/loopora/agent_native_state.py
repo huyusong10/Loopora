@@ -11,16 +11,23 @@ from loopora.run_artifacts import INITIAL_STAGNATION_STATE, read_jsonl
 from loopora.service_types import LooporaError
 from loopora.utils import read_json, write_json
 
+AGENT_NATIVE_STATE_UNREADABLE_ERROR = "agent-native run state is unreadable"
+AGENT_NATIVE_STATE_INVALID_ERROR = "agent-native run state is invalid"
+
 
 def agent_native_state(layout: Any, *, adapter: str, run: dict[str, Any]) -> dict[str, Any]:
     path = agent_native_state_path(layout)
     if path.exists():
         try:
             payload = read_json(path)
-        except (OSError, UnicodeError, ValueError) as exc:
-            raise LooporaError(f"agent-native state is unreadable: {path}: {exc}") from exc
+        except (OSError, UnicodeError) as exc:
+            raise LooporaError(AGENT_NATIVE_STATE_UNREADABLE_ERROR) from exc
+        except ValueError as exc:
+            raise LooporaError(AGENT_NATIVE_STATE_INVALID_ERROR) from exc
         if isinstance(payload, dict) and payload:
             return payload
+        if payload:
+            raise LooporaError(AGENT_NATIVE_STATE_INVALID_ERROR)
     return {
         "version": 1,
         "execution_plane": "agent_native",

@@ -8,6 +8,18 @@ from loopora.bundles import BundleError, read_bundle_file_text
 from loopora.structured_numbers import structured_non_negative_int
 
 
+READY_CANDIDATE_MEANING = (
+    "candidate contract passed Loopora Core validation; READY does not prove that its task scope matches the confirmed task anchor"
+)
+READY_TASK_ANCHOR_STATUS = "preserved from the first /loopora-plan user message for READY review"
+READY_REVIEW_SCOPE = "compare task_anchor with ready_review_projection.task_scope and judgments before /loopora-run"
+READY_REVIEW_BEFORE_LOOP = "confirm the candidate task scope and judgments match task_anchor before running /loopora-run"
+READY_CANDIDATE_NEXT_STEP = (
+    "compare task_anchor with the candidate task scope and judgments; repair and resubmit on mismatch, "
+    "otherwise review the preview URL and run /loopora-run in this same Agent session"
+)
+
+
 def normalized_candidate_yaml(raw_yaml: str) -> str:
     return raw_yaml.rstrip() + "\n" if raw_yaml.strip() else ""
 
@@ -80,6 +92,22 @@ def agent_ready_review_projection(preview: dict[str, Any]) -> dict[str, Any]:
         },
         "diagnostic_count": len([item for item in diagnostics if str(item.get("severity") or "") != "info"]),
     }
+
+
+def agent_ready_task_anchor_projection(session: dict[str, Any]) -> dict[str, str]:
+    transcript = session.get("transcript") if isinstance(session, dict) else []
+    for item in transcript if isinstance(transcript, list) else []:
+        if not isinstance(item, dict) or str(item.get("role") or "").strip() != "user":
+            continue
+        task_anchor = str(item.get("content") or "").strip()
+        if task_anchor:
+            return {
+                "ready_meaning": READY_CANDIDATE_MEANING,
+                "task_anchor_status": READY_TASK_ANCHOR_STATUS,
+                "task_anchor": task_anchor,
+                "review_scope": READY_REVIEW_SCOPE,
+            }
+    return {"ready_meaning": READY_CANDIDATE_MEANING, "review_scope": READY_REVIEW_SCOPE}
 
 
 def first_review_items(value: object, *, limit: int = 2) -> list[str]:

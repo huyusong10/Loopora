@@ -16,6 +16,28 @@ from agent_bundle_candidates_test_support import (
     cli,
     json,
 )
+from agent_adapter_test_common import _labeled_value
+
+
+READY_TASK_ANCHOR = (
+    "Confirmed working agreement: preserve payment callback idempotency, rollback, audit semantics, "
+    "and fail closed on double ledger writes or missing reconciliation evidence."
+)
+READY_REVIEW_INSTRUCTION = (
+    "confirm the candidate task scope and judgments match task_anchor before running /loopora-run"
+)
+
+
+def _assert_ready_task_comparison(summary: dict) -> None:
+    assert summary["ready_meaning"].startswith("candidate contract passed Loopora Core validation")
+    assert "does not prove" in summary["ready_meaning"]
+    assert summary["task_anchor_status"].startswith("preserved from the first /loopora-plan user message")
+    assert summary["task_anchor"] == READY_TASK_ANCHOR
+    assert "compare task_anchor with ready_review_projection.task_scope" in summary["review_scope"]
+    candidate_scope = " ".join(summary["ready_review_projection"]["task_scope"])
+    assert "focused starter" in candidate_scope
+    assert "payment callback" not in candidate_scope.lower()
+    assert summary["review_before_loop"] == READY_REVIEW_INSTRUCTION
 
 
 def test_cli_codex_gen_accepts_ready_bundle_without_starting_run(tmp_path: Path, sample_workdir: Path) -> None:
@@ -25,7 +47,7 @@ def test_cli_codex_gen_accepts_ready_bundle_without_starting_run(tmp_path: Path,
     result = _invoke_codex_plan(
         runner,
         sample_workdir,
-        message="Ship contract inspection for implementation handoff.",
+        message=READY_TASK_ANCHOR,
         bundle_file=bundle_file,
         json_output=True,
     )
@@ -38,9 +60,9 @@ def test_cli_codex_gen_accepts_ready_bundle_without_starting_run(tmp_path: Path,
         payload, kind="agent_plan", summary_key="agent_plan_summary", status="ready"
     )
     _assert_ready_review_projection(summary["ready_review_projection"])
+    _assert_ready_task_comparison(summary)
     assert summary["preview_url"].startswith("/loops/new/bundle?alignment_session_id=")
-    assert summary["review_before_loop"] == "confirm the preview carries these judgments before running /loopora-run"
-    assert summary["ready_next_step"].startswith("return to this Agent session and run /loopora-run")
+    assert summary["ready_next_step"].startswith("compare task_anchor with the candidate task scope")
     assert summary["ready_slash_command"] == "/loopora-run"
     assert "loopora agent codex run" in summary["ready_cli_command"]
     assert "--json" in summary["ready_cli_command"]
@@ -55,7 +77,7 @@ def test_cli_codex_gen_compact_json_omits_raw_but_keeps_ready_handoff(tmp_path: 
     result = _invoke_codex_plan(
         runner,
         sample_workdir,
-        message="Ship contract inspection for implementation handoff.",
+        message=READY_TASK_ANCHOR,
         bundle_file=bundle_file,
         compact_json_output=True,
     )
@@ -69,10 +91,11 @@ def test_cli_codex_gen_compact_json_omits_raw_but_keeps_ready_handoff(tmp_path: 
         status="ready",
     )
     _assert_ready_review_projection(summary["ready_review_projection"])
+    _assert_ready_task_comparison(summary)
     surface = summary["agent_surface"]
     assert surface["entry_kind"] == "project_skill"
-    assert surface["slash_commands"] == {"plan": "/loopora-plan", "run": "/loopora-run"}
-    assert "loopora-builder" in surface["target_agents"]
+    assert "slash_commands" not in surface
+    assert "target_agents" not in surface
     assert surface["capability_contract"]["role_dispatch"] == "host_native"
     assert surface["nested_provider_cli"] == "not_used"
     assert "packaging" not in surface
@@ -97,7 +120,7 @@ def test_cli_agent_gen_ready_output_points_back_to_same_agent_loop(tmp_path: Pat
             "--workdir",
             str(sample_workdir),
             "--message",
-            "Ship contract inspection for implementation handoff.",
+            READY_TASK_ANCHOR,
             "--bundle-file",
             str(bundle_file),
             "--entry-source",
@@ -108,7 +131,10 @@ def test_cli_agent_gen_ready_output_points_back_to_same_agent_loop(tmp_path: Pat
 
     assert result.exit_code == 0, result.stdout
     assert "Loopora Loop preview is ready" in result.stdout
-    assert "next_agent_step: review the preview URL, then run /loopora-run in this same Agent session" in result.stdout
+    assert "ready_meaning: candidate contract passed Loopora Core validation" in result.stdout
+    assert f"task_anchor: {READY_TASK_ANCHOR}" in result.stdout
+    assert "review_scope: compare task_anchor with ready_review_projection.task_scope" in result.stdout
+    assert "next_agent_step: compare task_anchor with the candidate task scope" in result.stdout
     assert "ready_review:" in result.stdout
     assert "loopora_fit:" in result.stdout
     assert "fake_done_risks:" in result.stdout
@@ -116,12 +142,20 @@ def test_cli_agent_gen_ready_output_points_back_to_same_agent_loop(tmp_path: Pat
     assert "coverage_targets: 2 checks /" in result.stdout
     assert "judgment_projection: 13/13 mapped" in result.stdout
     assert "closure_gate: GateKeeper (evidence_refs_required)" in result.stdout
-    assert "review_before_loop: confirm the preview carries these judgments before running /loopora-run" in result.stdout
-    assert "ready_next_step: return to this Agent session and run /loopora-run" in result.stdout
+    assert f"review_before_loop: {READY_REVIEW_INSTRUCTION}" in result.stdout
+    assert "ready_next_step: compare task_anchor with the candidate task scope" in result.stdout
     assert "ready_slash_command: /loopora-run" in result.stdout
     _assert_labeled_loopora_agent_command(result.stdout, "ready_cli_command", "run")
     _assert_labeled_loopora_agent_command(result.stdout, "ready_run_command", "run")
     _assert_codex_native_surface_plain(result.stdout)
     assert "preview_url: /loops/new/bundle?alignment_session_id=" in result.stdout
+    assert "preview_url_status: relative_path_web_not_started" in result.stdout
+    assert _labeled_value(result.stdout, "preview_url_web_start_command").endswith(
+        f"loopora serve --open --workdir {sample_workdir.resolve()} --host 127.0.0.1 --port 8742"
+    )
     assert "run_url:" not in result.stdout
     assert "Loopora run:" not in result.stdout
+    assert result.stdout.index("ready_meaning:") < result.stdout.index("task_anchor:")
+    assert result.stdout.index("task_anchor:") < result.stdout.index("ready_review:")
+    assert result.stdout.index("ready_review:") < result.stdout.index("review_before_loop:")
+    assert result.stdout.index("review_before_loop:") < result.stdout.index("ready_next_step:")

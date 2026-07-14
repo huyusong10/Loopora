@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 
 from loopora.service import LooporaError
@@ -121,6 +121,27 @@ def _strategy_source_for_spec_template(payload: Mapping[str, object]) -> dict | 
     else:
         result = _strategy_source_for_spec_template_without_mapping_field(payload)
     return result
+
+
+def _strategy_source_for_spec_template_request(
+    payload: Mapping[str, object],
+    *,
+    get_orchestration: Callable[[str], Mapping[str, object]],
+) -> dict | None:
+    if _has_explicit_strategy_source_for_spec_template(payload):
+        return _strategy_source_for_spec_template(payload)
+    orchestration_id = str(payload.get("orchestration_id") or "").strip()
+    if orchestration_id:
+        orchestration = get_orchestration(orchestration_id)
+        strategy_source = strategy_source_from_record(orchestration)
+        return normalize_strategy_source(strategy_source) if strategy_source else None
+    return _strategy_source_for_spec_template(payload)
+
+
+def _has_explicit_strategy_source_for_spec_template(payload: Mapping[str, object]) -> bool:
+    if _strategy_source_mapping_field(payload).present or _strategy_json_mapping_field(payload).present:
+        return True
+    return any(str(payload.get(key) or "").strip() for key in ("strategy_json", "workflow_json"))
 
 
 def _strategy_source_for_spec_template_without_mapping_field(payload: Mapping[str, object]) -> dict | None:

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from strategy_source_architecture_test_support import design_boundary_source
+
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
@@ -10,7 +12,7 @@ def test_alignment_event_api_routes_have_dedicated_boundary() -> None:
     alignment_event_api_source = (REPO_ROOT / "src" / "loopora" / "web_alignment_event_api.py").read_text(
         encoding="utf-8"
     )
-    design_source = (REPO_ROOT / "design" / "contracts.md").read_text(encoding="utf-8")
+    design_source = design_boundary_source()
 
     assert "from loopora.web_alignment_event_api import register_alignment_event_api_routes" in alignment_api_source
     assert "def register_alignment_event_api_routes" in alignment_event_api_source

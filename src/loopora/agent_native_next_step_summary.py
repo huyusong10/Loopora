@@ -27,6 +27,7 @@ from loopora.system_prompt_assets import load_system_prompt_asset
 
 ROLE_DISPATCH_MESSAGE_LIMIT = 1000
 ROLE_DISPATCH_LIST_ITEM_LIMIT = 8
+ROLE_DISPATCH_ABSOLUTE_PATH_TAIL_PARTS = 6
 
 
 def agent_next_step_summary(next_step: dict, *, adapter: str = "", workdir: str = "", compact: bool = False) -> dict:
@@ -56,7 +57,7 @@ def agent_next_step_summary(next_step: dict, *, adapter: str = "", workdir: str 
         summary["native_trace_contract"] = native_trace_contract
     dispatch_unavailable = agent_dispatch_unavailable_summary(
         adapter=str(next_step.get("adapter") or adapter or "").strip() or "codex",
-        workdir=str(workdir or "").strip() or "$PWD",
+        workdir=str(workdir or "").strip(),
         role_dispatch=role_dispatch,
     )
     if dispatch_unavailable:
@@ -159,8 +160,15 @@ def _dispatch_path_text(value: str, *, workdir: str = "") -> str:
     try:
         relative = path.resolve().relative_to(Path(workdir).expanduser().resolve())
     except (OSError, ValueError):
-        return text
+        return _compact_dispatch_absolute_path(path)
     return str(relative)
+
+
+def _compact_dispatch_absolute_path(path: Path) -> str:
+    parts = path.parts
+    if len(parts) <= ROLE_DISPATCH_ABSOLUTE_PATH_TAIL_PARTS:
+        return str(path)
+    return str(Path("…", *parts[-ROLE_DISPATCH_ABSOLUTE_PATH_TAIL_PARTS:]))
 
 
 def _attach_agent_next_step_submit_summary(summary: dict[str, object], next_step: dict, submit_hint: dict) -> None:

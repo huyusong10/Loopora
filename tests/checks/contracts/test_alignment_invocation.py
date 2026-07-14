@@ -122,3 +122,62 @@ def test_run_alignment_executor_builds_invocation_boundary_and_persists_session_
     assert [event["event_type"] for event in repo.events] == ["codex_event", "alignment_executor_session_ref"]
     assert repo.events[0]["payload"]["alignment_status"] == "running"
     assert repo.events[0]["payload"]["invocation_id"] == "repair-0002"
+
+
+def test_run_alignment_executor_treats_stdout_mirror_failure_as_diagnostic(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    session_id = "align_invocation"
+    root = tmp_path / ".loopora" / "alignment_sessions" / session_id
+    bundle_path = root / "artifacts" / "bundle.yml"
+    bundle_path.parent.mkdir(parents=True)
+    bundle_path.write_text("version: 1\n", encoding="utf-8")
+    workdir = tmp_path / "project"
+    workdir.mkdir()
+    session = {
+        "id": session_id,
+        "status": "running",
+        "workdir": str(workdir),
+        "bundle_path": str(bundle_path),
+        "alignment_stage": "confirmed",
+        "executor_kind": "codex",
+        "executor_mode": "preset",
+        "model": "gpt-5",
+        "reasoning_effort": "medium",
+        "repair_attempts": 0,
+    }
+    repo = FakeAlignmentInvocationRepository(session)
+    executor = FakeAlignmentExecutor()
+    invocation_dir = root / "invocations" / "0001"
+    stdout_path = invocation_dir / "stdout.log"
+    original_open = Path.open
+
+    def fail_stdout_append(path: Path, mode: str = "r", *args, **kwargs):
+        if path == stdout_path and mode == "a":
+            raise OSError(f"permission denied: {tmp_path / 'private' / 'stdout.log'}")
+        return original_open(path, mode, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "open", fail_stdout_append)
+    context = AlignmentExecutorRunContext(
+        repository=repo,
+        get_session=lambda _session_id: dict(repo.session),
+        config=AlignmentExecutorInvocationConfig(
+            output_schema={"type": "object"},
+            idle_timeout_seconds=None,
+            executor_factory=lambda: executor,
+            build_prompt=lambda _session, **_kwargs: "Prompt.",
+            ensure_artifact_dirs=lambda path: path.mkdir(parents=True, exist_ok=True),
+            next_invocation_dir=lambda invocation_root, _attempt, *, repair: invocation_root
+            / "invocations"
+            / ("0001-repair" if repair else "0001"),
+            repair_attempts=lambda _session_payload, *, invalid_default=0: invalid_default,
+        ),
+    )
+
+    output = run_alignment_executor(context, session_id, mode="generate")
+
+    assert output["assistant_message"] == "Invocation completed."
+    assert [event["event_type"] for event in repo.events] == ["codex_event", "alignment_executor_session_ref"]
+    assert repo.events[0]["payload"]["message"] == "executor heartbeat"
+    assert stdout_path.read_text(encoding="utf-8") == ""

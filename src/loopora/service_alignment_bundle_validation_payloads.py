@@ -4,6 +4,9 @@ from pathlib import Path
 
 from loopora.service_alignment_artifacts import alignment_bundle_content_fingerprint
 
+ALIGNMENT_BUNDLE_MISSING_FILE_ERROR = "alignment bundle does not exist"
+ALIGNMENT_BUNDLE_SAVE_FAILED_ERROR = "alignment bundle could not be saved"
+
 
 def alignment_bundle_validation_success(
     bundle_path: Path,
@@ -40,11 +43,10 @@ def alignment_bundle_validation_failure(
 
 
 def alignment_bundle_missing_file_validation(bundle_path: Path, *, checked_at: str) -> dict:
-    error = f"alignment bundle does not exist: {bundle_path}"
     return {
         "ok": False,
-        "error": error,
+        "error": ALIGNMENT_BUNDLE_MISSING_FILE_ERROR,
         "bundle_path": str(bundle_path),
         "checked_at": checked_at,
-        "semantic_lint": {"ok": False, "issues": [error]},
+        "semantic_lint": {"ok": False, "issues": [ALIGNMENT_BUNDLE_MISSING_FILE_ERROR]},
     }

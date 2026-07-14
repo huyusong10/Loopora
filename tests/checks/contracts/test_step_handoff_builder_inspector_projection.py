@@ -71,3 +71,35 @@ def test_inspector_handoff_deduplicates_failed_items_and_check_results(tmp_path:
 
     assert handoff["status"] == "blocked"
     assert handoff["blocking_items"] == ["Primary flow evidence", "Project-owned evidence"]
+
+
+def test_handoff_generated_prose_inherits_frozen_task_language(tmp_path: Path) -> None:
+    layout = RunArtifactLayout(tmp_path / "run")
+    layout.initialize()
+    builder = build_step_handoff(
+        StepResultContext(
+            layout=layout,
+            iter_id=0,
+            step={"id": "builder_step"},
+            step_order=0,
+            role={"id": "builder", "name": "Builder", "archetype": "builder"},
+            runtime_role="builder",
+            output={"summary": "已完成聚焦改动。", "abandoned": "没有扩大范围。"},
+            task_language="zh",
+        )
+    )
+    inspector = build_step_handoff(
+        StepResultContext(
+            layout=layout,
+            iter_id=0,
+            step={"id": "inspector_step"},
+            step_order=1,
+            role={"id": "inspector", "name": "Inspector", "archetype": "inspector"},
+            runtime_role="inspector",
+            output={"tester_observations": "检查项均已通过。", "check_results": [], "dynamic_checks": []},
+            task_language="zh",
+        )
+    )
+
+    assert builder["summary"] == "已完成聚焦改动。 范围外或未完成说明：没有扩大范围。"
+    assert inspector["recommended_next_action"] == "将证据包提交给 GateKeeper 裁决。"

@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 # Merged from test_agent_bundle_accessibility_locale_evidence_preferences.py
-from agent_bundle_candidates_test_support import AgentBundleCandidateRequest, Path, alignment_bundle_yaml
+from agent_bundle_candidates_test_support import AgentBundleCandidateRequest, Path, alignment_bundle_yaml, json
+from loopora.service_agent_bundle_candidates import AGENT_CANDIDATE_PLAN_FILE_SAVE_ERROR
 
 
 def test_agent_bundle_candidate_rejects_accessibility_and_locale_evidence_preferences_missing_from_runtime_surfaces(
@@ -213,20 +214,130 @@ from agent_bundle_candidates_test_support import (
     LooporaError,
     pytest,
 )
+from loopora.service_types import LooporaWorkdirUnavailableError
 
 
 def test_agent_bundle_candidate_rejects_missing_workdir(service_factory, tmp_path: Path) -> None:
     service = service_factory(scenario="success")
+    missing_workdir = tmp_path / "missing-project"
 
-    with pytest.raises(LooporaError, match="adapter project root does not exist"):
+    with pytest.raises(LooporaWorkdirUnavailableError) as exc_info:
         service.create_agent_bundle_candidate(
             AgentBundleCandidateRequest(
                 adapter="codex",
-                workdir=tmp_path / "missing-project",
+                workdir=missing_workdir,
                 message="Prepare a Loop for a project that is not present.",
-                bundle_yaml=alignment_bundle_yaml(str(tmp_path / "missing-project")),
+                bundle_yaml=alignment_bundle_yaml(str(missing_workdir)),
             )
         )
+    assert exc_info.value.action == "agent"
+    assert exc_info.value.workdir_state == "missing"
+    assert str(exc_info.value) == f"target project is not ready for same-Agent project entries: {exc_info.value.summary}"
+    assert str(missing_workdir.resolve(strict=False)) not in str(exc_info.value)
+
+
+def test_agent_bundle_candidate_rejects_blank_workdir_without_using_current_directory(
+    monkeypatch,
+    service_factory,
+    tmp_path: Path,
+) -> None:
+    service = service_factory(scenario="success")
+    monkeypatch.chdir(tmp_path)
+
+    with pytest.raises(LooporaWorkdirUnavailableError) as exc_info:
+        service.create_agent_bundle_candidate(
+            AgentBundleCandidateRequest(
+                adapter="codex",
+                workdir="",
+                message="Prepare a Loop without an implicit project.",
+                bundle_yaml=alignment_bundle_yaml(str(tmp_path)),
+            )
+        )
+
+    assert exc_info.value.action == "agent"
+    assert exc_info.value.workdir_state == "required"
+    assert str(tmp_path) not in str(exc_info.value)
+
+
+def test_agent_bundle_candidate_rejects_uninspectable_workdir_without_os_error(
+    service_factory,
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    service = service_factory(scenario="success")
+    blocked_workdir = tmp_path / "blocked-project"
+    blocked_resolved = blocked_workdir.resolve(strict=False)
+    private_path = tmp_path / "private" / "blocked"
+    original_exists = Path.exists
+
+    def fail_exists(path: Path) -> bool:
+        if path == blocked_resolved:
+            raise OSError(f"permission denied: {private_path}")
+        return original_exists(path)
+
+    monkeypatch.setattr(Path, "exists", fail_exists)
+
+    with pytest.raises(LooporaWorkdirUnavailableError) as exc_info:
+        service.create_agent_bundle_candidate(
+            AgentBundleCandidateRequest(
+                adapter="codex",
+                workdir=blocked_workdir,
+                message="Prepare a Loop for a project that cannot be inspected.",
+                bundle_yaml=alignment_bundle_yaml(str(blocked_workdir)),
+            )
+        )
+    assert exc_info.value.action == "agent"
+    assert exc_info.value.workdir_state == "unavailable"
+    assert "permission denied" not in str(exc_info.value)
+    assert str(private_path) not in str(exc_info.value)
+
+
+def test_agent_bundle_candidate_save_failure_marks_session_failed_without_local_path(
+    service_factory,
+    monkeypatch,
+    tmp_path: Path,
+    sample_workdir: Path,
+) -> None:
+    service = service_factory(scenario="success")
+    bundle_file = tmp_path / "bundle.yml"
+    bundle_file.write_text(alignment_bundle_yaml(str(sample_workdir.resolve())), encoding="utf-8")
+    private_path = tmp_path / "private" / "bundle.yml"
+    original_replace = Path.replace
+
+    def fail_candidate_replace(path: Path, target: Path) -> Path:
+        target_path = Path(target)
+        if target_path.name == "bundle.yml" and "alignment_sessions" in target_path.parts:
+            raise OSError(f"permission denied: {private_path}")
+        return original_replace(path, target)
+
+    monkeypatch.setattr(Path, "replace", fail_candidate_replace)
+
+    generated = service.create_agent_bundle_candidate(
+        AgentBundleCandidateRequest(
+            adapter="codex",
+            workdir=sample_workdir,
+            message="Build a governed refund flow with durable evidence.",
+            bundle_file=bundle_file,
+            entry_source="codex_project_skill",
+        )
+    )
+
+    session = generated["session"]
+    events = service.list_alignment_events(session["id"])
+    encoded = json.dumps(generated, ensure_ascii=False)
+
+    assert generated["ready"] is False
+    assert generated["status"] == "failed"
+    assert generated["requires_candidate_repair"] is True
+    assert generated["binding"]["alignment_status"] == "failed"
+    assert generated["binding"]["requires_candidate_repair"] is True
+    assert session["error_message"] == AGENT_CANDIDATE_PLAN_FILE_SAVE_ERROR
+    assert session["validation"]["error"] == AGENT_CANDIDATE_PLAN_FILE_SAVE_ERROR
+    assert events[-1]["event_type"] == "alignment_failed"
+    assert events[-1]["payload"] == {"status": "failed", "error": AGENT_CANDIDATE_PLAN_FILE_SAVE_ERROR}
+    assert "permission denied" not in encoded
+    assert str(private_path) not in encoded
+    assert not list(Path(session["bundle_path"]).parent.glob(".bundle.yml.tmp.*"))
 
 
 def test_agent_bundle_candidate_without_yaml_requires_task_summary(
@@ -370,7 +481,6 @@ from agent_bundle_candidates_test_support import (
     _assert_invalid_candidate_run_recovery,
     _invoke_codex_plan,
     assert_agent_v3_envelope,
-    json,
 )
 
 
@@ -427,6 +537,35 @@ def test_cli_agent_gen_with_invalid_candidate_reports_repair_before_loop(tmp_pat
         repair_focus=repair_summary["repair_focus"],
         bundle_file=bundle_file,
     )
+
+
+def test_cli_agent_gen_candidate_directory_reports_plan_file_repair(tmp_path: Path, sample_workdir: Path) -> None:
+    bundle_dir = tmp_path / "candidate-dir"
+    bundle_dir.mkdir()
+    task_message = "Build a governed refund self-service flow with authorization, audit, and payment failure evidence."
+
+    result = _invoke_codex_plan(
+        CliRunner(),
+        sample_workdir,
+        message=task_message,
+        bundle_file=bundle_dir,
+        json_output=True,
+    )
+
+    assert result.exit_code == 1
+    assert _error_text(result) == ""
+    assert "Invalid value" not in result.output
+    assert "Usage:" not in result.output
+    payload = json.loads(result.stdout)
+    summary, _legacy = assert_agent_v3_envelope(
+        payload, kind="agent_plan", summary_key="agent_plan_summary", status="blocked"
+    )
+    assert summary["loop_recovery"] == "repair_candidate_plan_file"
+    assert summary["validation_error"] == "bundle file could not be read"
+    assert summary["plan_file_to_repair"] == str(bundle_dir)
+    assert summary["repair_action"]["file_to_edit"] == str(bundle_dir)
+    assert any("make the candidate plan file readable" in item for item in summary["repair_focus"])
+    assert "is a directory" not in result.output
 
 # Merged from test_agent_bundle_not_fit_direct_summaries.py
 from agent_bundle_not_fit_test_support import assert_loopora_not_fit_failure, create_not_fit_agent_bundle_candidate

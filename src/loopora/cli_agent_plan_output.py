@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import typer
 
+from loopora.agent_entry_candidate import READY_CANDIDATE_NEXT_STEP
 from loopora.agent_native_surface import agent_native_run_surface_for_result, native_surface_plain_lines
 from loopora.cli_agent_plan_guidance_output import (
     _print_agent_repair_guidance,
     _print_agent_web_review_guidance,
 )
+from loopora.cli_agent_plan_recovery import print_agent_plan_surface_hint as _print_agent_plan_surface_hint
 from loopora.cli_agent_plan_recovery_results import (
     _agent_entry_return_run_command,
     _agent_entry_return_slash_command,
@@ -27,6 +29,7 @@ from loopora.cli_agent_plan_results import (
     _agent_gen_json_payload,
     _agent_plan_summary,
 )
+from loopora.cli_agent_runtime_support import print_preview_url as _print_preview_url
 from loopora.cli_agent_runtime_support import print_web_status as _print_web_status
 from loopora.cli_shared import echo_json
 from loopora.cli_summary_helpers import (
@@ -63,38 +66,34 @@ def _print_agent_gen_result(result: dict, *, json_output: bool, compact_json_out
         _attach_agent_gen_recovery_fields(result)
         echo_json(_agent_gen_json_payload(result, include_raw=not compact_json_output))
         return
+    show_full_surface = True
+    preview_printed = False
     if result.get("ready"):
         typer.echo("Loopora Loop preview is ready")
-        typer.echo("next_agent_step: review the preview URL, then run /loopora-run in this same Agent session")
-        _print_agent_ready_review_projection(result.get("ready_review_projection"))
+        _print_agent_ready_task_anchor(result)
+        typer.echo(f"next_agent_step: {READY_CANDIDATE_NEXT_STEP}")
+        _print_agent_ready_review_projection(
+            result.get("ready_review_projection"),
+            review_before_loop=result.get("review_before_loop"),
+        )
         _print_agent_ready_run_handoff(result)
-    elif result.get("requires_candidate_repair"):
-        typer.echo("Loopora Loop preview needs plan file repair before /loopora-run")
-        if result.get("loopora_fit_contradiction"):
-            typer.echo(
-                "not_fit: task summary says this looks like one-off, direct-answer, no-new-evidence, "
-                "or benchmark/test-harness-only work; "
-                "reframe the task with later evidence, handoff, or GateKeeper value before trying a runnable Loop"
-            )
-        error = _agent_gen_error_summary(result)
-        if error:
-            typer.echo(f"validation_error: {error}")
-        _print_agent_repair_guidance(result)
+    elif _print_agent_plan_repair_result(result):
+        pass
     elif str(result.get("status") or "").strip() == "skipped":
         _print_agent_skipped_result(result)
         return
     elif result.get("continued_alignment_session") and result.get("requires_web_alignment"):
         typer.echo("Loopora planning conversation is waiting for user input")
         _print_agent_alignment_dialogue_guidance(result)
+        show_full_surface = False
     elif result.get("requires_web_alignment"):
         _print_agent_web_alignment_header(result)
         _print_agent_web_review_guidance(result)
+        show_full_surface = False
+        preview_printed = True
     else:
         typer.echo(f"Loopora Loop preview status: {result.get('status')}")
-    _print_agent_native_run_surface(result)
-    typer.echo(f"session_id: {result['session']['id']}")
-    typer.echo(f"preview_url: {result.get('preview_url') or result.get('preview_path')}")
-    _print_web_status(result)
+    _print_agent_plan_footer(result, show_full_surface=show_full_surface, preview_printed=preview_printed)
 
 
 def _print_agent_skipped_result(result: dict) -> None:
@@ -104,6 +103,42 @@ def _print_agent_skipped_result(result: dict) -> None:
     if message:
         typer.echo(f"alignment_assistant_message: {_clip(message, 1000)}")
     typer.echo(f"session_id: {result['session']['id']}")
+
+
+def _print_agent_plan_repair_result(result: dict) -> bool:
+    if result.get("requires_context_repair"):
+        _attach_agent_gen_recovery_fields(result)
+        typer.echo("Loopora Agent context card needs repair before /loopora-run")
+        error = _agent_gen_error_summary(result)
+        if error:
+            typer.echo(f"validation_error: {error}")
+        _print_agent_context_card_repair_guidance(result)
+        return True
+    if not result.get("requires_candidate_repair"):
+        return False
+    typer.echo("Loopora Loop preview needs plan file repair before /loopora-run")
+    if result.get("loopora_fit_contradiction"):
+        typer.echo(
+            "not_fit: task summary says this looks like one-off, direct-answer, no-new-evidence, "
+            "or benchmark/test-harness-only work; "
+            "reframe the task with later evidence, handoff, or GateKeeper value before trying a runnable Loop"
+        )
+    error = _agent_gen_error_summary(result)
+    if error:
+        typer.echo(f"validation_error: {error}")
+    _print_agent_repair_guidance(result)
+    return True
+
+
+def _print_agent_plan_footer(result: dict, *, show_full_surface: bool, preview_printed: bool) -> None:
+    if show_full_surface:
+        _print_agent_native_run_surface(result)
+    else:
+        _print_agent_plan_surface_hint()
+    typer.echo(f"session_id: {result['session']['id']}")
+    if not preview_printed:
+        _print_preview_url(result)
+    _print_web_status(result)
 
 
 def _print_agent_web_alignment_header(result: dict) -> None:
@@ -160,6 +195,23 @@ def _print_agent_alignment_dialogue_guidance(result: dict) -> None:
         typer.echo(f"next_alignment_step: {_clip(next_step, 500)}")
 
 
+def _print_agent_context_card_repair_guidance(result: dict) -> None:
+    hints = result.get("repair_focus") if isinstance(result.get("repair_focus"), list) else []
+    if hints:
+        typer.echo("repair_focus:")
+        for hint in hints:
+            text = str(hint).strip()
+            if text:
+                typer.echo(f"- {_clip(text, 360)}")
+    action = result.get("repair_action") if isinstance(result.get("repair_action"), dict) else {}
+    if action:
+        typer.echo("repair_action:")
+        for key in ("state", "next_action", "command_after_repair", "stop_before"):
+            value = str(action.get(key) or "").strip()
+            if value:
+                typer.echo(f"{key}: {_clip(value, 420)}")
+
+
 def _latest_alignment_assistant_turn(session: dict) -> dict:
     transcript = session.get("transcript") if isinstance(session.get("transcript"), list) else []
     for item in reversed(transcript):
@@ -168,7 +220,14 @@ def _latest_alignment_assistant_turn(session: dict) -> dict:
     return {}
 
 
-def _print_agent_ready_review_projection(projection: object) -> None:
+def _print_agent_ready_task_anchor(result: dict) -> None:
+    for key in ("ready_meaning", "task_anchor_status", "task_anchor", "review_scope"):
+        value = str(result.get(key) or "").strip()
+        if value:
+            typer.echo(f"{key}: {_clip(value, 1000)}")
+
+
+def _print_agent_ready_review_projection(projection: object, *, review_before_loop: object = "") -> None:
     review = projection if isinstance(projection, dict) else {}
     if not review:
         return
@@ -200,7 +259,9 @@ def _print_agent_ready_review_projection(projection: object) -> None:
     diagnostic_count = _non_bool_int(review.get("diagnostic_count"))
     if diagnostic_count:
         typer.echo(f"review_warnings: {diagnostic_count}")
-    typer.echo("review_before_loop: confirm the preview carries these judgments before running /loopora-run")
+    review_instruction = str(review_before_loop or "").strip()
+    if review_instruction:
+        typer.echo(f"review_before_loop: {review_instruction}")
 
 
 def _print_agent_ready_run_handoff(result: dict) -> None:

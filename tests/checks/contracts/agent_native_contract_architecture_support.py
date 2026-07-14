@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from strategy_source_architecture_test_support import design_boundary_source
+
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
@@ -11,7 +13,7 @@ def loopora_source(*parts: str) -> str:
 
 
 def design_contracts_source() -> str:
-    return (REPO_ROOT / "design" / "contracts.md").read_text(encoding="utf-8")
+    return design_boundary_source()
 
 
 def assert_markers_present(source: str, *markers: str) -> None:

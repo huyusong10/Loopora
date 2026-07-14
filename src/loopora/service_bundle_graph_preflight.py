@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from loopora.branding import state_dir_for_workdir
+from loopora.local_workdir_artifacts import loop_artifact_dir_for_ready_workdir
 from loopora.service_types import LooporaConflictError
 from loopora.strategy_source import strategy_source_from_record
 
@@ -55,8 +55,8 @@ def preflight_bundle_graph_delete(repository, bundle: dict, links: BundleGraphLi
     return paths
 
 
-def loop_artifact_dir_for_record(loop: dict) -> Path:
-    return state_dir_for_workdir(loop["workdir"]) / "loops" / loop["id"]
+def loop_artifact_dir_for_record(loop: dict) -> Path | None:
+    return loop_artifact_dir_for_ready_workdir(loop.get("workdir"), loop["id"])
 
 
 def _expected_bundle_assets(links: BundleGraphLinks) -> list[tuple[str, str]]:
@@ -105,7 +105,9 @@ def _preflight_loop_delete(repository, bundle_id: str, links: BundleGraphLinks, 
         raise LooporaConflictError(f"cannot delete bundle with active loop runs: {', '.join(active_runs)}")
 
     paths = [Path(run["runs_dir"]) for run in runs if str(run.get("runs_dir") or "").strip()]
-    paths.append(loop_artifact_dir_for_record(loop))
+    loop_artifact_dir = loop_artifact_dir_for_record(loop)
+    if loop_artifact_dir is not None:
+        paths.append(loop_artifact_dir)
     return paths
 
 
@@ -163,9 +165,13 @@ def _assert_roles_not_shared_by_external_orchestrations(
         )
 
 
-def _strategy_source_role_definition_ids(strategy_source: dict) -> set[str]:
+def strategy_source_role_definition_ids(strategy_source: dict) -> set[str]:
     return {
         str(role.get("role_definition_id", "") or "").strip()
         for role in strategy_source.get("roles", [])
         if isinstance(role, dict)
     }
+
+
+def _strategy_source_role_definition_ids(strategy_source: dict) -> set[str]:
+    return strategy_source_role_definition_ids(strategy_source)

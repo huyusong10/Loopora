@@ -83,6 +83,7 @@ def test_agent_native_case_keeps_core_concepts_out_of_shortcut_hints() -> None:
     risk_terms = set(targets["agent-native-risk-hints"]["terms"])
     risk_globs = set(targets["agent-native-risk-hints"]["globs"])
     handbook_globs = set(targets["agent-native-handbook"]["globs"])
+    phase_report_target = targets["real-probe-phase-reports"]
 
     assert {"inline", "nested", "prewritten", "host dispatch"}.issubset(risk_terms)
     assert "READY" not in risk_terms
@@ -96,6 +97,9 @@ def test_agent_native_case_keeps_core_concepts_out_of_shortcut_hints() -> None:
     assert "tests/probes/real_environment/README.md" in handbook_globs
     assert "tests/probes/real_environment/test_real_agent_adapter_probe.py" in handbook_globs
     assert targets["agent-native-handbook"]["max_bytes_per_file"] >= AGENT_NATIVE_HANDBOOK_MIN_BYTES_PER_FILE
+    assert "tests/probes/real_environment/README.md" in phase_report_target["missing_hint"]
+    assert "--suite real-agent" in phase_report_target["missing_hint"]
+    assert "--artifact phase=.loopora/real-probes/real-agent-phase-report.json" in phase_report_target["missing_hint"]
     assert "design/contracts.md" not in risk_globs
     assert "tests/probes/real_environment/README.md" not in risk_globs
     assert "tests/probes/real_environment/*.py" not in risk_globs

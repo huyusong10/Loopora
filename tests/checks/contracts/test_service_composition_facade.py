@@ -34,6 +34,7 @@ def test_loopora_service_is_composition_facade(tmp_path: Path) -> None:
     assert callable(service.start_agent_loop)
     assert callable(service.app_services.agent_native.submit_step)
     assert callable(service.app_services.run.observation_snapshot)
+    assert callable(service.app_services.run.build_evidence_package)
     assert callable(service.app_services.projection.web_run_detail)
 
 

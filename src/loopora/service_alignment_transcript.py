@@ -7,7 +7,7 @@ from typing import Protocol
 from loopora.service_alignment_artifacts import (
     alignment_assistant_message_record,
     alignment_user_message_record,
-    write_alignment_transcript_log,
+    write_alignment_transcript_log_best_effort,
 )
 from loopora.utils import utc_now
 
@@ -88,7 +88,7 @@ def apply_alignment_user_message(
             effect.stage_event_payload or {},
         )
     updated = context.get_session(session_id)
-    write_alignment_transcript_log(updated)
+    write_alignment_transcript_log_best_effort(updated)
     return updated
 
 
@@ -106,7 +106,7 @@ def record_alignment_assistant_message(
     )
     transcript.append(record.entry)
     context.repository.update_alignment_session(session_id, transcript=transcript)
-    write_alignment_transcript_log(context.get_session(session_id))
+    write_alignment_transcript_log_best_effort(context.get_session(session_id))
     context.repository.append_alignment_event(session_id, "alignment_message", record.event_payload)
 
 
@@ -122,5 +122,5 @@ def append_alignment_notice_message(
     transcript.append({"role": "assistant", "content": content, "created_at": created_at})
     context.repository.update_alignment_session(session_id, transcript=transcript)
     updated = context.get_session(session_id)
-    write_alignment_transcript_log(updated)
+    write_alignment_transcript_log_best_effort(updated)
     return updated

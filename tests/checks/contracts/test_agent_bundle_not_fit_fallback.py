@@ -3,12 +3,12 @@ from __future__ import annotations
 from agent_bundle_candidates_test_support import (
     CliRunner,
     Path,
-    _assert_codex_native_surface_plain,
     _assert_codex_native_surface_summary,
     assert_agent_v3_envelope,
     cli,
     json,
 )
+from agent_adapter_test_common import _labeled_value
 
 
 def test_cli_agent_gen_without_bundle_reports_not_fit_fallback(sample_workdir: Path) -> None:
@@ -40,10 +40,25 @@ def test_cli_agent_gen_without_bundle_reports_not_fit_fallback(sample_workdir: P
     assert "GateKeeper value" in result.stdout
     assert "review_recommended_action: Skip Loop (Recommended)" in result.stdout
     assert "next_review_step: reply with review_reply_preview to skip Loop generation" in result.stdout
+    assert result.stdout.index("review_focus:") < result.stdout.index("next_review_step:")
+    assert "next_plan_cli_command_policy: fallback_for_non_interactive_agents" in result.stdout
+    assert result.stdout.index("next_review_step:") < result.stdout.index("preview_url:")
+    assert "preview_url_status: relative_path_web_not_started" in result.stdout
+    assert _labeled_value(result.stdout, "preview_url_web_start_command").endswith(
+        f"loopora serve --open --workdir {sample_workdir.resolve()} --host 127.0.0.1 --port 8742"
+    )
+    assert result.stdout.index("preview_url:") < result.stdout.index("preview_url_status:")
+    assert result.stdout.index("preview_url_status:") < result.stdout.index("preview_url_web_start_command:")
+    assert result.stdout.index("preview_url_web_start_command:") < result.stdout.index("next_plan_cli_command_policy:")
+    assert result.stdout.index("next_plan_cli_command_policy:") < result.stdout.index("next_plan_cli_command:")
     assert "after_review_ready:" not in result.stdout
     assert "after_review_cli_command:" not in result.stdout
-    _assert_codex_native_surface_plain(result.stdout)
+    assert "agent_surface: current host Agent remains the executor" in result.stdout
+    assert "full surface diagnostics are available with --json --compact-json" in result.stdout
+    assert "agent surface:" not in result.stdout
+    assert "- host dispatch:" not in result.stdout
     assert "preview_url: /loops/new/bundle?alignment_session_id=" in result.stdout
+    assert result.stdout.count("preview_url:") == 1
 
 
 def test_cli_agent_gen_without_bundle_json_reports_not_fit_fallback(sample_workdir: Path) -> None:
@@ -73,6 +88,10 @@ def test_cli_agent_gen_without_bundle_json_reports_not_fit_fallback(sample_workd
     )
     assert summary["loopora_fit_contradiction"] is True
     assert summary["preview_url"].startswith("/loops/new/bundle?alignment_session_id=")
+    assert summary["preview_url_status"] == "relative_path_web_not_started"
+    assert summary["preview_url_web_start_command"].endswith(
+        f"loopora serve --open --workdir {sample_workdir.resolve()} --host 127.0.0.1 --port 8742"
+    )
     _assert_codex_native_surface_summary(summary)
     assert summary["review_status"] == "not runnable; Loopora fit needs to be redefined"
     assert summary["review_focus"][0].startswith("Loopora fit: define later evidence")

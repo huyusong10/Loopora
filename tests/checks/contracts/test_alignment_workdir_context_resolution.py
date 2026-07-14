@@ -11,7 +11,7 @@ from loopora.service_alignment_workdir_context import (
     resolve_loopora_context,
     resolve_plan_context_from_workdir_context,
 )
-from loopora.service_types import LooporaError
+from loopora.service_types import LooporaWorkdirUnavailableError
 
 
 def test_get_alignment_workdir_context_attaches_default_plan_resolution(tmp_path: Path) -> None:
@@ -83,12 +83,54 @@ def test_resolve_loopora_context_routes_plan_and_run_from_one_command_boundary(t
     assert run == {"intent": "run", "adapter": "codex", "context_id": "thread-1"}
     assert run_calls == [{"root": str(tmp_path.resolve()), "adapter": "codex", "context_id": "thread-1"}]
 
-    with pytest.raises(LooporaError, match="workdir does not exist"):
+    missing_workdir = tmp_path / "missing"
+    with pytest.raises(LooporaWorkdirUnavailableError) as exc_info:
         resolve_loopora_context(
             context,
-            tmp_path / "missing",
+            missing_workdir,
             AlignmentLooporaContextResolutionRequest(intent="run"),
         )
+    assert exc_info.value.action == "alignment"
+    assert exc_info.value.workdir_state == "missing"
+    assert str(exc_info.value) == f"target project is not ready for Alignment: {exc_info.value.summary}"
+    assert str(missing_workdir.resolve(strict=False)) not in str(exc_info.value)
+
+
+def test_alignment_workdir_context_rejects_uninspectable_workdir_without_os_error(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    blocked_workdir = tmp_path / "blocked-workdir"
+    blocked_resolved = blocked_workdir.resolve(strict=False)
+    private_path = tmp_path / "private" / "blocked"
+    original_exists = Path.exists
+
+    def fail_exists(path: Path) -> bool:
+        if path == blocked_resolved:
+            raise OSError(f"permission denied: {private_path}")
+        return original_exists(path)
+
+    monkeypatch.setattr(Path, "exists", fail_exists)
+    context = AlignmentLooporaContextResolverContext(
+        workdir_context_payload=lambda _root: {},
+        resolve_plan_context=lambda _payload, **_kwargs: {},
+        resolve_run_context=lambda _root, **_kwargs: {},
+    )
+
+    for call in (
+        lambda: get_alignment_workdir_context(context, blocked_workdir),
+        lambda: resolve_loopora_context(
+            context,
+            blocked_workdir,
+            AlignmentLooporaContextResolutionRequest(intent="run"),
+        ),
+    ):
+        with pytest.raises(LooporaWorkdirUnavailableError) as exc_info:
+            call()
+        assert exc_info.value.action == "alignment"
+        assert exc_info.value.workdir_state == "unavailable"
+        assert "permission denied" not in str(exc_info.value)
+        assert str(private_path) not in str(exc_info.value)
 
 
 def test_resolve_plan_context_from_workdir_context_preserves_selection_semantics() -> None:

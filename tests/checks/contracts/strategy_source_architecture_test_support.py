@@ -4,6 +4,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 LOOPORA_SRC = REPO_ROOT / "src" / "loopora"
+DESIGN_BOUNDARY_FILES = ("contracts.md", "domain-workflow-contracts.md", "service-boundaries.md")
 
 
 def loopora_path(*parts: str) -> Path:
@@ -16,6 +17,13 @@ def loopora_source(*parts: str) -> str:
 
 def loopora_sources(*source_names: str) -> dict[str, str]:
     return {source_name: loopora_source(source_name) for source_name in source_names}
+
+
+def design_boundary_source() -> str:
+    return "\n\n".join(
+        (REPO_ROOT / "design" / filename).read_text(encoding="utf-8")
+        for filename in DESIGN_BOUNDARY_FILES
+    )
 
 
 def assert_contains(source: str, *markers: str) -> None:

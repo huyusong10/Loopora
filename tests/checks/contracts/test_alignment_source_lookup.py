@@ -27,6 +27,9 @@ class _SourceLookupService:
     def get_loop(self, loop_id: str) -> dict:
         return self.loops[loop_id]
 
+    def get_alignment_session(self, _session_id: str) -> dict:
+        return {}
+
     def export_bundle(self, bundle_id: str) -> dict:
         self.exported_bundle_ids.append(bundle_id)
         return self.bundles[bundle_id]
@@ -87,6 +90,27 @@ def test_resolve_alignment_source_option_seed_rejects_continue_session_and_missi
 
     with pytest.raises(LooporaError, match="no longer available"):
         resolve_alignment_source_option_seed(service, tmp_path, "run:missing")
+
+
+def test_resolve_alignment_source_option_seed_projects_broken_session_bundle_as_unavailable(tmp_path: Path) -> None:
+    service = _SourceLookupService()
+    service.context = {
+        "options": [
+            {
+                "option_id": "alignment_session:bad",
+                "action": "improve",
+                "source_type": "alignment_session",
+                "source_alignment_session_id": "bad",
+                "bundle_path": "bad\0bundle.yml",
+            }
+        ]
+    }
+
+    with pytest.raises(LooporaError, match="selected workdir context is no longer available") as exc_info:
+        resolve_alignment_source_option_seed(service, tmp_path, "alignment_session:bad")
+
+    assert "embedded null" not in str(exc_info.value)
+    assert str(Path.cwd()) not in str(exc_info.value)
 
 
 def test_alignment_run_source_bundle_derives_when_loop_has_no_imported_bundle() -> None:

@@ -4,9 +4,9 @@ import json
 from collections.abc import Callable, Iterable, Mapping
 from pathlib import Path
 
-from loopora.branding import state_dir_for_workdir
 from loopora.event_redaction import redact_alignment_event_payload, redact_run_event_payload
 from loopora.event_redaction_audit_results import event_redaction_sample, redaction_changed
+from loopora.local_workdir_artifacts import state_dir_for_ready_workdir
 from loopora.run_artifacts import RunArtifactLayout
 from loopora.settings import load_recent_workdirs
 
@@ -80,7 +80,10 @@ def _candidate_run_dirs(repository) -> list[Path]:
             _add_candidate_path(candidates, seen, row.get("path"))
 
     for workdir in load_recent_workdirs(limit=100):
-        root = state_dir_for_workdir(workdir) / "runs"
+        state_dir = state_dir_for_ready_workdir(workdir)
+        if state_dir is None:
+            continue
+        root = state_dir / "runs"
         if not root.exists():
             continue
         for run_dir in sorted(item for item in root.iterdir() if item.is_dir()):
@@ -104,7 +107,10 @@ def _candidate_alignment_session_dirs(repository) -> list[Path]:
             _add_candidate_path(candidates, seen, row.get("path"))
 
     for workdir in load_recent_workdirs(limit=100):
-        root = state_dir_for_workdir(workdir) / "alignment_sessions"
+        state_dir = state_dir_for_ready_workdir(workdir)
+        if state_dir is None:
+            continue
+        root = state_dir / "alignment_sessions"
         if not root.exists():
             continue
         for session_dir in sorted(item for item in root.iterdir() if item.is_dir()):

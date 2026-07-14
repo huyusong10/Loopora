@@ -4,18 +4,21 @@ import json
 from pathlib import Path
 
 from loopora.agent_native_guidance import core_blocker_kind as _core_blocker_kind
+from loopora.cli_agent_result_files import (
+    RESULT_FILE_INVALID_JSON_ERROR,
+    RESULT_FILE_MISSING_ERROR,
+    RESULT_FILE_OBJECT_ERROR,
+    RESULT_FILE_UNREADABLE_ERROR,
+)
 from loopora.cli_summary_helpers import non_bool_int as _non_bool_int
 from loopora.cli_summary_helpers import set_summary_text as _set_summary_text
 
 
 def _agent_submit_next_repair_step(result: dict) -> str:
     error = str(result.get("error") or "")
-    if _result_file_missing(error):
-        template = str(result.get("active_result_template") or "the active result template").strip()
-        step = (
-            "create the missing filled result file by copying "
-            f"{template}, replacing null placeholders in result, preserving loopora_host_dispatch, then submit again"
-        )
+    result_file_step = _result_file_read_repair_step(result, error)
+    if result_file_step:
+        step = result_file_step
     elif result.get("submitted_template_file"):
         result_file_to_write = str(result.get("active_result_file_to_write") or "").strip()
         if result_file_to_write:
@@ -74,6 +77,26 @@ def _agent_submit_next_repair_step(result: dict) -> str:
     return step
 
 
+def _result_file_read_repair_step(result: dict, error: str) -> str:
+    if _result_file_missing(error):
+        template = str(result.get("active_result_template") or "the active result template").strip()
+        return (
+            "create the missing filled result file by copying "
+            f"{template}, replacing null placeholders in result, preserving loopora_host_dispatch, then submit again"
+        )
+    if RESULT_FILE_UNREADABLE_ERROR in error:
+        return (
+            "make result_file_to_repair readable as UTF-8 JSON or recreate it from the active result template, "
+            "preserve loopora_host_dispatch, then submit again"
+        )
+    if RESULT_FILE_INVALID_JSON_ERROR in error:
+        return (
+            "fix JSON syntax in result_file_to_repair, keep one wrapper object with loopora_host_dispatch and result, "
+            "then submit again"
+        )
+    return ""
+
+
 def _agent_submit_result_file_dispatch_summary(result_file: Path) -> dict:
     try:
         payload = json.loads(result_file.read_text(encoding="utf-8"))
@@ -129,8 +152,11 @@ def _agent_submit_stale_dispatch_detail(result: dict) -> str:
 
 def _agent_submit_error_is_repairable(error: str) -> bool:
     markers = (
+        RESULT_FILE_MISSING_ERROR,
+        RESULT_FILE_UNREADABLE_ERROR,
+        RESULT_FILE_INVALID_JSON_ERROR,
+        RESULT_FILE_OBJECT_ERROR,
         "result file is not valid JSON",
-        "result file must contain one JSON object",
         "agent-native result does not match output_schema",
         "result wrapper must contain",
         "loopora_host_dispatch",
@@ -156,7 +182,9 @@ def _host_dispatch_missing(error: str) -> bool:
 
 
 def _result_file_missing(error: str) -> bool:
-    return "result file is not valid JSON" in error and ("No such file or directory" in error or "Errno 2" in error)
+    return RESULT_FILE_MISSING_ERROR in error or (
+        "result file is not valid JSON" in error and ("No such file or directory" in error or "Errno 2" in error)
+    )
 
 
 def _host_dispatch_error_is_repairable(error: str) -> bool:

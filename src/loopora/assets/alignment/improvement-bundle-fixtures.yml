@@ -1,0 +1,176 @@
+schema_version: 1
+fixtures:
+  search_refactor_improvement:
+    metadata_name: "Search 重构改进 Bundle"
+    metadata_description: "基于来源 Loop 反馈生成的任务范围内 search refactor 改进候选。"
+    loop_name: "Search 重构改进 Bundle"
+    collaboration_summary: >-
+      保留来源 Loop 的稳定搜索任务意图、workdir、executor 默认值和仍然有效的证据优先姿态；
+      这次反馈驱动的治理变化是任务范围内的重构 delta，而不是开放式大重写。
+      改进把过大的 Search Builder 拆成 baseline、query rewrite、retrieval、ranking、regression review 和 evidence hardening 阶段，
+      并把变化投射到 spec、roles、workflow、证据期望和 GateKeeper 严格度。
+      后续轮次必须证明复杂度没有只是换地方、搜索用户行为没有回归、证据路径可复验；
+      GateKeeper 从 baseline、phase、regression 和 hardening handoff 裁决已证明、弱证据、未证明、阻断和残余风险。
+    spec_markdown: |-
+      # Task
+
+      修订来源 Search Loop，使它从保守的单 Builder 改成任务范围内的阶段化 refactor workflow。保留来源搜索目标、workdir 和 executor 默认值；不做开放式平台重写、完整搜索 UI 重做或无证据的激进改造。
+
+      # Done When
+
+      - Baseline inspection 先固定当前搜索行为、可复现 proof path 和本地治理义务。
+      - Query rewrite、retrieval 和 ranking 分别由窄 Builder 推进，并各自留下 handoff、artifact、命令输出、日志或 evidence id。
+      - Regression review 能证明复杂度没有只是换地方、搜索结果没有回归、阶段证据路径可复验。
+      - Evidence hardening 只补 review 指名的 proof gap，不扩大产品范围。
+      - GateKeeper 读取 baseline、regression 和 hardening handoff 后，能区分已证明、弱证据、未证明、阻断和残余风险。
+
+      # Guardrails
+
+      - 不允许为了显得激进而扩大到无边界重写。
+      - 不允许用更多角色掩盖缺少独立证据边界的问题。
+      - 不允许把 retrieval 或 recall 回归藏在 ranking polish 后面。
+      - 若存在 AGENTS.md、design/README.md、design/ 或 tests/，阶段角色必须把本地治理作为读取、验证和 GateKeeper 阻断责任。
+
+      # Success Surface
+
+      - Reviewer 可以从 baseline artifact、query/retrieval/ranking handoff、regression review、evidence-hardening output 和 GateKeeper verdict 追踪每个 search refactor claim。
+      - 复杂度、可维护性、用户行为回归和证据路径都能被复验，而不是只出现在总结文案里。
+
+      # Fake Done
+
+      - 只增加角色数量、只改 prompt 文案、只声明“更激进重构”不得通过。
+      - 复杂度只是移动到另一个阶段、搜索结果回归、没有 baseline、没有阶段 handoff、没有 evidence id 或命令/日志证据时不得通过。
+      - 只有 happy-path search demo、单个 query 改善或最终 ranking story 不得通过。
+
+      # Evidence Preferences
+
+      - 优先 baseline artifacts、阶段 handoffs、before/after regression evidence、复杂度/可维护性证据、项目检查、命令输出、日志和 exact evidence ids。
+      - Regression Inspector 应把薄弱 proof 标为弱证据，把 unsupported claims 标为未证明，把回归和证据缺口标为阻断。
+      - GateKeeper 只接受有 owner/follow-up 的轻微 tuning 残余风险。
+
+      # Residual Risk
+
+      轻微 tuning 风险只有在标为残余风险并有 owner、follow-up 或 acceptance path 时可保留。复杂度只是换地方、用户行为回归、baseline 缺失、阶段证据路径不可复验、缺少审计/日志证据或跳过本地治理必须 fail closed。
+
+      # Role Notes
+
+      ## Search Baseline Inspector Notes
+
+      固定来源 Loop 当前搜索行为、baseline proof path、本地治理义务和不可回归边界；未证明 baseline claim 标为未证明。
+
+      ## Query Rewrite Builder Notes
+
+      只实现 query rewrite 阶段，读取 baseline handoff，留下 query rewrite artifact、命令/日志证据和 evidence id；不得静默改变 retrieval 或 ranking 语义。
+
+      ## Retrieval Builder Notes
+
+      只实现 retrieval 阶段，读取 query handoff，保留 query contract，留下 retrieval evidence 和可复验 handoff。
+
+      ## Ranking Builder Notes
+
+      只实现 ranking 阶段，读取 retrieval evidence，暴露 recall 或排序回归风险，不得用 polish 掩盖弱证据。
+
+      ## Search Regression Inspector Notes
+
+      读取 query、retrieval 和 ranking handoff，对照 baseline 反证复杂度转移、用户行为回归、证据路径脆弱和本地治理跳过。
+
+      ## Evidence Hardening Builder Notes
+
+      只补 Regression Inspector 点名的 proof gap，例如 harness、命令输出、日志、artifact 链接或 evidence id；不得扩大 search refactor scope。
+
+      ## Search Refactor GateKeeper Notes
+
+      读取 baseline、regression 和 hardening handoff，并查询 Builder / Inspector evidence；复杂度转移、行为回归、未证明阶段 claim、跳过本地治理或 unmanaged residual risk 必须 fail closed。
+    workflow:
+      version: 1
+      preset: "search-refactor-improvement-long-chain"
+      collaboration_intent: >-
+        使用 search refactor long-chain workflow：baseline、query rewrite、retrieval、ranking、regression review
+        和 evidence hardening 各自产生 distinct artifact、proof target 与 handoff；GateKeeper 汇入 baseline、
+        regression、hardening handoffs 与 evidence_query，让弱证据、复杂度转移、用户行为回归、证据路径不可复验或假完成在 closure 前暴露并 fail closed。
+      roles:
+        - id: "baseline_inspector"
+          role_definition_key: "search-baseline-inspector"
+        - id: "query_builder"
+          role_definition_key: "query-rewrite-builder"
+        - id: "retrieval_builder"
+          role_definition_key: "retrieval-builder"
+        - id: "ranking_builder"
+          role_definition_key: "ranking-builder"
+        - id: "regression_inspector"
+          role_definition_key: "search-regression-inspector"
+        - id: "evidence_builder"
+          role_definition_key: "evidence-hardening-builder"
+        - id: "gatekeeper"
+          role_definition_key: "search-refactor-gatekeeper"
+      steps:
+        - id: "baseline_inspection_step"
+          role_id: "baseline_inspector"
+          on_pass: "continue"
+        - id: "query_rewrite_builder_step"
+          role_id: "query_builder"
+          inputs:
+            handoffs_from:
+              - "baseline_inspection_step"
+            iteration_memory: "summary_only"
+          on_pass: "continue"
+        - id: "retrieval_builder_step"
+          role_id: "retrieval_builder"
+          inputs:
+            handoffs_from:
+              - "query_rewrite_builder_step"
+            iteration_memory: "summary_only"
+          on_pass: "continue"
+        - id: "ranking_builder_step"
+          role_id: "ranking_builder"
+          inputs:
+            handoffs_from:
+              - "retrieval_builder_step"
+            iteration_memory: "summary_only"
+          on_pass: "continue"
+        - id: "regression_inspection_step"
+          role_id: "regression_inspector"
+          inputs:
+            handoffs_from:
+              - "baseline_inspection_step"
+              - "query_rewrite_builder_step"
+              - "retrieval_builder_step"
+              - "ranking_builder_step"
+            evidence_query:
+              archetypes:
+                - "builder"
+              verifies:
+                - "task-scoped-refactor"
+                - "behavior-regression"
+                - "evidence-path"
+                - "local-governance"
+              limit: 32
+            iteration_memory: "summary_only"
+          on_pass: "continue"
+        - id: "evidence_hardening_builder_step"
+          role_id: "evidence_builder"
+          inputs:
+            handoffs_from:
+              - "regression_inspection_step"
+            iteration_memory: "summary_only"
+          on_pass: "continue"
+        - id: "refactor_gatekeeper_step"
+          role_id: "gatekeeper"
+          inputs:
+            handoffs_from:
+              - "baseline_inspection_step"
+              - "regression_inspection_step"
+              - "evidence_hardening_builder_step"
+            evidence_query:
+              archetypes:
+                - "builder"
+                - "inspector"
+              verifies:
+                - "task-scoped-refactor"
+                - "complexity-moved"
+                - "behavior-regression"
+                - "evidence-path"
+                - "local-governance"
+              limit: 40
+            iteration_memory: "summary_only"
+          on_pass: "finish_run"

@@ -3,6 +3,8 @@ from __future__ import annotations
 # Merged from test_asset_catalog_architecture.py
 from pathlib import Path
 
+from strategy_source_architecture_test_support import design_boundary_source
+
 from loopora.asset_catalog import StrategyTemplateAssetCatalog, WorkflowAssetCatalog
 
 
@@ -20,7 +22,7 @@ def test_asset_catalog_splits_pure_asset_helpers_from_repository_facade() -> Non
     role_facade_source = (repo_root / "src" / "loopora" / "asset_catalog_role_facade.py").read_text(encoding="utf-8")
     role_payloads_source = (repo_root / "src" / "loopora" / "asset_catalog_role_payloads.py").read_text(encoding="utf-8")
     role_snapshots_source = (repo_root / "src" / "loopora" / "asset_catalog_role_snapshots.py").read_text(encoding="utf-8")
-    contracts_source = (repo_root / "design" / "contracts.md").read_text(encoding="utf-8")
+    contracts_source = design_boundary_source()
 
     assert "class StrategyTemplateAssetCatalog" in catalog_source
     assert "RoleDefinitionAssetCatalogMixin" in catalog_source
@@ -50,6 +52,63 @@ def test_asset_catalog_splits_pure_asset_helpers_from_repository_facade() -> Non
     assert "asset_catalog_role_facade.py" in contracts_source
     assert "asset_catalog_role_payloads.py" in contracts_source
     assert "asset_catalog_role_snapshots.py" in contracts_source
+
+
+def test_asset_catalog_editors_use_browser_enhanced_field_recovery() -> None:
+    repo_root = Path(__file__).resolve().parents[3]
+    role_template = (repo_root / "src" / "loopora" / "templates" / "new_role_definition.html").read_text(encoding="utf-8")
+    orchestration_template = (repo_root / "src" / "loopora" / "templates" / "new_orchestration.html").read_text(encoding="utf-8")
+    role_script = (repo_root / "src" / "loopora" / "static" / "pages" / "new_role_definition.js").read_text(encoding="utf-8")
+    orchestration_script = (repo_root / "src" / "loopora" / "static" / "pages" / "new_orchestration.js").read_text(encoding="utf-8")
+    app_script = (repo_root / "src" / "loopora" / "static" / "app.js").read_text(encoding="utf-8")
+
+    assert all(fragment in role_template for fragment in (
+        'data-api-action="{{ role_definition_api_action }}"',
+        'data-api-method="{{ role_definition_api_method }}"',
+        'data-return-to="{{ return_to }}"',
+        'data-workdir-context-form="workdir"',
+        "data-asset-form-error",
+        'type="radio"',
+        'name="executor_mode"',
+        'data-testid="role-definition-mode-preset-input"',
+        'data-testid="role-definition-mode-command-input"',
+    ))
+    assert 'type="hidden"\n              name="executor_mode"' not in role_template
+    assert all(fragment in orchestration_template for fragment in (
+        'data-api-action="{{ orchestration_api_action }}"',
+        'data-api-method="{{ orchestration_api_method }}"',
+        'data-return-to="{{ return_to }}"',
+        'data-workdir-context-form="workdir"',
+        "data-asset-form-error",
+    ))
+    assert all(fragment in app_script for fragment in (
+        "function renderAssetFieldRecovery(form, payload",
+        "function clearAssetFieldRecovery(form",
+        "function renderAssetRecoveryActionPanel(form, payload",
+        "function bindAssetRecoveryActionButtons(form, panel",
+        "function assetSaveRedirectUrl(payload",
+        "payload?.error_code !== \"asset_validation_failed\"",
+        "field_errors",
+        "data-asset-field-recovery",
+        "data-asset-recovery-action=\"fix_asset_fields\"",
+        "data-asset-recovery-action=\"retry_web_asset_save\"",
+        "focusFirstAssetRecoveryField(form, fields, options)",
+        "submitAssetRecoveryForm(form, options)",
+    ))
+    assert all(fragment in role_script for fragment in (
+        "form.addEventListener(\"submit\", submitRoleDefinitionForm)",
+        "window.LooporaUI.renderAssetFieldRecovery(form, payload",
+        "window.LooporaUI.assetSaveRedirectUrl(payload",
+        "roleDefinitionPayload()",
+        "noteIdPrefix: \"role-definition-field-recovery\"",
+    ))
+    assert all(fragment in orchestration_script for fragment in (
+        "window.LooporaUI.renderAssetFieldRecovery(form, payload",
+        "window.LooporaUI.assetSaveRedirectUrl(payload",
+        "orchestrationPayload()",
+        "strategy_json: workflowState",
+        "noteIdPrefix: \"orchestration-field-recovery\"",
+    ))
 
 # Merged from test_asset_catalog_orchestration_resolution.py
 

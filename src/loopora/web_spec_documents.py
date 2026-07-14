@@ -4,7 +4,13 @@ from pathlib import Path
 
 from loopora.markdown_tools import looks_binary, render_safe_markdown_html
 from loopora.service import LooporaError
-from loopora.specs import SpecError, compile_markdown_spec
+from loopora.specs import (
+    SpecError,
+    compile_markdown_spec,
+    resolve_spec_file_path,
+    spec_file_read_error,
+    spec_file_save_error,
+)
 
 SPEC_MARKDOWN_SUFFIXES = {".md", ".markdown"}
 SPEC_DOCUMENT_MAX_BYTES = 1_000_000
@@ -22,7 +28,7 @@ def _load_spec_markdown_document(path_text: str, *, binary_error: str) -> tuple[
 
 
 def _resolve_spec_markdown_path(path_text: str) -> Path:
-    spec_path = Path(path_text).expanduser().resolve()
+    spec_path = resolve_spec_file_path(Path(path_text))
     if spec_path.suffix.lower() not in SPEC_MARKDOWN_SUFFIXES:
         raise LooporaError("spec path must point to a Markdown file (.md or .markdown)")
     return spec_path
@@ -37,6 +43,14 @@ def _assert_spec_markdown_content(raw_bytes: bytes, *, binary_error: str) -> Non
 def _assert_spec_markdown_size(raw_bytes: bytes) -> None:
     if len(raw_bytes) > SPEC_DOCUMENT_MAX_BYTES:
         raise LooporaError(f"spec file is too large; maximum size is {SPEC_DOCUMENT_MAX_BYTES} bytes")
+
+
+def _spec_document_read_error(exc: BaseException) -> str:
+    return spec_file_read_error(exc)
+
+
+def _spec_document_save_error(exc: BaseException) -> str:
+    return spec_file_save_error(exc)
 
 
 def _spec_validation_from_markdown(markdown_text: str) -> dict[str, object]:

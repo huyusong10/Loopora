@@ -128,16 +128,55 @@ def test_workspace_guard_fails_closed_when_baseline_is_missing_or_malformed(
     baseline_path = RunArtifactLayout(run_dir).workspace_baseline_path
 
     baseline_path.unlink()
-    with pytest.raises(LooporaError, match="workspace safety baseline"):
+    with pytest.raises(LooporaError, match="workspace safety baseline") as missing_error:
         service._enforce_workspace_safety(run, run_dir, 0, role="builder")
+    assert str(missing_error.value) == "workspace safety baseline is missing or malformed"
+    assert str(baseline_path) not in str(missing_error.value)
 
     baseline_path.write_text("{not json}\n", encoding="utf-8")
-    with pytest.raises(LooporaError, match="workspace safety baseline"):
+    with pytest.raises(LooporaError, match="workspace safety baseline") as malformed_json_error:
         service._enforce_workspace_safety(run, run_dir, 0, role="builder")
+    assert str(malformed_json_error.value) == "workspace safety baseline is missing or malformed"
+    assert str(baseline_path) not in str(malformed_json_error.value)
+    assert "Expecting property name" not in str(malformed_json_error.value)
 
     baseline_path.write_text('{"files": [42]}\n', encoding="utf-8")
-    with pytest.raises(LooporaError, match="workspace safety baseline"):
+    with pytest.raises(LooporaError, match="workspace safety baseline") as malformed_shape_error:
         service._enforce_workspace_safety(run, run_dir, 0, role="builder")
+    assert str(malformed_shape_error.value) == "workspace safety baseline is missing or malformed"
+    assert str(baseline_path) not in str(malformed_shape_error.value)
+
+
+def test_workspace_guard_redacts_low_level_baseline_read_errors(
+    service_factory,
+    sample_spec_file: Path,
+    sample_workdir: Path,
+    monkeypatch,
+) -> None:
+    (sample_workdir / "src").mkdir()
+    (sample_workdir / "src" / "app.py").write_text("print('keep')\n", encoding="utf-8")
+
+    service = service_factory(scenario="success")
+    loop = _create_loop(service, sample_spec_file, sample_workdir, name="Unreadable Baseline Loop")
+    run = service.start_run(loop["id"])
+    run_dir = Path(run["runs_dir"])
+    baseline_path = RunArtifactLayout(run_dir).workspace_baseline_path
+    local_path = sample_workdir / "private" / "workspace_baseline.json"
+    original_read_text = Path.read_text
+
+    def fail_read_text(path: Path, *args: object, **kwargs: object) -> str:
+        if path == baseline_path:
+            raise OSError(f"permission denied: {local_path}")
+        return original_read_text(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_text", fail_read_text)
+
+    with pytest.raises(LooporaError, match="workspace safety baseline") as read_error:
+        service._enforce_workspace_safety(run, run_dir, 0, role="builder")
+
+    assert str(read_error.value) == "workspace safety baseline could not be read"
+    assert str(local_path) not in str(read_error.value)
+    assert "permission denied" not in str(read_error.value)
 
 
 def test_destructive_tester_is_blocked_by_workspace_guard(

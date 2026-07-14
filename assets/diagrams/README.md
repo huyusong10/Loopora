@@ -7,7 +7,7 @@ Current canonical diagrams:
 | File family | Purpose |
 | --- | --- |
 | `loopora-overview.*.svg` | Shows the README opening overview: task judgment becomes a plan, Agent rounds run under it, and Web shows evidence and verdicts. |
-| `first-run-path.*.svg` | Shows the README-first path: start from the Coding Agent, preview in Web, then run with evidence flowing into one local record. |
+| `first-run-path.*.svg` | Shows the README-first route model: Fit Guide/Web choices come first when the user is outside an Agent session, same-Agent setup is first when already inside Codex/Claude Code/OpenCode, Web conversation/import/manual expert paths remain available for reviewed plans, and all starts converge into one reviewable Loop plus one local evidence/verdict record. |
 | `plan-judgment-structure.*.svg` | Shows the README plan-file overview: the surfaces that make task-local judgment runnable across rounds. |
 | `loopora-position.*.svg` | Places Loopora outside the Agent as the running structure that keeps human judgment active across rounds. |
 | `error-propagation.*.svg` | Shows how an unguided loop can turn an early proxy goal into a convincing but unsafe completion story. |

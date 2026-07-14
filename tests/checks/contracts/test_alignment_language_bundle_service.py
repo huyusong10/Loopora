@@ -35,16 +35,12 @@ SPANISH_EVIDENCE = {
     "success_surface": "El éxito prueba permisos, redacción de datos y evidencia de auditoría.",
     "fake_done_risks": "Una descarga feliz o captura visual sin evidencia debe bloquear el cierre.",
     "evidence_preferences": (
-        "La evidencia debe incluir prueba negativa de permisos, redacción, aislamiento y buckets Proven, Weak, "
-        "Unproven, Blocking y Residual risk."
+        "La evidencia debe incluir prueba negativa de permisos, redacción, aislamiento y buckets Proven, Weak, Unproven, Blocking y Residual risk."
     ),
     "execution_strategy": (
-        "Primero fijar contrato, luego construir exportación, después inspección y cierre; si la evidencia es Weak "
-        "o Unproven, reparar antes de GateKeeper."
+        "Primero fijar contrato, luego construir exportación, después inspección y cierre; si la evidencia es Weak o Unproven, reparar antes de GateKeeper."
     ),
-    "residual_risk_policy": (
-        "El Residual risk menor necesita owner y follow-up; permisos, redacción y aislamiento deben fail closed."
-    ),
+    "residual_risk_policy": ("El Residual risk menor necesita owner y follow-up; permisos, redacción y aislamiento deben fail closed."),
     "judgment_tradeoffs": "La evidencia estricta gana sobre velocidad de entrega o una vista previa bonita.",
     "local_governance": (
         "La gobernanza local de AGENTS.md, design/README.md, design/ y tests/ influye en la ejecución: "
@@ -52,16 +48,10 @@ SPANISH_EVIDENCE = {
         "skipped governance as Weak, Unproven o Blocking."
     ),
     "role_posture": (
-        "Builder construye, Inspector verifies evidencia y GateKeeper judges, blocks y closes según Proven, Weak, "
-        "Unproven, Blocking y Residual risk."
+        "Builder construye, Inspector verifies evidencia y GateKeeper judges, blocks y closes según Proven, Weak, Unproven, Blocking y Residual risk."
     ),
-    "workflow_shape": (
-        "El flujo usa handoffs, inspección de evidencia y cierre con GateKeeper; evidencia Weak o Unproven cambia "
-        "reparación antes del cierre."
-    ),
-    "workdir_facts": (
-        "El snapshot observed AGENTS.md, design/ y tests/ como gobernanza local; la pila de ejecución queda unknown."
-    ),
+    "workflow_shape": ("El flujo usa handoffs, inspección de evidencia y cierre con GateKeeper; evidencia Weak o Unproven cambia reparación antes del cierre."),
+    "workdir_facts": ("El snapshot observed AGENTS.md, design/ y tests/ como gobernanza local; la pila de ejecución queda unknown."),
     "open_questions": "No open questions; solo queda confirmación explícita de ejecución.",
 }
 
@@ -119,25 +109,18 @@ Bloquea cierre sin evidencia probada.
             role["name"] = "Exportación Builder"
             role["description"] = "Construye la exportación con permisos y redacción."
             role["prompt_markdown"] = (
-                f"---\nversion: 1\narchetype: {archetype}\n---\n\n"
-                "Construye la exportación CSV y conserva evidencia de permisos y redacción."
+                f"---\nversion: 1\narchetype: {archetype}\n---\n\nConstruye la exportación CSV y conserva evidencia de permisos y redacción."
             )
             role["posture_notes"] = "No aceptar una descarga feliz sin evidencia."
         elif key == "contract-inspector":
             role["name"] = "Evidencia Inspector"
             role["description"] = "Verifica permisos, redacción, aislamiento y auditoría."
-            role["prompt_markdown"] = (
-                f"---\nversion: 1\narchetype: {archetype}\n---\n\n"
-                "Inspecciona evidencia de permisos, redacción, aislamiento y auditoría."
-            )
+            role["prompt_markdown"] = f"---\nversion: 1\narchetype: {archetype}\n---\n\nInspecciona evidencia de permisos, redacción, aislamiento y auditoría."
             role["posture_notes"] = "Clasifica evidencia débil como Blocking."
         elif key == "gatekeeper":
             role["name"] = "Cierre GateKeeper"
             role["description"] = "Decide cierre con evidencia probada."
-            role["prompt_markdown"] = (
-                f"---\nversion: 1\narchetype: {archetype}\n---\n\n"
-                "Bloquea el cierre si faltan permisos, redacción o auditoría."
-            )
+            role["prompt_markdown"] = f"---\nversion: 1\narchetype: {archetype}\n---\n\nBloquea el cierre si faltan permisos, redacción o auditoría."
             role["posture_notes"] = "El cierre solo pasa con evidencia probada."
     bundle["workflow"]["collaboration_intent"] = "Builder construye, Inspector verifica evidencia y GateKeeper decide cierre."
     return bundle
@@ -198,11 +181,7 @@ def test_alignment_service_blocks_chinese_bundle_with_english_evidence(
     assert not Path(session["bundle_path"]).exists()
     assert "需要使用中文" in session["transcript"][-1]["content"]
     events = service.list_alignment_events(created["id"])
-    assert any(
-        event["event_type"] == "alignment_stage_blocked"
-        and "agreement_summary" in event["payload"].get("missing", [])
-        for event in events
-    )
+    assert any(event["event_type"] == "alignment_stage_blocked" and "agreement_summary" in event["payload"].get("missing", []) for event in events)
 
 
 def test_alignment_service_rewrites_english_bundle_message_for_chinese_user(
@@ -220,11 +199,7 @@ def test_alignment_service_rewrites_english_bundle_message_for_chinese_user(
     assert session["transcript"][-1]["content"] == "已整理成一个可导入的 Loopora bundle。"
     assert "I prepared" not in session["transcript"][-1]["content"]
     events = service.list_alignment_events(created["id"])
-    assert any(
-        event["event_type"] == "alignment_language_mismatch"
-        and event["payload"].get("missing") == ["assistant_message"]
-        for event in events
-    )
+    assert any(event["event_type"] == "alignment_language_mismatch" and event["payload"].get("missing") == ["assistant_message"] for event in events)
 
 
 def test_alignment_bundle_language_allows_locale_neutral_prompt_markdown(sample_workdir: Path) -> None:
@@ -233,6 +208,18 @@ def test_alignment_bundle_language_allows_locale_neutral_prompt_markdown(sample_
     issues = alignment_bundle_language_issues(bundle, prefers_chinese=True)
 
     assert not any("prompt_markdown" in issue for issue in issues)
+
+
+def test_alignment_chinese_bundle_projects_role_prompts_from_localized_asset(sample_workdir: Path) -> None:
+    (sample_workdir / "AGENTS.md").write_text("# Rules\n\nRead local rules before editing.\n", encoding="utf-8")
+    bundle = load_bundle_text(alignment_chinese_bundle_yaml(str(sample_workdir.resolve())))
+    roles = {role["key"]: role for role in bundle["role_definitions"]}
+
+    assert "谨慎构建聚焦 starter slice" in roles["builder"]["prompt_markdown"]
+    assert "Builder 读取适用的项目本地治理入口" in roles["builder"]["prompt_markdown"]
+    assert "对照 Done When" in roles["contract-inspector"]["prompt_markdown"]
+    assert "GateKeeper 将跳过" in roles["gatekeeper"]["prompt_markdown"]
+    assert "Build the focused starter slice" not in roles["builder"]["prompt_markdown"]
 
 
 def test_alignment_service_blocks_chinese_bundle_with_english_prose(
@@ -250,9 +237,7 @@ def test_alignment_service_blocks_chinese_bundle_with_english_prose(
     assert "bundle field collaboration_summary must follow the user-facing task language" in session["error_message"]
     events = service.list_alignment_events(created["id"])
     assert any(
-        event["event_type"] == "alignment_validation_failed"
-        and "bundle field collaboration_summary" in event["payload"].get("error", "")
-        for event in events
+        event["event_type"] == "alignment_validation_failed" and "bundle field collaboration_summary" in event["payload"].get("error", "") for event in events
     )
 
 
@@ -273,9 +258,7 @@ def test_alignment_service_blocks_chinese_bundle_with_english_visible_names(
     assert "bundle role_definition builder.name must follow the user-facing task language" in session["error_message"]
     events = service.list_alignment_events(created["id"])
     assert any(
-        event["event_type"] == "alignment_validation_failed"
-        and "bundle role_definition builder.name" in event["payload"].get("error", "")
-        for event in events
+        event["event_type"] == "alignment_validation_failed" and "bundle role_definition builder.name" in event["payload"].get("error", "") for event in events
     )
 
 
@@ -298,7 +281,5 @@ def test_alignment_service_blocks_spanish_bundle_with_english_prose(
     assert "bundle field collaboration_summary must follow the user-facing task language" in session["error_message"]
     events = service.list_alignment_events(created["id"])
     assert any(
-        event["event_type"] == "alignment_validation_failed"
-        and "bundle field collaboration_summary" in event["payload"].get("error", "")
-        for event in events
+        event["event_type"] == "alignment_validation_failed" and "bundle field collaboration_summary" in event["payload"].get("error", "") for event in events
     )

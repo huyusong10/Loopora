@@ -24,6 +24,7 @@ class RunnerStepWriteRequest:
     role: dict
     runtime_role: str
     normalized_output: dict
+    task_language: str = "en"
 
 
 @dataclass(frozen=True)
@@ -72,6 +73,7 @@ class ServiceRunnerStepArtifactsMixin:
             role=request.role,
             runtime_role=request.runtime_role,
             output=request.normalized_output,
+            task_language=request.task_language,
         )
         handoff = build_step_handoff(step_result)
         evidence_entry = build_step_evidence_entry(StepEvidenceEntryRequest(result=step_result, handoff=handoff))
@@ -89,9 +91,7 @@ class ServiceRunnerStepArtifactsMixin:
             )
         )
         append_jsonl_with_mirrors(request.layout.evidence_ledger_path, evidence_entry)
-        evidence_artifacts = write_runner_step_evidence_artifacts(
-            RunnerStepEvidenceArtifactsRequest(layout=request.layout)
-        )
+        evidence_artifacts = write_runner_step_evidence_artifacts(RunnerStepEvidenceArtifactsRequest(layout=request.layout))
         coverage_projection = evidence_artifacts.coverage_projection
         manifest_projection = evidence_artifacts.manifest_projection
         self.append_run_event(

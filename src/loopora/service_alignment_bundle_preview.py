@@ -7,6 +7,7 @@ from typing import Protocol
 
 from loopora.bundles import BundleError, bundle_to_yaml, load_bundle_text, read_bundle_file_text
 from loopora.service_alignment_bundle_validation_payloads import (
+    alignment_bundle_missing_file_validation,
     alignment_bundle_validation_failure,
     alignment_bundle_validation_success,
 )
@@ -33,7 +34,7 @@ def alignment_bundle_preview(context: AlignmentBundlePreviewContext, session: di
             "session": session,
             "yaml": "",
             "bundle": None,
-            "validation": session.get("validation") or {"ok": False, "error": "bundle file does not exist"},
+            "validation": alignment_bundle_missing_file_validation(bundle_path, checked_at=context.now()),
         }
     raw_yaml = ""
     semantic_issues: list[str] = []

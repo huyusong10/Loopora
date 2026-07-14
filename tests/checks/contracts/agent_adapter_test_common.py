@@ -54,6 +54,30 @@ def _assert_loopora_cli_command(command: str, command_body: str, *, loopora_home
     if loopora_home is not None:
         assert command.startswith(f"LOOPORA_HOME={shlex.quote(str(loopora_home))} ")
 
+def _assert_loopora_serve_command(
+    command: str,
+    *,
+    workdir: Path | str | None = None,
+    host: str = "127.0.0.1",
+    port: int = 8742,
+    loopora_home: Path | str | None = None,
+) -> None:
+    if loopora_home is not None:
+        assert command.startswith(f"LOOPORA_HOME={shlex.quote(str(loopora_home))} ")
+    tokens = shlex.split(command)
+    while tokens and "=" in tokens[0] and not tokens[0].startswith("--"):
+        tokens = tokens[1:]
+    if tokens[:2] == ["uv", "run"]:
+        tokens = tokens[2:]
+    elif len(tokens) >= 5 and tokens[:2] == ["uv", "--directory"] and tokens[3] == "run":
+        tokens = tokens[4:]
+    assert tokens[:2] == ["loopora", "serve"]
+    assert tokens[tokens.index("--host") + 1] == host
+    assert tokens[tokens.index("--port") + 1] == str(port)
+    if workdir is None:
+        return
+    assert Path(tokens[tokens.index("--workdir") + 1]).resolve() == Path(workdir).resolve()
+
 def _assert_recovery_choice_has_copyable_commands(choice: dict) -> None:
     option_id = str(choice.get("option_id") or "")
     assert option_id.startswith("agent_run:")
@@ -90,14 +114,16 @@ def _ready_candidate_digest(bundle_text: str) -> tuple[str, int]:
     return _candidate_digest(bundle_to_yaml(load_bundle_text(bundle_text)))
 
 def _wait_for_alignment_status(service, session_id: str, *statuses: str, timeout: float = 5.0) -> dict:
-    deadline = time.time() + timeout
+    deadline = time.monotonic() + timeout
     expected = set(statuses)
-    while time.time() < deadline:
+    while True:
         session = service.get_alignment_session(session_id)
         if session["status"] in expected:
             return session
-        time.sleep(0.05)
-    session = service.get_alignment_session(session_id)
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            break
+        time.sleep(min(0.05, remaining))
     raise AssertionError(f"alignment session stayed in {session['status']}, expected {sorted(expected)}")
 
 def _assert_cli_handoff_contract_paths(

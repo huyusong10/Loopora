@@ -7,6 +7,11 @@ from typing import Protocol
 from loopora.event_redaction import redact_sensitive_text
 from loopora.service_alignment_agent_entry_review import agent_entry_launch_projection, agent_entry_review_projection
 from loopora.service_alignment_artifacts import alignment_session_root
+from loopora.service_alignment_failure_recovery import (
+    ALIGNMENT_USER_CANCELLED,
+    ALIGNMENT_WORKER_INTERRUPTED,
+    alignment_failure_recovery_projection,
+)
 from loopora.service_alignment_traceability_projection import alignment_session_user_task_text
 from loopora.service_types import LooporaNotFoundError
 
@@ -75,6 +80,13 @@ def decorate_alignment_session(session: dict, *, active_statuses: set[str]) -> d
         executor_session_ref = {}
     payload["executor_session_ref"] = executor_session_ref
     payload["native_resume_available"] = bool(executor_session_ref.get("session_id"))
+    payload["failure_recovery"] = alignment_failure_recovery_projection(payload)
+    recovery_kind = payload["failure_recovery"].get("kind")
+    status_labels = {
+        ALIGNMENT_USER_CANCELLED: "cancelled",
+        ALIGNMENT_WORKER_INTERRUPTED: "interrupted",
+    }
+    payload["status_label"] = status_labels.get(recovery_kind, str(payload.get("status") or ""))
     return payload
 
 
@@ -118,6 +130,7 @@ def alignment_session_summary(session: dict, *, active_statuses: set[str]) -> di
     return {
         "id": decorated["id"],
         "status": decorated.get("status", ""),
+        "status_label": decorated.get("status_label", ""),
         "workdir": decorated.get("workdir", ""),
         "executor_kind": decorated.get("executor_kind", "codex"),
         "executor_mode": decorated.get("executor_mode", "preset"),
@@ -131,4 +144,5 @@ def alignment_session_summary(session: dict, *, active_statuses: set[str]) -> di
         "title": first_user[:96] if first_user else decorated["id"],
         "last_message": last_message[:160],
         "native_resume_available": decorated.get("native_resume_available", False),
+        "failure_recovery": decorated.get("failure_recovery", {}),
     }

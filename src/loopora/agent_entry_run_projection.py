@@ -12,6 +12,16 @@ from loopora.run_projection_fields import run_status_from_run, task_verdict_from
 from loopora.utils import utc_now
 
 
+AGENT_NATIVE_WEB_START_ERROR = "Agent-native Loop runs must be started or continued with /loopora-run in the same host Agent"
+AGENT_NATIVE_WEB_RERUN_ERROR = "Agent-native Loop runs must be restarted from /loopora-run in the same host Agent"
+AGENT_NATIVE_PLAN_FILE_WEB_START_ERROR = (
+    "Agent-native Plan File runs must be started or continued with /loopora-run in the same host Agent"
+)
+AGENT_NATIVE_PREVIEW_ASYNC_START_ERROR = (
+    "Agent-native Loop previews must be started from /loopora-run so the host Agent executes the run natively"
+)
+
+
 def agent_entry_loop_command(
     adapter: str,
     workdir: Path | str,
@@ -47,6 +57,17 @@ def agent_entry_loop_json_command(
 
 
 def agent_entry_loop_projection_messages(next_loop_action: str) -> dict[str, str]:
+    if next_loop_action == "retry_lifecycle_failure":
+        return {
+            "message_zh": (
+                "上一轮在启动或生命周期边界失败，没有形成可记录的证据结果；回到同一个 Agent 执行 /loopora-run "
+                "会从这份已审查 Loop 重试运行，而不是把它当成补证据回合。"
+            ),
+            "message_en": (
+                "The previous run failed at a start or lifecycle boundary and did not produce a recordable evidence result; "
+                "run /loopora-run in the same Agent to retry from this reviewed Loop rather than treating it as an evidence pass."
+            ),
+        }
     if next_loop_action == "start_next_run_for_unproven_verdict":
         return {
             "message_zh": (
@@ -73,7 +94,7 @@ def agent_entry_loop_projection_messages(next_loop_action: str) -> dict[str, str
 def agent_loop_result(adapter: str, root: Path, session: dict[str, Any], binding: dict[str, Any], run_result: dict[str, Any]) -> dict[str, Any]:
     run = run_result["run"]
     summary = agent_loop_summary(adapter, run, run_result)
-    return {
+    result = {
         "adapter": adapter,
         "workdir": str(root),
         "status": session["status"],
@@ -89,6 +110,11 @@ def agent_loop_result(adapter: str, root: Path, session: dict[str, Any], binding
         "complete": bool(run_result.get("complete", False)),
         "task_next_action": run_result.get("task_next_action") if isinstance(run_result.get("task_next_action"), dict) else {},
     }
+    context_binding_error = str(run_result.get("context_binding_error") or "").strip()
+    if context_binding_error:
+        result["context_binding_error"] = context_binding_error
+        result["context_repair_action"] = agent_loop_context_repair_action()
+    return result
 
 
 def agent_loop_summary(adapter: str, run: dict[str, Any], run_result: dict[str, Any]) -> dict[str, Any]:
@@ -131,7 +157,28 @@ def agent_loop_summary(adapter: str, run: dict[str, Any], run_result: dict[str, 
         )
     )
     summary.update(agent_next_step_continuation_summary(next_step))
+    context_binding_error = str(run_result.get("context_binding_error") or "").strip()
+    if context_binding_error:
+        summary["context_binding_error"] = context_binding_error
+        summary["context_repair_action"] = agent_loop_context_repair_action()
     return summary
+
+
+def agent_loop_context_repair_action() -> dict[str, object]:
+    return {
+        "state": "repair_agent_context_card",
+        "next_action": (
+            "Fix write access to the target project's .loopora agent state so future /loopora-run, /loopora-next, "
+            "and /loopora-submit calls can recover this run from the same Agent context."
+        ),
+        "allowed_inputs": [
+            "context_binding_error",
+            "run_id",
+            "run_url",
+            "target project .loopora agent state",
+        ],
+        "stop_before": "relying on context-id-only Agent commands; use explicit run-id commands until the card save succeeds",
+    }
 
 
 def agent_loop_unready_error(adapter: str, binding: dict[str, Any], session: dict[str, Any]) -> str:

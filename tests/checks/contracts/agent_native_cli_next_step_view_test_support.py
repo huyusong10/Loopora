@@ -54,12 +54,10 @@ def invoke_agent_next_step_view(monkeypatch: Any, tmp_path: Path, *, json_output
 def assert_agent_contract_strategy_output(stdout: str, layout: RunArtifactLayout) -> None:
     assert f"run_contract_path: {layout.run_contract_path}" in stdout
     assert "judgment_contract_summary: Keep intermediate step views tied to frozen judgment." in stdout
-    assert "check_mode: specified" in stdout
     assert "completion_mode: gatekeeper" in stdout
-    assert "strategy_preset: quality_gate" in stdout
-    assert "strategy_collaboration_intent: Inspector proof gaps must shape the release gate." in stdout
-    assert "workflow_preset:" not in stdout
-    assert "workflow_collaboration_intent:" not in stdout
+    assert "check_mode:" not in stdout
+    assert "strategy_preset:" not in stdout
+    assert "strategy_collaboration_intent:" not in stdout
 
 
 def _write_next_step_run_contract(layout: RunArtifactLayout) -> None:

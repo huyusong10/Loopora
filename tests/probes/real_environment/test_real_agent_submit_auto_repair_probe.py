@@ -112,13 +112,14 @@ def _write_phase_report(workdir: Path, outputs: list[str]) -> Path:
         events.extend(
             {"source": "cli_stdout", "line": line.strip()}
             for line in source_text.splitlines()
-            if "auto_repair" in line.lower() or "auto repair" in line.lower()
+            if "auto_repair" in line.lower() or "auto repair" in line.lower() or "attestation" in line.lower()
         )
     report = {
         "probe": "submit-auto-repair",
         "phase_statuses": {
             "wrapper_repair_observed": {"ok": any("wrapped_schema_result" in item["line"] for item in events)},
             "template_path_repair_observed": {"ok": any("accepted_filled_result_template_path" in item["line"] for item in events)},
+            "explicit_attestation_observed": {"ok": any("explicit_submit_flag" in item["line"] for item in events)},
             "core_blocker_preserved": {"ok": any("Core still blocked" in item["line"] for item in events)},
         },
         "diagnostics": {
@@ -209,7 +210,14 @@ def _write_json_result(path: Path, payload: dict) -> Path:
     return path
 
 
-def _invoke_real_core_submit(runner: CliRunner, fixture: dict, result_file: Path, *, json_output: bool = False):
+def _invoke_real_core_submit(
+    runner: CliRunner,
+    fixture: dict,
+    result_file: Path,
+    *,
+    json_output: bool = False,
+    attest_role_dispatch: bool = False,
+):
     args = [
         "agent",
         "codex",
@@ -225,6 +233,8 @@ def _invoke_real_core_submit(runner: CliRunner, fixture: dict, result_file: Path
     ]
     if json_output:
         args.append("--json")
+    if attest_role_dispatch:
+        args.append("--attest-role-dispatch")
     return runner.invoke(cli.app, args)
 
 
@@ -247,6 +257,31 @@ def _commit_step_then_restore_claimed_state(fixture: dict) -> None:
 
 def _cli_output(result) -> str:
     return str(result.stdout or result.output or result.exception or "")
+
+
+def _real_core_attestation_migration_results(runner: CliRunner, monkeypatch, tmp_path: Path):
+    explicit_fixture = _create_real_core_submit_fixture(tmp_path, "explicit-attestation")
+    explicit_result = _write_json_result(
+        explicit_fixture["workdir"] / "bare-result.json",
+        _real_core_builder_output(),
+    )
+    monkeypatch.setattr(cli, "create_service", lambda: explicit_fixture["service"])
+    explicit_repaired = _invoke_real_core_submit(
+        runner,
+        explicit_fixture,
+        explicit_result,
+        json_output=True,
+        attest_role_dispatch=True,
+    )
+    legacy_fixture = _create_real_core_submit_fixture(tmp_path, "legacy-implicit")
+    legacy_result = _write_json_result(legacy_fixture["workdir"] / "bare-result.json", _real_core_builder_output())
+    monkeypatch.setattr(cli, "create_service", lambda: legacy_fixture["service"])
+    legacy_repaired = _invoke_real_core_submit(runner, legacy_fixture, legacy_result, json_output=True)
+    assert explicit_repaired.exit_code == 0, _cli_output(explicit_repaired)
+    assert legacy_repaired.exit_code == 0, _cli_output(legacy_repaired)
+    assert json.loads(_cli_output(explicit_repaired))["summary"]["host_dispatch_attestation_source"] == "explicit_submit_flag"
+    assert json.loads(_cli_output(legacy_repaired))["summary"]["host_dispatch_attestation_source"] == "legacy_template_auto_repair"
+    return explicit_repaired, legacy_repaired
 
 
 def test_submit_auto_repair_wrapper_probe_records_format_repair_and_preserved_blockers(monkeypatch, tmp_path: Path) -> None:
@@ -345,13 +380,23 @@ def test_submit_auto_repair_wrapper_probe_records_format_repair_and_preserved_bl
 def test_submit_auto_repair_real_core_probe_preserves_validation_blockers(monkeypatch, tmp_path: Path) -> None:
     runner = CliRunner()
 
-    def invoke_case(result_file: Path, fixture: dict, *, json_output: bool = False):
+    def invoke_case(
+        result_file: Path,
+        fixture: dict,
+        *,
+        json_output: bool = False,
+        attest_role_dispatch: bool = False,
+    ):
         monkeypatch.setattr(cli, "create_service", lambda: fixture["service"])
-        return _invoke_real_core_submit(runner, fixture, result_file, json_output=json_output)
+        return _invoke_real_core_submit(
+            runner,
+            fixture,
+            result_file,
+            json_output=json_output,
+            attest_role_dispatch=attest_role_dispatch,
+        )
 
-    bare_fixture = _create_real_core_submit_fixture(tmp_path, "bare-wrapper")
-    bare_result = _write_json_result(bare_fixture["workdir"] / "bare-result.json", _real_core_builder_output())
-    bare_repaired = invoke_case(bare_result, bare_fixture, json_output=True)
+    explicit_repaired, legacy_repaired = _real_core_attestation_migration_results(runner, monkeypatch, tmp_path)
 
     result_only_fixture = _create_real_core_submit_fixture(tmp_path, "result-only")
     result_only = _write_json_result(result_only_fixture["workdir"] / "result-only.json", {"result": _real_core_builder_output()})
@@ -398,7 +443,6 @@ def test_submit_auto_repair_real_core_probe_preserves_validation_blockers(monkey
     )
     inline_blocked = invoke_case(inline, inline_fixture, json_output=True)
 
-    assert bare_repaired.exit_code == 0, _cli_output(bare_repaired)
     assert result_only_repaired.exit_code == 0, _cli_output(result_only_repaired)
     assert template_repaired.exit_code == 0, _cli_output(template_repaired)
     assert "accepted_filled_result_template_path_as_result_file" in _cli_output(template_repaired)
@@ -415,11 +459,18 @@ def test_submit_auto_repair_real_core_probe_preserves_validation_blockers(monkey
 
     report_path = _write_phase_report(
         unknown_fixture["workdir"],
-        [_cli_output(bare_repaired), _cli_output(template_repaired), _cli_output(unknown_blocked), _cli_output(stale_blocked)],
+        [
+            _cli_output(explicit_repaired),
+            _cli_output(legacy_repaired),
+            _cli_output(template_repaired),
+            _cli_output(unknown_blocked),
+            _cli_output(stale_blocked),
+        ],
     )
     report = json.loads(report_path.read_text(encoding="utf-8"))
     health = report["diagnostics"]["experience_health"]
     assert report["phase_statuses"]["wrapper_repair_observed"]["ok"] is True
     assert report["phase_statuses"]["template_path_repair_observed"]["ok"] is True
+    assert report["phase_statuses"]["explicit_attestation_observed"]["ok"] is True
     assert report["phase_statuses"]["core_blocker_preserved"]["ok"] is True
     assert any("Core still blocked evidence_refs_unknown" in item["line"] for item in health["auto_repair_events"])

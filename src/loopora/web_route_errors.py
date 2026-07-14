@@ -2,35 +2,32 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import FastAPI, HTTPException, Request
-from fastapi.exception_handlers import http_exception_handler, request_validation_exception_handler
+from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import HTMLResponse, JSONResponse, Response
+from starlette.exceptions import HTTPException
 
 from loopora.diagnostics import log_event
 from loopora.service_types import LooporaError
 from loopora.specs import SpecError
 from loopora.strategy_source import StrategySourceError
 from loopora.system_dialogs import SystemDialogError
+from loopora.web_request_context import _request_wants_json
 from loopora.web_route_context import WebRouteContext
 
 
 def register_error_handlers(app: FastAPI, ctx: WebRouteContext) -> None:
     @app.exception_handler(HTTPException)
     async def http_exception_error_handler(request: Request, exc: HTTPException) -> Response:
-        if not request.url.path.startswith("/api/"):
-            return await http_exception_handler(request, exc)
         detail = exc.detail if isinstance(exc.detail, str) else "request failed"
-        return ctx.json_error(detail, status_code=exc.status_code)
+        return _domain_error_response(request, ctx, detail, status_code=exc.status_code)
 
     @app.exception_handler(RequestValidationError)
-    async def request_validation_error_handler(request: Request, exc: RequestValidationError) -> Response:
-        if not request.url.path.startswith("/api/"):
-            return await request_validation_exception_handler(request, exc)
-        return ctx.json_error("request validation failed", status_code=400)
+    async def request_validation_error_handler(request: Request, _exc: RequestValidationError) -> Response:
+        return _domain_error_response(request, ctx, "request validation failed", status_code=400)
 
     @app.exception_handler(LooporaError)
-    async def loopora_error_handler(request: Request, exc: LooporaError) -> JSONResponse:
+    async def loopora_error_handler(request: Request, exc: LooporaError) -> Response:
         log_event(
             ctx.logger,
             logging.WARNING,
@@ -41,10 +38,10 @@ def register_error_handlers(app: FastAPI, ctx: WebRouteContext) -> None:
             error_type=type(exc).__name__,
             error_message=str(exc),
         )
-        return ctx.json_error(str(exc), status_code=getattr(exc, "status_code", 400))
+        return _domain_error_response(request, ctx, str(exc), status_code=getattr(exc, "status_code", 400))
 
     @app.exception_handler(SpecError)
-    async def spec_error_handler(request: Request, exc: SpecError) -> JSONResponse:
+    async def spec_error_handler(request: Request, exc: SpecError) -> Response:
         log_event(
             ctx.logger,
             logging.WARNING,
@@ -55,10 +52,10 @@ def register_error_handlers(app: FastAPI, ctx: WebRouteContext) -> None:
             error_type=type(exc).__name__,
             error_message=str(exc),
         )
-        return ctx.json_error(str(exc), status_code=400)
+        return _domain_error_response(request, ctx, str(exc), status_code=400)
 
     @app.exception_handler(StrategySourceError)
-    async def strategy_source_error_handler(request: Request, exc: StrategySourceError) -> JSONResponse:
+    async def strategy_source_error_handler(request: Request, exc: StrategySourceError) -> Response:
         log_event(
             ctx.logger,
             logging.WARNING,
@@ -69,10 +66,11 @@ def register_error_handlers(app: FastAPI, ctx: WebRouteContext) -> None:
             error_type=type(exc).__name__,
             error_message=str(exc),
         )
-        return ctx.json_error(str(exc), status_code=400)
+        return _domain_error_response(request, ctx, str(exc), status_code=400)
 
     @app.exception_handler(SystemDialogError)
-    async def system_dialog_error_handler(request: Request, exc: SystemDialogError) -> JSONResponse:
+    async def system_dialog_error_handler(request: Request, exc: SystemDialogError) -> Response:
+        detail = str(getattr(exc, "detail", "") or "").strip()
         log_event(
             ctx.logger,
             logging.WARNING,
@@ -82,5 +80,32 @@ def register_error_handlers(app: FastAPI, ctx: WebRouteContext) -> None:
             request_path=request.url.path,
             error_type=type(exc).__name__,
             error_message=str(exc),
+            error_detail=detail,
         )
-        return ctx.json_error(str(exc), status_code=400)
+        if not _request_wants_json(request):
+            return _domain_error_page(request, ctx, status_code=400)
+        return JSONResponse(
+            {"error": str(exc), "error_code": str(getattr(exc, "code", "") or "system_dialog_failed")},
+            status_code=400,
+        )
+
+
+def _domain_error_response(request: Request, ctx: WebRouteContext, message: str, *, status_code: int) -> Response:
+    if _request_wants_json(request):
+        return ctx.json_error(message, status_code=status_code)
+    return _domain_error_page(request, ctx, status_code=status_code)
+
+
+def _domain_error_page(request: Request, ctx: WebRouteContext, *, status_code: int) -> HTMLResponse:
+    return HTMLResponse(
+        ctx.templates.TemplateResponse(
+            request,
+            "error.html",
+            {
+                "request": request,
+                "status_code": status_code,
+                "access_state": ctx.access_state,
+            },
+        ).body.decode(),
+        status_code=status_code,
+    )

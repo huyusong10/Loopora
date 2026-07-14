@@ -13,8 +13,7 @@ from agent_native_v3_helpers import assert_agent_v3_envelope
 from agent_adapter_test_common import (
     _assert_loopora_agent_command,
     _assert_loopora_cli_command,
-    _assert_cli_handoff_contract_paths,
-    _assert_cli_list,
+    _assert_loopora_serve_command,
 )
 from agent_adapter_test_surface import (
     _assert_codex_native_surface_summary,
@@ -271,43 +270,31 @@ def _assert_agent_native_cli_output(
     stdout: str,
     layout: RunArtifactLayout,
     *,
+    workdir: Path,
     adapter: str = "codex",
     loopora_home: Path | str | None = None,
 ) -> None:
-    assert "run_start: started_new_agent_runner_run" in stdout
-    assert f"run_contract_path: {layout.run_contract_path}" in stdout
+    assert all(
+        fragment in stdout
+        for fragment in ("run_start: started_new_agent_native_run", f"run_contract_path: {layout.run_contract_path}")
+    )
+    assert "started_new_agent_runner_run" not in stdout
     assert "source_plan: Agent Native Refund Bundle (bundle_agent, rev 2)" in stdout
-    assert "source_plan_path: /tmp/loopora/bundle.yml" in stdout
+    assert "source_plan_path:" not in stdout
     assert 'source_plan: {"id":' not in stdout
     assert "judgment_contract_summary: Prefer frozen judgment over lifecycle optimism." in stdout
-    assert "check_mode: specified" in stdout
     assert "completion_mode: gatekeeper" in stdout
-    assert "strategy_preset: quality_gate" in stdout
-    assert "strategy_collaboration_intent: Linear review must feed GateKeeper before closure." in stdout
-    assert "workflow_preset:" not in stdout
-    assert "workflow_collaboration_intent:" not in stdout
-    assert "check_count: 2" in stdout
-    _assert_cli_list(stdout, "coverage_targets", f"{PRIMARY_COVERAGE_TARGET_ID} (required)", "gatekeeper.finish (required)")
-    _assert_cli_list(stdout, "loop_fit_reasons", "Future Agent rounds keep the same proof bar active.")
-    _assert_cli_list(stdout, "judgment_tradeoffs", "Evidence beats fast closure.")
-    _assert_cli_list(
-        stdout,
-        "execution_strategy",
-        "Prove the refund path first, then expand after audit evidence is strong.",
-    )
-    _assert_cli_list(stdout, "local_governance", "GateKeeper treats skipped AGENTS.md checks as Blocking.")
-    _assert_cli_list(stdout, "role_postures", "GateKeeper: Fail closed when evidence is weak.")
-    _assert_cli_list(stdout, "success_surface", "Support admin can approve a refund.")
-    _assert_cli_list(stdout, "fake_done_states", "CSV export without permission audit is fake done.")
-    _assert_cli_list(stdout, "evidence_preferences", "Require browser journey and audit log command evidence.")
-    assert "residual_risk: No residual risk is acceptable." in stdout
-    assert "run_url: /runs/run_agent" in stdout
+    assert "strategy_preset:" not in stdout
+    assert "loop_fit_reasons:" not in stdout
+    assert "evidence_preferences:" not in stdout
+    assert len(stdout.splitlines()) < 70
+    _assert_relative_run_url_output(stdout, run_id="run_agent", workdir=workdir, loopora_home=loopora_home)
     assert f"next_step_id: {AGENT_STEP_ID}" in stdout
     assert f"next_target_agent: {AGENT_TARGET}" in stdout
     assert "next_target_agent_config:" in stdout
     assert AGENT_CONFIG_PATH in stdout
     assert "next_target_agent_config_exists: false" in stdout
-    _assert_cli_dispatch_unavailable(stdout, adapter=adapter, loopora_home=loopora_home)
+    _assert_cli_dispatch_unavailable(stdout, adapter=adapter, workdir=workdir, loopora_home=loopora_home)
     assert "continuation_previous_run: run_previous" in stdout
     assert "continuation_task_verdict: insufficient_evidence" in stdout
     assert "continuation_required_coverage: 1 covered / 2 missing" in stdout
@@ -315,8 +302,7 @@ def _assert_agent_native_cli_output(
     assert f"- {PRIMARY_COVERAGE_TARGET_ID}: Support admin path still lacks direct proof." in stdout
     assert f"next_action_policy: {AGENT_WORKSPACE_POLICY}" in stdout
     assert "required_coverage: pending; required checks 0 covered / 2 missing" in stdout
-    assert "top_coverage_gaps:" in stdout
-    assert f"- {PRIMARY_COVERAGE_TARGET_ID}: Support admin can approve a refund." in stdout
+    assert "top_coverage_gaps:" not in stdout
     assert "next_context_path:" in stdout
     assert STEP_CONTEXT_FILE in stdout
     assert "known_evidence_count: 3" in stdout
@@ -326,13 +312,28 @@ def _assert_agent_native_cli_output(
     assert "replace null placeholders before submit" in stdout
     assert RESULT_TEMPLATE_FILL_PREFIX in stdout
     assert "keep loopora_host_dispatch, then submit the filled copy" in stdout
-    _assert_cli_handoff_contract_paths(
-        stdout,
-        step_contract_fragment=STEP_CONTRACT_FILE,
-        template_fragment=RUN_AGENT_RESULT_TEMPLATE,
-        outbox_fragment=RESULT_OUTBOX_DIR,
-    )
+    assert STEP_CONTRACT_FILE in stdout
+    assert RUN_AGENT_RESULT_TEMPLATE in stdout
+    assert "result_outbox_dir:" not in stdout
     assert f"submit_hint: {RUN_AGENT_SUBMIT_COMMAND}" in stdout
+
+def _assert_relative_run_url_output(
+    output: str,
+    *,
+    run_id: str,
+    workdir: Path,
+    loopora_home: Path | str | None = None,
+) -> None:
+    assert f"run_url: /runs/{run_id}" in output
+    assert "run_url_status: relative_path_web_not_started" in output
+    assert output.count(f"run_url: /runs/{run_id}") == 1
+    assert output.count("run_url_status: relative_path_web_not_started") == 1
+    assert output.count("run_url_web_start_command:") == 1
+    _assert_loopora_serve_command(
+        _last_labeled_value(output, "run_url_web_start_command"),
+        workdir=workdir,
+        loopora_home=loopora_home,
+    )
 
 def _assert_agent_run_json_summary_reports_missing_dispatch(
     payload: dict,
@@ -342,6 +343,7 @@ def _assert_agent_run_json_summary_reports_missing_dispatch(
     loopora_home: Path | str | None = None,
 ) -> None:
     summary, _legacy = assert_agent_v3_envelope(payload, kind="agent_run", summary_key="agent_run_summary")
+    _assert_relative_run_url_summary(summary, run_id="run_agent", workdir=workdir, loopora_home=loopora_home)
     assert summary["next_target_agent"] == AGENT_TARGET
     assert summary["next_target_agent_config"].endswith(AGENT_CONFIG_PATH)
     assert summary["next_target_agent_config_exists"] is False
@@ -395,15 +397,40 @@ def _assert_agent_run_json_summary_reports_missing_dispatch(
     )
     assert "do not submit inline role work" in summary["dispatch_unavailable"]["next"]
 
+def _assert_relative_run_url_summary(
+    summary: dict,
+    *,
+    run_id: str,
+    workdir: Path,
+    loopora_home: Path | str | None = None,
+) -> None:
+    assert summary["run_url"] == f"/runs/{run_id}"
+    assert summary["run_url_status"] == "relative_path_web_not_started"
+    _assert_loopora_serve_command(
+        summary["run_url_web_start_command"],
+        workdir=workdir,
+        loopora_home=loopora_home,
+    )
+
 def _assert_cli_dispatch_unavailable(
     stdout: str,
     *,
     adapter: str,
+    workdir: Path,
     loopora_home: Path | str | None = None,
 ) -> None:
     assert f"dispatch_unavailable: {AGENT_TARGET} config is missing;" in stdout
+    workdir_arg = shlex.quote(str(workdir))
     if loopora_home is not None:
         assert f"LOOPORA_HOME={shlex.quote(str(loopora_home))} " in stdout
-    assert f'loopora agent {adapter} check --workdir "$PWD"' in stdout
-    assert f'loopora init {adapter} --workdir "$PWD"' in stdout
+    assert f"loopora agent {adapter} check --workdir {workdir_arg}" in stdout
+    assert f"loopora init {adapter} --workdir {workdir_arg}" in stdout
+    assert f'loopora agent {adapter} check --workdir "$PWD"' not in stdout
     assert f"dispatch_next: invoke {AGENT_TARGET}" not in stdout
+
+def _last_labeled_value(output: str, label: str) -> str:
+    prefix = f"{label}: "
+    values = [line.strip().removeprefix(prefix) for line in output.splitlines() if line.strip().startswith(prefix)]
+    if not values:
+        raise AssertionError(f"missing {label}: line in output")
+    return values[-1]

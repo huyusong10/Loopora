@@ -1,0 +1,331 @@
+schema_version: 1
+fixtures:
+  refund_repair_en:
+    metadata_name: "Refund Safety Repair Bundle"
+    metadata_description: "Governed refund self-service workflow with evidence-first repair."
+    loop_name: "Refund Safety Repair Bundle"
+    collaboration_summary: >-
+      Project the refund working agreement into a task contract, refund-safety roles, and a repair workflow.
+      Final production, finance, and compliance feedback arrives too late to be the only control signal. Later
+      rounds create new evidence and handoffs for authorization, eligibility, provider failure, audit trail, and
+      support follow-up before GateKeeper closure. The first Builder proves a narrow refund path, Inspector tries to disprove
+      authorization and audit claims, Guide turns Weak or Unproven evidence into a focused repair direction, the
+      Repair Builder follows that Guide handoff, and GateKeeper reads all critical handoffs before blocking
+      unauthorized refunds, missing audit trails, silent provider failure, or double-refund risk. Evidence projection
+      must classify refund claims as Proven, Weak, Unproven, Blocking, or visible Residual risk.{local_governance_sentence}
+    spec_markdown: |-
+      # Task
+
+      Ship a governed refund self-service path where authorized customer admins can request eligible refunds, provider failure is handled visibly, support or finance can trace the decision, and double-refund risk is blocked.
+
+      # Done When
+
+      - Authorized admins can request an eligible refund on the narrow refund path.
+      - Refund eligibility, provider failure handling, audit records, and support handoff evidence are collected.
+      - Unauthorized refunds, missing audit trails, silent provider failure, and double-refund risk block closure.
+
+      # Guardrails
+
+      - Keep the first pass scoped to refund safety, not broad billing expansion.
+      - Do not claim observed payment, billing, or audit stack details until the run verifies them in the workdir.
+
+      # Success Surface
+
+      - A support or finance reviewer can trace who requested the refund, why it was eligible, what provider result occurred, and what handoff remains.
+      - The user can audit refund claims through Proven, Weak, Unproven, Blocking, and Residual risk buckets.
+
+      # Fake Done
+
+      - Do not pass with pages, buttons, mocked eligibility, or happy-path-only tests that do not prove refund authorization.
+      - Do not pass if provider failure, audit trail reconstruction, support handoff, or double-refund prevention is missing or only promised.
+
+      # Evidence Preferences
+
+      - Prefer permission checks, eligibility cases, provider failure replay, audit records, support handoff artifacts, and direct project-owned command output.
+      - Inspector evidence must name which refund claims are Proven, Weak, Unproven, Blocking, or Residual risk.
+      - Guide repair must turn Weak or Unproven evidence into the next narrow repair direction instead of expanding the billing surface.
+
+      # Execution Strategy
+
+      First prove authorization, eligibility, audit trail, provider failure, and support handoff on a narrow refund path. If evidence is Weak or Unproven, route Inspector evidence to Guide, then run a Repair Builder pass that reads the Guide handoff before GateKeeper closure. Defer UI polish and broader billing expansion until refund safety proof is direct.
+
+      # Judgment Tradeoffs
+
+      Prefer a rough but proven refund path over a polished billing screen; reject speed or UI completeness when it hides authorization, audit, provider, support, or double-refund risk.
+
+      # Residual Risk
+
+      Rare provider edge cases may remain only when visible, explicitly named, tracked, and assigned to a support or finance follow-up; unauthorized refunds, missing audit trails, silent provider failure, and double refunds must fail closed.
+
+      # Role Notes
+
+      ## Refund Path Builder Notes
+
+      Build the narrow refund safety path and leave a handoff naming changed refund behavior, permission and eligibility assumptions, audit artifacts, provider-failure evidence, and blockers.
+
+      ## Refund Evidence Inspector Notes
+
+      Try to disprove authorization, audit, provider-failure, support handoff, and double-refund claims from durable evidence. Classify each claim as Proven, Weak, Unproven, Blocking, or Residual risk.
+
+      ## Refund Repair Guide Notes
+
+      Read Inspector evidence and produce one narrow repair direction that turns Weak or Unproven refund proof into the next Builder target. Do not broaden into general billing polish.
+
+      ## Refund Repair Builder Notes
+
+      Read the Guide handoff before editing and implement only the narrowed repair slice. Leave evidence that the repair changed the proof state.
+
+      ## Refund Safety GateKeeper Notes
+
+      Finish only when initial Builder, Inspector, Guide, and Repair Builder handoffs prove the refund contract. Block unauthorized refunds, missing audit trails, silent provider failure, double-refund risk, or unmanaged residual risk.
+    workflow:
+      version: 1
+      preset: "refund_repair_review"
+      collaboration_intent: >-
+        Build the narrow refund path first, inspect refund safety evidence, use Guide to convert Weak or Unproven proof
+        into one repair direction, run a Guide-informed Repair Builder pass, then let GateKeeper finish only after reading
+        the initial Builder, Inspector, Guide, and repair handoffs plus Builder / Inspector / Guide evidence.
+      roles:
+        - id: "refund_builder"
+          role_definition_key: "refund-builder"
+        - id: "refund_inspector"
+          role_definition_key: "refund-inspector"
+        - id: "refund_repair_guide"
+          role_definition_key: "refund-repair-guide"
+        - id: "refund_repair_builder"
+          role_definition_key: "refund-repair-builder"
+        - id: "refund_gatekeeper"
+          role_definition_key: "refund-gatekeeper"
+      steps:
+        - id: "builder_step"
+          role_id: "refund_builder"
+          on_pass: "continue"
+        - id: "refund_inspection_step"
+          role_id: "refund_inspector"
+          inputs:
+            handoffs_from:
+              - "builder_step"
+            evidence_query:
+              archetypes:
+                - "builder"
+              verifies:
+                - "refund.authorization"
+                - "refund.audit"
+                - "refund.provider_failure"
+              limit: 16
+            iteration_memory: "summary_only"
+          on_pass: "continue"
+        - id: "repair_guide_step"
+          role_id: "refund_repair_guide"
+          inputs:
+            handoffs_from:
+              - "refund_inspection_step"
+            evidence_query:
+              archetypes:
+                - "inspector"
+              verifies:
+                - "refund.authorization"
+                - "refund.audit"
+                - "refund.provider_failure"
+              limit: 12
+            iteration_memory: "summary_only"
+          on_pass: "continue"
+        - id: "builder_repair_step"
+          role_id: "refund_repair_builder"
+          inputs:
+            handoffs_from:
+              - "refund_inspection_step"
+              - "repair_guide_step"
+            evidence_query:
+              archetypes:
+                - "guide"
+                - "inspector"
+                - "builder"
+              verifies:
+                - "refund.repair"
+              limit: 16
+            iteration_memory: "summary_only"
+          on_pass: "continue"
+        - id: "gatekeeper_step"
+          role_id: "refund_gatekeeper"
+          inputs:
+            handoffs_from:
+              - "builder_step"
+              - "refund_inspection_step"
+              - "repair_guide_step"
+              - "builder_repair_step"
+            evidence_query:
+              archetypes:
+                - "builder"
+                - "inspector"
+                - "guide"
+              verifies:
+                - "refund.authorization"
+                - "refund.audit"
+                - "refund.provider_failure"
+                - "refund.repair"
+              limit: 32
+            iteration_memory: "summary_only"
+          on_pass: "finish_run"
+  refund_repair_zh:
+    metadata_name: "退款安全修复 Bundle"
+    metadata_description: "带证据优先修复路径的退款自助流程治理 bundle。"
+    loop_name: "退款安全修复 Bundle"
+    collaboration_summary: >-
+      将退款工作协议投影到任务契约、退款安全 roles 和修复型 workflow。真正的生产、财务或合规反馈太晚，不能作为唯一控制信号；
+      后续轮次必须在 GateKeeper 收束前产生授权、退款资格、支付失败、审计记录和客服交接等中间证据。第一轮 Builder 证明窄退款路径，
+      Inspector 反证授权和审计声明，Guide 把弱证据或未证明项收窄成修复方向，Repair Builder 读取 Guide handoff 后修复，
+      GateKeeper 读取关键 handoff 后阻断未授权退款、缺失审计、静默支付失败或重复退款风险。证据投影必须把退款声明区分为已证明、弱证据、未证明、阻断或可见残余风险。{local_governance_sentence}
+    spec_markdown: |-
+      # Task
+
+      为退款用户、授权客户管理员、客服和财务交付受治理的退款自助路径：授权客户管理员可以申请符合资格的退款，支付失败可见，客服或财务可以追踪退款决定，并阻断重复退款风险。
+
+      # Done When
+
+      - 授权管理员可以在窄退款路径上申请符合资格的退款。
+      - 退款资格、支付失败处理、审计记录和客服交接证据已被收集。
+      - 未授权退款、缺失审计、静默支付失败和重复退款风险会阻断收束。
+
+      # Guardrails
+
+      - 首轮保持在退款安全边界内，不扩展成宽泛账单改造。
+      - 不要声称已观察到支付、账单或审计技术栈，除非运行时在 workdir 中验证。
+
+      # Success Surface
+
+      - 客服或财务可以追踪谁申请了退款、为什么符合资格、支付服务返回了什么结果，以及还剩什么交接。
+      - 用户可以通过已证明、弱证据、未证明、阻断和残余风险证据桶审计退款声明。
+
+      # Fake Done
+
+      - 只有页面、按钮、模拟资格或 happy path 测试，不能证明退款授权时不得通过。
+      - 支付失败、审计重建、客服交接或重复退款防护缺失或只被承诺时不得通过。
+
+      # Evidence Preferences
+
+      - 优先使用权限检查、退款资格用例、支付失败 replay、审计记录、客服交接产物和项目内命令输出。
+      - Inspector 证据必须说明哪些退款声明是已证明、弱证据、未证明、阻断或残余风险。
+      - Guide 修复必须把弱证据或未证明项转成下一轮收窄修复方向，而不是扩展账单界面。
+
+      # Execution Strategy
+
+      先在窄退款路径上证明授权、资格、审计记录、支付失败和客服交接。证据弱或未证明时，把 Inspector 证据路由给 Guide，再执行读取 Guide handoff 的 Repair Builder 修复轮；界面打磨和更宽泛账单扩展必须等退款安全证明直接成立后再做。
+
+      # Judgment Tradeoffs
+
+      优先粗糙但已证明的退款路径，而不是漂亮但隐藏授权、审计、支付、客服或重复退款风险的账单界面。
+
+      # Residual Risk
+
+      少见支付服务边缘情况只有在可见、明确点名、已跟踪并分配给客服或财务 follow-up 时才可接受；未授权退款、缺失审计、静默支付失败和重复退款必须 fail closed。
+
+      # Role Notes
+
+      ## 退款路径 Builder Notes
+
+      构建窄退款安全路径，并留下 handoff，说明变更行为、权限和资格假设、审计产物、支付失败证据与 blocker。
+
+      ## 退款证据 Inspector Notes
+
+      从持久证据反证授权、审计、支付失败、客服交接和重复退款声明。把每个声明分成已证明、弱证据、未证明、阻断或残余风险。
+
+      ## 退款修复 Guide Notes
+
+      读取 Inspector 证据，产出一个收窄修复方向，把弱证据或未证明退款声明转成下一轮 Builder 目标。不要扩展成通用账单打磨。
+
+      ## 退款修复 Builder Notes
+
+      编辑前读取 Guide handoff，只实现收窄修复 slice，并留下修复是否改变证明状态的证据。
+
+      ## 退款安全 GateKeeper Notes
+
+      只有初始 Builder、Inspector、Guide 和 Repair Builder handoff 都证明退款契约时才 finish。未授权退款、缺失审计、静默支付失败、重复退款风险或未治理残余风险必须阻断。
+    workflow:
+      version: 1
+      preset: "refund_repair_review"
+      collaboration_intent: >-
+        先构建窄退款路径，再检查退款安全证据，用 Guide 把弱证据或未证明项转成一个修复方向，执行读取 Guide handoff 的 Repair Builder 轮次，
+        最后 GateKeeper 必须读取初始 Builder、Inspector、Guide、修复 handoff，以及 Builder / Inspector / Guide 证据后才能 finish。
+      roles:
+        - id: "refund_builder"
+          role_definition_key: "refund-builder"
+        - id: "refund_inspector"
+          role_definition_key: "refund-inspector"
+        - id: "refund_repair_guide"
+          role_definition_key: "refund-repair-guide"
+        - id: "refund_repair_builder"
+          role_definition_key: "refund-repair-builder"
+        - id: "refund_gatekeeper"
+          role_definition_key: "refund-gatekeeper"
+      steps:
+        - id: "builder_step"
+          role_id: "refund_builder"
+          on_pass: "continue"
+        - id: "refund_inspection_step"
+          role_id: "refund_inspector"
+          inputs:
+            handoffs_from:
+              - "builder_step"
+            evidence_query:
+              archetypes:
+                - "builder"
+              verifies:
+                - "refund.authorization"
+                - "refund.audit"
+                - "refund.provider_failure"
+              limit: 16
+            iteration_memory: "summary_only"
+          on_pass: "continue"
+        - id: "repair_guide_step"
+          role_id: "refund_repair_guide"
+          inputs:
+            handoffs_from:
+              - "refund_inspection_step"
+            evidence_query:
+              archetypes:
+                - "inspector"
+              verifies:
+                - "refund.authorization"
+                - "refund.audit"
+                - "refund.provider_failure"
+              limit: 12
+            iteration_memory: "summary_only"
+          on_pass: "continue"
+        - id: "builder_repair_step"
+          role_id: "refund_repair_builder"
+          inputs:
+            handoffs_from:
+              - "refund_inspection_step"
+              - "repair_guide_step"
+            evidence_query:
+              archetypes:
+                - "guide"
+                - "inspector"
+                - "builder"
+              verifies:
+                - "refund.repair"
+              limit: 16
+            iteration_memory: "summary_only"
+          on_pass: "continue"
+        - id: "gatekeeper_step"
+          role_id: "refund_gatekeeper"
+          inputs:
+            handoffs_from:
+              - "builder_step"
+              - "refund_inspection_step"
+              - "repair_guide_step"
+              - "builder_repair_step"
+            evidence_query:
+              archetypes:
+                - "builder"
+                - "inspector"
+                - "guide"
+              verifies:
+                - "refund.authorization"
+                - "refund.audit"
+                - "refund.provider_failure"
+                - "refund.repair"
+              limit: 32
+            iteration_memory: "summary_only"
+          on_pass: "finish_run"

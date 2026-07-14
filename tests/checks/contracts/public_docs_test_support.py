@@ -10,8 +10,12 @@ PUBLIC_READER_DOCS = (
     ROOT / "README.zh-CN.md",
     ROOT / "HUMAN-SHAPED-LOOP.md",
     ROOT / "HUMAN-SHAPED-LOOP.zh-CN.md",
+    ROOT / "CODE_OF_CONDUCT.md",
+    ROOT / "CHANGELOG.md",
+    ROOT / "GOVERNANCE.md",
     ROOT / "CONTRIBUTING.md",
     ROOT / "SECURITY.md",
+    ROOT / "SUPPORT.md",
 )
 CHINESE_PUBLIC_READER_DOCS = (
     ROOT / "README.zh-CN.md",
@@ -31,4 +35,4 @@ def _assert_semantic_groups(text: str, groups: tuple[tuple[str, ...], ...], *, l
     normalized = text.casefold()
     missing = [group for group in groups if not all(term.casefold() in normalized for term in group)]
 
-    assert not missing, f"{label} is missing public-reader Agent Runner semantics: {missing[:3]}"
+    assert not missing, f"{label} is missing public-reader Agent Native semantics: {missing[:3]}"

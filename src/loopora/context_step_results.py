@@ -19,6 +19,7 @@ class StepResultContext:
     role: dict
     runtime_role: str
     output: dict
+    task_language: str = "en"
 
 
 @dataclass(frozen=True)

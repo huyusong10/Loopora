@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from loopora import agent_adapter_command_prefix
 from loopora.agent_adapter_role_contracts import agent_native_dispatch_guidance
 from loopora.agent_adapter_run_contract import (
     agent_native_loop_body as agent_native_loop_body,
@@ -26,6 +27,7 @@ def agent_plan_contract(
             "adapter": adapter,
             "adapter_label": adapter_label,
             "marker_source": marker_source,
+            "loopora_cli_entry": agent_adapter_command_prefix.current_project_file_loopora_cli_entry(),
             "context_bits": context_bits,
             "argument_text": load_system_prompt_asset(argument_asset).strip(),
             "AGENT_PLAN_RESIDUAL_RISK_SKELETON_GUIDANCE": AGENT_PLAN_RESIDUAL_RISK_SKELETON_GUIDANCE,

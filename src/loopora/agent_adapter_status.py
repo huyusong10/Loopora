@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Any
 
 from loopora.agent_adapter_check_utils import adapter_label as _adapter_label
+from loopora.agent_adapter_check_utils import adapter_unavailable_summary as _adapter_unavailable_summary
 from loopora.agent_adapter_host_config import host_config_status as _host_config_status
 from loopora.agent_adapter_managed_files import (
     managed_file_status as _managed_file_status,
@@ -23,7 +24,7 @@ def not_implemented_adapter_status(kind: str, root: Path) -> dict[str, Any]:
         "workdir": str(root),
         "implemented": False,
         "status": "not_implemented",
-        "summary": "Coming soon",
+        "summary": _adapter_unavailable_summary(kind),
         "managed_files": [],
         "manifest_path": "",
         "error": "",

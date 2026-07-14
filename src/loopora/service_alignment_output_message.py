@@ -3,11 +3,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Protocol
 
-from loopora.service_alignment_decision_options import (
-    default_alignment_decision_options,
-    normalize_alignment_missing_items,
-    visible_alignment_decision_options,
-)
+from loopora.service_alignment_decision_option_catalog import default_alignment_decision_options
+from loopora.service_alignment_decision_option_normalization import normalize_alignment_missing_items
+from loopora.service_alignment_decision_option_selection import visible_alignment_decision_options
 from loopora.service_alignment_language import (
     alignment_generation_display_language,
     alignment_generation_prefers_chinese,

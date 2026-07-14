@@ -184,8 +184,8 @@
         kind: "finished",
         title: localeText("运行收束", "Run closed"),
         detail: localeText(
-          "这次运行已经结束，可能是成功、失败或手动停止。",
-          "The run has ended, whether by success, failure, or manual stop."
+          "前序阶段结束后，将本次运行收束为成功、失败或手动停止。",
+          "After the preceding stages finish, this closes the run as succeeded, failed, or stopped."
         ),
       });
       return stages.map((stage, index) => ({
@@ -521,7 +521,7 @@
           state: "current",
           stateLabel: run?.status === "queued"
             ? localeText("排队中", "Queued")
-            : (run?.status === "awaiting_agent" ? localeText("等待 Agent", "Awaiting Agent") : localeText("处理中", "Active")),
+            : (run?.status === "awaiting_agent" ? localeText("等待同一 Agent", "Awaiting same Agent") : localeText("处理中", "Active")),
           durationLabel: formatStageDuration(checksLiveMs) || localeText("刚开始", "Just started"),
           meta: run?.status === "queued"
             ? localeText("等待执行槽", "Waiting for a slot")
@@ -625,13 +625,13 @@
         state: runFinished ? (terminalOutcome?.state || "failed") : "pending",
         stateLabel: runFinished
           ? (terminalOutcome?.stateLabel || translateStatus(run?.status || "draft"))
-          : localeText("进行中", "Open"),
+          : localeText("等待收束", "Pending closure"),
         durationLabel: runFinished
           ? formatDuration(run?.started_at, run?.finished_at)
-          : localeText("进行中", "In progress"),
+          : localeText("等待前序阶段", "Waiting"),
         meta: runFinished
           ? (terminalOutcome?.meta || `${localeText("生命周期", "Lifecycle")}: ${translateStatus(run?.status || "draft")}`)
-          : localeText("运行尚未结束", "The run is still in progress"),
+          : localeText("前序阶段完成后再收束", "Closes after preceding stages"),
       };
 
       return snapshots;

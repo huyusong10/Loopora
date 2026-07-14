@@ -72,14 +72,14 @@ __all__ = (
 )
 
 
-def build_fake_payload(scenario: str, request) -> dict:
+def build_fake_payload(scenario: str, request, *, display_language: str = "en") -> dict:
     context = fake_payload_context(request)
     _raise_for_fake_provider_failure(scenario, request, context)
     if request.role == "alignment" or context.archetype == "alignment":
         return build_alignment_payload(scenario, request)
     if _should_destructively_clear_workdir(scenario, context.archetype):
         _clear_workdir_for_destructive_fake(request)
-    payload = fake_role_payload(scenario, request, context)
+    payload = fake_role_payload(scenario, request, context, display_language=display_language)
     if payload is None:
         raise FakePayloadError(f"unsupported fake role: {request.role}")
     return payload

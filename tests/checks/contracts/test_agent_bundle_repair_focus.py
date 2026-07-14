@@ -13,8 +13,14 @@ from agent_bundle_candidates_test_support import (
 
 
 def test_agent_plan_repair_focus_explains_semantic_projection_categories() -> None:
+    context_hints = cli_agent_adapter_commands._validation_repair_hints("agent context card could not be saved")
+    assert context_hints[0].startswith("fix write access to the target project's .loopora agent state")
+
+    save_hints = cli_agent_adapter_commands._validation_repair_hints("candidate plan file could not be saved")
+    assert save_hints[0].startswith("fix write access to the target project's .loopora state")
+
     hints = cli_agent_adapter_commands._validation_repair_hints(
-        "bundle semantic lint failed: agent-first candidate must project explicit host Agent success criteria "
+        "bundle semantic lint failed: Agent-native candidate must project explicit host Agent success criteria "
         "into runnable surfaces: missing data/export/report"
     )
 
@@ -23,15 +29,20 @@ def test_agent_plan_repair_focus_explains_semantic_projection_categories() -> No
         "include those categories in spec Done When/Success Surface, role responsibilities, workflow intent, "
         "evidence preferences, and GateKeeper closure"
     )
+    legacy_hints = cli_agent_adapter_commands._validation_repair_hints(
+        "bundle semantic lint failed: agent-first candidate must project explicit host Agent success criteria "
+        "into runnable surfaces: missing data/export/report"
+    )
+    assert legacy_hints[:2] == hints[:2]
 
 
 def test_agent_plan_repair_focus_explains_multiple_semantic_projection_categories() -> None:
     hints = cli_agent_adapter_commands._validation_repair_hints(
-        "bundle semantic lint failed: agent-first candidate must project the host Agent task context "
+        "bundle semantic lint failed: Agent-native candidate must project the host Agent task context "
         "into runnable surfaces: missing soc2, vendor, rollout; "
-        "agent-first candidate must project explicit host Agent fake-done risks into runnable surfaces: "
+        "Agent-native candidate must project explicit host Agent fake-done risks into runnable surfaces: "
         "missing permission/audit, download/export-only; "
-        "agent-first candidate must project explicit host Agent evidence preferences into runnable surfaces: "
+        "Agent-native candidate must project explicit host Agent evidence preferences into runnable surfaces: "
         "missing audit/log, permission/auth"
     )
 
@@ -129,6 +140,168 @@ def test_cli_agent_gen_json_repair_focus_explains_control_character_yaml_errors(
     )
 
 
+def test_cli_agent_gen_json_repair_focus_redacts_unreadable_candidate_file(
+    monkeypatch, tmp_path: Path, sample_workdir: Path
+) -> None:
+    bundle_file = tmp_path / "unreadable-bundle.yml"
+    bundle_file.write_text(alignment_bundle_yaml(str(sample_workdir.resolve())), encoding="utf-8")
+    local_path = tmp_path / "private" / "bundle.yml"
+    original_read_text = Path.read_text
+    resolved_bundle_file = bundle_file.resolve()
+
+    def fail_candidate_read(path: Path, *args: object, **kwargs: object) -> str:
+        if path == resolved_bundle_file:
+            raise OSError(f"permission denied: {local_path}")
+        return original_read_text(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_text", fail_candidate_read)
+    result = invoke_agent_plan_json(
+        sample_workdir,
+        bundle_file,
+        "Build a refund admin workflow with audit and provider-failure evidence.",
+    )
+
+    assert result.exit_code == 1, result.stdout
+    payload = json.loads(result.stdout)
+    summary, _legacy = assert_agent_v3_envelope(
+        payload, kind="agent_plan", summary_key="agent_plan_summary", status="blocked"
+    )
+    assert summary["loop_recovery"] == "repair_candidate_plan_file"
+    assert summary["requires_candidate_repair"] is True
+    assert summary["validation_error"] == "bundle file could not be read"
+    assert summary["plan_file_to_repair"] == str(bundle_file)
+    assert summary["repair_task_message"] == "Build a refund admin workflow with audit and provider-failure evidence."
+    assert (
+        "make the candidate plan file readable or rerun /loopora-plan with a readable --bundle-file"
+        in summary["repair_focus"]
+    )
+    assert "--bundle-file" in summary["repair_cli_command"]
+    assert str(bundle_file) in summary["repair_cli_command"]
+    assert "--json --compact-json" in summary["repair_cli_command"]
+    assert summary["agent_work_panel"]["state"] == "repair_candidate_plan_file"
+    encoded = json.dumps(payload, ensure_ascii=False)
+    assert "permission denied" not in encoded
+    assert str(local_path) not in encoded
+
+
+def test_cli_agent_gen_json_repair_focus_redacts_candidate_file_resolve_error(
+    monkeypatch, tmp_path: Path, sample_workdir: Path
+) -> None:
+    bundle_file = tmp_path / "unresolvable-bundle.yml"
+    local_path = tmp_path / "private" / "candidate.yml"
+    original_resolve = Path.resolve
+
+    def fail_candidate_resolve(path: Path, *args: object, **kwargs: object) -> Path:
+        if path == bundle_file:
+            raise OSError(f"permission denied: {local_path}")
+        return original_resolve(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "resolve", fail_candidate_resolve)
+    result = invoke_agent_plan_json(
+        sample_workdir,
+        bundle_file,
+        "Build a refund admin workflow with audit and provider-failure evidence.",
+    )
+
+    assert result.exit_code == 1, result.stdout
+    payload = json.loads(result.stdout)
+    summary, _legacy = assert_agent_v3_envelope(
+        payload, kind="agent_plan", summary_key="agent_plan_summary", status="blocked"
+    )
+    assert summary["loop_recovery"] == "repair_candidate_plan_file"
+    assert summary["validation_error"] == "bundle file could not be read"
+    assert summary["plan_file_to_repair"] == str(bundle_file)
+    encoded = json.dumps(payload, ensure_ascii=False)
+    assert "permission denied" not in encoded
+    assert str(local_path) not in encoded
+
+
+def test_cli_agent_gen_json_repair_focus_handles_missing_candidate_file(tmp_path: Path, sample_workdir: Path) -> None:
+    bundle_file = tmp_path / "missing-bundle.yml"
+    result = invoke_agent_plan_json(
+        sample_workdir,
+        bundle_file,
+        "Build a refund admin workflow with audit and provider-failure evidence.",
+    )
+
+    assert result.exit_code == 1, result.stdout
+    payload = json.loads(result.stdout)
+    summary, _legacy = assert_agent_v3_envelope(
+        payload, kind="agent_plan", summary_key="agent_plan_summary", status="blocked"
+    )
+    assert summary["loop_recovery"] == "repair_candidate_plan_file"
+    assert summary["requires_candidate_repair"] is True
+    assert summary["validation_error"] == "bundle file does not exist"
+    assert summary["plan_file_to_repair"] == str(bundle_file)
+    assert (
+        "create the candidate plan file at plan_file_to_repair or rerun /loopora-plan with an existing --bundle-file"
+        in summary["repair_focus"]
+    )
+    assert "--bundle-file" in summary["repair_cli_command"]
+    assert str(bundle_file) in summary["repair_cli_command"]
+    encoded = json.dumps(payload, ensure_ascii=False)
+    assert "No such file" not in encoded
+    assert "FileNotFoundError" not in encoded
+
+
+def test_cli_agent_gen_json_repair_focus_handles_non_utf8_candidate_file(tmp_path: Path, sample_workdir: Path) -> None:
+    bundle_file = tmp_path / "latin1-bundle.yml"
+    bundle_file.write_bytes(b"version: 1\nmetadata:\n  name: caf\xe9\n")
+    result = invoke_agent_plan_json(
+        sample_workdir,
+        bundle_file,
+        "Build a refund admin workflow with audit and provider-failure evidence.",
+    )
+
+    assert result.exit_code == 1, result.stdout
+    payload = json.loads(result.stdout)
+    summary, _legacy = assert_agent_v3_envelope(
+        payload, kind="agent_plan", summary_key="agent_plan_summary", status="blocked"
+    )
+    assert summary["loop_recovery"] == "repair_candidate_plan_file"
+    assert summary["requires_candidate_repair"] is True
+    assert summary["validation_error"] == "bundle file must be UTF-8 encoded YAML"
+    assert summary["plan_file_to_repair"] == str(bundle_file)
+    assert "resave the candidate plan file as UTF-8 YAML before rerunning repair_cli_command" in summary["repair_focus"]
+    assert "--bundle-file" in summary["repair_cli_command"]
+    assert str(bundle_file) in summary["repair_cli_command"]
+    encoded = json.dumps(payload, ensure_ascii=False)
+    assert "UnicodeDecodeError" not in encoded
+    assert "codec can't decode" not in encoded
+
+
+def test_cli_agent_gen_plain_repair_focus_redacts_unreadable_candidate_file(
+    monkeypatch, tmp_path: Path, sample_workdir: Path
+) -> None:
+    bundle_file = tmp_path / "unreadable-plain-bundle.yml"
+    bundle_file.write_text(alignment_bundle_yaml(str(sample_workdir.resolve())), encoding="utf-8")
+    local_path = tmp_path / "private" / "plain-bundle.yml"
+    original_read_text = Path.read_text
+    resolved_bundle_file = bundle_file.resolve()
+
+    def fail_candidate_read(path: Path, *args: object, **kwargs: object) -> str:
+        if path == resolved_bundle_file:
+            raise OSError(f"permission denied: {local_path}")
+        return original_read_text(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_text", fail_candidate_read)
+    result = invoke_agent_plan_plain(
+        sample_workdir,
+        bundle_file,
+        "Build a refund admin workflow with audit and provider-failure evidence.",
+    )
+
+    assert result.exit_code == 1, result.stdout
+    assert "Loopora Loop preview needs plan file repair before /loopora-run" in result.stdout
+    assert "validation_error: bundle file could not be read" in result.stdout
+    assert f"plan_file_to_repair: {bundle_file}" in result.stdout
+    assert "make the candidate plan file readable or rerun /loopora-plan with a readable --bundle-file" in result.stdout
+    assert "--bundle-file" in result.stdout
+    assert "--json --compact-json" in result.stdout
+    assert "permission denied" not in result.stdout
+    assert str(local_path) not in result.stdout
+
+
 def test_cli_agent_gen_json_repair_focus_explains_semantic_lint_issues(tmp_path: Path, sample_workdir: Path) -> None:
     payload = yaml.safe_load(alignment_bundle_yaml(str(sample_workdir.resolve())))
     payload["collaboration_summary"] = "Coordinate a starter slice."
@@ -180,5 +353,23 @@ def invoke_agent_plan_json(sample_workdir: Path, bundle_file: Path, message: str
             str(bundle_file),
             "--no-web",
             "--json",
+        ],
+    )
+
+
+def invoke_agent_plan_plain(sample_workdir: Path, bundle_file: Path, message: str):
+    return CliRunner().invoke(
+        cli.app,
+        [
+            "agent",
+            "codex",
+            "plan",
+            "--workdir",
+            str(sample_workdir),
+            "--message",
+            message,
+            "--bundle-file",
+            str(bundle_file),
+            "--no-web",
         ],
     )

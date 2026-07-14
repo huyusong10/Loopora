@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
+from loopora.diagnostics import get_logger, log_exception
 from loopora.event_redaction import redact_alignment_event_payload
 from loopora.executor_types import ExecutorError, RoleRequest
 from loopora.service_alignment_artifacts import (
@@ -21,6 +23,8 @@ from loopora.service_alignment_execution import (
     alignment_request_can_native_resume_fallback,
     apply_alignment_native_resume_fallback,
 )
+
+logger = get_logger(__name__)
 
 
 class AlignmentInvocationRepository(Protocol):
@@ -187,13 +191,11 @@ def execute_alignment_request(
 
     def emit_alignment_event(event_type: str, payload: dict) -> dict:
         sanitized = sanitize_alignment_invocation_event_payload(event_type, payload, invocation_id=invocation_id)
+        message = ""
         if event_type == "codex_event":
             message = str(sanitized.get("message", "") or "").strip()
-            if message:
-                with stdout_path.open("a", encoding="utf-8") as handle:
-                    handle.write(message + "\n")
         session = repository.get_alignment_session(session_id) or {}
-        return repository.append_alignment_event(
+        record = repository.append_alignment_event(
             session_id,
             event_type,
             {
@@ -201,6 +203,14 @@ def execute_alignment_request(
                 "alignment_status": session.get("status", ""),
             },
         )
+        if event_type == "codex_event" and message:
+            write_alignment_stdout_message_best_effort(
+                stdout_path,
+                message,
+                session_id=session_id,
+                invocation_id=invocation_id,
+            )
+        return record
 
     return executor.execute(
         request,
@@ -208,6 +218,28 @@ def execute_alignment_request(
         lambda: repository.alignment_should_stop(session_id),
         lambda pid: set_alignment_active_child_pid(repository, session_id, pid),
     )
+
+
+def write_alignment_stdout_message_best_effort(
+    stdout_path: Path,
+    message: str,
+    *,
+    session_id: str,
+    invocation_id: str,
+) -> None:
+    try:
+        with stdout_path.open("a", encoding="utf-8") as handle:
+            handle.write(message + "\n")
+    except OSError as exc:
+        log_exception(
+            logger,
+            "alignment.invocation_stdout.write_failed",
+            "Failed to mirror alignment executor event to stdout.log",
+            error=exc,
+            level=logging.WARNING,
+            session_id=session_id,
+            invocation_id=invocation_id,
+        )
 
 
 def persist_alignment_executor_session_ref(

@@ -191,7 +191,7 @@ def alignment_agent_candidate_traceability_issues(
     issues: list[str] = []
     if include_loop_fit_contradiction and text_mentions_loop_fit_contradiction(task_text):
         issues.append(
-            "agent-first candidate cannot compile a Loop when the host Agent task context says Loopora is not fit; "
+            "Agent-native candidate cannot compile a Loop when the host Agent task context says Loopora is not fit; "
             "ask the user or use Web review before generating a runnable Loop"
         )
     normalized_bundle_text = normalize_alignment_traceability_text(alignment_bundle_agreement_projection_text(bundle))
@@ -203,7 +203,7 @@ def alignment_agent_candidate_traceability_issues(
         required_matches = 1 if len(terms) < 4 else 2
         if len(matched) < required_matches:
             issues.append(
-                "agent-first candidate must project the host Agent task context into runnable surfaces: missing "
+                "Agent-native candidate must project the host Agent task context into runnable surfaces: missing "
                 + ", ".join(terms[:5])
             )
     if not include_candidate_contract_issues:

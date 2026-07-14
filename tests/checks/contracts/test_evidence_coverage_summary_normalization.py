@@ -63,3 +63,27 @@ def test_coverage_summary_drops_malformed_collection_shapes() -> None:
     assert summary["evidence_kind_counts"] == {}
     assert summary["risk_signals"] == []
     assert summary["latest_gatekeeper"] == {}
+
+
+def test_coverage_summary_separates_required_basis_from_advisory_follow_up() -> None:
+    summary = summarize_evidence_coverage_projection(
+        {
+            "targets": [
+                {"id": "done_when.primary", "required": True, "status": "covered"},
+                {"id": "gatekeeper.finish", "required": True, "status": "covered"},
+                {"id": "advisory.maintainability", "required": False, "status": "missing"},
+                {"id": "advisory.docs", "required": False, "status": "weak"},
+                {"id": "advisory.polish", "required": False, "status": "covered"},
+            ]
+        }
+    )
+
+    assert summary["required_target_count"] == 2
+    assert summary["covered_required_target_count"] == 2
+    assert summary["missing_required_target_count"] == 0
+    assert summary["blocked_required_target_count"] == 0
+    assert summary["advisory_target_count"] == 3
+    assert summary["covered_advisory_target_count"] == 1
+    assert summary["weak_advisory_target_count"] == 1
+    assert summary["missing_advisory_target_count"] == 1
+    assert summary["blocked_advisory_target_count"] == 0

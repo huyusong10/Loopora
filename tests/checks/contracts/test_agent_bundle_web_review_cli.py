@@ -13,6 +13,15 @@ from agent_bundle_candidates_test_support import (
     json,
     yaml,
 )
+from agent_adapter_test_common import _labeled_value
+
+
+def _assert_ready_task_anchor(summary: dict, *, task_message: str, confirmation_text: str) -> None:
+    assert summary["task_anchor"] == task_message
+    assert "first /loopora-plan user message" in summary["task_anchor_status"]
+    assert confirmation_text not in summary["task_anchor"]
+    assert "ready_review_projection.task_scope" in summary["review_scope"]
+    assert summary["ready_next_step"].startswith("compare task_anchor with the candidate task scope")
 
 
 def test_cli_agent_gen_without_bundle_reports_web_alignment_needed(sample_workdir: Path) -> None:
@@ -27,7 +36,7 @@ def test_cli_agent_gen_without_bundle_reports_web_alignment_needed(sample_workdi
     )
 
     assert result.exit_code == 0, result.stdout
-    _assert_web_review_plain_output(result.stdout, task_message=task_message)
+    _assert_web_review_plain_output(result.stdout, task_message=task_message, workdir=sample_workdir)
 
     json_task_message = "Prepare a second governed implementation loop."
     json_result = _invoke_codex_plan(
@@ -39,7 +48,7 @@ def test_cli_agent_gen_without_bundle_reports_web_alignment_needed(sample_workdi
     )
 
     assert json_result.exit_code == 0, json_result.stdout
-    _assert_web_review_json_payload(json.loads(json_result.stdout), task_message=json_task_message)
+    _assert_web_review_json_payload(json.loads(json_result.stdout), task_message=json_task_message, workdir=sample_workdir)
 
 
 def test_cli_agent_gen_without_bundle_keeps_spanish_review_language(sample_workdir: Path) -> None:
@@ -247,6 +256,7 @@ def test_cli_agent_plan_message_only_rounds_continue_same_alignment_session(samp
     assert third_summary["alignment_session_id"] == first_summary["alignment_session_id"]
     assert third_summary["alignment_stage"] == "ready"
     assert third_summary["ready_slash_command"] == "/loopora-run"
+    _assert_ready_task_anchor(third_summary, task_message=task_message, confirmation_text="Confirm; use this direction")
     ready_projection_text = json.dumps(third_summary["ready_review_projection"], ensure_ascii=False)
     assert "RAG support chatbot" in ready_projection_text
     assert "retrieval ACL" in ready_projection_text
@@ -334,6 +344,7 @@ def test_cli_agent_plan_chinese_webhook_rounds_preserve_task_anchor_to_ready_pro
     assert third_summary["continued_alignment_session"] is True
     assert third_summary["alignment_session_id"] == first_summary["alignment_session_id"]
     assert third_summary["alignment_stage"] == "ready"
+    _assert_ready_task_anchor(third_summary, task_message=task_message, confirmation_text="确认，采用这份工作协议")
     ready_projection_text = json.dumps(third_summary["ready_review_projection"], ensure_ascii=False)
     for term in ("Stripe", "webhook", "ledger", "幂等", "对账"):
         assert term in ready_projection_text
@@ -624,12 +635,12 @@ def test_cli_agent_plan_incident_rounds_use_repro_first_workflow(sample_workdir:
     assert "Builder -> Inspector -> Guide" not in bundle_text
     assert "Confirm; use this direction" not in bundle_text
 
-def test_cli_agent_gen_reports_auto_started_web_review_url(sample_workdir: Path, monkeypatch) -> None:
+def test_cli_agent_gen_reports_reused_web_review_url(sample_workdir: Path, monkeypatch) -> None:
     runner = CliRunner()
     monkeypatch.setattr(
         cli_agent_runtime_support,
-        "ensure_local_web_service",
-        lambda: {"base_url": "http://127.0.0.1:9876", "reused": False, "started": True, "port": 9876},
+        "discover_local_web_service",
+        lambda: {"base_url": "http://127.0.0.1:9876", "reused": True, "port": 9876},
     )
 
     result = runner.invoke(
@@ -659,10 +670,70 @@ def test_cli_agent_gen_reports_auto_started_web_review_url(sample_workdir: Path,
     assert "run_blocked_until_web_review: yes" in result.stdout
     assert "after_review_cli_command_status: blocked_until_web_review_complete" in result.stdout
     assert "after_review_slash_command: /loopora-run" in result.stdout
-    _assert_labeled_loopora_agent_command(result.stdout, "after_web_review_cli_command", "run")
     _assert_labeled_loopora_agent_command(result.stdout, "after_review_cli_command", "run")
-    _assert_labeled_loopora_agent_command(result.stdout, "after_review_command", "run")
-    assert "web: started http://127.0.0.1:9876" in result.stdout
+    assert "after_web_review_cli_command:" not in result.stdout
+    assert "after_review_command:" not in result.stdout
+    assert "agent_surface: current host Agent remains the executor" in result.stdout
+    assert "agent surface:" not in result.stdout
+    assert "- host dispatch:" not in result.stdout
+    assert "web: reused http://127.0.0.1:9876" in result.stdout
+
+
+def test_cli_agent_gen_reports_relative_preview_when_web_unavailable(sample_workdir: Path, monkeypatch) -> None:
+    runner = CliRunner()
+    web_cases = (
+        {
+            "base_url": "http://127.0.0.1:8742",
+            "reused": False,
+            "start_available": False,
+            "port": 8742,
+            "warning": "no available Loopora Web port was found",
+        },
+        {
+            "base_url": "http://127.0.0.1:8747",
+            "reused": False,
+            "start_available": True,
+            "port": 8747,
+            "warning": "Loopora Web is not running; start it explicitly with the provided foreground command",
+        },
+    )
+
+    for web in web_cases:
+        port = int(web["port"])
+        workdir = sample_workdir / f"web-unavailable-{port}"
+        workdir.mkdir()
+        monkeypatch.setattr(cli_agent_runtime_support, "discover_local_web_service", lambda web=web: dict(web))
+
+        result = runner.invoke(
+            cli.app,
+            [
+                "agent",
+                "codex",
+                "plan",
+                "--workdir",
+                str(workdir),
+                "--message",
+                "Prepare a governed implementation loop.",
+                "--entry-source",
+                "codex_project_skill",
+            ],
+        )
+
+        assert result.exit_code == 0, result.stdout
+        assert "preview_url: /loops/new/bundle?alignment_session_id=" in result.stdout
+        assert f"preview_url: http://127.0.0.1:{port}/loops/new/bundle" not in result.stdout
+        expected_status = "relative_path_web_not_running" if web["start_available"] else "relative_path_web_unavailable"
+        assert f"preview_url_status: {expected_status}" in result.stdout
+        assert _labeled_value(result.stdout, "preview_url_web_start_command").endswith(
+            f"loopora serve --open --workdir {workdir.resolve()} --host 127.0.0.1 --port {port}"
+        )
+        assert f"web_warning: {web['warning']}" in result.stdout
+        expected_web_state = "not running" if web["start_available"] else "unavailable"
+        assert f"web: {expected_web_state} http://127.0.0.1:{port}" in result.stdout
+        assert result.stdout.index("preview_url:") < result.stdout.index("preview_url_status:")
+        assert result.stdout.index("preview_url_web_start_command:") < result.stdout.index(
+            "next_plan_cli_command_policy:"
+        )
 
 
 def test_cli_agent_loop_after_web_review_fallback_reprints_review_url_and_focus(sample_workdir: Path, monkeypatch) -> None:
@@ -684,8 +755,8 @@ def test_cli_agent_loop_after_web_review_fallback_reprints_review_url_and_focus(
     )
     monkeypatch.setattr(
         cli_agent_runtime_support,
-        "ensure_local_web_service",
-        lambda: {"base_url": "http://127.0.0.1:9988", "reused": False, "started": True, "port": 9988},
+        "discover_local_web_service",
+        lambda: {"base_url": "http://127.0.0.1:9988", "reused": True, "port": 9988},
     )
 
     loop_result = runner.invoke(cli.app, ["agent", "codex", "run", "--workdir", str(sample_workdir)])
@@ -708,11 +779,12 @@ def test_cli_agent_loop_after_web_review_fallback_reprints_review_url_and_focus(
     assert "run_blocked_until_web_review: yes" in output_text
     assert "after_review_cli_command_status: blocked_until_web_review_complete" in output_text
     assert "after_review_slash_command: /loopora-run" in output_text
-    _assert_labeled_loopora_agent_command(output_text, "after_web_review_cli_command", "run")
     _assert_labeled_loopora_agent_command(output_text, "after_review_cli_command", "run")
-    _assert_labeled_loopora_agent_command(output_text, "after_review_command", "run")
+    assert "after_web_review_cli_command:" not in output_text
+    assert "after_review_command:" not in output_text
     assert "preview_url: http://127.0.0.1:9988/loops/new/bundle?alignment_session_id=" in output_text
-    assert "web: started http://127.0.0.1:9988" in output_text
+    assert output_text.count("preview_url:") == 1
+    assert "web: reused http://127.0.0.1:9988" in output_text
     assert "Traceback" not in output_text
     assert _error_text(loop_result) == ""
     assert "cli.command.failed" not in output_text

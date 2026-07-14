@@ -1,19 +1,31 @@
 from __future__ import annotations
 
-from strategy_source_architecture_test_support import assert_contains, assert_contains_all, assert_excludes, assert_excludes_all, loopora_path, loopora_source, loopora_sources
+from strategy_source_architecture_test_support import (
+    assert_contains,
+    assert_contains_all,
+    assert_excludes,
+    assert_excludes_all,
+    loopora_path,
+    loopora_source,
+    loopora_sources,
+)
 
 
 def test_runtime_uses_strategy_source_boundary_for_workflow_source_helpers() -> None:
     strategy_source_path = loopora_path("strategy_source.py")
     strategy_source_boundary_sources = (
-        "service.py", "service_app.py", "service_asset_common.py", "service_bundle_export.py",
-        "agent_native_runtime_context.py", "service_run_registration.py", "service_loop_records.py",
-        "service_runner_step_runtime.py", "service_runner_support.py",
+        "service.py",
+        "service_app.py",
+        "service_asset_common.py",
+        "service_bundle_export.py",
+        "agent_native_runtime_context.py",
+        "service_run_registration.py",
+        "service_loop_records.py",
+        "service_runner_step_runtime.py",
+        "service_runner_support.py",
     )
     sources = loopora_sources("strategy_source.py", "service_bundle_assets.py", *strategy_source_boundary_sources)
-    runner_execution_source = loopora_source("service_runner_execution.py") + loopora_source(
-        "service_runner_context_preparation.py"
-    )
+    runner_execution_source = loopora_source("service_runner_execution.py") + loopora_source("service_runner_context_preparation.py")
     strategy_import_sources = [sources[source_name] for source_name in strategy_source_boundary_sources]
 
     assert strategy_source_path.exists()
@@ -47,8 +59,14 @@ def test_runtime_uses_strategy_source_boundary_for_workflow_source_helpers() -> 
 
 def test_compiler_sources_use_strategy_source_boundary_for_strategy_inputs() -> None:
     sources = loopora_sources(
-        "strategy_source.py", "compiler/loop_compiler.py", "specs.py", "spec_markdown.py",
-        "cli_spec_commands.py", "web_spec_api.py", "web_route_context_loop_pages.py",
+        "strategy_source.py",
+        "compiler/loop_compiler.py",
+        "specs.py",
+        "spec_markdown.py",
+        "cli_spec_commands.py",
+        "cli_spec_recovery.py",
+        "web_spec_template_api_routes.py",
+        "web_route_context_orchestration_pages.py",
     )
     loop_compiler_source = sources["compiler/loop_compiler.py"]
     specs_source = sources["specs.py"]
@@ -66,18 +84,34 @@ def test_compiler_sources_use_strategy_source_boundary_for_strategy_inputs() -> 
         "def init_spec_file_for_strategy_source",
         "strategy_source: dict[str, Any] | None = None",
     )
-    for command_source in [sources["cli_spec_commands.py"], sources["web_spec_api.py"]]:
+    for command_source in [sources["cli_spec_commands.py"], sources["web_spec_template_api_routes.py"]]:
         assert_contains(command_source, "render_spec_template_for_strategy_source", "init_spec_file_for_strategy_source")
         assert "render_spec_template(locale=locale, workflow=" not in command_source
-    assert "render_spec_template_for_strategy_source" in sources["web_route_context_loop_pages.py"]
+    assert_contains(sources["cli_spec_commands.py"], "from loopora.cli_spec_recovery import")
+    assert_excludes(
+        sources["cli_spec_commands.py"],
+        "def exit_with_missing_spec_file_recovery",
+        '"resource_recovery": "invalid_spec_file_input"',
+    )
+    assert_contains(
+        sources["cli_spec_recovery.py"],
+        "def exit_with_missing_spec_file_recovery",
+        '"resource_recovery": "invalid_spec_file_input"',
+        "copyable_loopora_command",
+    )
+    assert "render_spec_template_for_strategy_source" in sources["web_route_context_orchestration_pages.py"]
     assert_contains(loop_compiler_source, "_loopfile_strategy_source", 'strategy_source_payload = mapping(bundle.get("workflow"))')
     assert 'workflow = mapping(bundle.get("workflow"))' not in loop_compiler_source
 
 
 def test_run_takeaway_projection_uses_strategy_snapshot_for_contract_trace_inputs() -> None:
     sources = loopora_sources(
-        "service_bundle_control_trace_mining.py", "run_takeaways.py", "run_takeaway_common.py",
-        "run_takeaway_evidence.py", "run_takeaway_iterations.py", "run_takeaway_judgment.py",
+        "service_bundle_control_trace_mining.py",
+        "run_takeaways.py",
+        "run_takeaway_common.py",
+        "run_takeaway_evidence.py",
+        "run_takeaway_iterations.py",
+        "run_takeaway_judgment.py",
         "run_takeaway_legacy.py",
     )
     run_takeaways_source = sources["run_takeaways.py"]
@@ -113,8 +147,11 @@ def test_run_takeaway_projection_uses_strategy_snapshot_for_contract_trace_input
         "def build_legacy_iteration_takeaway",
     )
     for source_name in [
-        "agent_entry_run_projection.py", "agent_native_judgment_contract.py", "agent_native_task_proof.py",
-        "cli_run_contract_output.py", "service_alignment_run_source_projection.py",
+        "agent_entry_run_projection.py",
+        "agent_native_judgment_contract.py",
+        "agent_native_task_proof.py",
+        "cli_run_contract_output.py",
+        "service_alignment_run_source_projection.py",
     ]:
         source = loopora_source(source_name)
         assert "from loopora.run_takeaway_judgment import build_judgment_contract" in source

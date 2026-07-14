@@ -16,6 +16,7 @@ from loopora.agent_adapter_context_binding import (
     resolve_adapter_project_root as resolve_adapter_project_root,
 )
 from loopora.agent_adapter_command_prefix import (
+    copyable_loopora_command as copyable_loopora_command,
     loopora_command_env_prefix as loopora_command_env_prefix,
     prefix_loopora_command as prefix_loopora_command,
 )
@@ -23,12 +24,15 @@ from loopora.agent_adapter_lifecycle import (
     FIRST_TASK_MESSAGE_EXAMPLE as FIRST_TASK_MESSAGE_EXAMPLE,
     IMPLEMENTED_AGENT_ADAPTERS as IMPLEMENTED_AGENT_ADAPTERS,
     _adapter_check_recovery as _adapter_check_recovery,
+    adapter_first_task_handoff_policy as adapter_first_task_handoff_policy,
     _managed_templates as _managed_templates,
     adapter_first_task_message_example as adapter_first_task_message_example,
+    adapter_first_task_message_example_state as adapter_first_task_message_example_state,
     agent_adapter_status as agent_adapter_status,
     check_agent_adapter as check_agent_adapter,
     install_agent_adapter as install_agent_adapter,
     list_agent_adapter_statuses as list_agent_adapter_statuses,
+    preview_agent_adapter_uninstall as preview_agent_adapter_uninstall,
     uninstall_agent_adapter as uninstall_agent_adapter,
 )
 from loopora.agent_adapter_manifest import (
@@ -105,7 +109,7 @@ def agent_loop_command(
     if normalized_entry_source:
         command_bits.extend(["--entry-source", shlex.quote(normalized_entry_source)])
     command = " ".join(command_bits)
-    return prefix_loopora_command(command, entry_source=normalized_entry_source)
+    return copyable_loopora_command(command, entry_source=normalized_entry_source)
 
 
 def agent_loop_json_command(

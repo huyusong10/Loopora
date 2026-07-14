@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from loopora import strategy_source
 from loopora import workflows
 
@@ -96,3 +98,53 @@ def test_strategy_source_helpers_preserve_legacy_workflow_helper_contract() -> N
     ]
     for strategy_result, workflow_result in step_helper_cases:
         assert strategy_result == workflow_result
+
+
+def test_strategy_role_execution_defaults_preserve_command_only_blank_starting_point() -> None:
+    settings = strategy_source.default_strategy_role_execution_settings("custom")
+
+    assert settings == {
+        "executor_kind": "custom",
+        "executor_mode": "command",
+        "command_cli": "",
+        "command_args_text": "",
+        "model": "",
+        "reasoning_effort": "",
+    }
+
+
+def test_strategy_role_execution_settings_use_shared_alias_and_reasoning_normalization() -> None:
+    settings = strategy_source.normalize_strategy_role_execution_settings(
+        {
+            "executor_kind": "claude-code",
+            "executor_mode": " PRESET ",
+            "reasoning_effort": "xhigh",
+        }
+    )
+
+    assert settings == {
+        "executor_kind": "claude",
+        "executor_mode": "preset",
+        "command_cli": "claude",
+        "command_args_text": "",
+        "model": "",
+        "reasoning_effort": "max",
+    }
+
+
+def test_strategy_role_execution_settings_reject_command_only_executor_without_command_mode() -> None:
+    with pytest.raises(ValueError, match="Custom Command only supports command mode"):
+        strategy_source.normalize_strategy_role_execution_settings({"executor_kind": "custom"})
+
+
+def test_strategy_role_execution_settings_reject_invalid_command_template() -> None:
+    with pytest.raises(ValueError, match="custom command is missing required placeholders") as exc_info:
+        strategy_source.normalize_strategy_role_execution_settings(
+            {
+                "executor_kind": "custom",
+                "executor_mode": "command",
+                "command_args_text": "{schema_path}",
+            }
+        )
+
+    assert str(exc_info.value) == "custom command is missing required placeholders: {prompt}, {output_path}"

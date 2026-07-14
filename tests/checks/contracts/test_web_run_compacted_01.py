@@ -2,6 +2,7 @@ from __future__ import annotations
 
 # Merged from test_web_run_artifact_smoke_api.py
 from pathlib import Path
+from urllib.parse import parse_qs, urlsplit
 
 from fastapi.testclient import TestClient
 
@@ -212,11 +213,42 @@ def test_run_detail_separates_status_verdict_and_reruns_terminal_run(
     accepted_events_after_first_post = service.recent_run_events(run["id"], event_types={"run_result_accepted"})
     first_accept_event_id = accepted_events_after_first_post[-1]["id"]
     accepted_task_verdict_status = accepted_events_after_first_post[-1]["payload"]["task_verdict_status"]
+    _assert_run_detail_recorded_result_state(
+        client,
+        service,
+        run,
+        first_accept_event_id=first_accept_event_id,
+        accepted_task_verdict_status=accepted_task_verdict_status,
+    )
+    _assert_run_detail_recorded_result_can_reopen(client, service, run, recorded_event_id=first_accept_event_id)
+
+    rerun_response = client.post(f"/runs/{run['id']}/rerun", follow_redirects=False)
+
+    assert rerun_response.status_code == HTTPStatus.SEE_OTHER
+    redirect_parts = urlsplit(rerun_response.headers["location"])
+    assert redirect_parts.path.startswith("/runs/")
+    assert parse_qs(redirect_parts.query)["workdir"] == [str(sample_workdir)]
+    new_run_id = redirect_parts.path.removeprefix("/runs/")
+    assert new_run_id
+    assert new_run_id != run["id"]
+    assert service.get_run(new_run_id)["loop_id"] == loop["id"]
+    _wait_for_run_terminal_status(service, new_run_id)
+
+
+def _assert_run_detail_recorded_result_state(
+    client: TestClient,
+    service,
+    run: dict,
+    *,
+    first_accept_event_id: int,
+    accepted_task_verdict_status: str,
+) -> None:
     page_after_accept = client.get(f"/runs/{run['id']}")
     assert page_after_accept.status_code == HTTPStatus.OK
     assert 'data-testid="run-accepted-result-state"' in page_after_accept.text
     assert _expected_recorded_verdict_page_text(accepted_task_verdict_status) in page_after_accept.text
     assert 'data-testid="run-accept-result-button"' not in page_after_accept.text
+    assert 'data-testid="run-evidence-improve-button"' not in page_after_accept.text
     duplicate_accept_response = client.post(f"/runs/{run['id']}/accept", follow_redirects=False)
     assert duplicate_accept_response.status_code == HTTPStatus.SEE_OTHER
     accepted_events_after_duplicate_post = service.recent_run_events(run["id"], event_types={"run_result_accepted"})
@@ -234,11 +266,35 @@ def test_run_detail_separates_status_verdict_and_reruns_terminal_run(
     assert accepted_timeline_events[-1]["title"] == _expected_recorded_verdict_title(accepted_task_verdict_status)
     assert snapshot_payload["key_takeaways"]["source_event_id"] <= snapshot_payload["latest_event_id"]
 
-    rerun_response = client.post(f"/runs/{run['id']}/rerun", follow_redirects=False)
 
-    assert rerun_response.status_code == HTTPStatus.SEE_OTHER
-    new_run_id = rerun_response.headers["location"].removeprefix("/runs/")
-    assert new_run_id
-    assert new_run_id != run["id"]
-    assert service.get_run(new_run_id)["loop_id"] == loop["id"]
-    _wait_for_run_terminal_status(service, new_run_id)
+def _assert_run_detail_recorded_result_can_reopen(
+    client: TestClient,
+    service,
+    run: dict,
+    *,
+    recorded_event_id: int,
+) -> None:
+    reopen_response = client.post(f"/runs/{run['id']}/reopen-result", follow_redirects=False)
+    assert reopen_response.status_code == HTTPStatus.SEE_OTHER
+    reopened_events = service.recent_run_events(run["id"], event_types={"run_result_acceptance_reopened"})
+    assert len(reopened_events) == 1
+    assert reopened_events[-1]["payload"]["recorded_event_id"] == recorded_event_id
+    reopened_state = service.run_result_acceptance_state(run["id"])
+    assert reopened_state["accepted"] is False
+    assert reopened_state["event_id"] == reopened_events[-1]["id"]
+    page_after_reopen = client.get(f"/runs/{run['id']}")
+    assert page_after_reopen.status_code == HTTPStatus.OK
+    assert 'data-testid="run-accept-result-button"' in page_after_reopen.text
+    assert 'data-testid="run-reopen-recorded-result-button"' not in page_after_reopen.text
+    assert 'data-testid="run-result-decision"' in page_after_reopen.text
+    assert page_after_reopen.text.count('data-testid="run-improve-chat-button"') == 1
+    assert 'data-testid="run-evidence-improve-button"' not in page_after_reopen.text
+    snapshot_after_reopen = client.get(f"/api/runs/{run['id']}/observation-snapshot")
+    assert snapshot_after_reopen.status_code == HTTPStatus.OK
+    reopened_timeline_events = [
+        event
+        for event in snapshot_after_reopen.json()["timeline_events"]
+        if event["event_type"] == "run_result_acceptance_reopened"
+    ]
+    assert reopened_timeline_events
+    assert reopened_timeline_events[-1]["title"] == "Recorded evidence verdict reopened"

@@ -8,6 +8,14 @@ from loopora.service_types import LooporaConflictError
 from loopora.structured_booleans import structured_bool_is_true
 
 
+EXPLICIT_HOST_DISPATCH_ATTESTATION_SOURCE = "explicit_submit_flag"
+LEGACY_HOST_DISPATCH_ATTESTATION_SOURCE = "legacy_template_auto_repair"
+HOST_DISPATCH_ATTESTATION_SOURCES = {
+    EXPLICIT_HOST_DISPATCH_ATTESTATION_SOURCE,
+    LEGACY_HOST_DISPATCH_ATTESTATION_SOURCE,
+}
+
+
 def validate_agent_native_host_dispatch(context: dict[str, Any], dispatch: dict[str, Any] | None) -> dict[str, Any]:
     adapter = str(context["adapter"])
     run = context["run"]
@@ -56,11 +64,23 @@ def validate_agent_native_host_dispatch(context: dict[str, Any], dispatch: dict[
         "inline": inline,
         "attestation": str(dispatch.get("attestation") or "").strip(),
     }
+    _attach_agent_native_attestation_source(normalized, dispatch)
     normalized.update(dispatch_position)
     native_trace = _agent_native_dispatch_trace(adapter, dispatch=dispatch, role_dispatch=role_dispatch)
     if native_trace:
         normalized["native_trace"] = native_trace
     return normalized
+
+
+def _attach_agent_native_attestation_source(normalized: dict[str, Any], dispatch: dict[str, Any]) -> None:
+    source = str(dispatch.get("attestation_source") or "").strip()
+    if source and source not in HOST_DISPATCH_ATTESTATION_SOURCES:
+        raise LooporaConflictError(
+            "agent-native host dispatch attestation_source must be one of "
+            f"{sorted(HOST_DISPATCH_ATTESTATION_SOURCES)}"
+        )
+    if source:
+        normalized["attestation_source"] = source
 
 
 def _required_agent_native_dispatch_text(dispatch: dict[str, Any], field: str) -> str:

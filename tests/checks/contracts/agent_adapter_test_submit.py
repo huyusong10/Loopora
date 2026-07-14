@@ -126,6 +126,8 @@ def _invoke_codex_submit(runner: CliRunner, workdir: Path, **options):
     ]
     if options.get("json_output", True):
         args.append("--json")
+    if options.get("attest_role_dispatch"):
+        args.append("--attest-role-dispatch")
     return runner.invoke(cli.app, args)
 
 def _assert_stale_submit_repair_payload(payload: dict, *, active_template: Path) -> None:

@@ -24,6 +24,7 @@ def agent_work_panel(result: dict, *, summary: dict | None = None) -> AgentWorkP
     evidence_focus = _panel_evidence_focus(result, task_verdict=task_verdict, next_summary=next_summary, top_gaps=top_gaps)
     current_role = str(next_summary.get("role") or "").strip()
     current_step_id = str(next_summary.get("step_id") or "").strip()
+    target_agent = str(next_summary.get("target_agent") or "").strip()
     submitted_step = result.get("submitted_step") if isinstance(result.get("submitted_step"), dict) else {}
     if not current_role and isinstance(submitted_step.get("role"), dict):
         current_role = str(submitted_step["role"].get("name") or submitted_step["role"].get("id") or "").strip()
@@ -36,6 +37,9 @@ def agent_work_panel(result: dict, *, summary: dict | None = None) -> AgentWorkP
         "task_outcome": task_outcome,
         "current_role": current_role,
         "current_step_id": current_step_id,
+        "target_agent": target_agent,
+        "role_handoff_status": _panel_role_handoff_status(result, task_proven=task_proven, next_summary=next_summary),
+        "role_handoff_owner": "current_host_agent" if next_summary else "",
         "next_action": _panel_next_action(result, next_summary=next_summary, task_proven=task_proven),
         "evidence_focus": evidence_focus,
         "top_gaps": top_gaps,
@@ -48,16 +52,25 @@ def agent_work_panel(result: dict, *, summary: dict | None = None) -> AgentWorkP
 def print_agent_work_panel(result: dict, *, summary: dict | None = None) -> None:
     panel = agent_work_panel(result, summary=summary)
     typer.echo("agent_work_panel:")
-    for key in ("state", "run_id", "task_outcome", "current_role", "current_step_id", "next_action", "evidence_focus", "ask_user", "run_url"):
+    for key in (
+        "state",
+        "run_id",
+        "task_outcome",
+        "current_role",
+        "current_step_id",
+        "target_agent",
+        "role_handoff_status",
+        "role_handoff_owner",
+        "next_action",
+        "evidence_focus",
+        "ask_user",
+        "run_url",
+    ):
         value = panel.get(key)
         if value not in ("", [], {}, None):
             typer.echo(f"{key}: {_clip(str(value), 260)}")
+    _print_run_url_recovery(result)
     typer.echo(f"task_proven: {str(panel.get('task_proven') is True).lower()}")
-    todo_items = [str(item).strip() for item in list(panel.get("todo_items") or []) if str(item).strip()]
-    if todo_items:
-        typer.echo("todo_items:")
-        for item in todo_items[:4]:
-            typer.echo(f"- {_clip(item, 180)}")
     top_gaps = [item for item in list(panel.get("top_gaps") or []) if isinstance(item, dict)]
     if top_gaps:
         typer.echo("top_gaps:")
@@ -67,66 +80,106 @@ def print_agent_work_panel(result: dict, *, summary: dict | None = None) -> None
                 typer.echo(f"- {_clip(rendered, 220)}")
 
 
+def _print_run_url_recovery(result: dict) -> None:
+    for key in ("run_url_status", "run_url_web_start_command"):
+        value = str(result.get(key) or "").strip()
+        if value:
+            rendered = value if key == "run_url_web_start_command" else _clip(value, 260)
+            typer.echo(f"{key}: {rendered}")
+
+
 def _next_step_summary(result: dict, *, summary: dict | None) -> dict[str, object]:
+    displayed_summary: dict[str, object] = {}
     if isinstance(summary, dict):
-        next_summary = summary.get("next_step")
-        if isinstance(next_summary, dict):
-            return next_summary
+        displayed = summary.get("next_step")
+        if isinstance(displayed, dict):
+            displayed_summary = displayed
     next_step = result.get("next_step") if isinstance(result.get("next_step"), dict) else {}
     if not next_step:
-        return {}
+        return displayed_summary
     run = result.get("run") if isinstance(result.get("run"), dict) else {}
     adapter = str(result.get("adapter") or next_step.get("adapter") or "").strip() or "codex"
-    workdir = str(result.get("workdir") or run.get("workdir") or "").strip() or "$PWD"
-    return agent_next_step_summary(next_step, adapter=adapter, workdir=workdir)
+    workdir = str(result.get("workdir") or run.get("workdir") or "").strip()
+    full_summary = agent_next_step_summary(next_step, adapter=adapter, workdir=workdir)
+    full_summary.update(displayed_summary)
+    return full_summary
+
+
+def _panel_role_handoff_status(result: dict, *, task_proven: bool, next_summary: dict[str, object]) -> str:
+    if isinstance(next_summary.get("dispatch_unavailable"), dict):
+        return "blocked_before_dispatch"
+    if next_summary:
+        return "ready_for_host_dispatch"
+    if task_proven or result.get("complete") is True:
+        return "not_applicable"
+    return "unavailable"
 
 
 def _task_outcome(result: dict, *, task_proven: bool, verdict_status: str, summary: dict | None) -> str:
+    outcome = ""
     if isinstance(summary, dict):
         value = str(summary.get("task_outcome") or "").strip()
         if value:
-            return value
-    if task_proven:
-        return "proven"
-    task_next_action = result.get("task_next_action") if isinstance(result.get("task_next_action"), dict) else {}
-    if str(task_next_action.get("kind") or "").strip() == "continue_evidence":
-        return "not_proven_continue_evidence"
-    if result.get("complete") is True:
-        return "not_proven"
-    if verdict_status and verdict_status != "not_evaluated":
-        return "not_proven_continue_evidence"
-    return "not_yet_evaluated"
+            outcome = value
+    if not outcome:
+        task_next_action = result.get("task_next_action") if isinstance(result.get("task_next_action"), dict) else {}
+        action_kind = str(task_next_action.get("kind") or "").strip()
+        if task_proven:
+            outcome = "proven"
+        elif action_kind == "retry_lifecycle_failure":
+            outcome = "not_proven_retry_lifecycle_failure"
+        elif action_kind == "continue_evidence":
+            outcome = "not_proven_continue_evidence"
+        elif result.get("complete") is True:
+            outcome = "not_proven"
+        elif verdict_status and verdict_status != "not_evaluated":
+            outcome = "not_proven_continue_evidence"
+        else:
+            outcome = "not_yet_evaluated"
+    return outcome
 
 
 def _panel_state(result: dict, *, task_proven: bool, next_summary: dict[str, object]) -> str:
-    if task_proven:
-        return "task_proven"
-    if isinstance(next_summary.get("dispatch_unavailable"), dict):
-        return "dispatch_unavailable"
     submitted = result.get("submitted_step") if isinstance(result.get("submitted_step"), dict) else {}
-    if str(submitted.get("status") or "").strip() == "blocked":
-        return "blocked"
-    if result.get("complete") is True:
-        return "needs_more_evidence"
-    if next_summary:
-        return "awaiting_agent"
-    run = result.get("run") if isinstance(result.get("run"), dict) else {}
-    return run_status_from_run(run) or "unknown"
+    task_next_action = result.get("task_next_action") if isinstance(result.get("task_next_action"), dict) else {}
+    if task_proven:
+        state = "task_proven"
+    elif isinstance(next_summary.get("dispatch_unavailable"), dict):
+        state = "dispatch_unavailable"
+    elif str(submitted.get("status") or "").strip() == "blocked":
+        state = "blocked"
+    elif str(task_next_action.get("kind") or "").strip() == "retry_lifecycle_failure":
+        state = "retry_lifecycle_failure"
+    elif result.get("complete") is True:
+        state = "needs_more_evidence"
+    elif next_summary:
+        state = "awaiting_agent"
+    else:
+        run = result.get("run") if isinstance(result.get("run"), dict) else {}
+        state = run_status_from_run(run) or "unknown"
+    return state
 
 
 def _panel_next_action(result: dict, *, next_summary: dict[str, object], task_proven: bool) -> str:
     if task_proven:
         return "Task verdict passed; no new evidence pass starts unless the task scope changes."
-    submitted = result.get("submitted_step") if isinstance(result.get("submitted_step"), dict) else {}
-    if isinstance(next_summary.get("dispatch_unavailable"), dict) or str(submitted.get("status") or "").strip() == "blocked":
-        return _panel_default_next_action(result, next_summary=next_summary, task_proven=task_proven)
-    if result.get("complete") is True:
-        return _panel_default_next_action(result, next_summary=next_summary, task_proven=task_proven)
     task_next_action = result.get("task_next_action") if isinstance(result.get("task_next_action"), dict) else {}
+    action_kind = str(task_next_action.get("kind") or "").strip()
     guidance = str(task_next_action.get("guidance") or "").strip()
-    if guidance:
-        return guidance
-    action = _panel_default_next_action(result, next_summary=next_summary, task_proven=task_proven)
+    submitted = result.get("submitted_step") if isinstance(result.get("submitted_step"), dict) else {}
+    action = ""
+    if action_kind == "retry_lifecycle_failure" and guidance:
+        action = guidance
+    elif isinstance(next_summary.get("dispatch_unavailable"), dict) or str(submitted.get("status") or "").strip() == "blocked":
+        action = _panel_default_next_action(result, next_summary=next_summary, task_proven=task_proven)
+    elif action_kind == "continue_evidence" and guidance and "/loopora-run" in guidance:
+        action = guidance
+    elif result.get("complete") is True:
+        action = _panel_default_next_action(result, next_summary=next_summary, task_proven=task_proven)
+    elif guidance:
+        action = guidance
+    else:
+        action = _panel_default_next_action(result, next_summary=next_summary, task_proven=task_proven)
     return action or "Continue the current Loopora handoff."
 
 
@@ -152,6 +205,8 @@ def _panel_default_next_action(result: dict, *, next_summary: dict[str, object],
 
 def _panel_evidence_focus(result: dict, *, task_verdict: dict, next_summary: dict[str, object], top_gaps: list[dict]) -> str:
     task_next_action = result.get("task_next_action") if isinstance(result.get("task_next_action"), dict) else {}
+    if str(task_next_action.get("kind") or "").strip() == "retry_lifecycle_failure":
+        return ""
     focus = str(task_next_action.get("task_verdict_summary") or "").strip()
     if focus:
         return _clip_inline(focus, 240)

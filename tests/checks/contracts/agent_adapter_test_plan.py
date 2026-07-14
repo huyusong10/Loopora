@@ -11,6 +11,7 @@ from agent_native_v3_helpers import assert_agent_v3_envelope
 from agent_adapter_test_common import (
     _assert_loopora_agent_command,
     _assert_labeled_loopora_agent_command,
+    _labeled_value,
 )
 from agent_adapter_test_surface import (
     _assert_codex_native_surface_summary,
@@ -19,6 +20,13 @@ from agent_adapter_test_surface import (
 
 
 EXPECTED_READY_REVIEW_CHECK_COUNT = 2
+
+
+def _assert_web_start_command(command: str, *, port: int = 8742, workdir: Path | None = None) -> None:
+    if workdir is not None:
+        assert command.endswith(f"loopora serve --open --workdir {workdir.resolve()} --host 127.0.0.1 --port {port}")
+        return
+    assert command.endswith(f"loopora serve --open --host 127.0.0.1 --port {port}")
 
 
 def _assert_plan_repair_retry_text(output: str, bundle_file: Path) -> None:
@@ -77,7 +85,7 @@ def _invoke_codex_plan(runner: CliRunner, workdir: Path, **options):
         args.append("--compact-json")
     return runner.invoke(cli.app, args, env=options.get("env"))
 
-def _assert_web_review_plain_output(output: str, *, task_message: str) -> None:
+def _assert_web_review_plain_output(output: str, *, task_message: str, workdir: Path | None = None) -> None:
     assert "Loopora Loop preview needs Web review" in output
     assert "not_fit:" not in output
     assert "review_status: not runnable; no candidate plan file was submitted" in output
@@ -99,7 +107,19 @@ def _assert_web_review_plain_output(output: str, *, task_message: str) -> None:
     assert "review_recommended_action: Continue evidence-first review (Recommended)" in output
     assert "review_reply_preview: Continue Web review from this /loopora-plan task anchor:" in output
     assert "\nUse the evidence-first path:" not in output
+    assert "next_plan_cli_command_policy: fallback_for_non_interactive_agents" in output
     command = _assert_labeled_loopora_agent_command(output, "next_plan_cli_command", "plan")
+    assert output.index("review_focus:") < output.index("next_review_step:") < output.index(
+        "preview_url:"
+    )
+    assert "preview_url_status: relative_path_web_not_started" in output
+    assert "preview_url_web_start_command:" in output
+    _assert_web_start_command(_labeled_value(output, "preview_url_web_start_command"), workdir=workdir)
+    assert output.index("preview_url:") < output.index("preview_url_status:")
+    assert output.index("preview_url_status:") < output.index("preview_url_web_start_command:")
+    assert output.index("preview_url_web_start_command:") < output.index("next_plan_cli_command_policy:")
+    assert output.index("next_plan_cli_command_policy:") < output.index("next_plan_cli_command:")
+    assert output.index("next_plan_cli_command:") < output.index("after_review_ready:")
     assert "--message" in command
     assert "Continue Web review from this /loopora-plan task anchor:" in command
     assert "next_review_step: open the preview URL" in output
@@ -107,15 +127,19 @@ def _assert_web_review_plain_output(output: str, *, task_message: str) -> None:
     assert "run_blocked_until_web_review: yes" in output
     assert "after_review_cli_command_status: blocked_until_web_review_complete" in output
     assert "after_review_slash_command: /loopora-run" in output
-    _assert_labeled_loopora_agent_command(output, "after_web_review_cli_command", "run")
     _assert_labeled_loopora_agent_command(output, "after_review_cli_command", "run")
-    _assert_labeled_loopora_agent_command(output, "after_review_command", "run")
-    _assert_codex_native_surface_plain(output)
+    assert "after_web_review_cli_command:" not in output
+    assert "after_review_command:" not in output
+    assert "agent_surface: current host Agent remains the executor" in output
+    assert "full surface diagnostics are available with --json --compact-json" in output
+    assert "agent surface:" not in output
+    assert "- host dispatch:" not in output
     assert "Web alignment" not in output
     assert "preview_url: /loops/new/bundle?alignment_session_id=" in output
+    assert output.count("preview_url:") == 1
     assert "candidate_url:" not in output
 
-def _assert_web_review_json_payload(payload: dict, *, task_message: str) -> None:
+def _assert_web_review_json_payload(payload: dict, *, task_message: str, workdir: Path | None = None) -> None:
     summary, _legacy = assert_agent_v3_envelope(payload, kind="agent_plan", summary_key="agent_plan_summary")
     _assert_codex_native_surface_summary(summary)
     assert summary["loop_recovery"] == "finish_web_review"
@@ -133,6 +157,9 @@ def _assert_web_review_json_payload(payload: dict, *, task_message: str) -> None
     assert task_message in summary["review_reply_message"]
     assert summary["review_reply_preview"].startswith("Continue Web review from this /loopora-plan task anchor:")
     assert summary["message_cli_command"] == summary["next_plan_cli_command"]
+    assert summary["next_plan_cli_command_policy"].startswith("fallback_for_non_interactive_agents")
+    assert summary["preview_url_status"] == "relative_path_web_not_started"
+    _assert_web_start_command(summary["preview_url_web_start_command"], workdir=workdir)
     _assert_loopora_agent_command(summary["next_plan_cli_command"], "plan")
     assert "--message" in summary["next_plan_cli_command"]
     assert summary["after_review_ready"].startswith("return to this Agent session")
@@ -159,8 +186,10 @@ def _assert_ready_plan_summary(payload: dict) -> None:
     assert summary["ready"] is True
     assert "happy-path claim" in summary["ready_review_projection"]["fake_done_risks"][0]
     assert summary["ready_review_projection"]["gatekeeper"]["requires_evidence_refs"] is True
-    assert summary["review_before_loop"] == "confirm the preview carries these judgments before running /loopora-run"
-    assert summary["ready_next_step"].startswith("return to this Agent session and run /loopora-run")
+    assert summary["review_before_loop"] == (
+        "confirm the candidate task scope and judgments match task_anchor before running /loopora-run"
+    )
+    assert summary["ready_next_step"].startswith("compare task_anchor with the candidate task scope")
     assert summary["ready_slash_command"] == "/loopora-run"
     assert "loopora agent codex run" in summary["ready_cli_command"]
     assert "--json" in summary["ready_cli_command"]

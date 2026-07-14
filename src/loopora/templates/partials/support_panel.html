@@ -1,0 +1,190 @@
+<details
+  class="panel maintenance-disclosure"
+  id="tools-support-panel"
+  data-testid="tools-support-panel"
+  data-support-next-action-kinds="{{ support_guidance.support_summary.next_action_kinds|join(',') }}"
+  data-support-ready-next-action-kinds="{{ support_guidance.support_summary.ready_next_action_kinds|join(',') }}"
+  data-support-blocked-next-action-kinds="{{ support_guidance.support_summary.blocked_next_action_kinds|join(',') }}"
+  data-support-target-project-status="{{ support_guidance.target_project_status }}"
+  data-support-target-project-setup-ready="{{ 'true' if support_guidance.target_project_setup_ready else 'false' }}"
+  data-support-target-project-report-only="{{ 'true' if support_guidance.target_project_report_only else 'false' }}"
+  data-support-public-report-url="{{ support_public_report_url }}"
+  data-support-panel-context="{{ support_panel_context }}"
+  {% if support_panel_open %}open{% endif %}
+>
+  <summary class="panel-header workbench-disclosure-summary">
+    <div>
+      <h2><span data-lang="zh">安全支持与公开报告</span><span data-lang="en">Support and safe reporting</span></h2>
+      <p class="tools-copy">
+        <span data-lang="zh">遇到设置、就绪或产品行为问题时，优先用公开 issue 支持包沟通；漏洞或敏感细节不要发公开 issue。</span>
+        <span data-lang="en">For setup, readiness, or product-behavior issues, use the public issue support bundle first; keep vulnerabilities and sensitive details out of public issues.</span>
+      </p>
+    </div>
+    <span class="panel-note">
+      {% if support_panel_open %}
+      <span data-lang="zh">支持入口</span>
+      <span data-lang="en">Support entry</span>
+      {% else %}
+      <span data-lang="zh">需要帮助时再展开</span>
+      <span data-lang="en">Open when asking for help</span>
+      {% endif %}
+    </span>
+  </summary>
+  <div class="agent-adapter-next-steps" data-testid="tools-support-public-report">
+    <strong>
+      <span data-lang="zh">公开报告</span>
+      <span data-lang="en">Public report</span>
+    </strong>
+    <span>
+      {% if support_panel_context == "tools" %}
+      <span data-lang="zh">先在上方选择目标项目并刷新，再复制公开 issue 支持包；页面渲染这个面板时不会运行诊断。</span>
+      <span data-lang="en">Choose and refresh the target project above before copying the public issue support bundle; rendering this panel does not run diagnostics.</span>
+      {% else %}
+      <span data-lang="zh">带目标项目打开本页后可以复制公开 issue 支持包；也可以在目标项目运行 <code>loopora support --workdir "$PWD"</code> 刷新命令；页面渲染这个面板时不会运行诊断。</span>
+      <span data-lang="en">Open this page with a target project to copy the public issue support bundle, or run <code>loopora support --workdir "$PWD"</code> from the target project to refresh the command; rendering this panel does not run diagnostics.</span>
+      {% endif %}
+    </span>
+    <span>
+      <span data-lang="zh">{{ support_posting_guidance_zh }}</span>
+      <span data-lang="en">{{ support_posting_guidance_en }}</span>
+    </span>
+    <span data-testid="tools-support-target-required" data-support-target-required-note data-support-next-action-kind="choose_workdir_for_public_report" {% if not support_guidance.target_project_required %}hidden{% endif %}>
+      <span data-lang="zh">当前优先支持包/兜底报告命令仍包含 &lt;project-dir&gt;；请先选择并刷新目标项目，再复制公开 issue 支持包或按需复制脱敏报告命令。</span>
+      <span data-lang="en">The preferred bundle/fallback report commands still contain &lt;project-dir&gt;; choose and refresh a target project before copying the public issue bundle or requested redacted report command.</span>
+    </span>
+    <span data-testid="tools-support-target-state" data-support-target-state-note {% if not support_guidance.target_project_report_only %}hidden{% endif %}>
+      <span data-lang="zh">目标项目状态：{{ support_target_status_zh }}；优先支持包/兜底报告命令可以生成脱敏证据，但设置仍需要可用的目标项目。</span>
+      <span data-lang="en">Target project state: {{ support_target_status_en }}; the preferred bundle/fallback report commands can produce redacted evidence, but setup still needs a usable target project.</span>
+    </span>
+  </div>
+  <div class="agent-readiness-meta" data-testid="tools-support-public-materials">
+    <strong>
+      <span data-lang="zh">公开 issue 只粘贴（优先支持包）</span>
+      <span data-lang="en">Paste publicly only (bundle first)</span>
+    </strong>
+    {% for item in support_public_paste_zh %}
+    <span><span data-lang="zh">{{ item }}</span><span data-lang="en">{{ support_public_paste_en[loop.index0] }}</span></span>
+    {% endfor %}
+  </div>
+  <div class="agent-readiness-meta" data-testid="tools-support-local-only">
+    <strong>
+      <span data-lang="zh">仅限本地使用</span>
+      <span data-lang="en">Keep local only</span>
+    </strong>
+    {% for item in support_local_only_zh %}
+    <span><span data-lang="zh">{{ item }}</span><span data-lang="en">{{ support_local_only_en[loop.index0] }}</span></span>
+    {% endfor %}
+  </div>
+  <div class="agent-readiness-meta" data-testid="tools-support-commands">
+    <strong>
+      {% if support_guidance.target_project_report_only %}
+      <span data-lang="zh">运行优先支持包/兜底报告/身份命令；设置目标未就绪</span>
+      <span data-lang="en">Run preferred bundle/fallback report/identity commands; setup target not ready</span>
+      {% elif support_guidance.command_fields_executable %}
+      <span data-lang="zh">在本地运行；只粘贴生成的输出</span>
+      <span data-lang="en">Run locally; paste generated outputs only</span>
+      {% else %}
+      <span data-lang="zh">运行已就绪命令；优先支持包/兜底报告命令仅预览</span>
+      <span data-lang="en">Run ready commands; preview preferred bundle/fallback report commands only</span>
+      {% endif %}
+    </strong>
+    <span>
+      <span data-lang="zh">命令行支持入口</span>
+      <span data-lang="en">CLI support entry</span>:
+      <code>loopora support</code>
+    </span>
+    <span>
+      {% if support_guidance.command_fields_executable %}
+      <span data-lang="zh">优先公开 issue 支持包命令</span>
+      <span data-lang="en">Preferred public issue support bundle command</span>:
+      {% else %}
+      <span data-lang="zh">优先公开 issue 支持包命令形状</span>
+      <span data-lang="en">Preferred public issue support bundle command shape</span>:
+      {% endif %}
+      <code>{{ support_guidance.commands.public_issue_bundle }}</code>
+    </span>
+    <span>
+      {% if support_guidance.command_fields_executable %}
+      <span data-lang="zh">兜底脱敏就绪报告命令（被要求时）</span>
+      <span data-lang="en">Fallback redacted readiness report command (when requested)</span>:
+      {% else %}
+      <span data-lang="zh">兜底脱敏就绪报告命令形状（被要求时）</span>
+      <span data-lang="en">Fallback redacted readiness report command shape (when requested)</span>:
+      {% endif %}
+      <code>{{ support_guidance.commands.public_doctor }}</code>
+    </span>
+    <span>
+      <span data-lang="zh">紧凑版本/源码身份命令</span>
+      <span data-lang="en">Compact version/source identity command</span>:
+      <code>{{ support_guidance.commands.version }}</code>
+    </span>
+    <span>
+      <span data-lang="zh">结构化版本/源码身份命令</span>
+      <span data-lang="en">Structured version/source identity command</span>:
+      <code>{{ support_guidance.commands.version_json }}</code>
+    </span>
+  </div>
+  <div class="agent-readiness-actions" data-testid="tools-support-actions">
+    <button class="agent-readiness-copy-button" type="button" data-support-copy-public-report="true" {% if support_guidance.target_project_required %}disabled aria-disabled="true"{% endif %} data-testid="tools-support-copy-public-report">
+      {% if support_guidance.target_project_required %}
+      <span data-lang="zh">选择目标后复制公开 issue 支持包</span>
+      <span data-lang="en">Choose target before copying public issue bundle</span>
+      {% else %}
+      <span data-lang="zh">复制公开 issue 支持包</span>
+      <span data-lang="en">Copy public issue bundle</span>
+      {% endif %}
+    </button>
+    <button class="agent-readiness-copy-button" type="button" data-support-next-action-kind="run_public_issue_bundle" data-support-command-copy="{{ support_guidance.commands.public_issue_bundle }}" data-support-command-requires-target="{{ 'true' if not support_guidance.command_fields_executable else 'false' }}" data-support-command-ready="{{ 'true' if support_guidance.command_fields_executable else 'false' }}" {% if not support_guidance.command_fields_executable %}disabled aria-disabled="true"{% endif %} data-testid="tools-support-copy-public-issue-bundle-command">
+      {% if support_guidance.command_fields_executable %}
+      <span data-lang="zh">复制优先支持包命令</span>
+      <span data-lang="en">Copy preferred bundle command</span>
+      {% else %}
+      <span data-lang="zh">选择目标后复制优先支持包命令</span>
+      <span data-lang="en">Choose target before copying preferred bundle command</span>
+      {% endif %}
+    </button>
+    <button class="agent-readiness-copy-button" type="button" data-support-next-action-kind="run_public_doctor_report" data-support-command-copy="{{ support_guidance.commands.public_doctor }}" data-support-command-requires-target="{{ 'true' if not support_guidance.command_fields_executable else 'false' }}" data-support-command-ready="{{ 'true' if support_guidance.command_fields_executable else 'false' }}" data-support-allows-nonzero-exit="true" {% if not support_guidance.command_fields_executable %}disabled aria-disabled="true"{% endif %} data-testid="tools-support-copy-public-report-command">
+      {% if support_guidance.command_fields_executable %}
+      <span data-lang="zh">复制兜底报告命令</span>
+      <span data-lang="en">Copy fallback report command</span>
+      {% else %}
+      <span data-lang="zh">选择目标后复制兜底报告命令</span>
+      <span data-lang="en">Choose target before copying fallback report command</span>
+      {% endif %}
+    </button>
+    <button class="agent-readiness-copy-button" type="button" data-support-next-action-kind="run_version_identity" data-support-command-copy="{{ support_guidance.commands.version }}" data-support-command-ready="true" data-testid="tools-support-copy-version">
+      <span data-lang="zh">复制版本/源码命令</span>
+      <span data-lang="en">Copy version/source command</span>
+    </button>
+    <button class="agent-readiness-copy-button" type="button" data-support-next-action-kind="run_version_identity" data-support-command-copy="{{ support_guidance.commands.version_json }}" data-support-command-ready="true" data-testid="tools-support-copy-version-json">
+      <span data-lang="zh">复制结构化版本命令</span>
+      <span data-lang="en">Copy structured version command</span>
+    </button>
+  </div>
+  <div class="field-status" id="tools-support-status" data-testid="tools-support-status" hidden></div>
+  <div class="agent-readiness-public-report" data-support-manual-copy data-support-public-report-manual-copy data-testid="tools-support-public-report-manual-copy" hidden></div>
+  <div class="agent-readiness-meta" data-testid="tools-support-routes">
+    {% for action in support_guidance.next_actions %}
+    {% if action.route_kind == "bug_report" %}
+    <span data-support-next-action-kind="{{ action.kind }}" data-support-route-kind="{{ action.route_kind }}"><span data-lang="zh">可复现缺陷或就绪阻塞</span><span data-lang="en">Reproducible defects or readiness blockers</span>: <a href="{{ action.url }}" target="_blank" rel="noreferrer">{{ support_guidance.issue_routes[0].destination }}</a></span>
+    {% elif action.route_kind == "feature_request" %}
+    <span data-support-next-action-kind="{{ action.kind }}" data-support-route-kind="{{ action.route_kind }}"><span data-lang="zh">新的用户可见行为</span><span data-lang="en">New user-visible behavior</span>: <a href="{{ action.url }}" target="_blank" rel="noreferrer">{{ support_guidance.issue_routes[1].destination }}</a></span>
+    {% elif action.route_kind == "usage_or_setup" %}
+    <span data-support-next-action-kind="{{ action.kind }}" data-support-route-kind="{{ action.route_kind }}"><span data-lang="zh">使用或设置问题</span><span data-lang="en">Usage or setup questions</span>: <a href="{{ action.url }}" target="_blank" rel="noreferrer">{{ support_guidance.docs.support }}</a></span>
+    {% elif action.route_kind == "security" %}
+    <span data-support-next-action-kind="{{ action.kind }}" data-support-route-kind="{{ action.route_kind }}" data-support-public-fallback="{{ action.public_fallback }}">
+      <span data-lang="zh">漏洞或敏感细节</span><span data-lang="en">Vulnerabilities or sensitive details</span>:
+      <a href="{{ action.policy_url }}" target="_blank" rel="noreferrer">{{ support_guidance.docs.security }}</a>
+      <span data-lang="zh">；可用时使用</span><span data-lang="en">; use</span>
+      <a href="{{ action.private_report_url }}" target="_blank" rel="noreferrer"><span data-lang="zh">私密报告</span><span data-lang="en">private reporting</span></a>
+      <span data-lang="zh">，否则公开 issue 只能请求私密渠道。</span><span data-lang="en">when available; otherwise public issues may only ask for a private channel.</span>
+    </span>
+    {% endif %}
+    {% endfor %}
+  </div>
+  <ol class="agent-readiness-steps" data-testid="tools-support-redaction">
+    {% for item in support_redaction_zh %}
+    <li><span data-lang="zh">{{ item }}</span><span data-lang="en">{{ support_redaction_en[loop.index0] }}</span></li>
+    {% endfor %}
+  </ol>
+</details>

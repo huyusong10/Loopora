@@ -10,9 +10,7 @@ def _option_ids(options: list[dict]) -> list[str]:
 
 
 def _visible_option_ids(output: dict, *, has_bundle: bool = False, prefers_chinese: bool = False) -> list[str]:
-    return _option_ids(
-        visible_alignment_decision_options(output, has_bundle=has_bundle, prefers_chinese=prefers_chinese)
-    )
+    return _option_ids(visible_alignment_decision_options(output, has_bundle=has_bundle, prefers_chinese=prefers_chinese))
 
 
 def test_alignment_visible_decision_options_require_boolean_needs_user_input() -> None:
@@ -27,21 +25,31 @@ def test_alignment_visible_decision_options_require_boolean_needs_user_input() -
 
 
 def test_alignment_visible_decision_options_fall_back_when_custom_choice_set_is_incomplete() -> None:
-    assert _visible_option_ids(
-        clarifying_output(custom_choice("only_choice", recommended=True))
-    ) == DEFAULT_CLARIFYING_IDS
-    assert _visible_option_ids(
-        clarifying_output(custom_choice("slow", recommended=None), custom_choice("fast", recommended=None))
-    ) == DEFAULT_CLARIFYING_IDS
+    assert _visible_option_ids(clarifying_output(custom_choice("only_choice", recommended=True))) == DEFAULT_CLARIFYING_IDS
+    assert _visible_option_ids(clarifying_output(custom_choice("slow", recommended=None), custom_choice("fast", recommended=None))) == DEFAULT_CLARIFYING_IDS
+
+
+def test_alignment_visible_decision_options_fall_back_when_multiple_choices_are_recommended() -> None:
+    assert (
+        _visible_option_ids(
+            clarifying_output(
+                custom_choice("evidence_path", recommended=True),
+                custom_choice("speed_path", recommended=True),
+            )
+        )
+        == DEFAULT_CLARIFYING_IDS
+    )
 
 
 def test_alignment_visible_decision_options_fall_back_when_custom_choice_fields_are_invalid() -> None:
-    assert _visible_option_ids(
-        clarifying_output(custom_choice("evidence_path", description=None), custom_choice("speed_path", recommended=False))
-    ) == DEFAULT_CLARIFYING_IDS
-    assert _visible_option_ids(
-        clarifying_output(custom_choice("evidence_path", recommended="true"), custom_choice("speed_path", recommended="false"))
-    ) == DEFAULT_CLARIFYING_IDS
+    assert (
+        _visible_option_ids(clarifying_output(custom_choice("evidence_path", description=None), custom_choice("speed_path", recommended=False)))
+        == DEFAULT_CLARIFYING_IDS
+    )
+    assert (
+        _visible_option_ids(clarifying_output(custom_choice("evidence_path", recommended="true"), custom_choice("speed_path", recommended="false")))
+        == DEFAULT_CLARIFYING_IDS
+    )
 
 
 def test_alignment_visible_decision_options_accept_complete_custom_choice_set() -> None:

@@ -193,7 +193,32 @@ def test_alignment_service_blocks_global_persona_readiness_evidence(
 
 # Merged from test_alignment_service_workdir_fact_grounding.py
 
+from agent_adapter_test_common import _wait_for_alignment_status
 from alignment_test_support import _wait_for_status
+
+
+class _StaticAlignmentService:
+    def __init__(self, status: str) -> None:
+        self.status = status
+
+    def get_alignment_session(self, _session_id: str) -> dict:
+        return {"status": self.status}
+
+
+def test_alignment_wait_helpers_accept_expected_status_on_deadline_boundary() -> None:
+    service = _StaticAlignmentService("ready")
+
+    assert _wait_for_status(service, "align_1", "ready", timeout=0)["status"] == "ready"
+    assert _wait_for_alignment_status(service, "align_1", "ready", timeout=0)["status"] == "ready"
+
+
+def test_alignment_wait_helpers_report_last_observed_unexpected_status() -> None:
+    service = _StaticAlignmentService("working")
+
+    with pytest.raises(AssertionError, match="working"):
+        _wait_for_status(service, "align_1", "ready", timeout=0)
+    with pytest.raises(AssertionError, match="working"):
+        _wait_for_alignment_status(service, "align_1", "ready", timeout=0)
 
 
 def test_alignment_service_blocks_invented_workdir_facts_readiness_evidence(

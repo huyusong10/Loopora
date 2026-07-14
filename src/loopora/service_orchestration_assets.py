@@ -33,6 +33,29 @@ class ServiceOrchestrationAssetMixin:
         self._reconcile_local_orphaned_runs()
         return self._asset_call(self.asset_catalog.get_orchestration, orchestration_id)
 
+    def preview_orchestration_delete(self, orchestration_id: str) -> dict:
+        orchestration = self.get_orchestration(orchestration_id)
+        blockers = self._orchestration_delete_blockers(orchestration_id)
+        referencing_loop_ids = _loop_ids_referencing_orchestration(self.repository, orchestration_id)
+        return {
+            "status": "dry_run",
+            "dry_run": True,
+            "delete_allowed": not blockers,
+            "id": orchestration["id"],
+            "name": orchestration.get("name", ""),
+            "would_delete": {
+                "orchestration": orchestration["id"],
+                "referencing_loop_count": len(referencing_loop_ids),
+                "referencing_loop_ids": referencing_loop_ids,
+            },
+            "blockers": blockers,
+            "does_not_delete": [
+                "saved_loop_snapshots",
+                "target_project_workdirs",
+                "external_provider_history",
+            ],
+        }
+
     def create_orchestration(
         self,
         *,
@@ -125,12 +148,8 @@ class ServiceOrchestrationAssetMixin:
         return orchestration
 
     def delete_orchestration(self, orchestration_id: str, *, allow_bundle_owned: bool = False) -> dict:
-        if not allow_bundle_owned and hasattr(self, "_bundle_record_for_orchestration_id"):
-            bundle = self._bundle_record_for_orchestration_id(orchestration_id)
-            if bundle:
-                raise LooporaConflictError(
-                    f"orchestration {orchestration_id} is managed by bundle {bundle['id']}; delete the bundle instead"
-                )
+        if not allow_bundle_owned:
+            self._assert_orchestration_delete_allowed(orchestration_id)
         result = self._asset_call(self.asset_catalog.delete_orchestration, orchestration_id)
         log_event(
             logger,
@@ -140,6 +159,30 @@ class ServiceOrchestrationAssetMixin:
             orchestration_id=orchestration_id,
         )
         return result
+
+    def _orchestration_delete_blockers(self, orchestration_id: str) -> list[dict]:
+        blockers: list[dict] = []
+        if hasattr(self, "_bundle_record_for_orchestration_id"):
+            bundle = self._bundle_record_for_orchestration_id(orchestration_id)
+            if bundle:
+                blockers.append({"kind": "bundle_owned", "bundle_id": bundle["id"]})
+        referencing_loop_ids = _loop_ids_referencing_orchestration(self.repository, orchestration_id)
+        if referencing_loop_ids:
+            blockers.append({"kind": "referenced_by_loops", "loop_ids": referencing_loop_ids})
+        return blockers
+
+    def _assert_orchestration_delete_allowed(self, orchestration_id: str) -> None:
+        if hasattr(self, "_bundle_record_for_orchestration_id"):
+            bundle = self._bundle_record_for_orchestration_id(orchestration_id)
+            if bundle:
+                raise LooporaConflictError(
+                    f"orchestration {orchestration_id} is managed by bundle {bundle['id']}; delete the bundle instead"
+                )
+        referencing_loop_ids = _loop_ids_referencing_orchestration(self.repository, orchestration_id)
+        if referencing_loop_ids:
+            raise LooporaConflictError(
+                f"orchestration {orchestration_id} is referenced by loops: {', '.join(referencing_loop_ids)}"
+            )
 
 
 def _pop_required(raw_request: dict[str, Any], field_name: str) -> Any:
@@ -200,3 +243,14 @@ def _strategy_source_counts(orchestration: dict) -> tuple[int, int]:
     if not strategy_source:
         return 0, 0
     return len(list(strategy_source.get("roles") or [])), len(list(strategy_source.get("steps") or []))
+
+
+def _loop_ids_referencing_orchestration(repository, orchestration_id: str) -> list[str]:
+    target_id = str(orchestration_id or "").strip()
+    if not target_id:
+        return []
+    return sorted(
+        str(loop.get("id") or "").strip()
+        for loop in repository.list_loops()
+        if str(loop.get("orchestration_id") or "").strip() == target_id and str(loop.get("id") or "").strip()
+    )

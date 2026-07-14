@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from agent_adapter_test_common import _assert_loopora_serve_command
 from agent_native_cli_test_support import (
     AgentNativeStepSubmitRequest,
     CliRunner,
@@ -140,6 +141,7 @@ def test_cli_agent_submit_json_separates_active_step_lifecycle_from_task_proof(m
         payload, kind="agent_submit", summary_key="agent_submit_summary", status="active"
     )
     assert summary["run_status"] == "awaiting_agent"
+    _assert_relative_run_url_summary(summary, run_id="run_active", workdir=workdir)
     assert summary["complete"] is False
     assert summary["submitted_step"]["step_id"] == "builder_step"
     assert summary["submitted_step"]["coverage_result_scope"] == "submitted_role_raw_classifications_not_aggregated_coverage"
@@ -190,6 +192,7 @@ def test_cli_agent_submit_json_separates_active_step_lifecycle_from_task_proof(m
         summary_key="agent_submit_summary",
         status="active",
     )
+    _assert_relative_run_url_summary(compact_summary, run_id="run_active", workdir=workdir)
     assert compact_summary["submitted_step"]["step_id"] == "builder_step"
     assert compact_summary["submitted_step"]["coverage_result_scope"] == "submitted_role_raw_classifications_not_aggregated_coverage"
     assert compact_summary["submitted_step"]["coverage_result_counts"] == {"covered": 1}
@@ -200,7 +203,16 @@ def test_cli_agent_submit_json_separates_active_step_lifecycle_from_task_proof(m
     compact_summary_keys = list(compact_summary)
     assert compact_summary_keys.index("agent_work_panel") < compact_summary_keys.index("agent_surface")
     assert compact_payload["technical_handoff"]["next_submit_command"] == "loopora agent codex submit --run-id run_active"
+    assert compact_payload["technical_handoff"]["run_url_status"] == "relative_path_web_not_started"
     assert "next_role_dispatch_message" not in compact_payload["technical_handoff"]
+
+def _assert_relative_run_url_summary(summary: dict, *, run_id: str, workdir: Path) -> None:
+    assert summary["run_url"] == f"/runs/{run_id}"
+    assert summary["run_url_status"] == "relative_path_web_not_started"
+    _assert_loopora_serve_command(
+        summary["run_url_web_start_command"],
+        workdir=workdir,
+    )
 
 
 def test_cli_agent_submit_compact_json_bounds_next_step_and_surface_handoff(monkeypatch, tmp_path: Path) -> None:
@@ -353,7 +365,7 @@ def test_cli_agent_submit_compact_json_bounds_next_step_and_surface_handoff(monk
         summary_key="agent_submit_summary",
         status="active",
     )
-    assert len(result.stdout.encode("utf-8")) < 18_000
+    assert len(result.stdout.encode("utf-8")) < 11_000
     assert long_note_tail not in result.stdout
     assert long_target_tail not in result.stdout
     assert summary["submitted_step"]["coverage_result_counts"] == {"covered": 24}
@@ -361,15 +373,21 @@ def test_cli_agent_submit_compact_json_bounds_next_step_and_surface_handoff(monk
     assert summary["submitted_step"]["coverage_results_omitted"] == 21
     assert summary["next_step"]["coverage_target_ids"] == coverage_target_ids
     assert "coverage_targets" not in summary["next_step"]
-    assert len(summary["next_step"]["coverage_targets_preview"]) == 3
-    assert summary["next_step"]["coverage_targets_omitted"] == 21
-    assert len(summary["next_step"]["top_coverage_gaps"]) == 3
-    assert len(summary["next_step"]["known_evidence_refs"]) == 3
+    assert "coverage_targets_preview" not in summary["next_step"]
+    assert "top_coverage_gaps" not in summary["next_step"]
+    assert "known_evidence_refs" not in summary["next_step"]
+    assert len(summary["agent_work_panel"]["evidence_focus"]) <= 180
+    assert summary["agent_work_panel"]["top_gaps"] == [
+        {"target_id": target_id, "status": "missing"} for target_id in coverage_target_ids[:3]
+    ]
     assert "packaging" not in summary["agent_surface"]
     assert summary["agent_surface"]["entry_kind"] == "project_skill"
     assert summary["agent_surface"]["capability_contract"]["role_dispatch"] == "host_native"
     assert payload["technical_handoff"]["next_submit_command"] == (
         "loopora agent codex submit --run-id run_bounded --step-id contract_inspection_step"
+    )
+    assert payload["technical_handoff"]["next_result_file"].endswith(
+        "run_bounded__contract_inspection_step.result.json"
     )
     assert "next_role_dispatch_message" not in payload["technical_handoff"]
     _assert_role_dispatch_message(

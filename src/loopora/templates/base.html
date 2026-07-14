@@ -8,34 +8,46 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>{% block title %}Loopora{% endblock %}</title>
-  <link rel="icon" href="/logo/logo.svg" sizes="any" type="image/svg+xml" />
-  <link rel="shortcut icon" href="/logo/logo.svg" type="image/svg+xml" />
+  <link rel="icon" href="{{ logo_asset_url('logo.svg') }}" sizes="any" type="image/svg+xml" />
+  <link rel="shortcut icon" href="{{ logo_asset_url('logo.svg') }}" type="image/svg+xml" />
   {% include "_display_preferences_bootstrap.html" %}
-  <link rel="stylesheet" href="{{ static_asset_url('app.css') }}" />
+  {% include "_global_stylesheets.html" %}
   {% block styles %}{% endblock %}
   <script src="{{ static_asset_url('app.js') }}" defer></script>
 </head>
-<body>
+<body{% if demo_playground_workdir %} data-demo-playground-workdir="{{ demo_playground_workdir }}"{% endif %}>
   <div class="page-shell">
     <nav class="top-nav" data-testid="top-nav">
-      <a class="top-nav-brand" href="/" aria-label="{{ 'Loopora 首页' if page_locale == 'zh' else 'Loopora home' }}" data-testid="nav-home-brand">
-        <img class="top-nav-brand-lockup" src="/logo/logo-with-text-horizontal.svg" alt="" aria-hidden="true" data-testid="top-nav-brand-lockup" />
+      <a class="top-nav-brand" href="{{ nav_home_href }}" aria-label="{{ 'Loopora 首页' if page_locale == 'zh' else 'Loopora home' }}" data-testid="nav-home-brand" data-workdir-context-link="workdir">
+        <span class="top-nav-brand-lockup" aria-hidden="true" data-testid="top-nav-brand-lockup">
+          <img class="brand-lockup-image brand-lockup-image--light" src="{{ logo_asset_url('logo-with-text-horizontal.svg') }}" alt="" />
+          <img class="brand-lockup-image brand-lockup-image--dark" src="{{ logo_asset_url('logo-with-text-horizontal-light.svg') }}" alt="" />
+        </span>
       </a>
       <div class="top-nav-links">
-        <a class="top-nav-link {% if request.url.path == '/' or request.url.path.startswith('/runs/') or (request.url.path.startswith('/loops/') and not request.url.path.startswith('/loops/new')) %}active{% endif %}" href="/" data-testid="nav-loops-link">
+        <a class="top-nav-link {% if request.url.path == '/' or request.url.path.startswith('/runs/') or (request.url.path.startswith('/loops/') and not request.url.path.startswith('/loops/new')) %}active{% endif %}" href="{{ nav_home_href }}" data-testid="nav-loops-link" data-workdir-context-link="workdir">
           <span data-lang="zh">Loop</span>
           <span data-lang="en">Loops</span>
         </a>
-        <a class="top-nav-link {% if request.url.path == '/loops/new' or request.url.path.startswith('/loops/new/') %}active{% endif %}" href="/loops/new/bundle" data-testid="nav-compose-link">
+        <a class="top-nav-link {% if request.url.path in ['/fit-guide', '/tutorial'] %}active{% endif %}" href="{{ nav_tutorial_href }}" data-testid="nav-tutorial-link" data-workdir-context-link="workdir">
+          <span data-lang="zh">适用性判断</span>
+          <span data-lang="en">Fit Guide</span>
+        </a>
+        <a class="top-nav-link {% if request.url.path == '/loops/new' or request.url.path.startswith('/loops/new/') %}active{% endif %}" href="{{ nav_compose_href }}" data-testid="nav-compose-link" data-workdir-context-link="workdir">
           <span data-lang="zh">编排</span>
           <span data-lang="en">Compose</span>
         </a>
+        <a class="top-nav-link {% if request.url.path in ['/same-agent', '/tools'] %}active{% endif %}" href="{{ nav_tools_href }}" data-testid="nav-tools-link" data-workdir-context-link="workdir">
+          <span data-lang="zh">同一 Agent 设置</span>
+          <span data-lang="en">Same-Agent Setup</span>
+        </a>
         <div class="nav-preferences nav-dropdown" data-nav-menu data-testid="nav-resource-menu">
-          <button
+          <a
             class="top-nav-link nav-preferences-toggle {% if request.url.path.startswith('/roles') or request.url.path.startswith('/orchestrations') or request.url.path.startswith('/bundles') %}active{% endif %}"
-            type="button"
+            href="{{ nav_bundles_href }}"
             id="nav-resource-toggle"
             data-testid="nav-resource-toggle"
+            data-workdir-context-link="workdir"
             data-toggle-nav-menu
             aria-haspopup="true"
             aria-expanded="false"
@@ -44,7 +56,7 @@
             <span data-lang="zh">构件</span>
             <span data-lang="en">Assets</span>
             <span class="nav-menu-caret" aria-hidden="true"></span>
-          </button>
+          </a>
           <div
             class="nav-preferences-panel nav-dropdown-panel"
             id="nav-resource-panel"
@@ -58,15 +70,15 @@
                 <p><span data-lang="zh">维护方案文件、角色和流程，供 Loop 编排时复用。</span><span data-lang="en">Maintain plan files, roles, and flows reused by Loops.</span></p>
               </div>
               <div class="nav-menu-list">
-                <a class="nav-menu-link {% if request.url.path.startswith('/bundles') %}active{% endif %}" href="/bundles" data-testid="nav-menu-bundles-link">
+                <a class="nav-menu-link {% if request.url.path.startswith('/bundles') %}active{% endif %}" href="{{ nav_bundles_href }}" data-testid="nav-menu-bundles-link" data-workdir-context-link="workdir">
                   <span data-lang="zh">方案文件</span>
                   <span data-lang="en">Plan files</span>
                 </a>
-                <a class="nav-menu-link {% if request.url.path.startswith('/roles') %}active{% endif %}" href="/roles" data-testid="nav-menu-roles-link">
+                <a class="nav-menu-link {% if request.url.path.startswith('/roles') %}active{% endif %}" href="{{ nav_roles_href }}" data-testid="nav-menu-roles-link" data-workdir-context-link="workdir">
                   <span data-lang="zh">角色定义</span>
                   <span data-lang="en">Role definitions</span>
                 </a>
-                <a class="nav-menu-link {% if request.url.path.startswith('/orchestrations') %}active{% endif %}" href="/orchestrations" data-testid="nav-menu-orchestrations-link">
+                <a class="nav-menu-link {% if request.url.path.startswith('/orchestrations') %}active{% endif %}" href="{{ nav_orchestrations_href }}" data-testid="nav-menu-orchestrations-link" data-workdir-context-link="workdir">
                   <span data-lang="zh">流程编排</span>
                   <span data-lang="en">Flows</span>
                 </a>
@@ -74,13 +86,9 @@
             </section>
           </div>
         </div>
-        <a class="top-nav-link {% if request.url.path == '/tools' %}active{% endif %}" href="/tools" data-testid="nav-tools-link">
-          <span data-lang="zh">工具</span>
-          <span data-lang="en">Tools</span>
-        </a>
-        <a class="top-nav-link {% if request.url.path == '/tutorial' %}active{% endif %}" href="/tutorial" data-testid="nav-tutorial-link">
-          <span data-lang="zh">教程</span>
-          <span data-lang="en">Tutorial</span>
+        <a class="top-nav-link {% if request.url.path == '/support' %}active{% endif %}" href="{{ nav_support_href }}" data-testid="nav-support-link" data-workdir-context-link="workdir">
+          <span data-lang="zh">支持</span>
+          <span data-lang="en">Support</span>
         </a>
       </div>
       <div class="top-nav-trailing">
@@ -127,19 +135,219 @@
         </div>
       </div>
     </nav>
+    {% if demo_mode %}
+    <div class="demo-mode-banner" role="note" data-testid="demo-mode-banner">
+      <div class="demo-mode-banner-copy">
+        <strong><span data-lang="zh">隔离 Demo</span><span data-lang="en">Isolated demo</span></strong>
+        <span data-lang="zh">证据样例与创建沙盒都使用模拟 executor，仅用于体验产品；Ctrl-C 后全部删除，不代表真实任务证明。</span>
+        <span data-lang="en">The evidence sample and creation playground both use a simulated executor for product evaluation only. Ctrl-C deletes all demo data; this is not real task proof.</span>
+      </div>
+      {% if demo_evidence_href or demo_playground_href or demo_real_task_command %}
+      <nav class="demo-mode-banner-actions" aria-label="{{ 'Demo 体验路径' if page_locale == 'zh' else 'Demo evaluation paths' }}">
+        {% if demo_evidence_href %}
+        <a href="{{ demo_evidence_href }}" data-testid="demo-evidence-link">
+          <span data-lang="zh">查看证据样例</span><span data-lang="en">View evidence sample</span>
+        </a>
+        {% endif %}
+        {% if demo_playground_href %}
+        <a href="{{ demo_playground_href }}" data-testid="demo-playground-link">
+          <span data-lang="zh">试着创建 Loop</span><span data-lang="en">Try creating a Loop</span>
+        </a>
+        {% endif %}
+        {% if demo_real_task_command %}
+        <div class="demo-real-task-handoff" data-recovery-panel data-testid="demo-real-task-handoff">
+          <button
+            class="demo-real-task-copy"
+            type="button"
+            data-recovery-command-copy
+            data-copy-value="{{ demo_real_task_command }}"
+            data-copy-success-zh="真实任务命令已复制。"
+            data-copy-success-en="Real-task command copied."
+            data-copy-failure-zh="浏览器未允许自动复制；请手动复制下面的真实任务命令。"
+            data-copy-failure-en="The browser blocked automatic copy; copy the real-task command below manually."
+            data-copy-manual-label-zh="手动复制真实任务命令"
+            data-copy-manual-label-en="Manual real-task command copy"
+            data-testid="demo-real-task-copy"
+          >
+            <span data-lang="zh">复制真实任务命令</span><span data-lang="en">Copy real-task command</span>
+          </button>
+          <span class="field-status manual-recovery-status" data-recovery-copy-status role="status" hidden></span>
+          <div class="manual-recovery-command-copy" data-recovery-command-manual-copy hidden></div>
+        </div>
+        {% endif %}
+      </nav>
+      {% endif %}
+    </div>
+    {% endif %}
+    <div
+      class="global-project-scope-bar"
+      data-testid="global-project-scope"
+      data-project-scope-root
+      data-current-workdir="{{ workdir_context }}"
+      data-project-scope-explicit-all="{{ 'true' if project_scope_explicit_all else 'false' }}"
+      data-project-scope-requires-all-marker="{{ 'true' if project_scope_requires_all_marker else 'false' }}"
+    >
+      <div class="global-workdir-context" data-testid="global-workdir-context" {% if not workdir_context %}hidden{% endif %}>
+        <span>
+          <span data-lang="zh">目标项目</span>
+          <span data-lang="en">Target project</span>
+        </span>
+        <code title="{{ workdir_context }}">{{ workdir_context }}</code>
+      </div>
+      <div class="global-project-all-state" data-project-scope-all-state {% if workdir_context %}hidden{% endif %}>
+        <span><span data-lang="zh">项目视图</span><span data-lang="en">Project view</span></span>
+        <strong><span data-lang="zh">全部项目</span><span data-lang="en">All projects</span></strong>
+      </div>
+      {% if project_scope_feedback %}
+      <p
+        class="global-project-scope-feedback{% if project_scope_feedback == 'target_unavailable' %} is-error{% else %} is-success{% endif %}"
+        role="status"
+        data-return-feedback-param="project_scope_feedback"
+        data-testid="global-project-scope-feedback"
+      >
+        {% if project_scope_feedback == "selected" %}
+        <span data-lang="zh">已切换目标项目。</span><span data-lang="en">Target project switched.</span>
+        {% elif project_scope_feedback == "all" %}
+        <span data-lang="zh">正在查看全部项目。</span><span data-lang="en">Showing all projects.</span>
+        {% elif project_scope_feedback == "target_unavailable" %}
+        <span data-lang="zh">该路径不是可用的项目目录，已切换到全部项目。</span><span data-lang="en">That path is not an available project directory. Showing all projects instead.</span>
+        {% endif %}
+      </p>
+      {% endif %}
+      {% if not demo_mode %}
+      <details class="global-project-switcher" data-project-scope-switcher>
+        <summary class="global-project-switcher-toggle" data-testid="global-project-scope-toggle">
+          <span data-lang="zh">切换项目</span>
+          <span data-lang="en">Switch project</span>
+          <span class="global-project-switcher-caret" aria-hidden="true"></span>
+        </summary>
+        <div
+          class="global-project-switcher-panel"
+          data-testid="global-project-scope-panel"
+          aria-label="{{ '切换目标项目' if page_locale == 'zh' else 'Switch target project' }}"
+        >
+          <div class="global-project-switcher-head">
+            <strong><span data-lang="zh">选择工作范围</span><span data-lang="en">Choose work scope</span></strong>
+            <p>
+              {% if project_scope_stays_on_page %}
+              <span data-lang="zh">切换后刷新当前设置页，并使用新的目标项目。</span><span data-lang="en">Switching refreshes this setup page with the new target project.</span>
+              {% else %}
+              <span data-lang="zh">切换后回到首页，避免在错误项目中继续深层操作。</span><span data-lang="en">Switching returns to Home so deep actions do not continue in the wrong project.</span>
+              {% endif %}
+            </p>
+          </div>
+          <div class="global-project-scope-options" data-testid="global-project-scope-options">
+            <form action="/project-scope" method="post" data-global-project-scope-form>
+              <input type="hidden" name="return_to" value="{{ project_scope_return_to }}" />
+              <button
+                class="global-project-scope-option"
+                type="submit"
+                name="workdir"
+                value=""
+                {% if not workdir_context %}aria-current="true"{% endif %}
+                data-project-scope-option=""
+                data-testid="global-project-scope-all"
+              >
+                <strong><span data-lang="zh">全部项目</span><span data-lang="en">All projects</span></strong>
+                <span><span data-lang="zh">跨项目查看现有工作</span><span data-lang="en">Review existing work across projects</span></span>
+              </button>
+            </form>
+            {% for project in project_scope_recent_items %}
+            <form action="/project-scope" method="post" data-global-project-scope-form>
+              <input type="hidden" name="return_to" value="{{ project_scope_return_to }}" />
+              <button
+                class="global-project-scope-option"
+                type="submit"
+                name="workdir"
+                value="{{ project.workdir }}"
+                data-project-scope-option="{{ project.workdir }}"
+              >
+                <strong>{{ project.label }}</strong>
+                <code title="{{ project.workdir }}">{{ project.workdir }}</code>
+              </button>
+            </form>
+            {% endfor %}
+          </div>
+          <form class="global-project-custom-form" action="/project-scope" method="post" data-global-project-scope-form data-testid="global-project-scope-form">
+            <input type="hidden" name="return_to" value="{{ project_scope_return_to }}" />
+            <label for="global-project-scope-workdir">
+              <span data-lang="zh">其他项目路径</span>
+              <span data-lang="en">Another project path</span>
+            </label>
+            <div class="global-project-custom-fields">
+              <input
+                id="global-project-scope-workdir"
+                name="workdir"
+                type="text"
+                value="{{ workdir_context }}"
+                required
+                autocomplete="off"
+                spellcheck="false"
+                placeholder="/absolute/path/to/project"
+                data-testid="global-project-scope-workdir"
+              />
+              {% if project_scope_native_picker_enabled %}
+              <button class="ghost-button" type="button" data-project-scope-picker data-testid="global-project-scope-browse">
+                <span data-lang="zh">浏览</span><span data-lang="en">Browse</span>
+              </button>
+              {% endif %}
+              <button class="primary-button" type="submit" data-testid="global-project-scope-submit">
+                <span data-lang="zh">打开项目</span><span data-lang="en">Open project</span>
+              </button>
+            </div>
+          </form>
+        </div>
+      </details>
+      {% endif %}
+    </div>
     <main class="site-main {% block main_class %}{% endblock %}">
       {% block content %}{% endblock %}
     </main>
   </div>
+  <div
+    class="app-feedback"
+    id="app-feedback"
+    data-testid="app-feedback"
+    role="status"
+    aria-live="polite"
+    aria-atomic="true"
+    hidden
+  ></div>
+  <div
+    class="global-manual-copy"
+    data-global-manual-copy
+    data-testid="global-manual-copy"
+    hidden
+  ></div>
   <div class="confirm-modal" id="confirm-modal" hidden aria-hidden="true">
     <div class="confirm-modal-backdrop" data-close-confirm-modal="1"></div>
-    <div class="confirm-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="confirm-modal-title">
+    <div
+      class="confirm-modal-dialog"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="confirm-modal-title"
+      aria-describedby="confirm-modal-detail confirm-modal-preview confirm-modal-status"
+      tabindex="-1"
+    >
     <div class="confirm-modal-copy">
         <h2 id="confirm-modal-title">
           <span data-lang="zh">要删除这个项目吗？</span>
           <span data-lang="en">Delete this item?</span>
         </h2>
         <p id="confirm-modal-detail"></p>
+        <div
+          class="delete-preview"
+          id="confirm-modal-preview"
+          data-testid="confirm-modal-preview"
+          hidden
+        ></div>
+        <p
+          class="field-status is-error confirm-modal-status"
+          id="confirm-modal-status"
+          data-testid="confirm-modal-status"
+          aria-live="polite"
+          hidden
+        ></p>
       </div>
       <div class="card-actions confirm-modal-actions">
         <button class="ghost-button" type="button" id="confirm-modal-cancel">

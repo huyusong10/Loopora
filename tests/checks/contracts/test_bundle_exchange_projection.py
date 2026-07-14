@@ -1,12 +1,17 @@
 from __future__ import annotations
 
+from http import HTTPStatus
 from pathlib import Path
+from urllib.parse import quote
 
+from fastapi.testclient import TestClient
 import pytest
 
+from loopora.bundles import bundle_to_yaml
 from loopora.executor_fake_payloads import alignment_bundle_yaml
 from loopora.service import LooporaError
 from loopora.service_agent_adapters import AgentBundleCandidateRequest
+from loopora.web import build_app
 
 
 def test_bundle_exchange_list_omits_default_governance_card_projection(service_factory, sample_workdir: Path) -> None:
@@ -50,5 +55,100 @@ def test_web_preview_and_agent_candidate_share_bundle_parse_errors(service_facto
 
     assert result["ready"] is False
     assert result["requires_candidate_repair"] is True
-    assert result["session"]["validation"]["error"].startswith("invalid bundle YAML:")
-    assert str(exc_info.value).startswith("invalid bundle YAML:")
+    assert result["session"]["validation"]["error"] == "invalid bundle YAML: check Plan File YAML syntax"
+    assert str(exc_info.value) == "invalid bundle YAML: check Plan File YAML syntax"
+
+
+def test_bundles_page_scopes_plan_files_and_loop_export_picker_to_target_workdir(
+    service_factory,
+    sample_spec_file: Path,
+    tmp_path: Path,
+) -> None:
+    service = service_factory(scenario="success")
+    current_workdir = tmp_path / "current-project"
+    other_workdir = tmp_path / "other-project"
+    current_workdir.mkdir()
+    other_workdir.mkdir()
+
+    def create_loop(*, name: str, workdir: Path) -> dict:
+        return service.create_loop(
+            name=name,
+            spec_path=sample_spec_file,
+            workdir=workdir,
+            model="gpt-5.4-mini",
+            reasoning_effort="medium",
+            max_iters=2,
+            max_role_retries=1,
+            delta_threshold=0.005,
+            trigger_window=2,
+            regression_window=2,
+            role_models={},
+        )
+
+    other_loop = create_loop(name="Other Project Loop", workdir=other_workdir)
+    other_bundle = service.import_bundle_text(
+        bundle_to_yaml(
+            service.derive_bundle_from_loop(
+                other_loop["id"],
+                name="Other Project Plan",
+                description="Keep scoped Plan File pages from showing cross-project assets.",
+                collaboration_summary="This plan belongs to the other project.",
+            )
+        )
+    )
+    client = TestClient(build_app(service=service))
+    encoded_current_workdir = quote(str(current_workdir.resolve()), safe="")
+    encoded_other_workdir = quote(str(other_workdir.resolve()), safe="")
+
+    foreign_only_response = client.get(f"/bundles?workdir={encoded_current_workdir}")
+
+    assert foreign_only_response.status_code == HTTPStatus.OK
+    assert 'data-testid="bundle-derive-empty-state"' in foreign_only_response.text
+    assert 'data-testid="bundle-derive-form"' not in foreign_only_response.text
+    assert 'id="bundles-empty-state"' in foreign_only_response.text
+    assert f'data-testid="bundle-exchange-item-{other_bundle["id"]}"' not in foreign_only_response.text
+    assert "Other Project Plan" not in foreign_only_response.text
+    assert (
+        f'href="/loops/new?workdir={encoded_current_workdir}" data-testid="bundle-derive-create-loop-link"'
+        in foreign_only_response.text
+    )
+
+    current_loop = create_loop(name="Current Project Loop", workdir=current_workdir)
+    current_bundle = service.import_bundle_text(
+        bundle_to_yaml(
+            service.derive_bundle_from_loop(
+                current_loop["id"],
+                name="Current Project Plan",
+                description="Keep the current project plan visible on scoped Plan File pages.",
+                collaboration_summary="This plan belongs to the current project.",
+            )
+        )
+    )
+    scoped_response = client.get(f"/bundles?workdir={encoded_current_workdir}")
+    global_response = client.get("/bundles")
+
+    assert scoped_response.status_code == HTTPStatus.OK
+    assert 'data-testid="bundle-derive-form"' in scoped_response.text
+    assert f'action="/bundles/derive?workdir={encoded_current_workdir}"' in scoped_response.text
+    derive_form = scoped_response.text[
+        scoped_response.text.index('data-testid="bundle-derive-form"') : scoped_response.text.index(
+            'data-testid="bundle-derive-loop-select"'
+        )
+    ]
+    assert 'data-workdir-context-form="workdir"' in derive_form
+    assert f'value="{current_loop["id"]}"' in scoped_response.text
+    assert "Current Project Loop" in scoped_response.text
+    assert f'value="{other_loop["id"]}"' not in scoped_response.text
+    assert "Other Project Loop" not in scoped_response.text
+    assert f'data-testid="bundle-exchange-item-{current_bundle["id"]}"' in scoped_response.text
+    assert "Current Project Plan" in scoped_response.text
+    assert f'href="/bundles/{current_bundle["id"]}/export?workdir={encoded_current_workdir}" data-workdir-context-link="workdir"' in scoped_response.text
+    assert f'data-testid="bundle-exchange-item-{other_bundle["id"]}"' not in scoped_response.text
+    assert "Other Project Plan" not in scoped_response.text
+    assert global_response.status_code == HTTPStatus.OK
+    assert f'value="{current_loop["id"]}"' in global_response.text
+    assert f'value="{other_loop["id"]}"' in global_response.text
+    assert f'data-testid="bundle-exchange-item-{current_bundle["id"]}"' in global_response.text
+    assert f'data-testid="bundle-exchange-item-{other_bundle["id"]}"' in global_response.text
+    assert f'href="/bundles/{current_bundle["id"]}/export?workdir={encoded_current_workdir}" data-workdir-context-link="workdir"' in global_response.text
+    assert f'href="/bundles/{other_bundle["id"]}/export?workdir={encoded_other_workdir}" data-workdir-context-link="workdir"' in global_response.text

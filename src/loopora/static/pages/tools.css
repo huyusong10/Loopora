@@ -1,0 +1,118 @@
+.tools-page-intro {
+  display: grid;
+  gap: 7px;
+  max-width: 880px;
+}
+
+.tools-page-intro h1 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 2rem;
+  line-height: 1.15;
+}
+
+.tools-page-intro p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.tools-page-intro code {
+  color: var(--ink);
+}
+
+.tools-setup-workbench {
+  padding: 20px 22px;
+}
+
+.tools-setup-workbench > .panel-header {
+  margin-bottom: 14px;
+}
+
+.tools-setup-context-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 18px;
+  padding: 14px 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.tools-setup-context-grid .agent-adapter-target,
+.tools-setup-context-grid .agent-host-selector {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+}
+
+.tools-setup-context-grid .agent-adapter-target {
+  align-content: start;
+}
+
+.tools-setup-context-grid .agent-host-selector {
+  padding-left: 18px;
+  border-left: 1px solid var(--line);
+}
+
+.tools-setup-workbench > .agent-readiness-summary {
+  margin-top: 14px;
+}
+
+.tools-peer-routes {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 18px;
+  padding: 14px 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.tools-peer-routes > strong {
+  color: var(--ink);
+  font-size: 0.9rem;
+}
+
+.tools-peer-route-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+@media (max-width: 900px) {
+  .tools-setup-context-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .tools-setup-context-grid .agent-host-selector {
+    padding-top: 14px;
+    padding-left: 0;
+    border-top: 1px solid var(--line);
+    border-left: 0;
+  }
+}
+
+@media (max-width: 640px) {
+  .tools-page-intro h1 {
+    font-size: 1.65rem;
+  }
+
+  .tools-setup-workbench {
+    padding: 17px 16px;
+  }
+
+  .tools-peer-routes {
+    display: grid;
+  }
+
+  .tools-peer-route-actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    justify-content: stretch;
+  }
+
+  .tools-peer-route-actions > * {
+    width: 100%;
+  }
+}

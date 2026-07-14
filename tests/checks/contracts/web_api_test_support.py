@@ -4,6 +4,7 @@ import json
 import time
 from http import HTTPStatus
 from pathlib import Path
+from urllib.parse import parse_qs, urlsplit
 
 from fastapi.testclient import TestClient
 
@@ -50,8 +51,52 @@ RECORDED_VERDICT_PAGE_TEXT_BY_STATUS = {
     "not_evaluated": "Unevaluated verdict recorded",
 }
 
+
+def _assert_recovery_summary_actions(
+    payload: dict,
+    *,
+    summary_key: str,
+    state_key: str,
+    state: str,
+    expected: list[str],
+) -> None:
+    actions = payload["next_actions"]
+    action_kinds = [item["kind"] for item in actions]
+    ready_after = {item["kind"]: item["after_action"] for item in actions if item.get("after_action")}
+    ready_now = [item["kind"] for item in actions if not item.get("after_action")]
+    assert (payload[summary_key]["next_action_kinds"], action_kinds, payload[summary_key][state_key]) == (expected, expected, state)
+    assert (payload["next_action_ready_now_kinds"], payload[summary_key]["next_action_ready_after_actions"]) == (ready_now, ready_after)
+
+
+def _assert_web_delete_preview_action_projection(
+    payload: dict,
+    *,
+    expected_kind: str = "",
+    expected_endpoint: str = "",
+) -> None:
+    if not expected_kind:
+        assert (payload["next_actions"], payload["next_action_kinds"], payload["next_action_ready_now_kinds"], payload["next_action_ready_after_actions"]) == (
+            [],
+            [],
+            [],
+            {},
+        )
+        return
+    action = payload["next_actions"][0]
+    assert action["kind"] == expected_kind
+    assert action["target"] == "web_api"
+    assert action["method"] == "DELETE"
+    assert action["endpoint"] == expected_endpoint
+    assert (payload["next_action_kinds"], payload["next_action_ready_now_kinds"], payload["next_action_ready_after_actions"]) == (
+        [expected_kind],
+        [expected_kind],
+        {},
+    )
+
+
 def _read_service_log_records() -> list[dict]:
     return [json.loads(line) for line in (app_home() / "logs" / "service.log").read_text(encoding="utf-8").splitlines() if line.strip()]
+
 
 def _start_agent_first_loop(service, *, tmp_path: Path, workdir: Path) -> dict:
     bundle_file = tmp_path / "agent-first-bundle.yml"
@@ -78,6 +123,7 @@ def _start_agent_first_loop(service, *, tmp_path: Path, workdir: Path) -> dict:
         execute_async=False,
     )
 
+
 def _create_api_loop_run(client: TestClient, sample_spec_file: Path, sample_workdir: Path) -> str:
     response = client.post(
         "/api/loops",
@@ -98,15 +144,17 @@ def _create_api_loop_run(client: TestClient, sample_spec_file: Path, sample_work
     assert response.status_code == HTTPStatus.CREATED
     return response.json()["run"]["id"]
 
+
 def _wait_for_run_success(client: TestClient, run_id: str) -> None:
-    deadline = time.time() + 5
-    while time.time() < deadline:
+    deadline = time.monotonic() + 5
+    while time.monotonic() < deadline:
         run_response = client.get(f"/api/runs/{run_id}")
         assert run_response.status_code == HTTPStatus.OK
         if run_response.json()["status"] == "succeeded":
             return
         time.sleep(0.05)
     raise AssertionError(f"run did not succeed before timeout: {run_id}")
+
 
 def _assert_file_explorer_contract(client: TestClient, run_id: str) -> None:
     explorer = client.get(f"/api/files?run_id={run_id}&root=workdir")
@@ -122,6 +170,7 @@ def _assert_file_explorer_contract(client: TestClient, run_id: str) -> None:
     invalid_root = client.get(f"/api/files?run_id={run_id}&root=archive")
     assert invalid_root.status_code == HTTPStatus.BAD_REQUEST
     assert "error" in invalid_root.json()
+
 
 def _assert_run_artifact_catalog(client: TestClient, run_id: str) -> None:
     artifacts = client.get(f"/api/runs/{run_id}/artifacts")
@@ -168,6 +217,7 @@ def _assert_run_artifact_catalog(client: TestClient, run_id: str) -> None:
         assert " run " not in f" {zh_metadata} "
         assert "任务裁决" not in zh_metadata
 
+
 def _assert_artifact_file(
     client: TestClient,
     run_id: str,
@@ -185,11 +235,13 @@ def _assert_artifact_file(
     if content_fragment is not None:
         assert content_fragment in payload["content"]
 
+
 def _assert_attachment_download(response, *, filename: str) -> None:
     assert response.status_code == HTTPStatus.OK
     assert response.headers["content-type"] == "application/octet-stream"
     assert response.headers["content-disposition"].startswith("attachment;")
     assert filename in response.headers["content-disposition"]
+
 
 def _assert_acceptance_evidence_payload(payload: dict) -> None:
     assert payload["evidence_source_event_id"] > 0
@@ -211,6 +263,14 @@ def _assert_acceptance_evidence_payload(payload: dict) -> None:
     assert payload["coverage_status"] in {"covered", "weak", "partial", "blocked", "pending"}
     assert payload["evidence_count"] > 0
     assert set(payload["evidence_bucket_counts"]) >= {"proven", "weak", "unproven", "blocking", "residual_risk"}
+    target_basis = payload["coverage_target_basis"]
+    assert set(target_basis) == {"required", "advisory"}
+    assert target_basis["required"]["total"] > 0
+    for group in target_basis.values():
+        assert set(group) == {"total", "covered", "weak", "unproven", "blocking", "open"}
+        assert group["open"] == group["weak"] + group["unproven"] + group["blocking"]
+        assert group["total"] >= group["covered"] + group["open"]
+
 
 def _accept_run_result_and_assert_observation_event(client: TestClient, service, run: dict, loop: dict) -> list[dict]:
     run_before_accept = service.get_run(run["id"])
@@ -220,7 +280,9 @@ def _accept_run_result_and_assert_observation_event(client: TestClient, service,
     accept_response = client.post(f"/runs/{run['id']}/accept", follow_redirects=False)
 
     assert accept_response.status_code == HTTPStatus.SEE_OTHER
-    assert accept_response.headers["location"] == f"/runs/{run['id']}"
+    redirect_parts = urlsplit(accept_response.headers["location"])
+    assert redirect_parts.path == f"/runs/{run['id']}"
+    assert parse_qs(redirect_parts.query)["workdir"] == [str(loop["workdir"])]
     run_after_accept = service.get_run(run["id"])
     loop_after_accept = service.get_loop(loop["id"])
     assert run_after_accept["status"] == run_before_accept["status"]
@@ -233,16 +295,24 @@ def _accept_run_result_and_assert_observation_event(client: TestClient, service,
     assert accepted_events[-1]["payload"]["recorded_verdict_kind"] == _expected_recorded_verdict_kind(task_verdict_status)
     assert accepted_events[-1]["payload"]["evidence_source_event_id"] < accepted_events[-1]["id"]
     _assert_acceptance_evidence_payload(accepted_events[-1]["payload"])
+    acceptance_state = service.run_result_acceptance_state(run["id"])
+    assert acceptance_state["recorded_coverage_target_basis"] == accepted_events[-1]["payload"][
+        "coverage_target_basis"
+    ]
     return accepted_events
+
 
 def _expected_recorded_verdict_kind(task_verdict_status: str) -> str:
     return RECORDED_VERDICT_KIND_BY_STATUS.get(task_verdict_status, "evidence_verdict_recorded")
 
+
 def _expected_recorded_verdict_title(task_verdict_status: str) -> str:
     return RECORDED_VERDICT_TITLE_BY_STATUS.get(task_verdict_status, "Evidence verdict recorded")
 
+
 def _expected_recorded_verdict_page_text(task_verdict_status: str) -> str:
     return RECORDED_VERDICT_PAGE_TEXT_BY_STATUS.get(task_verdict_status, "Evidence verdict recorded")
+
 
 def _assert_run_artifact_previews(client: TestClient, run_id: str, sample_spec_text: str) -> None:
     missing_artifact = client.get(f"/api/runs/{run_id}/artifacts/missing-artifact/download")
@@ -257,6 +327,7 @@ def _assert_run_artifact_previews(client: TestClient, run_id: str, sample_spec_t
     _assert_artifact_file(client, run_id, "evidence-coverage", content_fragment='"targets"')
     _assert_artifact_file(client, run_id, "evidence-manifest", content_fragment='"verification_status"')
     _assert_artifact_file(client, run_id, "task-verdict", content_fragment='"status"')
+
 
 def _assert_file_preview_safety(client: TestClient, run_id: str, sample_workdir: Path) -> None:
     binary_path = sample_workdir / ".DS_Store"
@@ -314,8 +385,10 @@ def _assert_file_preview_safety(client: TestClient, run_id: str, sample_workdir:
     assert crowded_payload["entries_truncated"] is True
     assert len(crowded_payload["entries"]) == CROWDED_DIRECTORY_PREVIEW_ENTRY_LIMIT
 
+
 def _stream_body(stream_response) -> str:
     return "".join(chunk.decode() if isinstance(chunk, bytes) else chunk for chunk in stream_response.iter_text())
+
 
 def _assert_run_event_streaming(client: TestClient, run_id: str) -> None:
     events = client.get(f"/api/runs/{run_id}/events")
@@ -344,10 +417,12 @@ def _assert_run_event_streaming(client: TestClient, run_id: str) -> None:
         reconnect_body = _stream_body(stream_response)
     assert f"id: {reconnect_from}\n" not in reconnect_body
 
+
 def _assert_key_takeaway_judgment_contract(judgment_contract: dict) -> None:
     _assert_key_takeaway_contract_core(judgment_contract, path_key="contract_path", goal_key="goal")
     assert KEY_TAKEAWAY_EVIDENCE_PREFERENCE in judgment_contract["judgment_tradeoffs"]
     assert any("one coherent attempt that improves the main path" in item for item in judgment_contract["judgment_tradeoffs"])
+
 
 def _assert_key_takeaway_contract_core(payload: dict, *, path_key: str, goal_key: str) -> None:
     assert payload[path_key] == KEY_TAKEAWAY_CONTRACT_PATH
@@ -365,6 +440,7 @@ def _assert_key_takeaway_contract_core(payload: dict, *, path_key: str, goal_key
     assert payload["evidence_preferences"] == KEY_TAKEAWAY_EVIDENCE_PREFERENCES
     assert payload["residual_risk"] == KEY_TAKEAWAY_RESIDUAL_RISK
 
+
 def _assert_run_detail_terminal_actions_page(client: TestClient, run: dict, loop: dict) -> None:
     page_response = client.get(f"/runs/{run['id']}")
     assert page_response.status_code == HTTPStatus.OK
@@ -375,9 +451,13 @@ def _assert_run_detail_terminal_actions_page(client: TestClient, run: dict, loop
     assert 'data-testid="run-latest-event-card"' in page_response.text
     assert 'data-testid="run-agent-handoff-card"' in page_response.text
     assert 'data-testid="run-export-loop-button"' in page_response.text
+    assert 'data-testid="run-export-evidence-button"' in page_response.text
     assert f"/bundles/derive/export?loop_id={loop['id']}" in page_response.text
     assert 'data-testid="run-accept-result-button"' in page_response.text
     assert 'data-testid="run-rerun-button"' in page_response.text
+    assert 'data-testid="run-result-decision"' in page_response.text
+    assert page_response.text.count('data-testid="run-improve-chat-button"') == 1
+    assert 'data-testid="run-evidence-improve-button"' not in page_response.text
     assert "Run next evidence pass" in page_response.text
     assert '<span data-lang="en">Rerun</span>' not in page_response.text
     assert 'id="stop-run"' not in page_response.text
@@ -387,14 +467,16 @@ def _assert_run_detail_terminal_actions_page(client: TestClient, run: dict, loop
     assert export_response.headers["content-type"].startswith("application/yaml")
     assert "Rerun From Detail Loop" in export_response.text
 
+
 def _wait_for_run_terminal_status(service, run_id: str) -> None:
-    deadline = time.time() + 5
-    while time.time() < deadline:
+    deadline = time.monotonic() + 5
+    while time.monotonic() < deadline:
         new_run = service.get_run(run_id)
         if new_run["status"] in {"succeeded", "failed", "stopped"}:
             break
         time.sleep(0.05)
     assert service.get_run(run_id)["status"] in {"succeeded", "failed", "stopped"}
+
 
 def _assert_bundle_preview_control_summary(preview: dict) -> None:
     preview_control_summary = preview["control_summary"]
@@ -411,26 +493,27 @@ def _assert_bundle_preview_control_summary(preview: dict) -> None:
     assert preview["diagnostics"] == preview_control_summary["diagnostics"]
     assert isinstance(preview["diagnostics"], list)
 
+
 __all__ = [
-    '_accept_run_result_and_assert_observation_event',
-    '_assert_acceptance_evidence_payload',
-    '_assert_artifact_file',
-    '_assert_attachment_download',
-    '_assert_bundle_preview_control_summary',
-    '_assert_file_explorer_contract',
-    '_assert_file_preview_safety',
-    '_assert_key_takeaway_judgment_contract',
-    '_assert_run_artifact_catalog',
-    '_assert_run_artifact_previews',
-    '_assert_run_detail_terminal_actions_page',
-    '_assert_run_event_streaming',
-    '_create_api_loop_run',
-    '_expected_recorded_verdict_kind',
-    '_expected_recorded_verdict_page_text',
-    '_expected_recorded_verdict_title',
-    '_read_service_log_records',
-    '_start_agent_first_loop',
-    '_stream_body',
-    '_wait_for_run_success',
-    '_wait_for_run_terminal_status',
+    "_accept_run_result_and_assert_observation_event",
+    "_assert_acceptance_evidence_payload",
+    "_assert_artifact_file",
+    "_assert_attachment_download",
+    "_assert_bundle_preview_control_summary",
+    "_assert_file_explorer_contract",
+    "_assert_file_preview_safety",
+    "_assert_key_takeaway_judgment_contract",
+    "_assert_run_artifact_catalog",
+    "_assert_run_artifact_previews",
+    "_assert_run_detail_terminal_actions_page",
+    "_assert_run_event_streaming",
+    "_create_api_loop_run",
+    "_expected_recorded_verdict_kind",
+    "_expected_recorded_verdict_page_text",
+    "_expected_recorded_verdict_title",
+    "_read_service_log_records",
+    "_start_agent_first_loop",
+    "_stream_body",
+    "_wait_for_run_success",
+    "_wait_for_run_terminal_status",
 ]

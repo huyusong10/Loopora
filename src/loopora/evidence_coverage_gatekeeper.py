@@ -4,6 +4,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from loopora.evidence_support import evidence_item_is_non_supporting_gatekeeper_ref, evidence_item_is_supporting_gatekeeper_ref
+from loopora.runtime_task_language import runtime_task_text
 from loopora.structured_booleans import structured_bool_is_true
 from loopora.structured_numbers import structured_non_negative_int
 
@@ -30,7 +31,12 @@ def latest_gatekeeper_projection(
     }
 
 
-def apply_gatekeeper_target(target_state: dict[str, dict], latest_gatekeeper: Mapping[str, Any]) -> None:
+def apply_gatekeeper_target(
+    target_state: dict[str, dict],
+    latest_gatekeeper: Mapping[str, Any],
+    *,
+    language: str = "en",
+) -> None:
     row = target_state.get("gatekeeper.finish")
     if not row or not latest_gatekeeper:
         return
@@ -42,19 +48,31 @@ def apply_gatekeeper_target(target_state: dict[str, dict], latest_gatekeeper: Ma
     has_self_measured_evidence = structured_bool_is_true(latest_gatekeeper.get("self_measured_evidence"))
     if result == "passed" and supporting_refs:
         row["status"] = "covered"
-        row["reason"] = "GateKeeper passed with supporting upstream evidence refs."
+        row["reason"] = runtime_task_text(
+            language,
+            "GateKeeper passed with supporting upstream evidence refs.",
+            "GateKeeper 已通过，并引用了可支持结论的上游证据。",
+        )
         row["evidence_refs"] = list(dict.fromkeys([*supporting_refs, gatekeeper_id]))
     elif result == "passed" and has_self_measured_evidence:
         row["status"] = "covered"
-        row["reason"] = "GateKeeper passed with measured self evidence and concrete evidence claims."
+        row["reason"] = runtime_task_text(
+            language,
+            "GateKeeper passed with measured self evidence and concrete evidence claims.",
+            "GateKeeper 已通过，并提供了可度量的自身证据与具体证据声明。",
+        )
         row["evidence_refs"] = [gatekeeper_id] if gatekeeper_id else []
     elif result == "passed" and evidence_refs and non_supporting_refs and not supporting_refs:
         row["status"] = "blocked"
-        row["reason"] = "GateKeeper pass cited only non-supporting upstream evidence refs."
+        row["reason"] = runtime_task_text(
+            language,
+            "GateKeeper pass cited only non-supporting upstream evidence refs.",
+            "GateKeeper 虽然报告通过，但只引用了不能支持结论的上游证据。",
+        )
         row["evidence_refs"] = list(dict.fromkeys([*non_supporting_refs, gatekeeper_id]))
     elif result in {"blocked", "failed", "rejected"}:
         row["status"] = "blocked"
-        row["reason"] = "GateKeeper blocked the run."
+        row["reason"] = runtime_task_text(language, "GateKeeper blocked the run.", "GateKeeper 阻断了这个 Run。")
         row["evidence_refs"] = [gatekeeper_id] if gatekeeper_id else []
 
 
@@ -68,15 +86,11 @@ def gatekeeper_has_self_measured_evidence(item: Mapping[str, Any], *, item_id: s
 
 def _gatekeeper_evidence_refs(item: Mapping[str, Any]) -> list[str]:
     refs = [
-        str(ref).split(":", 1)[1].strip()
-        for ref in list(item.get("verifies") or [])
-        if str(ref).startswith("evidence:") and str(ref).split(":", 1)[1].strip()
+        str(ref).split(":", 1)[1].strip() for ref in list(item.get("verifies") or []) if str(ref).startswith("evidence:") and str(ref).split(":", 1)[1].strip()
     ]
     if refs:
         return list(dict.fromkeys(refs))
-    return list(
-        dict.fromkeys(str(ref).strip() for ref in list(item.get("related_evidence_ids") or []) if str(ref).strip())
-    )
+    return list(dict.fromkeys(str(ref).strip() for ref in list(item.get("related_evidence_ids") or []) if str(ref).strip()))
 
 
 def _supporting_gatekeeper_refs(evidence_refs: list[str], evidence_items_by_id: Mapping[str, Mapping[str, Any]]) -> list[str]:

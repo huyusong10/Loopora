@@ -4,7 +4,14 @@ Loopora is experimental local-first software. Security reports are still welcome
 
 ## Supported Versions
 
-Only the current development line and the latest published release are in scope for security fixes. Older local state formats are not migrated in place unless the current design explicitly says so.
+Security support follows the source-only alpha boundary. Maintainers triage reports against supported surfaces, but this repository does not imply long-term support for every published commit, local state format, or source snapshot.
+
+| Version or state | Security support |
+| --- | --- |
+| Current development line | In scope for triage and security fixes when the report can be reproduced against current source. |
+| Release tags explicitly marked as supported by maintainers | In scope while that supported status remains documented by maintainers. |
+| Source-only development snapshots, forks, dirty checkouts, or unmarked tags | No implied security support; reproduce against the current development line or a supported release tag. |
+| Older `.loopora/` local state formats | Not migrated in place unless the current design explicitly says so. |
 
 ## Reporting A Vulnerability
 

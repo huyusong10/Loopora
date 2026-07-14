@@ -11,11 +11,22 @@ from loopora.bundle_contract import BundleError
 from loopora.bundle_normalization import normalize_bundle
 
 
+def resolve_bundle_file_path(path: Path) -> Path:
+    try:
+        return path.expanduser().resolve()
+    except (OSError, RuntimeError, ValueError) as exc:
+        raise BundleError("bundle file could not be read") from exc
+
+
 def read_bundle_file_text(path: Path) -> str:
     try:
         return path.read_text(encoding="utf-8")
     except UnicodeDecodeError as exc:
         raise BundleError("bundle file must be UTF-8 encoded YAML") from exc
+    except FileNotFoundError as exc:
+        raise BundleError("bundle file does not exist") from exc
+    except (OSError, ValueError) as exc:
+        raise BundleError("bundle file could not be read") from exc
 
 
 def load_bundle_file(path: Path) -> dict[str, Any]:
@@ -23,13 +34,29 @@ def load_bundle_file(path: Path) -> dict[str, Any]:
     return load_bundle_text(raw_text)
 
 
-def load_bundle_text(raw_text: str) -> dict[str, Any]:
+def decode_bundle_text(raw_text: str) -> Mapping[str, object]:
     try:
         payload = yaml.safe_load(raw_text) or {}
     except yaml.YAMLError as exc:
-        raise BundleError(f"invalid bundle YAML: {exc}") from exc
+        raise BundleError(_invalid_bundle_yaml_message(raw_text)) from exc
     if not isinstance(payload, Mapping):
         raise BundleError("bundle YAML must decode to an object")
+    return payload
+
+
+def _invalid_bundle_yaml_message(raw_text: str) -> str:
+    if any(_is_yaml_control_character(character) for character in raw_text):
+        return "invalid bundle YAML: contains unsupported control characters"
+    return "invalid bundle YAML: check Plan File YAML syntax"
+
+
+def _is_yaml_control_character(character: str) -> bool:
+    ordinal = ord(character)
+    return ordinal < 32 and character not in "\t\n\r"
+
+
+def load_bundle_text(raw_text: str) -> dict[str, Any]:
+    payload = decode_bundle_text(raw_text)
     return normalize_bundle(payload)
 
 

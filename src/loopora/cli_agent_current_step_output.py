@@ -13,6 +13,7 @@ from loopora.agent_native_next_step_sections import (
     agent_dispatch_unavailable_summary as _agent_dispatch_unavailable_summary,
 )
 from loopora.agent_native_step_view_paths import agent_native_step_contract_path_text as _agent_native_step_contract_path_text
+from loopora.agent_native_submit_hints import agent_native_workdir_from_loopora_path as _agent_native_workdir_from_loopora_path
 from loopora.cli_agent_current_step_continuation_output import print_agent_continuation as _print_agent_continuation
 from loopora.cli_agent_current_step_evidence_output import (
     print_agent_current_step_evidence_scope as _print_agent_current_step_evidence_scope,
@@ -43,7 +44,7 @@ def _print_agent_current_step(next_step: dict) -> None:
         target_agent_config = str(
             role_dispatch.get("target_agent_config_absolute_path") or role_dispatch.get("target_agent_config_path") or ""
         ).strip()
-        if target_agent_config:
+        if target_agent_config and role_dispatch.get("target_agent_config_exists") is not True:
             typer.echo(f"next_target_agent_config: {target_agent_config}")
         if "target_agent_config_exists" in role_dispatch:
             typer.echo(f"next_target_agent_config_exists: {str(role_dispatch.get('target_agent_config_exists') is True).lower()}")
@@ -51,20 +52,25 @@ def _print_agent_current_step(next_step: dict) -> None:
             adapter = str(next_step.get("adapter") or "").strip() or "codex"
             dispatch_unavailable = _agent_dispatch_unavailable_summary(
                 adapter=adapter,
-                workdir="$PWD",
+                workdir=_agent_current_step_workdir(next_step, submit_hint),
                 role_dispatch=role_dispatch,
             )
             check_command = str(dispatch_unavailable.get("check_command") or "").strip()
             repair_command = str(dispatch_unavailable.get("repair_command") or "").strip()
-            typer.echo(
-                "dispatch_unavailable: "
-                f"{target_agent} config is missing; run {check_command} "
-                f"and repair with {repair_command} before dispatching this role"
-            )
+            if check_command and repair_command:
+                typer.echo(
+                    "dispatch_unavailable: "
+                    f"{target_agent} config is missing; run {check_command} "
+                    f"and repair with {repair_command} before dispatching this role"
+                )
+            else:
+                typer.echo(
+                    "dispatch_unavailable: "
+                    f"{target_agent} config is missing; {dispatch_unavailable.get('next')}"
+                )
         else:
             typer.echo(f"dispatch_next: {_agent_dispatch_next_summary(role_dispatch)}")
             _print_agent_native_dispatch_contract(next_step, target_agent)
-    _print_agent_native_todo(next_step.get("native_todo"))
     _print_agent_continuation(next_step.get("continuation"))
     action_summary = _action_policy_summary(action_policy)
     if action_summary:
@@ -75,21 +81,22 @@ def _print_agent_current_step(next_step: dict) -> None:
     coverage_note = _agent_coverage_classification_note(next_step)
     if coverage_note:
         typer.echo(f"coverage_classification_note: {coverage_note}")
-    _print_top_coverage_gaps(next_step.get("required_coverage"))
     _print_agent_current_step_technical_handoff(next_step, submit_hint)
 
 
-def _print_agent_native_todo(native_todo: object) -> None:
-    if not isinstance(native_todo, dict) or native_todo.get("recommended") is not True:
-        return
-    policy = str(native_todo.get("host_policy") or "").strip()
-    if policy:
-        typer.echo(f"native_todo: {_clip(policy, 220)}")
-    items = [str(item).strip() for item in list(native_todo.get("items") or []) if str(item).strip()]
-    if items:
-        typer.echo("native_todo_items:")
-        for item in items[:6]:
-            typer.echo(f"- {_clip(item, 180)}")
+def _agent_current_step_workdir(next_step: dict, submit_hint: dict) -> str:
+    for value in (
+        next_step.get("context_absolute_path"),
+        next_step.get("agent_step_view_absolute_path"),
+        _agent_native_step_contract_path_text(next_step, absolute=True),
+        submit_hint.get("result_template_absolute_path"),
+        submit_hint.get("result_file_absolute_path"),
+        submit_hint.get("result_outbox_absolute_dir"),
+    ):
+        workdir = _agent_native_workdir_from_loopora_path(value)
+        if workdir:
+            return workdir
+    return ""
 
 
 def _print_agent_current_step_technical_handoff(next_step: dict, submit_hint: dict) -> None:
@@ -121,9 +128,6 @@ def _print_agent_current_step_paths(next_step: dict, submit_hint: dict) -> None:
     context_path = str(next_step.get("context_absolute_path") or next_step.get("context_path") or "").strip()
     if context_path:
         typer.echo(f"next_context_path: {context_path}")
-    agent_step_view_path = str(next_step.get("agent_step_view_absolute_path") or next_step.get("agent_step_view_path") or "").strip()
-    if agent_step_view_path:
-        typer.echo(f"next_agent_step_view_path: {agent_step_view_path}")
     step_contract_path = _agent_native_step_contract_path_text(next_step, absolute=True)
     if step_contract_path:
         typer.echo(f"next_step_contract_path: {step_contract_path}")
@@ -154,9 +158,6 @@ def _print_agent_current_step_submit_hint(submit_hint: dict) -> None:
         else:
             template_fill = load_system_prompt_asset("agent_native/result-template-fill-submit-copy.md").strip()
         typer.echo(f"result_template_fill: {template_fill}")
-    result_outbox_dir = str(submit_hint.get("result_outbox_absolute_dir") or submit_hint.get("result_outbox_dir") or "").strip()
-    if result_outbox_dir:
-        typer.echo(f"result_outbox_dir: {result_outbox_dir}")
     submit_command = str(submit_hint.get("command") or "").strip()
     if submit_command:
         typer.echo(f"submit_hint: {submit_command}")
@@ -168,11 +169,7 @@ def _print_top_coverage_gaps(required_coverage: object) -> None:
     gaps = required_coverage.get("top_gaps")
     if not isinstance(gaps, list):
         return
-    visible_gaps = [gap for gap in gaps if isinstance(gap, dict)][:3]
-    if not visible_gaps:
-        return
-    typer.echo("top_coverage_gaps:")
-    for gap in visible_gaps:
+    for gap in [item for item in gaps if isinstance(item, dict)][:3]:
         target_id = str(gap.get("target_id") or gap.get("id") or "").strip()
         status = str(gap.get("status") or "").strip()
         source_section = str(gap.get("source_section") or "").strip()

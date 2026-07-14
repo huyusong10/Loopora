@@ -1,0 +1,121 @@
+from __future__ import annotations
+
+"""Delivery and release domain-risk patterns for alignment traceability."""
+
+MIGRATION_ROLLBACK_INTEGRITY_PATTERN = (
+    r"(?:(?:\b(?:migration|migrate|migrated|schema[- ]?migration)\b|迁移|迁到).{0,160}"
+    r"(?:\b(?:rollback|roll\s+back|roll-back|dry[- ]?run|row[- ]?count|checksum|data[- ]?integrity|"
+    r"data\s+loss|lossless|reconcile|reconciliation)\b|回滚|试跑|行数|校验和|数据不丢|数据丢失|"
+    r"数据完整|完整性|对账|金额不丢|状态不丢)"
+    r"|(?:\b(?:rollback|roll\s+back|roll-back|dry[- ]?run|row[- ]?count|checksum|data[- ]?integrity|"
+    r"data\s+loss|lossless|reconcile|reconciliation)\b|回滚|试跑|行数|校验和|数据不丢|数据丢失|"
+    r"数据完整|完整性|对账|金额不丢|状态不丢).{0,160}"
+    r"(?:\b(?:migration|migrate|migrated|schema[- ]?migration)\b|迁移|迁到)"
+    r"|(?:\b(?:backfill)\b|回填).{0,120}"
+    r"(?:\b(?:migration|migrate|migrated|schema[- ]?migration|rollback|roll\s+back|roll-back|"
+    r"dry[- ]?run|row[- ]?count|checksum|data[- ]?integrity|data\s+loss|lossless)\b|"
+    r"迁移|迁到|回滚|试跑|行数|校验和|数据不丢|数据丢失|数据完整|完整性)"
+    r"|(?:\b(?:migration|migrate|migrated|schema[- ]?migration|rollback|roll\s+back|roll-back|"
+    r"dry[- ]?run|row[- ]?count|checksum|data[- ]?integrity|data\s+loss|lossless)\b|"
+    r"迁移|迁到|回滚|试跑|行数|校验和|数据不丢|数据丢失|数据完整|完整性).{0,120}"
+    r"(?:\b(?:backfill)\b|回填))"
+)
+BACKWARD_COMPATIBILITY_PATTERN = (
+    r"\b(?:backward(?:s)?[- ]?compat(?:ible|ibility)?|compat(?:ible|ibility)|legacy|"
+    r"old\s+(?:api|apis|client|clients|report|reports)|"
+    r"existing\s+(?:api|apis|client|clients|report|reports|consumer|consumers))\b"
+    r"|向后兼容|兼容|旧\s*API|老\s*API|旧客户端|老客户端|旧报表|老报表|历史报表"
+)
+EVALUATION_SET_PATTERN = (
+    r"\b(?:eval(?:uation)?[- ]?set|evaluation[- ]?set|test[- ]?set|golden[- ]?(?:set|queries?|examples?)|"
+    r"negative[- ]?(?:examples?|cases?|samples?)|regression[- ]?(?:samples?|set|queries?)|holdout|"
+    r"top[- ]?\d+|demo[- ]?quer(?:y|ies)|single[- ]?query|benchmark\s+score)\b"
+    r"|评测集|评估集|黄金样本|黄金查询|负例|负样本|回归样本|回归集|真实查询|查询集|单个查询|单点上涨"
+)
+HUMAN_REVIEW_QUALITY_PATTERN = (
+    r"\b(?:human[- ]?review|manual[- ]?review|review[- ]?rubric|relevance|hallucination|groundedness|"
+    r"faithfulness|quality[- ]?review)\b"
+    r"|人工评审|人工审核|评审标准|相关性|幻觉|事实性|可信度|质量评审"
+)
+RAG_GROUNDING_TOOL_SAFETY_PATTERN = (
+    r"(?:(?:\b(?:rag|retrieval[- ]?augmented|knowledge[- ]?base[- ]?(?:qa|q&a|chatbot)|"
+    r"support[- ]?chatbot|answer[- ]?grounding|grounded[- ]?answer(?:s)?|source[- ]?ground(?:ed|ing)|"
+    r"retrieved[- ]?(?:source|chunk|chunks|context)|source[- ]?chunk(?:s)?|citation[- ]?span(?:s)?|"
+    r"answer[- ]?faithfulness|citation[- ]?precision|no[- ]?answer[- ]?behavior|"
+    r"prompt[- ]?injection|jailbreak|document[- ]?injection|tool[- ]?call[- ]?allowlist|"
+    r"tool[- ]?use[- ]?allowlist)\b|"
+    r"知识库问答|知识库\s*chatbot|\bRAG\b|检索增强|答案溯源|答案引用|引用片段|引用跨度|"
+    r"来源片段|检索片段|来源可追踪|答案忠实度|引用准确率|无答案行为|"
+    r"提示词注入|文档注入|越狱|工具调用白名单|工具白名单).{0,360}"
+    r"(?:\b(?:citation(?:s)?|source[- ]?span(?:s)?|document[- ]?version(?:s)?|retrieval[- ]?acl|"
+    r"tenant[- ]?filter(?:ing)?|permission[- ]?filtered[- ]?retrieval|top[- ]?k[- ]?recall|"
+    r"golden[- ]?(?:q&a|qa|questions?)|negative[- ]?prompt[- ]?injection|"
+    r"system[- ]?prompt[- ]?leak(?:age)?|unauthorized[- ]?tool(?:s)?|"
+    r"tool[- ]?call[- ]?proof|pii[- ]?leak(?:age)?|secret[- ]?leak(?:age)?|"
+    r"fallback|handoff|human[- ]?handoff|multilingual[- ]?quer(?:y|ies)|demo[- ]?question|"
+    r"plausible[- ]?answer|embedding[- ]?search|ui[- ]?citation(?:s)?)\b|"
+    r"引用|来源跨度|文档版本|检索权限|租户过滤|权限过滤检索|top-k\s*召回|黄金问答|"
+    r"负向提示词注入|系统提示词泄露|未授权工具|工具调用证明|PII\s*泄露|密钥泄露|"
+    r"兜底|人工接管|多语言查询|demo\s*问题|答案看起来合理|向量搜索|嵌入搜索|界面引用)"
+    r"|(?:\b(?:citation(?:s)?|source[- ]?span(?:s)?|document[- ]?version(?:s)?|retrieval[- ]?acl|"
+    r"tenant[- ]?filter(?:ing)?|permission[- ]?filtered[- ]?retrieval|top[- ]?k[- ]?recall|"
+    r"golden[- ]?(?:q&a|qa|questions?)|negative[- ]?prompt[- ]?injection|"
+    r"system[- ]?prompt[- ]?leak(?:age)?|unauthorized[- ]?tool(?:s)?|"
+    r"tool[- ]?call[- ]?proof|pii[- ]?leak(?:age)?|secret[- ]?leak(?:age)?|"
+    r"fallback|handoff|human[- ]?handoff|multilingual[- ]?quer(?:y|ies)|demo[- ]?question|"
+    r"plausible[- ]?answer|embedding[- ]?search|ui[- ]?citation(?:s)?)\b|"
+    r"引用|来源跨度|文档版本|检索权限|租户过滤|权限过滤检索|top-k\s*召回|黄金问答|"
+    r"负向提示词注入|系统提示词泄露|未授权工具|工具调用证明|PII\s*泄露|密钥泄露|"
+    r"兜底|人工接管|多语言查询|demo\s*问题|答案看起来合理|向量搜索|嵌入搜索|界面引用).{0,360}"
+    r"(?:\b(?:rag|retrieval[- ]?augmented|knowledge[- ]?base[- ]?(?:qa|q&a|chatbot)|"
+    r"support[- ]?chatbot|answer[- ]?grounding|grounded[- ]?answer(?:s)?|source[- ]?ground(?:ed|ing)|"
+    r"retrieved[- ]?(?:source|chunk|chunks|context)|source[- ]?chunk(?:s)?|citation[- ]?span(?:s)?|"
+    r"answer[- ]?faithfulness|citation[- ]?precision|no[- ]?answer[- ]?behavior|"
+    r"prompt[- ]?injection|jailbreak|document[- ]?injection|tool[- ]?call[- ]?allowlist|"
+    r"tool[- ]?use[- ]?allowlist)\b|"
+    r"知识库问答|知识库\s*chatbot|\bRAG\b|检索增强|答案溯源|答案引用|引用片段|引用跨度|"
+    r"来源片段|检索片段|来源可追踪|答案忠实度|引用准确率|无答案行为|"
+    r"提示词注入|文档注入|越狱|工具调用白名单|工具白名单))"
+)
+INCIDENT_ROOT_CAUSE_REPRO_PATTERN = (
+    r"\b(?:root[- ]?cause|repro|reproduce|reproduced|reproduction|trigger[- ]?condition|triggering[- ]?condition|"
+    r"failure[- ]?mode)\b"
+    r"|根因|复现|触发条件|故障模式"
+)
+REGRESSION_MONITORING_GUARD_PATTERN = (
+    r"\b(?:regression[- ]?(?:test|tests|guard|coverage)|monitor(?:ing)?|alerts?|alerting|recurrence|"
+    r"release[- ]?guard|rollback[- ]?path|runbook|canary)\b"
+    r"|回归测试|回归防护|监控|告警|复发|发布防护|回滚路径|运行手册|灰度"
+)
+FEATURE_FLAG_ROLLOUT_SAFETY_PATTERN = (
+    r"(?:(?:\b(?:feature[- ]?flag(?:s)?|flagged[- ]?rollout|release[- ]?flag|rollout|canary|"
+    r"gradual[- ]?rollout|staged[- ]?rollout|beta[- ]?cohort|cohort|percentage[- ]?rollout)\b|"
+    r"feature\s*flag|功能开关|特性开关|发布开关|灰度发布|灰度|渐进发布|分阶段发布|beta\s*cohort|用户分群).{0,220}"
+    r"(?:\b(?:kill[- ]?switch|default[- ]?off|cohort[- ]?target(?:ing)?|targeting|targeted|"
+    r"percentage|percent[- ]?rollout|sticky[- ]?assignment|exposure[- ]?consistency|"
+    r"session[- ]?consistency|rollback|roll\s+back|roll-back|blast[- ]?radius|"
+    r"error[- ]?rate|conversion[- ]?rate|alert[- ]?threshold(?:s)?)\b|"
+    r"熔断开关|一键回退|默认关闭|命中分群|目标分群|百分比|稳定分配|曝光一致|session\s*一致|"
+    r"会话一致|回滚|影响面|错误率|转化率|告警阈值)"
+    r"|(?:\b(?:kill[- ]?switch|default[- ]?off|cohort[- ]?target(?:ing)?|targeting|targeted|"
+    r"percentage|percent[- ]?rollout|sticky[- ]?assignment|exposure[- ]?consistency|"
+    r"session[- ]?consistency|rollback|roll\s+back|roll-back|blast[- ]?radius|"
+    r"error[- ]?rate|conversion[- ]?rate|alert[- ]?threshold(?:s)?)\b|"
+    r"熔断开关|一键回退|默认关闭|命中分群|目标分群|百分比|稳定分配|曝光一致|session\s*一致|"
+    r"会话一致|回滚|影响面|错误率|转化率|告警阈值).{0,220}"
+    r"(?:\b(?:feature[- ]?flag(?:s)?|flagged[- ]?rollout|release[- ]?flag|rollout|canary|"
+    r"gradual[- ]?rollout|staged[- ]?rollout|beta[- ]?cohort|cohort|percentage[- ]?rollout)\b|"
+    r"feature\s*flag|功能开关|特性开关|发布开关|灰度发布|灰度|渐进发布|分阶段发布|beta\s*cohort|用户分群))"
+)
+EXTERNAL_PROVIDER_CONTRACT_PATTERN = (
+    r"\b(?:sandbox|provider[- ]?contract|external[- ]?(?:api|provider)|third[- ]?party|"
+    r"vendor[- ]?(?:api|provider)|real\s+(?:rate|rates|response|responses)|"
+    r"contract[- ]?(?:probe|proof|verification))\b"
+    r"|第三方|外部(?:接口|API|供应商|provider)|供应商|沙箱|真实(?:费率|响应|返回)|契约探测|契约证明"
+)
+RESILIENCE_RETRY_TIMEOUT_PATTERN = (
+    r"\b(?:timeout|timeouts|rate[- ]?limit|rate[- ]?limited|retry|retries|backoff|fallback|"
+    r"circuit[- ]?breaker|degrad(?:e|ed|ation)|partial[- ]?failure|transient[- ]?failure|"
+    r"network[- ]?failure)\b"
+    r"|超时|限流|重试|退避|降级|熔断|部分失败|瞬时失败|网络失败|兜底"
+)

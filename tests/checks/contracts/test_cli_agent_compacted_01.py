@@ -32,6 +32,8 @@ def test_adapter_check_output_has_dedicated_boundary() -> None:
         assert marker not in output_source
     assert "agent_v3_envelope(" in check_output_source
     assert "agent_v3_envelope(" not in output_source
+    assert "copyable_loopora_command" in check_output_source
+    assert "prefix_loopora_command" not in check_output_source
     assert "cli_agent_adapter_check_output.py" in design_source
 
 
@@ -47,18 +49,16 @@ def test_adapter_install_conflict_output_has_dedicated_boundary() -> None:
     assert "def _adapter_conflict_paths" not in output_source
     assert "cli_agent_adapter_conflict_output.py" in design_source
 
+
 # Merged from test_cli_agent_adapter_output_surface.py
 from loopora.cli_agent_adapter_output import print_adapter_mutation_result
 
 from cli_agent_adapter_output_test_support import (
-    assert_output_contains,
     codex_installed_mutation_result,
-    native_surface_boundary_snippets,
-    packaging_surface_snippets,
 )
 
 
-def test_adapter_output_keeps_native_surface_and_clean_fallback_steps(tmp_path, capsys) -> None:
+def test_adapter_output_keeps_first_use_steps_concise_while_json_keeps_surface_details(tmp_path, capsys) -> None:
     print_adapter_mutation_result(
         codex_installed_mutation_result(tmp_path),
         action="installed",
@@ -69,25 +69,63 @@ def test_adapter_output_keeps_native_surface_and_clean_fallback_steps(tmp_path, 
 
     assert "Codex Loopora entry is installed" in output
     assert "target project:" in output
-    assert "first task message example:" in output
-    assert "agent surface:" in output
-    assert "- slash commands: plan=/loopora-plan run=/loopora-run" in output
-    assert_output_contains(
-        output,
-        "- capabilities: execution=current_host_agent",
-        "role_dispatch=host_native",
-        "workspace=current_host_agent_workdir",
-        "worktree=not_created_or_switched_by_loopora",
-        "proof=loopora_evidence_refs_and_task_verdict",
-    )
-    assert "- activation: explicit_loopora_command_or_cli_only" in output
-    assert "- command namespace: loopora_plan_run_only_no_generic_host_command_aliases" in output
-    assert "- references: .agents/skills/loopora-run/references/loopora-run-contract.md" in output
-    for snippet in packaging_surface_snippets():
-        assert snippet in output
-    assert_output_contains(output, *native_surface_boundary_snippets())
+    assert "first task message handoff:" in output
+    assert "completed fit review:" in output
+    assert "copyable /loopora-plan handoff as one Agent message" in output
+    assert "generic orientation example (not a completed review):" in output
+    assert output.index("completed fit review:") < output.index("generic orientation example")
+    assert "next:" in output
+    assert "web:" in output
+    assert f"loopora serve --open --workdir {tmp_path} --host 127.0.0.1 --port 8742" in output
+    assert "diagnostics:" in output
+    assert "installed files:" in output
+    assert "managed files current" in output
+    assert "details: rerun with --json for managed file hashes and the Agent surface contract." in output
+    assert "agent surface:" not in output
+    assert "managed files:" not in output
     assert "{label}" not in output
-    assert "managed files:" in output
+
+
+def test_adapter_uninstall_output_summarizes_cleanup_and_kept_files(tmp_path, capsys) -> None:
+    print_adapter_mutation_result(
+        {
+            "adapter": "codex",
+            "label": "Codex",
+            "workdir": str(tmp_path / "project with spaces"),
+            "status": "not_installed",
+            "removed_files": [
+                ".agents/skills/loopora-plan/SKILL.md",
+                ".agents/skills/loopora-run/SKILL.md",
+            ],
+            "kept_files": [
+                {
+                    "path": ".agents/skills/loopora-plan/SKILL.md",
+                    "reason": "not_loopora_managed",
+                }
+            ],
+            "manifest_error": "invalid manifest",
+        },
+        action="uninstalled",
+        json_output=False,
+    )
+
+    output = capsys.readouterr().out
+
+    assert "Codex Loopora entry is uninstalled" in output
+    assert "removed files: 2 Loopora-managed files" in output
+    assert "removed:" not in output
+    assert ".agents/skills/loopora-run/SKILL.md" not in output
+    assert "kept files: 1 need manual review" in output
+    assert "manual review:" in output
+    assert "- .agents/skills/loopora-plan/SKILL.md: not_loopora_managed" in output
+    assert "managed manifest was unreadable" in output
+    assert "Reinstall later:" in output
+    assert "loopora init codex --workdir" in output
+    assert "--workdir '" in output
+    assert "project with spaces" in output
+    assert "refresh or restart Codex" in output
+    assert "details: pass --json when you need exact removed and kept paths for cleanup logs." in output
+
 
 # Merged from test_cli_agent_plan_recovery.py
 from loopora.cli_agent_plan_recovery import (
@@ -109,10 +147,21 @@ def test_agent_plan_message_required_recovery_keeps_single_question_and_native_s
     assert agent_plan_error_requires_message("missing --message task context") is True
     assert agent_plan_error_requires_message("different validation error") is False
     assert result["loop_recovery"] == "plan_message_required"
-    assert result["required_inputs"] == ["task_goal", "fake_done_risks", "required_evidence", "judgment_tradeoffs"]
+    assert result["required_inputs"] == [
+        "loopora_fit_reason",
+        "task_goal",
+        "fake_done_risks",
+        "required_evidence",
+        "judgment_tradeoffs",
+    ]
     assert result["question_action"]["target"] == "main_agent_session"
     assert result["question_action"]["subagent_policy"].startswith("Do not ask user questions")
-    assert result["task_message_template"].startswith("Goal:")
+    assert result["task_message_template"].startswith("Loopora fit:")
+    assert result["first_task_message_example_state"]["completed_review"] is False
+    assert result["first_task_message_example_state"]["kind"] == "generic_orientation_example"
+    assert result["first_task_handoff_policy"]["preferred_source"] == "completed_fit_review"
+    assert result["first_task_handoff_policy"]["fallback_source"] == "generic_example"
+    assert result["first_task_handoff_policy"]["fit_command"].endswith(f"loopora fit --workdir {tmp_path.resolve()}")
     assert "loopora agent codex plan" in result["debug_cli_example_command"]
     assert "--context-id ctx_123" in result["debug_cli_example_command"]
     assert "--entry-source codex_project_skill" in result["debug_cli_example_command"]
@@ -121,18 +170,24 @@ def test_agent_plan_message_required_recovery_keeps_single_question_and_native_s
     output = capsys.readouterr().out
 
     assert output.count("required_inputs:") == 1
+    assert "- Loopora fit reason (loopora_fit_reason)" in output
+    assert "- Task goal (task_goal)" in output
     assert "ask_user: What long-running task should Loopora govern?" in output
     assert "question_action: Use the host's official user-question or follow-up capability" in output
-    assert "recommended_reply_shape: Goal: ..." in output
+    assert "recommended_reply_shape: Loopora fit: ..." in output
+    assert "Goal: ..." in output
     assert "Fake-done risks: ..." in output
     assert "Required evidence: ..." in output
     assert "Judgment tradeoffs: ..." in output
     assert "decision_impact: This answer decides the Loop's task contract" in output
-    assert "example_user_reply: Build the account-deletion audit flow;" in output
+    assert "example_user_reply: Loopora fit:" in output
     assert "first_task_message_example:" not in output
     assert "debug_cli_example_command:" not in output
-    assert "agent surface:" in output
-    assert "- host dispatch: Codex spawn_agent with agent_type=<role_dispatch.target_agent>" in output
+    assert "agent_surface: current host Agent remains the executor" in output
+    assert "full surface diagnostics are available with --json --compact-json" in output
+    assert "agent surface:" not in output
+    assert "- host dispatch:" not in output
+
 
 # Merged from test_cli_agent_plan_repair_hints.py
 from loopora.cli_agent_plan_repair_hints import validation_repair_hints
@@ -140,8 +195,7 @@ from loopora.cli_agent_plan_repair_hints import validation_repair_hints
 
 def test_plan_repair_hints_project_host_message_categories_into_runnable_surfaces() -> None:
     hints = validation_repair_hints(
-        "agent-first candidate must project host Agent success criteria into runnable surfaces: "
-        "missing API compatibility, rollback proof"
+        "Agent-native candidate must project host Agent success criteria into runnable surfaces: missing API compatibility, rollback proof"
     )
 
     assert hints == [
@@ -152,12 +206,12 @@ def test_plan_repair_hints_project_host_message_categories_into_runnable_surface
 
 def test_plan_repair_hints_explain_common_semantic_lint_issues() -> None:
     hints = validation_repair_hints(
-        "bundle semantic lint failed: spec must include at least one Done When bullet; "
-        "workflow.collaboration_intent must explain evidence flow"
+        "bundle semantic lint failed: spec must include at least one Done When bullet; workflow.collaboration_intent must explain evidence flow"
     )
 
     assert "add # Done When bullets that make the task judgment reviewable and runnable" in hints
     assert "rewrite workflow.collaboration_intent to name evidence flow" in hints[1]
+
 
 # Merged from test_cli_agent_recovery_architecture.py
 from pathlib import Path
@@ -165,28 +219,18 @@ from pathlib import Path
 
 def test_cli_agent_recovery_has_dedicated_boundary() -> None:
     root = Path(__file__).resolve().parents[3]
-    adapter_commands_source = (root / "src" / "loopora" / "cli_agent_adapter_commands.py").read_text(
-        encoding="utf-8"
-    )
+    adapter_commands_source = (root / "src" / "loopora" / "cli_agent_adapter_commands.py").read_text(encoding="utf-8")
     native_source = (root / "src" / "loopora" / "cli_agent_native.py").read_text(encoding="utf-8")
     recovery_source = (root / "src" / "loopora" / "cli_agent_recovery.py").read_text(encoding="utf-8")
-    runtime_commands_source = (root / "src" / "loopora" / "cli_agent_runtime_commands.py").read_text(
-        encoding="utf-8"
-    )
-    output_source = (root / "src" / "loopora" / "cli_agent_context_recovery_output.py").read_text(
-        encoding="utf-8"
-    )
+    run_command_source = (root / "src" / "loopora" / "cli_agent_run_command.py").read_text(encoding="utf-8")
+    output_source = (root / "src" / "loopora" / "cli_agent_context_recovery_output.py").read_text(encoding="utf-8")
     results_source = (root / "src" / "loopora" / "cli_agent_recovery_results.py").read_text(encoding="utf-8")
-    active_runs_source = (root / "src" / "loopora" / "cli_agent_recovery_active_runs.py").read_text(
-        encoding="utf-8"
-    )
-    choices_source = (root / "src" / "loopora" / "cli_agent_recoverable_context_output.py").read_text(
-        encoding="utf-8"
-    )
+    active_runs_source = (root / "src" / "loopora" / "cli_agent_recovery_active_runs.py").read_text(encoding="utf-8")
+    choices_source = (root / "src" / "loopora" / "cli_agent_recoverable_context_output.py").read_text(encoding="utf-8")
     design_source = (root / "design" / "contracts.md").read_text(encoding="utf-8")
 
     assert "from loopora import cli_agent_recovery as _agent_recovery" in adapter_commands_source
-    assert "from loopora.cli_agent_recovery import" in runtime_commands_source
+    assert "from loopora.cli_agent_recovery import" in run_command_source
     assert "from loopora.cli_agent_recovery import" in native_source
     assert "from loopora.cli_agent_recovery_results import" in recovery_source
     assert "from loopora.cli_agent_recovery_active_runs import" in results_source
@@ -224,20 +268,15 @@ def test_cli_agent_recovery_has_dedicated_boundary() -> None:
     assert "cli_agent_recovery_active_runs.py" in design_source
     assert "cli_agent_recoverable_context_output.py" in design_source
 
+
 # Merged from test_cli_agent_runtime_command_architecture.py
 
 
 def test_cli_agent_adapter_lifecycle_commands_have_dedicated_boundary() -> None:
     root = Path(__file__).resolve().parents[3]
-    adapter_commands_source = (root / "src" / "loopora" / "cli_agent_adapter_commands.py").read_text(
-        encoding="utf-8"
-    )
-    runtime_commands_source = (root / "src" / "loopora" / "cli_agent_runtime_commands.py").read_text(
-        encoding="utf-8"
-    )
-    lifecycle_source = (root / "src" / "loopora" / "cli_agent_adapter_lifecycle_commands.py").read_text(
-        encoding="utf-8"
-    )
+    adapter_commands_source = (root / "src" / "loopora" / "cli_agent_adapter_commands.py").read_text(encoding="utf-8")
+    runtime_commands_source = (root / "src" / "loopora" / "cli_agent_runtime_commands.py").read_text(encoding="utf-8")
+    lifecycle_source = (root / "src" / "loopora" / "cli_agent_adapter_lifecycle_commands.py").read_text(encoding="utf-8")
     options_source = (root / "src" / "loopora" / "cli_agent_command_options.py").read_text(encoding="utf-8")
     design_source = (root / "design" / "contracts.md").read_text(encoding="utf-8")
 
@@ -259,7 +298,7 @@ def test_cli_agent_adapter_lifecycle_commands_have_dedicated_boundary() -> None:
         assert marker in lifecycle_source
         assert marker not in adapter_commands_source
     for marker in (
-        "AdapterWorkdirOption = Annotated",
+        "AdapterRuntimeWorkdirOption = Annotated",
         "ContextIdOption = Annotated",
         "ResultFileOption = Annotated",
         "SourceOptionIdOption = Annotated",
@@ -273,19 +312,40 @@ def test_cli_agent_adapter_lifecycle_commands_have_dedicated_boundary() -> None:
     assert "cli_agent_command_options.py" in design_source
 
 
+def test_cli_agent_runtime_phase_commands_have_dedicated_boundaries() -> None:
+    root = Path(__file__).resolve().parents[3]
+    runtime_source = (root / "src" / "loopora" / "cli_agent_runtime_commands.py").read_text(encoding="utf-8")
+    phase_sources = {
+        phase: (root / "src" / "loopora" / f"cli_agent_{phase}_command.py").read_text(encoding="utf-8") for phase in ("plan", "run", "next", "submit")
+    }
+    contracts = (root / "design" / "contracts.md").read_text(encoding="utf-8")
+    service_boundaries = (root / "design" / "service-boundaries.md").read_text(encoding="utf-8")
+
+    for phase, source in phase_sources.items():
+        assert f"from loopora.cli_agent_{phase}_command import" in runtime_source
+        assert f"def register_agent_{phase}_command" in source
+        assert f"def agent_{phase}" in source
+        assert f"def agent_{phase}" not in runtime_source
+        assert f"cli_agent_{phase}_command.py" in service_boundaries
+    assert "def _claim_agent_next_from_cli_compat" in runtime_source
+    assert "claim_agent_next_from_cli(request)" in runtime_source
+    assert "Agent Native runtime CLI registration ownership" in contracts
+    assert "cli_agent_*_command.py" in contracts
+
+
 def test_cli_agent_runtime_actions_have_dedicated_boundary() -> None:
     root = Path(__file__).resolve().parents[3]
-    adapter_commands_source = (root / "src" / "loopora" / "cli_agent_adapter_commands.py").read_text(
-        encoding="utf-8"
-    )
-    runtime_commands_source = (root / "src" / "loopora" / "cli_agent_runtime_commands.py").read_text(
-        encoding="utf-8"
+    adapter_commands_source = (root / "src" / "loopora" / "cli_agent_adapter_commands.py").read_text(encoding="utf-8")
+    runtime_commands_source = (root / "src" / "loopora" / "cli_agent_runtime_commands.py").read_text(encoding="utf-8")
+    phase_sources = "\n".join(
+        (root / "src" / "loopora" / f"cli_agent_{phase}_command.py").read_text(encoding="utf-8") for phase in ("plan", "run", "next", "submit")
     )
     actions_source = (root / "src" / "loopora" / "cli_agent_runtime_actions.py").read_text(encoding="utf-8")
     design_source = (root / "design" / "contracts.md").read_text(encoding="utf-8")
 
     assert "from loopora import cli_agent_runtime_actions as _agent_runtime_actions" in adapter_commands_source
     assert "from loopora.cli_agent_runtime_actions import" in runtime_commands_source
+    assert "from loopora.cli_agent_runtime_actions import" in phase_sources
     for marker in (
         "def claim_agent_next_from_cli",
         "def handle_agent_submit_error",
@@ -297,6 +357,29 @@ def test_cli_agent_runtime_actions_have_dedicated_boundary() -> None:
         assert marker not in runtime_commands_source
     assert "cli_agent_runtime_actions.py" in design_source
     assert "cli_agent_runtime_commands.py" in design_source
+
+
+def test_cli_agent_runtime_workdir_recovery_has_dedicated_boundary() -> None:
+    root = Path(__file__).resolve().parents[3]
+    runtime_commands_source = (root / "src" / "loopora" / "cli_agent_runtime_commands.py").read_text(encoding="utf-8")
+    phase_sources = "\n".join(
+        (root / "src" / "loopora" / f"cli_agent_{phase}_command.py").read_text(encoding="utf-8") for phase in ("plan", "run", "next", "submit")
+    )
+    workdir_recovery_source = (root / "src" / "loopora" / "cli_agent_workdir_recovery.py").read_text(encoding="utf-8")
+    design_source = (root / "design" / "contracts.md").read_text(encoding="utf-8")
+
+    assert "from loopora.cli_agent_workdir_recovery import" in phase_sources
+    for marker in (
+        "class AgentRuntimeWorkdirRecoveryRequest",
+        "def exit_if_unusable_agent_runtime_workdir",
+        "def _agent_runtime_workdir_recovery_json_payload",
+        "def _print_agent_runtime_workdir_recovery",
+    ):
+        assert marker in workdir_recovery_source
+        assert marker not in runtime_commands_source
+        assert marker not in phase_sources
+    assert "cli_agent_workdir_recovery.py" in design_source
+
 
 # Merged from test_cli_agent_submit_repair_output.py
 from loopora.cli_agent_submit_repair_output import print_agent_submit_repair_plain

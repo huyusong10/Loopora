@@ -4,7 +4,7 @@ from __future__ import annotations
 from agent_native_cli_terminal_submit_test_support import (
     Path,
     assert_cli_list,
-    assert_codex_native_surface_plain,
+    assert_agent_native_handoff_surface_plain,
     install_terminal_plain_submit_service,
     invoke_terminal_submit,
     terminal_plain_submit_fixture,
@@ -20,7 +20,7 @@ def test_cli_agent_submit_prints_terminal_task_verdict(monkeypatch, tmp_path: Pa
 
     assert result.exit_code == 0, result.stdout
     assert "run_status: succeeded" in result.stdout
-    assert_codex_native_surface_plain(result.stdout)
+    assert_agent_native_handoff_surface_plain(result.stdout)
     assert "submitted_step_id: gatekeeper_step" in result.stdout
     assert "submitted_status: blocked" in result.stdout
     assert_cli_list(result.stdout, "submitted_evidence_refs", "ev_000_03_gatekeeper_step")
@@ -31,15 +31,8 @@ def test_cli_agent_submit_prints_terminal_task_verdict(monkeypatch, tmp_path: Pa
     assert "submitted_summary: GateKeeper submitted terminal evidence with an insufficient-evidence verdict." in result.stdout
     assert f"run_contract_path: {layout.run_contract_path}" in result.stdout
     assert "judgment_contract_summary: Keep the evidence standard frozen through terminal submit." in result.stdout
-    assert_cli_list(result.stdout, "loop_fit_reasons", "Later role outputs can drift without the frozen contract.")
-    assert_cli_list(result.stdout, "judgment_tradeoffs", "Direct proof beats narrative confidence.")
-    assert_cli_list(result.stdout, "execution_strategy", "Collect audit evidence before terminal closure.")
-    assert_cli_list(result.stdout, "local_governance", "Inspector verifies tests/ evidence before terminal closure.")
-    assert_cli_list(result.stdout, "role_postures", "GateKeeper: Separate run success from task proof.")
-    assert_cli_list(result.stdout, "success_surface", "Checkout instrumentation records the buyer action.")
-    assert_cli_list(result.stdout, "fake_done_states", "A story without audit evidence is fake done.")
-    assert_cli_list(result.stdout, "evidence_preferences", "Audit log command output is required.")
-    assert "residual_risk: Manual billing export remains a Support-owned follow-up." in result.stdout
+    assert "loop_fit_reasons:" not in result.stdout
+    assert "evidence_preferences:" not in result.stdout
     assert "task_verdict: insufficient_evidence" in result.stdout
     assert "task_verdict_source: gatekeeper" in result.stdout
     assert "task_verdict_summary: Required coverage still lacks direct evidence." in result.stdout
@@ -49,11 +42,13 @@ def test_cli_agent_submit_prints_terminal_task_verdict(monkeypatch, tmp_path: Pa
     assert "next_plan_action: open run_url and use Improve plan with evidence" in result.stdout
     assert "if the Loop itself needs adjustment" in result.stdout
     assert "next_evidence_focus: Required coverage still lacks direct evidence." in result.stdout
-    assert "agent_runner: lifecycle_closed_task_unproven" in result.stdout
-    assert "agent_runner_task_verdict: insufficient_evidence" in result.stdout
+    assert "agent_native: lifecycle_closed_task_unproven" in result.stdout
+    assert "agent_native_task_verdict: insufficient_evidence" in result.stdout
     assert "task_proof_source: run.task_verdict" in result.stdout
     assert "run_lifecycle_source: result.complete" in result.stdout
-    assert "agent_runner: complete" not in result.stdout
+    assert "agent_native: complete" not in result.stdout
+    assert "agent_runner:" not in result.stdout
+    assert "agent_runner_task_verdict" not in result.stdout
 
 # Merged from test_agent_native_evidence_contract_architecture.py
 from agent_native_contract_architecture_support import (
@@ -96,8 +91,11 @@ def test_agent_native_evidence_contracts_have_dedicated_boundary() -> None:
     assert_design_mentions(design_contracts_source(), "agent_native_evidence_contracts.py", "agent_native_known_evidence_refs.py")
 
 # Merged from test_agent_native_guidance.py
-from loopora.agent_native_guidance import actionable_blocking_item
-from loopora.service_agent_native_contracts import agent_native_actionable_blocking_item
+from loopora.agent_native_guidance import actionable_blocking_item, actionable_next_action
+from loopora.service_agent_native_contracts import (
+    agent_native_actionable_blocking_item,
+    agent_native_actionable_repair_next_action,
+)
 
 
 def test_agent_native_blocking_summaries_explain_contract_target_tokens() -> None:
@@ -107,6 +105,17 @@ def test_agent_native_blocking_summaries_explain_contract_target_tokens() -> Non
     assert agent_native_actionable_blocking_item("check_001") == expected
     assert actionable_blocking_item("done_when.check_001").startswith("done_when.check_001: coverage target id")
     assert agent_native_actionable_blocking_item("gatekeeper.finish").startswith("gatekeeper.finish: GateKeeper finish target")
+
+
+def test_agent_native_blocked_next_action_never_surfaces_placeholders_for_custom_blockers() -> None:
+    blockers = ["custom_role_blocker: produce direct audit evidence before continuing"]
+
+    assert actionable_next_action("No action needed.", blockers) == "Resolve the listed blocking items before continuing evidence."
+    assert (
+        agent_native_actionable_repair_next_action("Continue only after the blocking issues are resolved.", blockers)
+        == "Resolve the listed blocking items before continuing evidence."
+    )
+    assert actionable_next_action("Investigate the missing audit proof.", blockers) == "Investigate the missing audit proof."
 
 # Merged from test_agent_native_host_dispatch_literal_validation.py
 from compacted_agent_native_support import (
@@ -281,15 +290,25 @@ def test_agent_native_next_step_sections_have_dedicated_boundary() -> None:
     ):
         assert marker in section_source
         assert marker not in next_step_source
-    assert "prefix_loopora_command" in section_source
-    assert "prefix_loopora_command" not in next_step_source
+    assert "copyable_loopora_command" in section_source
+    assert "copyable_loopora_command" not in next_step_source
     dispatch_unavailable = agent_dispatch_unavailable_summary(
         adapter="codex",
         workdir="$PWD",
         role_dispatch={"target_agent": "loopora-builder", "target_agent_config_exists": False},
     )
+    assert dispatch_unavailable["workdir_available"] is True
     assert 'loopora agent codex check --workdir "$PWD"' in dispatch_unavailable["check_command"]
     assert 'loopora init codex --workdir "$PWD"' in dispatch_unavailable["repair_command"]
+    missing_workdir_dispatch = agent_dispatch_unavailable_summary(
+        adapter="codex",
+        workdir="",
+        role_dispatch={"target_agent": "loopora-builder", "target_agent_config_exists": False},
+    )
+    assert missing_workdir_dispatch["workdir_available"] is False
+    assert "check_command" not in missing_workdir_dispatch
+    assert "repair_command" not in missing_workdir_dispatch
+    assert "Recover the project workdir" in missing_workdir_dispatch["next"]
     assert "agent_native_next_step_sections.py" in design_source
 
 # Merged from test_agent_native_observation_current_handoff.py

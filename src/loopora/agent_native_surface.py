@@ -42,9 +42,6 @@ def compact_native_run_surface(surface: dict[str, Any]) -> dict[str, Any]:
     compact: dict[str, Any] = {}
     for key in (
         "entry_kind",
-        "entry_paths",
-        "slash_commands",
-        "target_agents",
         "host_mechanism",
         "accepted_native_tools",
         "submit_contract",
@@ -59,7 +56,6 @@ def compact_native_run_surface(surface: dict[str, Any]) -> dict[str, Any]:
         key: capability[key]
         for key in (
             "activation",
-            "command_namespace",
             "role_dispatch",
             "workspace_owner",
             "proof_owner",
@@ -69,19 +65,6 @@ def compact_native_run_surface(surface: dict[str, Any]) -> dict[str, Any]:
     }
     if compact_capability:
         compact["capability_contract"] = compact_capability
-    experience = surface.get("experience_capabilities") if isinstance(surface.get("experience_capabilities"), dict) else {}
-    compact_experience = {
-        key: experience[key]
-        for key in (
-            "role_dispatch_guidance",
-            "todo_guidance",
-            "native_trace_optional",
-            "technical_handoff_paths",
-        )
-        if experience.get(key) not in ("", [], {}, None)
-    }
-    if compact_experience:
-        compact["experience_capabilities"] = compact_experience
     return compact
 
 

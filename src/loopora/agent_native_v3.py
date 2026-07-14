@@ -22,6 +22,9 @@ class AgentWorkPanelV3(TypedDict):
     task_outcome: str
     current_role: str
     current_step_id: str
+    target_agent: str
+    role_handoff_status: str
+    role_handoff_owner: str
     next_action: str
     evidence_focus: str
     top_gaps: list[dict[str, Any]]
@@ -127,7 +130,11 @@ def agent_v3_status(*, ready: object = None, complete: object = None, error: obj
 def agent_v3_technical_handoff(summary: dict[str, Any]) -> dict[str, Any]:
     keys = (
         "run_url",
+        "run_url_status",
         "preview_url",
+        "preview_url_status",
+        "active_run_url",
+        "active_run_url_status",
         "context_path",
         "agent_step_view_path",
         "step_contract_path",
@@ -137,6 +144,7 @@ def agent_v3_technical_handoff(summary: dict[str, Any]) -> dict[str, Any]:
         "next_agent_step_view_path",
         "next_step_contract_path",
         "next_result_template",
+        "next_result_file",
         "next_submit_command",
         "schema_lookup",
         "result_file_to_repair",

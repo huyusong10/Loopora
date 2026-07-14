@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from strategy_source_architecture_test_support import design_boundary_source
+
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
@@ -43,7 +45,7 @@ def test_run_finalization_uses_stable_verdict_engine_actor_factory() -> None:
     finalization_source = (REPO_ROOT / "src" / "loopora" / "service_run_finalization.py").read_text(encoding="utf-8")
     verdicts_source = (REPO_ROOT / "src" / "loopora" / "run_finalization_verdicts.py").read_text(encoding="utf-8")
     actors_source = (REPO_ROOT / "src" / "loopora" / "kernel" / "actors.py").read_text(encoding="utf-8")
-    contracts_source = (REPO_ROOT / "design" / "contracts.md").read_text(encoding="utf-8")
+    contracts_source = design_boundary_source()
 
     assert "ActorRef.verdict_engine()" in finalization_source
     assert 'ActorRef(kind="system", id="verdict-engine"' not in finalization_source

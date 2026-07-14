@@ -5,9 +5,14 @@ from context_architecture_test_support import loopora_source
 
 def test_run_contract_snapshot_request_uses_strategy_source_input() -> None:
     context_contract_snapshot_source = loopora_source("context_contract_snapshot.py")
+    adapter_workdir_recovery_source = loopora_source("agent_adapter_workdir_recovery.py")
     context_flow_source = loopora_source("context_flow.py")
+    cli_spec_recovery_source = loopora_source("cli_loop_spec_recovery.py")
     registration_source = loopora_source("service_run_registration.py")
+    service_loop_create_inputs_source = loopora_source("service_loop_create_inputs.py")
     service_run_start_source = loopora_source("service_run_start.py")
+    web_workdir_recovery_source = loopora_source("web_workdir_recovery.py")
+    workdir_inputs_source = loopora_source("workdir_inputs.py")
 
     assert "class RunContractSnapshotRequest" in context_contract_snapshot_source
     assert "strategy_source: dict" in context_contract_snapshot_source
@@ -23,7 +28,7 @@ def test_run_contract_snapshot_request_uses_strategy_source_input() -> None:
     assert "workflow=strategy_source" not in context_contract_snapshot_source
     assert "workflow=strategy_snapshot" not in context_flow_source
     assert "from loopora.context_contract_snapshot import RunContractSnapshotRequest, build_run_contract_snapshot" in service_run_start_source
-    assert "class LoopCreateRequest" in loopora_source("service_loop_create_inputs.py")
+    assert "class LoopCreateRequest" in service_loop_create_inputs_source
     assert "class ResolvedLoopCreate" in registration_source
     assert "class LoopCreateRequest" not in registration_source
     assert "class LoopDefinitionFiles" in registration_source
@@ -36,3 +41,15 @@ def test_run_contract_snapshot_request_uses_strategy_source_input() -> None:
     assert "_validate_loop_completion_workflow" not in registration_source
     assert "strategy_source = self._normalized_strategy_source_from_record(loop)" in service_run_start_source
     assert 'workflow = loop.get("workflow_json")' not in registration_source + service_run_start_source
+    assert "def spec_path_state" in workdir_inputs_source
+    assert "def workdir_path_state" in workdir_inputs_source
+    assert "def normalize_existing_spec_path" in workdir_inputs_source
+    assert "normalize_existing_spec_path" in service_loop_create_inputs_source
+    assert "normalize_recoverable_workdir" in service_loop_create_inputs_source
+    assert "spec_path_state" in cli_spec_recovery_source
+    assert "spec_path_state" in web_workdir_recovery_source
+    assert "workdir_path_state" in adapter_workdir_recovery_source
+    assert "workdir_path_state" in service_run_start_source
+    assert ".exists()" not in service_loop_create_inputs_source
+    assert ".exists()" not in adapter_workdir_recovery_source
+    assert ".exists()" not in service_run_start_source

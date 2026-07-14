@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1000" height="520" viewBox="0 0 1000 520" role="img" aria-labelledby="title desc">
   <title id="title">Loopora first-use path</title>
-  <desc id="desc">A diagram showing first use of Loopora from the current Coding Agent: generate a candidate Loop, preview or adjust it in Web, return to the Agent to run, and write evidence into the same local record.</desc>
+  <desc id="desc">A diagram showing the first-use route choices: Fit Guide/Web choices first when you are outside an Agent session, same-Agent setup when you are already in Codex, Claude Code, or OpenCode, and import or manual expert paths for reviewed plan files. All paths preserve task judgment in one reviewable Loop and write evidence, gaps, blockers, and verdicts into the same local record.</desc>
   <defs>
     <marker id="arrow-blue" markerWidth="12" markerHeight="12" refX="9" refY="6" orient="auto">
       <path d="M2 2 L10 6 L2 10 Z" fill="#2563eb"/>
@@ -27,44 +27,39 @@
   </defs>
 
   <rect width="1000" height="520" rx="28" class="canvas"/>
-  <text x="500" y="58" text-anchor="middle" class="title">Start in the Agent, inspect evidence in Web</text>
-  <text x="500" y="91" text-anchor="middle" class="sub">Keep the same working surface; add a reviewable run surface to long tasks</text>
+  <text x="500" y="58" text-anchor="middle" class="title">Pick a path, one Loop record</text>
+  <text x="500" y="91" text-anchor="middle" class="sub">Outside an Agent: Fit Guide/Web choices. Inside one: same-Agent setup.</text>
 
   <g class="shadow">
-    <rect x="78" y="140" width="844" height="130" rx="20" class="lane"/>
-    <text x="116" y="178" class="h">Current Agent</text>
-    <text x="116" y="209" class="body">Describe the task and judgment</text>
+    <rect x="58" y="132" width="410" height="154" rx="20" class="web"/>
+    <text x="96" y="171" class="h green">Fit Guide/Web choices</text>
+    <text x="96" y="202" class="body">Default outside an Agent session</text>
+    <text x="96" y="229" class="body">Web conversation / Plan File import</text>
+    <text x="96" y="256" class="body">Manual expert paths when reviewed</text>
 
-    <rect x="336" y="166" width="170" height="52" rx="16" class="cmd"/>
-    <text x="421" y="199" text-anchor="middle" class="cmdText">/loopora-plan</text>
-    <text x="421" y="239" text-anchor="middle" class="small">Plan Loop candidate</text>
-
-    <rect x="680" y="166" width="174" height="52" rx="16" class="cmd"/>
-    <text x="767" y="199" text-anchor="middle" class="cmdText">/loopora-run</text>
-    <text x="767" y="239" text-anchor="middle" class="small">Run Agent rounds</text>
+    <rect x="532" y="132" width="410" height="154" rx="20" class="agent"/>
+    <text x="570" y="171" class="h">Same-Agent setup</text>
+    <text x="570" y="202" class="body">Already inside a host Agent</text>
+    <text x="570" y="229" class="body">Codex / Claude Code / OpenCode</text>
+    <rect x="570" y="241" width="150" height="42" rx="14" class="cmd"/>
+    <text x="645" y="268" text-anchor="middle" class="cmdText">/loopora-plan</text>
+    <rect x="740" y="241" width="150" height="42" rx="14" class="cmd"/>
+    <text x="815" y="268" text-anchor="middle" class="cmdText">/loopora-run</text>
   </g>
-
-  <path d="M270 192 H314" fill="none" stroke="#2563eb" stroke-width="3"/>
-  <polygon points="328,192 312,183 312,201" fill="#2563eb"/>
-  <path d="M520 192 H658" fill="none" stroke="#2563eb" stroke-width="3"/>
-  <polygon points="672,192 656,183 656,201" fill="#2563eb"/>
 
   <g class="shadow">
-    <rect x="346" y="316" width="248" height="82" rx="18" class="web"/>
-    <text x="470" y="350" text-anchor="middle" class="h green">Web preview</text>
-    <text x="470" y="378" text-anchor="middle" class="body">Confirm, adjust, or add judgment</text>
+    <rect x="260" y="326" width="220" height="82" rx="18" class="lane"/>
+    <text x="370" y="360" text-anchor="middle" class="h">Reviewable Loop</text>
+    <text x="370" y="388" text-anchor="middle" class="body">Plan, adjust, confirm</text>
 
-    <rect x="632" y="316" width="248" height="82" rx="18" class="record"/>
-    <text x="756" y="350" text-anchor="middle" class="h">Same local record</text>
-    <text x="756" y="378" text-anchor="middle" class="body">Evidence, gaps, blockers, verdict</text>
+    <rect x="520" y="326" width="260" height="82" rx="18" class="record"/>
+    <text x="650" y="360" text-anchor="middle" class="h">Same local record</text>
+    <text x="650" y="388" text-anchor="middle" class="body">Evidence, gaps, blockers, verdict</text>
   </g>
 
-  <path d="M421 258 V302" fill="none" stroke="#059669" stroke-width="3"/>
-  <polygon points="421,316 412,300 430,300" fill="#059669"/>
-  <path d="M594 357 H610" fill="none" stroke="#059669" stroke-width="3"/>
-  <polygon points="624,357 608,348 608,366" fill="#059669"/>
-  <path d="M767 258 V302" fill="none" stroke="#059669" stroke-width="3"/>
-  <polygon points="767,316 758,300 776,300" fill="#059669"/>
+  <path d="M263 292 L350 313" fill="none" stroke="#059669" stroke-width="3" marker-end="url(#arrow-green)"/>
+  <path d="M737 292 L434 322" fill="none" stroke="#059669" stroke-width="3" marker-end="url(#arrow-green)"/>
+  <path d="M480 367 H506" fill="none" stroke="#059669" stroke-width="3" marker-end="url(#arrow-green)"/>
 
-  <text x="500" y="460" text-anchor="middle" class="body">A Loop started in the Agent can be inspected in Web; Web evidence comes from the same run.</text>
+  <text x="500" y="460" text-anchor="middle" class="body">Start from the path you are actually in; evidence stays in one local record.</text>
 </svg>

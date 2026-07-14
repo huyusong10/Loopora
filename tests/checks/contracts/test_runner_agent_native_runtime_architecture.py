@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from strategy_source_architecture_test_support import design_boundary_source
+
 from runner_agent_native_architecture_support import (
-    REPO_ROOT,
     SRC_ROOT,
     agent_native_claim_source,
     source,
@@ -13,7 +14,7 @@ def test_headless_and_agent_share_runner_step_runtime_request_boundary() -> None
     agent_source = agent_native_claim_source()
     agent_runtime_step_source = source("agent_native_claim_runtime_step.py")
     request_source = source("runner_step_runtime_requests.py")
-    contracts_source = (REPO_ROOT / "design" / "contracts.md").read_text(encoding="utf-8")
+    contracts_source = design_boundary_source()
 
     assert "from loopora.runner_step_runtime_requests import" in runner_source
     assert "from loopora.agent_native_claim_runtime_step import" in agent_source

@@ -1,0 +1,79 @@
+{
+  "scenario_payloads": {
+    "alignment_bundle_unsupported_observed_workdir_claim": {
+      "assistant_message": "I prepared a bundle with an unsupported observed workdir claim.",
+      "bundle_yaml": "unsupported_observed_workdir_claim"
+    },
+    "alignment_governance_markers_listed_without_responsibilities": {
+      "assistant_message": "I prepared a bundle that lists governance markers but does not route responsibilities.",
+      "bundle_yaml": "governance_markers_listed_as_facts"
+    },
+    "alignment_invalid": {
+      "assistant_message": "我先给出一个故意不完整的 bundle。",
+      "bundle_yaml": "invalid_minimal"
+    },
+    "alignment_invalid_then_valid": {
+      "assistant_message": "我先给出一个需要修复的 bundle。",
+      "bundle_yaml": "invalid_minimal",
+      "skip_modes": ["repair"]
+    },
+    "alignment_semantic_invalid_then_valid": {
+      "assistant_message": "我先给出一个语义不完整的 bundle。",
+      "bundle_yaml": "without_semantics",
+      "skip_modes": ["repair"]
+    },
+    "alignment_chinese_readiness_evidence": {
+      "assistant_message": "我已用中文整理成一个可导入的 Loopora bundle。",
+      "bundle_yaml": "chinese",
+      "agreement_summary": "使用聚焦 Builder、证据 Inspector 和严格 GateKeeper 来推进这个 Loop。",
+      "readiness_evidence": "chinese"
+    },
+    "alignment_english_bundle_prose_for_chinese_user": {
+      "assistant_message": "我准备了一个 bundle，但正文仍然是英文。",
+      "bundle_yaml": "default",
+      "agreement_summary": "使用聚焦 Builder、证据 Inspector 和严格 GateKeeper 来推进这个 Loop。",
+      "readiness_evidence": "chinese"
+    },
+    "alignment_english_visible_bundle_names_for_chinese_user": {
+      "assistant_message": "我准备了一个中文 bundle，但可见名称仍然是英文。",
+      "bundle_yaml": "chinese_with_english_visible_names",
+      "agreement_summary": "使用聚焦 Builder、证据 Inspector 和严格 GateKeeper 来推进这个 Loop。",
+      "readiness_evidence": "chinese"
+    },
+    "alignment_english_assistant_message_for_chinese_bundle": {
+      "assistant_message": "I prepared an importable Loopora bundle.",
+      "bundle_yaml": "chinese",
+      "agreement_summary": "使用聚焦 Builder、证据 Inspector 和严格 GateKeeper 来推进这个 Loop。",
+      "readiness_evidence": "chinese"
+    },
+    "alignment_english_bundle_for_chinese_user": {
+      "assistant_message": "I prepared an importable Loopora bundle.",
+      "bundle_yaml": "default"
+    },
+    "alignment_generated_lineage_metadata": {
+      "assistant_message": "I prepared a bundle but encoded source lineage metadata.",
+      "bundle_yaml": "lineage_metadata"
+    },
+    "alignment_markdown_fenced_bundle": {
+      "assistant_message": "I prepared a fenced bundle.",
+      "bundle_yaml": "markdown_fenced_default"
+    },
+    "alignment_missing_readiness_evidence": {
+      "assistant_message": "我勾选了 checklist 但没有给出具体证据。",
+      "bundle_yaml": "default",
+      "readiness_evidence": "missing"
+    },
+    "alignment_refund_agreement_repair_bundle": {
+      "assistant_message": "I prepared a refund governance Loopora bundle with a Guide repair pass.",
+      "bundle_yaml": "refund_repair",
+      "agreement_response": "refund",
+      "complete_readiness_checklist": true
+    },
+    "alignment_chinese_refund_agreement_repair_bundle": {
+      "assistant_message": "已整理成一个包含 Guide 修复轮次的退款治理 Loopora bundle。",
+      "bundle_yaml": "chinese_refund_repair",
+      "agreement_response": "chinese_refund",
+      "complete_readiness_checklist": true
+    }
+  }
+}

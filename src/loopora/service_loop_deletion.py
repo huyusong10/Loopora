@@ -3,8 +3,8 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-from loopora.branding import state_dir_for_workdir
 from loopora.diagnostics import get_logger, log_event
+from loopora.local_workdir_artifacts import loop_artifact_dir_for_ready_workdir
 from loopora.service_cleanup_diagnostics import best_effort_rmtree, record_cleanup_failure
 from loopora.service_types import ACTIVE_RUN_STATUSES, LooporaConflictError
 
@@ -12,6 +12,38 @@ logger = get_logger(__name__)
 
 
 class ServiceLoopDeletionMixin:
+    def preview_loop_delete(self, loop_id: str) -> dict:
+        loop = self.get_loop(loop_id)
+        runs = loop.get("runs") if isinstance(loop.get("runs"), list) else []
+        run_ids = [
+            str(run.get("id") or "").strip()
+            for run in runs
+            if isinstance(run, dict) and str(run.get("id") or "").strip()
+        ]
+        active_run_ids = [
+            str(run.get("id") or "").strip()
+            for run in runs
+            if isinstance(run, dict)
+            and str(run.get("status") or "").strip() in ACTIVE_RUN_STATUSES
+            and str(run.get("id") or "").strip()
+        ]
+        return {
+            "status": "dry_run",
+            "dry_run": True,
+            "delete_allowed": not active_run_ids,
+            "id": loop.get("id"),
+            "name": loop.get("name") or "",
+            "workdir": loop.get("workdir") or "",
+            "would_delete": {"loop": loop.get("id"), "run_count": len(runs), "run_ids": run_ids},
+            "blocked_by_active_runs": active_run_ids,
+            "does_not_delete": [
+                "target_project_workdir",
+                "source_spec_file",
+                "exported_plan_files",
+                "external_provider_history",
+            ],
+        }
+
     def delete_loop(self, loop_id: str, *, allow_bundle_owned: bool = False) -> dict:
         if not allow_bundle_owned and hasattr(self, "_bundle_record_for_loop_id"):
             bundle = self._bundle_record_for_loop_id(loop_id)
@@ -23,7 +55,9 @@ class ServiceLoopDeletionMixin:
             raise LooporaConflictError(f"cannot delete loop with active runs: {', '.join(active_runs)}")
 
         paths_to_remove = [Path(run["runs_dir"]) for run in loop["runs"]]
-        paths_to_remove.append(state_dir_for_workdir(loop["workdir"]) / "loops" / loop_id)
+        loop_artifact_dir = loop_artifact_dir_for_ready_workdir(loop["workdir"], loop_id)
+        if loop_artifact_dir is not None:
+            paths_to_remove.append(loop_artifact_dir)
 
         self.repository.delete_loop(loop_id)
         for path in paths_to_remove:

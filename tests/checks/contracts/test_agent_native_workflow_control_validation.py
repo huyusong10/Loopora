@@ -27,7 +27,7 @@ def test_agent_native_submit_revalidates_persisted_workflow_controls(
         AgentBundleCandidateRequest(
             adapter="codex",
             workdir=sample_workdir,
-            message="Reject corrupted persisted workflow controls before accepting an Agent Runner step result.",
+            message="Reject corrupted persisted workflow controls before accepting an Agent Native step result.",
             bundle_file=bundle_file,
             entry_source="codex_project_skill",
         )
@@ -71,7 +71,7 @@ def test_agent_native_submit_revalidates_persisted_workflow_inputs(
         AgentBundleCandidateRequest(
             adapter="codex",
             workdir=sample_workdir,
-            message="Reject corrupted persisted workflow inputs before accepting an Agent Runner step result.",
+            message="Reject corrupted persisted workflow inputs before accepting an Agent Native step result.",
             bundle_file=bundle_file,
             entry_source="codex_project_skill",
         )

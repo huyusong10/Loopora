@@ -36,6 +36,7 @@ from loopora.web_strategy_inputs import (
     _orchestration_form_values_from_record,
     _orchestration_payload_from_mapping,
     _strategy_source_for_spec_template,
+    _strategy_source_for_spec_template_request,
 )
 
 __all__ = [
@@ -66,4 +67,5 @@ __all__ = [
     "_role_definition_payload_from_mapping",
     "_spec_document_payload",
     "_strategy_source_for_spec_template",
+    "_strategy_source_for_spec_template_request",
 ]

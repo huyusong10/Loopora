@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}{{ '请求未完成' if page_locale == 'zh' else 'Request not completed' }}{% endblock %}
+{% block content %}
+<div class="page-stack" data-testid="web-error-page">
+  <section class="hero hero-tight">
+    <div class="hero-copy-stack">
+      <h1>
+        <span data-lang="zh">Loopora 无法完成这个请求。</span>
+        <span data-lang="en">Loopora could not complete this request.</span>
+      </h1>
+      <p>
+        <span data-lang="zh">请求没有完成，但内部错误细节不会显示在浏览器里。返回工作台后可以重试，或打开支持页复制脱敏证据并选择正确的求助路线。</span>
+        <span data-lang="en">The request did not complete, and internal details are kept out of the browser. Return to the workspace to retry, or open Support to copy redacted evidence and choose the right help route.</span>
+      </p>
+      <div class="field-status is-warning" aria-live="polite" data-testid="web-error-status">
+        <span data-lang="zh">状态码 {{ status_code }}</span>
+        <span data-lang="en">Status {{ status_code }}</span>
+      </div>
+    </div>
+    <div class="card-actions hero-actions">
+      <a class="primary-button" href="{{ nav_home_href }}" data-testid="web-error-home-link" data-workdir-context-link="workdir">
+        <span data-lang="zh">返回 Loopora 首页</span>
+        <span data-lang="en">Return to Loopora home</span>
+      </a>
+      <a class="secondary-button" href="{{ nav_support_href }}" data-testid="web-error-support-link" data-workdir-context-link="workdir">
+        <span data-lang="zh">打开支持页</span>
+        <span data-lang="en">Open Support</span>
+      </a>
+    </div>
+  </section>
+</div>
+{% endblock %}

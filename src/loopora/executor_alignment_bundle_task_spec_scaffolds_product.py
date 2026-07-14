@@ -1,0 +1,19 @@
+from __future__ import annotations
+
+from loopora.executor_alignment_bundle_task_spec_scaffolds_product_engagement import (
+    _append_schedule_phase_spec_notes as _append_schedule_phase_spec_notes,
+    _append_notification_subscription_deliverability_spec_notes as _append_notification_subscription_deliverability_spec_notes,
+    _append_support_ticket_sla_spec_notes as _append_support_ticket_sla_spec_notes,
+)
+
+from loopora.executor_alignment_bundle_task_spec_scaffolds_product_operations import (
+    _append_concurrency_conflict_resolution_spec_notes as _append_concurrency_conflict_resolution_spec_notes,
+    _append_analytics_experiment_instrumentation_spec_notes as _append_analytics_experiment_instrumentation_spec_notes,
+    _append_inventory_reservation_consistency_spec_notes as _append_inventory_reservation_consistency_spec_notes,
+)
+
+from loopora.executor_alignment_bundle_task_spec_scaffolds_product_search_ai import (
+    _append_search_index_consistency_spec_notes as _append_search_index_consistency_spec_notes,
+    _append_search_quality_spec_notes as _append_search_quality_spec_notes,
+    _append_rag_long_chain_spec_notes as _append_rag_long_chain_spec_notes,
+)

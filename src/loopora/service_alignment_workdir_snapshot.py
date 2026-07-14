@@ -4,6 +4,10 @@ import os
 from pathlib import Path
 
 from loopora.branding import APP_STATE_DIRNAME
+from loopora.workdir_inputs import PATH_PROBE_ERRORS, same_workdir_identity
+
+
+WORKDIR_UNREADABLE_MESSAGE = "Workdir could not be inspected."
 
 
 def alignment_project_boundary(root: Path) -> Path | None:
@@ -38,47 +42,47 @@ def alignment_workdir_snapshot(workdir: Path) -> str:
     try:
         root = workdir.expanduser().resolve()
         if not root.exists() or not root.is_dir():
-            return f"Workdir is not an accessible directory: {root}"
+            return WORKDIR_UNREADABLE_MESSAGE
         entries = sorted(root.iterdir(), key=lambda item: (item.is_file(), item.name.lower()))
-    except OSError as exc:
-        return f"Workdir could not be inspected: {exc}"
-    visible = [item for item in entries if item.name not in {".DS_Store", APP_STATE_DIRNAME}][:40]
-    workdir_appears_empty = not visible
-    marker_names = {
-        "README.md",
-        "README.zh-CN.md",
-        "package.json",
-        "pyproject.toml",
-        "Cargo.toml",
-        "go.mod",
-        "pnpm-lock.yaml",
-        "uv.lock",
-        "requirements.txt",
-        "AGENTS.md",
-    }
-    markers = [item.name for item in visible if item.name in marker_names]
-    design_dir = root / "design"
-    design_readme = design_dir / "README.md"
-    tests_dir = root / "tests"
-    agents_file = root / "AGENTS.md"
-    applicable_agents = alignment_applicable_agents_paths(root)
-    lines = [f"Top-level entries ({len(visible)} shown):"]
-    if workdir_appears_empty:
-        lines.append("Workdir appears empty. Treat technology choices as assumptions until the run verifies them.")
-    for item in visible:
-        suffix = "/" if item.is_dir() else ""
-        lines.append(f"- {item.name}{suffix}")
-    if markers:
-        lines.append("Detected markers: " + ", ".join(markers))
-    lines.append(f"AGENTS.md exists: {'yes' if agents_file.is_file() else 'no'}")
-    lines.append(f"Applicable AGENTS.md exists: {'yes' if applicable_agents else 'no'}")
-    if applicable_agents:
-        agents_relpaths = [os.path.relpath(path, root) for path in applicable_agents]
-        lines.append("Applicable AGENTS.md paths: " + ", ".join(agents_relpaths))
-    lines.append(f"design/ exists: {'yes' if design_dir.is_dir() else 'no'}")
-    lines.append(f"design/README.md exists: {'yes' if design_readme.is_file() else 'no'}")
-    lines.append(f"tests/ exists: {'yes' if tests_dir.is_dir() else 'no'}")
-    return "\n".join(lines)
+        visible = [item for item in entries if item.name not in {".DS_Store", APP_STATE_DIRNAME}][:40]
+        workdir_appears_empty = not visible
+        marker_names = {
+            "README.md",
+            "README.zh-CN.md",
+            "package.json",
+            "pyproject.toml",
+            "Cargo.toml",
+            "go.mod",
+            "pnpm-lock.yaml",
+            "uv.lock",
+            "requirements.txt",
+            "AGENTS.md",
+        }
+        markers = [item.name for item in visible if item.name in marker_names]
+        design_dir = root / "design"
+        design_readme = design_dir / "README.md"
+        tests_dir = root / "tests"
+        agents_file = root / "AGENTS.md"
+        applicable_agents = alignment_applicable_agents_paths(root)
+        lines = [f"Top-level entries ({len(visible)} shown):"]
+        if workdir_appears_empty:
+            lines.append("Workdir appears empty. Treat technology choices as assumptions until the run verifies them.")
+        for item in visible:
+            suffix = "/" if item.is_dir() else ""
+            lines.append(f"- {item.name}{suffix}")
+        if markers:
+            lines.append("Detected markers: " + ", ".join(markers))
+        lines.append(f"AGENTS.md exists: {'yes' if agents_file.is_file() else 'no'}")
+        lines.append(f"Applicable AGENTS.md exists: {'yes' if applicable_agents else 'no'}")
+        if applicable_agents:
+            agents_relpaths = [os.path.relpath(path, root) for path in applicable_agents]
+            lines.append("Applicable AGENTS.md paths: " + ", ".join(agents_relpaths))
+        lines.append(f"design/ exists: {'yes' if design_dir.is_dir() else 'no'}")
+        lines.append(f"design/README.md exists: {'yes' if design_readme.is_file() else 'no'}")
+        lines.append(f"tests/ exists: {'yes' if tests_dir.is_dir() else 'no'}")
+        return "\n".join(lines)
+    except PATH_PROBE_ERRORS:
+        return WORKDIR_UNREADABLE_MESSAGE
 
 
 def alignment_workdir_snapshot_has_governance_markers(workdir_snapshot: str) -> bool:
@@ -98,19 +102,34 @@ def alignment_workdir_snapshot_has_governance_markers(workdir_snapshot: str) -> 
 def alignment_workdir_spec_candidates(state_dir: Path) -> list[Path]:
     candidates: list[Path] = []
     root_spec = state_dir / "spec.md"
-    if root_spec.is_file():
+    if _path_is_file(root_spec):
         candidates.append(root_spec)
     loops_dir = state_dir / "loops"
-    if loops_dir.is_dir():
-        candidates.extend(path for path in sorted(loops_dir.glob("*/spec.md")) if path.is_file())
+    if _path_is_dir(loops_dir):
+        candidates.extend(path for path in _glob_paths(loops_dir, "*/spec.md") if _path_is_file(path))
     return candidates[:20]
 
 
 def alignment_same_workdir(candidate: object, expected: Path) -> bool:
-    candidate_text = str(candidate or "").strip()
-    if not candidate_text:
-        return False
+    return same_workdir_identity(candidate, expected)
+
+
+def _path_is_file(path: Path) -> bool:
     try:
-        return Path(candidate_text).expanduser().resolve() == expected.expanduser().resolve()
-    except OSError:
+        return path.is_file()
+    except PATH_PROBE_ERRORS:
         return False
+
+
+def _path_is_dir(path: Path) -> bool:
+    try:
+        return path.is_dir()
+    except PATH_PROBE_ERRORS:
+        return False
+
+
+def _glob_paths(path: Path, pattern: str) -> list[Path]:
+    try:
+        return sorted(path.glob(pattern))
+    except PATH_PROBE_ERRORS:
+        return []

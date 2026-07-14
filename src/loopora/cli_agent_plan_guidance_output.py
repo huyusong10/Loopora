@@ -10,6 +10,7 @@ from loopora.cli_agent_plan_recovery_results import (
     REPAIR_NEXT_ACTION,
     REPAIR_NEXT_REPAIR_STEP,
     REPAIR_REFERENCE,
+    NEXT_PLAN_CLI_COMMAND_POLICY,
     _agent_after_review_ready_message,
     _agent_entry_return_run_command,
     _agent_entry_return_slash_command,
@@ -26,6 +27,7 @@ from loopora.cli_agent_plan_recovery_results import (
     _recommended_review_option,
 )
 from loopora.cli_agent_plan_repair_hints import validation_repair_hints as _validation_repair_hints
+from loopora.cli_agent_runtime_support import print_preview_url as _print_preview_url
 from loopora.cli_summary_helpers import clip_inline as _clip_inline
 
 
@@ -38,8 +40,12 @@ def _print_agent_web_review_guidance(result: dict) -> None:
         typer.echo(f"- {item}")
     if result.get("loopora_fit_contradiction"):
         typer.echo(f"next_review_step: {_agent_web_review_next_step(result, not_fit=True)}")
+        _print_preview_url(result)
+        _print_agent_web_review_next_plan_command(result)
         return
     typer.echo(f"next_review_step: {_agent_web_review_next_step(result, not_fit=False)}")
+    _print_preview_url(result)
+    _print_agent_web_review_next_plan_command(result)
     _print_agent_web_review_return_command(result)
 
 
@@ -54,10 +60,19 @@ def _print_agent_web_review_recommended_action(result: dict) -> None:
     reply = str(recommended.get("user_reply") or review.get("suggested_reply") or "").strip()
     if reply:
         typer.echo(f"review_reply_preview: {_clip_inline(reply, 260)}")
+
+
+def _print_agent_web_review_next_plan_command(result: dict) -> None:
+    review = _agent_entry_review(result)
+    recommended = _recommended_review_option(review)
+    reply = str(recommended.get("user_reply") or review.get("suggested_reply") or "").strip()
     message_cli_command = str(result.get("message_cli_command") or result.get("next_plan_cli_command") or "").strip()
     if not message_cli_command and reply:
         message_cli_command = _agent_review_message_cli_command(result, reply=reply)
     if message_cli_command:
+        policy = str(result.get("next_plan_cli_command_policy") or NEXT_PLAN_CLI_COMMAND_POLICY).strip()
+        if policy:
+            typer.echo(f"next_plan_cli_command_policy: {policy}")
         typer.echo(f"next_plan_cli_command: {message_cli_command}")
 
 
@@ -76,9 +91,7 @@ def _print_agent_web_review_return_command(result: dict) -> None:
     typer.echo("after_review_cli_command_status: blocked_until_web_review_complete")
     typer.echo(f"after_review_slash_command: {_agent_entry_return_slash_command()}")
     if command:
-        typer.echo(f"after_web_review_cli_command: {command}")
         typer.echo(f"after_review_cli_command: {command}")
-        typer.echo(f"after_review_command: {command}")
 
 
 def _print_agent_repair_guidance(result: dict) -> None:

@@ -19,13 +19,37 @@
   </div>
 </section>
 
-<form class="panel form-panel form-panel-wide" method="post" action="{{ page_copy.action }}" id="new-orchestration-form" data-testid="orchestration-editor-form" data-readonly="{{ 'true' if orchestration_locked else 'false' }}">
-  <div class="field-status is-error" id="form-error" aria-live="polite" {% if not form_error %}hidden{% endif %}>{{ form_error or "" }}</div>
+<form
+  class="panel form-panel form-panel-wide"
+  method="post"
+  action="{{ page_copy.action }}"
+  id="new-orchestration-form"
+  data-testid="orchestration-editor-form"
+  data-readonly="{{ 'true' if orchestration_locked else 'false' }}"
+  data-api-action="{{ orchestration_api_action }}"
+  data-api-method="{{ orchestration_api_method }}"
+  data-return-to="{{ return_to }}"
+  data-workdir-context-form="workdir"
+>
+  <div class="field-status is-error" id="form-error" data-asset-form-error aria-live="polite" {% if not form_error %}hidden{% endif %}>{{ form_error or "" }}</div>
+  {% if form_field_errors %}
+  <ul class="field-status is-error" data-asset-field-recovery-list aria-live="polite">
+    {% for item in form_field_errors %}
+    <li id="{{ item.id }}" data-asset-field-recovery data-asset-field-recovery-for="{{ item.field }}">{{ item.label }}: {{ item.message }}</li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+  {% if request.query_params.get("saved") == "1" %}
+  <div class="field-status is-success" data-return-feedback-param="saved" aria-live="polite">
+    <span data-lang="zh">流程编排已保存，可以继续编辑。</span>
+    <span data-lang="en">Orchestration saved. You can keep editing.</span>
+  </div>
+  {% endif %}
 
   <div class="orchestration-header-grid">
     <label class="orchestration-meta-field">
       <span><span data-lang="zh">名称</span><span data-lang="en">Name</span></span>
-      <input name="name" value="{{ form_values.name }}" required {% if orchestration_locked %}readonly{% endif %} />
+      <input name="name" value="{{ form_values.name }}" required {% if orchestration_locked %}readonly{% endif %} {% if "name" in form_field_error_fields %}aria-invalid="true"{% endif %} {% if form_field_error_ids.get("name") %}aria-describedby="{{ form_field_error_ids.get("name") }}"{% endif %} />
     </label>
 
     <label class="orchestration-meta-field orchestration-meta-field-wide">
@@ -112,7 +136,7 @@
                 <span data-lang="zh">添加步骤</span>
                 <span data-lang="en">Add step</span>
               </button>
-              <a class="ghost-button" href="/roles">
+              <a class="ghost-button" href="{{ role_definitions_href }}" data-testid="orchestration-manage-roles-link" data-workdir-context-link="workdir">
                 <span data-lang="zh">管理角色</span>
                 <span data-lang="en">Manage roles</span>
               </a>
@@ -121,13 +145,14 @@
           <div id="workflow-steps-list" class="workflow-steps-list" data-testid="workflow-steps-list"></div>
         </section>
       </div>
-      <textarea id="workflow-json-input" name="strategy_json" rows="12" data-testid="workflow-json-input" hidden>{{- form_values.strategy_json -}}</textarea>
-      <textarea id="prompt-files-json-input" name="prompt_files_json" rows="12" data-testid="prompt-files-json-input" hidden>{{- form_values.prompt_files_json -}}</textarea>
+      {% set workflow_error_id = form_field_error_ids.get("strategy_json") or form_field_error_ids.get("workflow_json") %}
+      <textarea id="workflow-json-input" name="strategy_json" rows="12" data-testid="workflow-json-input" {% if "strategy_json" in form_field_error_fields or "workflow_json" in form_field_error_fields %}aria-invalid="true"{% endif %} {% if workflow_error_id %}aria-describedby="{{ workflow_error_id }}"{% endif %} hidden>{{- form_values.strategy_json -}}</textarea>
+      <textarea id="prompt-files-json-input" name="prompt_files_json" rows="12" data-testid="prompt-files-json-input" {% if "prompt_files_json" in form_field_error_fields %}aria-invalid="true"{% endif %} {% if form_field_error_ids.get("prompt_files_json") %}aria-describedby="{{ form_field_error_ids.get("prompt_files_json") }}"{% endif %} hidden>{{- form_values.prompt_files_json -}}</textarea>
   </section>
 
   <div class="card-actions">
     {% if orchestration_locked %}
-    <a class="primary-button" href="{{ orchestration_create_from_preset_href }}">
+    <a class="primary-button" href="{{ orchestration_create_from_preset_href }}" data-testid="orchestration-create-from-preset-link" data-workdir-context-link="workdir">
       <span data-lang="zh">{{ page_copy.submit_zh }}</span>
       <span data-lang="en">{{ page_copy.submit_en }}</span>
     </a>
@@ -137,7 +162,7 @@
       <span data-lang="en">{{ page_copy.submit_en }}</span>
     </button>
     {% endif %}
-    <a class="ghost-button" href="/orchestrations">
+    <a class="ghost-button" href="{{ cancel_href }}" data-testid="orchestration-cancel-link" data-workdir-context-link="workdir">
       <span data-lang="zh">取消</span>
       <span data-lang="en">Cancel</span>
     </a>

@@ -473,6 +473,8 @@ def assert_continued_terminal_unproven_run(
     )
     _assert_codex_native_surface_summary(continued["agent_run_summary"])
     assert continuation_summary["next_focus"]
+    assert continuation_summary["action_mode"] == "close_gaps"
+    assert continuation_summary["prior_run_progress_status"] == "baseline"
     assert continued["next_step"]["execution_plane"] == "agent_native"
     session = service.get_alignment_session(started["session"]["id"])
     assert session["linked_run_id"] == continued["run"]["id"]
@@ -485,6 +487,8 @@ def assert_continuation_step_artifacts(continued: dict[str, Any], previous_run: 
     agent_step_view = json.loads(Path(continued["next_step"]["agent_step_view_absolute_path"]).read_text(encoding="utf-8"))
     continuation = step_context["continuation"]
     assert_terminal_unproven_continuation_payload(continuation, previous_run["id"])
+    assert continuation["action_mode"] == "close_gaps"
+    assert continuation["prior_run_progress"]["status"] == "baseline"
     assert continuation["previous_task_verdict_path"].endswith("evidence/task_verdict.json")
     assert any(gap["target_id"] == "done_when.check_001" for gap in continuation["coverage"]["top_gaps"])
     assert agent_step_view["continuation"]["previous_run_id"] == previous_run["id"]
@@ -515,7 +519,6 @@ from agent_adapter_test_support import (
     EXPECTED_NATIVE_PACKAGING,
     EXPECTED_NATIVE_PERMISSION_BOUNDARY,
     EXPECTED_NATIVE_TOOLING_BOUNDARY,
-    _assert_output_contains,
 )
 
 
@@ -525,94 +528,6 @@ def adapter_entry_paths_text(adapter: str) -> str:
         "claude": ".claude/skills/loopora-plan/SKILL.md and .claude/skills/loopora-run/SKILL.md",
         "opencode": ".opencode/commands/loopora-plan.md and .opencode/commands/loopora-run.md",
     }[adapter]
-
-
-def assert_native_surface_plain_output(output: str) -> None:
-    assert "agent surface:" in output
-    _assert_output_contains(
-        output,
-        "- entry:",
-        "plan=",
-        "run=",
-        "/loopora-plan",
-        "/loopora-run",
-    )
-    assert "loopora-orchestrator" in output
-    assert "nested provider CLI=not_used" in output
-    _assert_output_contains(
-        output,
-        "execution=current_host_agent",
-        "role_dispatch=host_native",
-        "workspace=current_host_agent_workdir",
-        "worktree=not_created_or_switched_by_loopora",
-        "proof=loopora_evidence_refs_and_task_verdict",
-        "explicit_loopora_command_or_cli_only",
-        "loopora_plan_run_only_no_generic_host_command_aliases",
-        "host dispatch:",
-        "accepted native tools:",
-        "role configs:",
-        "loopora-builder=",
-        "references:",
-        "loopora-run-contract.md",
-    )
-    _assert_output_contains(
-        output,
-        "packaging:",
-        "entries=generated_thin_project_local_packaging",
-        "scope=project_local_no_global_marketplace_or_skill_cache",
-        "visibility=adapter_project_entries_checked_not_global_skill_sync_assumed",
-        "bundle=entries_roles_references_and_state_checked_together",
-        "update=explicit_check_or_init_only_no_background_auto_update",
-    )
-    _assert_output_contains(
-        output,
-        "context loading:",
-        "entry=thin_dispatcher",
-        "summary_first=",
-        "references=on_demand_from_reference_paths",
-        "memory=host_owned_hint_not_loopora_context_or_evidence",
-        "host_context=host_loaded_skills_commands_agents_editor_context_and_ide_bridges_are_hints_not_loopora_context_contract_or_evidence",
-        "health check:",
-        "scope=managed_entries_role_configs_and_loopora_state",
-        "session recovery:",
-        "ambiguous=list_recoverable_contexts_before_running",
-        "host_sessions=not_auto_discovered_or_taken_over_by_loopora",
-    )
-    _assert_output_contains(
-        output,
-        "handoff:",
-        "required=role_dispatch.target_agent, context_path, step_contract_path, result_template",
-        "payload=path_based_context_step_contract_and_template_not_large_inline_prompt",
-        "parallel=only_when_loop_workflow_declares_parallel_group",
-        "permission boundary:",
-        "owner=host_agent_and_user",
-        "mode=host_agent_user_owned_not_changed_by_loopora",
-        "tooling boundary:",
-        "mcp=host_owned_not_installed_or_enabled_by_loopora",
-        "observability:",
-        "hook_protocol=adapter_specific_no_cross_host_parity_assumption",
-        "progress=activity_status_is_not_task_proof",
-        "owned state:",
-        ".loopora/",
-    )
-    _assert_native_surface_plain_ownership(output)
-    _assert_output_contains(output, "submit contract:", "loopora_host_dispatch", "proof boundary:", "Loopora evidence refs")
-    assert output.index("agent surface:") < output.index("managed files:")
-
-
-def _assert_native_surface_plain_ownership(output: str) -> None:
-    _assert_output_contains(
-        output,
-        "ownership:",
-        "model_provider_defaults",
-        "global_user_config",
-        "user_skills_and_plugins",
-        "mcp_servers",
-        "permissions",
-        "external_model_routers_provider_proxies_and_model_aliases_are_host_routing_not_loopora_policy_or_task_proof",
-        "host_skills_plugins_not_auto_mutated_by_loopora",
-        "host_credentials_env_and_secrets_not_collected_or_used_as_task_proof",
-    )
 
 
 def assert_native_surface_payload(payload: dict, *, adapter: str, entry_paths: str) -> None:
@@ -635,6 +550,10 @@ def assert_native_surface_payload(payload: dict, *, adapter: str, entry_paths: s
     assert surface["health_check"]["adapter_check"] == f"loopora agent {adapter} check --workdir <project>"
     assert surface["health_check"]["side_effects"] == "check_commands_do_not_install_or_overwrite"
     assert surface["health_check"]["host_reload"] == "restart_or_new_host_session_may_be_required_for_entry_discovery"
+    diagnostics = surface["diagnostics"]
+    assert "loopora doctor --workdir" in diagnostics["readiness_command"]
+    assert f"loopora init {adapter} --workdir" in diagnostics["check_command"]
+    assert f"loopora agent {adapter} check --workdir" in diagnostics["agent_check_command"]
     assert surface["session_recovery"]["context_card"] == "exact_agent_context_card_first"
     assert surface["session_recovery"]["not_ready"] == "return_to_loopora_plan_or_web_review"
     assert (

@@ -1,0 +1,285 @@
+{% macro review_items(items, empty_zh, empty_en) -%}
+  {% if items %}
+  <ul>
+    {% for item in items[:2] %}
+    <li>{{ item }}</li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="bundle-review-empty-copy"><span data-lang="zh">{{ empty_zh }}</span><span data-lang="en">{{ empty_en }}</span></p>
+  {% endif %}
+{%- endmacro %}
+
+{% macro improve_action(button_class="secondary-button") -%}
+<form method="post" action="{{ workdir_context_href('/bundles/' ~ bundle.id ~ '/revise', workdir_context) }}" class="inline-form" data-workdir-context-form="workdir">
+  <button class="{{ button_class }}" type="submit" data-testid="bundle-improve-chat-button">
+    <span data-lang="zh">对话改进方案</span><span data-lang="en">Improve plan in chat</span>
+  </button>
+</form>
+{%- endmacro %}
+
+{% macro web_run_action(button_class="primary-button", needs_review=false) -%}
+<form id="bundle-start-run-form-fields" method="post" action="{{ workdir_context_href('/bundles/' ~ bundle.id ~ '/runs', workdir_context) }}" class="inline-form" data-testid="bundle-start-run-form" data-workdir-context-form="workdir">
+  <button class="{{ button_class }}" type="submit" data-testid="bundle-start-run-button">
+    {% if needs_review %}
+    <span data-lang="zh">按当前方案运行</span><span data-lang="en">Run current plan</span>
+    {% else %}
+    <span data-lang="zh">开始新 Run</span><span data-lang="en">Start new Run</span>
+    {% endif %}
+  </button>
+</form>
+{%- endmacro %}
+
+{% set review = bundle_governance_summary|default({}) %}
+{% set workflow = bundle_workflow_preview|default({}) %}
+{% set coverage = control_summary.coverage|default({}) %}
+{% set gatekeeper = review.gatekeeper|default({}) %}
+{% set mapped_count = bundle_traceability.get("mapped_count", 0) %}
+{% set required_count = bundle_traceability.get("required_count", 0) %}
+{% set projection_state = "complete" if required_count and mapped_count >= required_count else ("gaps" if mapped_count else "repair") %}
+{% set review_available = review.success_surface or review.failure_modes or review.evidence_style or review.residual_risk_policy %}
+
+<section
+  class="panel bundle-review-surface"
+  data-testid="bundle-review-surface"
+  data-bundle-review-surface
+  data-review-state="{{ projection_state }}"
+>
+  <header class="bundle-review-header">
+    <div>
+      <span class="bundle-review-kicker"><span data-lang="zh">已保存方案</span><span data-lang="en">Saved Plan File</span></span>
+      <h2><span data-lang="zh">复核判断，再开始下一次 Run</span><span data-lang="en">Review the judgment before the next Run</span></h2>
+      <p>
+        <span data-lang="zh">这份方案是下一次运行的冻结判断依据。先确认什么算成功、什么会造成假完成，以及收尾前必须出现哪些证据。</span>
+        <span data-lang="en">This Plan File is the frozen judgment basis for the next Run. Recheck success, fake-done risk, and the evidence required before closure.</span>
+      </p>
+    </div>
+    <dl class="bundle-review-facts" data-testid="bundle-review-facts">
+      <div data-review-fact="traceability">
+        <dt><span data-lang="zh">判断映射</span><span data-lang="en">Judgment map</span></dt>
+        <dd>{{ mapped_count }}/{{ required_count }}</dd>
+      </div>
+      <div data-review-fact="coverage">
+        <dt><span data-lang="zh">必需目标</span><span data-lang="en">Required targets</span></dt>
+        <dd>{{ coverage.required_target_count|default(0) }}</dd>
+      </div>
+      <div data-review-fact="closure">
+        <dt><span data-lang="zh">收口</span><span data-lang="en">Closure</span></dt>
+        <dd>{% if gatekeeper.enabled %}GateKeeper{% else %}<span data-lang="zh">未配置</span><span data-lang="en">Not configured</span>{% endif %}</dd>
+      </div>
+    </dl>
+  </header>
+
+  <div
+    class="bundle-review-tabs"
+    role="tablist"
+    aria-label="{{ '方案复核视图' if page_locale == 'zh' else 'Plan review views' }}"
+    data-testid="bundle-review-tabs"
+    data-bundle-review-tabs
+    hidden
+  >
+    <button class="bundle-review-tab is-active" type="button" role="tab" id="bundle-review-tab-judgment" aria-controls="bundle-review-panel-judgment" aria-selected="true" data-bundle-review-tab="judgment">
+      <span data-lang="zh">判断</span><span data-lang="en">Judgment</span>
+    </button>
+    <button class="bundle-review-tab" type="button" role="tab" id="bundle-review-tab-workflow" aria-controls="bundle-review-panel-workflow" aria-selected="false" tabindex="-1" data-bundle-review-tab="workflow">
+      <span data-lang="zh">运行流程</span><span data-lang="en">Run flow</span>
+    </button>
+    <button class="bundle-review-tab" type="button" role="tab" id="bundle-review-tab-contract" aria-controls="bundle-review-panel-contract" aria-selected="false" tabindex="-1" data-bundle-review-tab="contract">
+      <span data-lang="zh">完整契约</span><span data-lang="en">Full contract</span>
+    </button>
+  </div>
+
+  <section
+    class="bundle-review-panel"
+    id="bundle-review-panel-judgment"
+    role="tabpanel"
+    aria-labelledby="bundle-review-tab-judgment"
+    data-testid="bundle-review-judgment-panel"
+    data-bundle-review-panel="judgment"
+  >
+    {% if control_summary.task_scope %}
+    <div class="bundle-review-scope" data-testid="bundle-review-task-scope">
+      <span><span data-lang="zh">任务边界</span><span data-lang="en">Task boundary</span></span>
+      <strong>{{ control_summary.task_scope[0] }}</strong>
+    </div>
+    {% endif %}
+
+    {% if review_available %}
+    <div class="bundle-judgment-grid" data-testid="bundle-judgment-grid">
+      <section class="bundle-judgment-item" data-review-field="success">
+        <h3><span data-lang="zh">什么算成功</span><span data-lang="en">What success means</span></h3>
+        {{ review_items(review.success_surface, "成功面尚未显式投影。", "The success surface is not explicitly projected.") }}
+      </section>
+      <section class="bundle-judgment-item bundle-judgment-item--risk" data-review-field="fake_done">
+        <h3><span data-lang="zh">什么会造成假完成</span><span data-lang="en">What can fake completion</span></h3>
+        {{ review_items(review.failure_modes, "没有额外假完成风险。", "No additional fake-done risk is declared.") }}
+      </section>
+      <section class="bundle-judgment-item bundle-judgment-item--evidence" data-review-field="evidence">
+        <h3><span data-lang="zh">必须出现的证据</span><span data-lang="en">Evidence that must exist</span></h3>
+        {{ review_items(review.evidence_style, "证据要求由完整契约提供。", "Evidence expectations come from the full contract.") }}
+      </section>
+      <section class="bundle-judgment-item" data-review-field="strategy">
+        <h3><span data-lang="zh">下一轮如何推进</span><span data-lang="en">How the next Run should move</span></h3>
+        {{ review_items(review.execution_strategy, "按运行流程和未证明目标推进。", "Follow the run flow and unproven targets.") }}
+      </section>
+      <section class="bundle-judgment-item bundle-judgment-item--closure" data-review-field="closure">
+        <h3><span data-lang="zh">什么会阻断收尾</span><span data-lang="en">What blocks closure</span></h3>
+        {{ review_items(review.residual_risk_policy, "残余风险策略未单独声明。", "No separate residual-risk policy is declared.") }}
+      </section>
+      <section class="bundle-judgment-item" data-review-field="tradeoffs">
+        <h3><span data-lang="zh">判断取舍</span><span data-lang="en">Judgment tradeoffs</span></h3>
+        {{ review_items(review.judgment_tradeoffs, "按任务契约保守裁决。", "Judge conservatively from the task contract.") }}
+      </section>
+    </div>
+    {% else %}
+    <div class="empty-state empty-state--compact bundle-review-repair" data-testid="bundle-review-repair-state">
+      <h3><span data-lang="zh">判断投影需要修复</span><span data-lang="en">The judgment projection needs repair</span></h3>
+      <p><span data-lang="zh">源方案仍然保留，但当前无法形成可审查的成功、风险和证据摘要。先修复契约或替换 YAML，再决定是否运行。</span><span data-lang="en">The source plan is still preserved, but success, risk, and evidence cannot be reviewed here. Repair the contract or replace the YAML before deciding to run.</span></p>
+      <div class="card-actions">
+        <a class="secondary-button" href="#bundle-detail-form" data-testid="bundle-review-repair-edit-link" data-open-bundle-management>
+          <span data-lang="zh">修复契约</span><span data-lang="en">Repair contract</span>
+        </a>
+        <a class="ghost-button" href="{{ bundle_replace_yaml_href }}" data-testid="bundle-review-repair-replace-link" data-workdir-context-link="workdir">
+          <span data-lang="zh">替换 YAML</span><span data-lang="en">Replace YAML</span>
+        </a>
+      </div>
+    </div>
+    {% endif %}
+
+    {% if bundle_diagnostic_warnings %}
+    <div class="bundle-review-warning" data-testid="bundle-review-warning" role="note">
+      <strong><span data-lang="zh">运行前仍有 {{ bundle_diagnostic_warnings|length }} 项流程提醒</span><span data-lang="en">{{ bundle_diagnostic_warnings|length }} run-flow warning(s) remain</span></strong>
+      <span><span data-lang="zh">{{ bundle_diagnostic_warnings[0].message_zh or bundle_diagnostic_warnings[0].message }}</span><span data-lang="en">{{ bundle_diagnostic_warnings[0].message_en or bundle_diagnostic_warnings[0].message }}</span></span>
+      <a href="#bundle-diagnostic-projection" data-open-bundle-management><span data-lang="zh">查看映射详情</span><span data-lang="en">Review mapping details</span></a>
+    </div>
+    {% endif %}
+
+    <div class="bundle-run-decision" data-testid="bundle-run-decision" data-launch-mode="{{ 'same_agent' if agent_entry_start else ('web' if bundle.loop else 'unlinked') }}">
+      <div>
+        <span class="bundle-review-kicker"><span data-lang="zh">下一步决策</span><span data-lang="en">Next decision</span></span>
+        <strong>
+          {% if agent_entry_start %}
+          <span data-lang="zh">回到同一宿主 Agent 开始运行</span><span data-lang="en">Return to the same host Agent to run</span>
+          {% elif bundle.loop %}
+          <span data-lang="zh">用这份冻结方案开始新 Run</span><span data-lang="en">Start a new Run from this frozen plan</span>
+          {% else %}
+          <span data-lang="zh">这份方案还没有关联可运行 Loop</span><span data-lang="en">This plan is not attached to a runnable Loop</span>
+          {% endif %}
+        </strong>
+        <p>
+          {% if agent_entry_start %}
+          <span data-lang="zh">Web 不会替宿主 Agent 启动工作；运行指引会保留同一会话和目标项目边界。</span><span data-lang="en">Web will not start host-owned work. The run guide preserves the same session and target-project boundary.</span>
+          {% elif bundle.loop %}
+          <span data-lang="zh">这会创建一条新的运行记录，不会改写方案文件或把流程成功当成任务通过。</span><span data-lang="en">This creates a new Run record. It does not rewrite the Plan File or treat workflow success as task proof.</span>
+          {% else %}
+          <span data-lang="zh">先导出或替换源文件；只有关联 Loop 后才能从这里运行。</span><span data-lang="en">Export or replace the source first. This page can run only after a Loop is attached.</span>
+          {% endif %}
+        </p>
+      </div>
+      <div class="card-actions bundle-run-decision-actions">
+        {% if bundle.loop and not agent_entry_start and not review_available %}
+        {{ improve_action("primary-button") }}
+        {{ web_run_action("secondary-button", true) }}
+        {% elif bundle.loop %}
+          {% if agent_entry_start %}
+          <a class="primary-button" href="{{ workdir_context_href('/loops/' ~ bundle.loop.id, workdir_context) }}" data-testid="bundle-open-agent-run-guide" data-workdir-context-link="workdir">
+            <span data-lang="zh">打开同一 Agent 运行指引</span><span data-lang="en">Open same-Agent run guide</span>
+          </a>
+          {% else %}
+          {{ web_run_action() }}
+          {% endif %}
+        {% else %}
+        <a class="primary-button" href="{{ workdir_context_href('/bundles/' ~ bundle.id ~ '/export', workdir_context) }}" data-testid="bundle-export-yaml-link" data-workdir-context-link="workdir">
+          <span data-lang="zh">导出方案文件</span><span data-lang="en">Export plan</span>
+        </a>
+        {% endif %}
+        {% if not (bundle.loop and not agent_entry_start and not review_available) %}
+        {{ improve_action() }}
+        {% endif %}
+        {% if bundle.loop and not agent_entry_start %}
+        <a class="ghost-button" href="{{ workdir_context_href('/loops/' ~ bundle.loop.id, workdir_context) }}" data-testid="bundle-open-loop-link" data-workdir-context-link="workdir">
+          <span data-lang="zh">打开 Loop</span><span data-lang="en">Open Loop</span>
+        </a>
+        {% endif %}
+      </div>
+    </div>
+  </section>
+
+  <section
+    class="bundle-review-panel"
+    id="bundle-review-panel-workflow"
+    role="tabpanel"
+    aria-labelledby="bundle-review-tab-workflow"
+    data-testid="bundle-review-workflow-panel"
+    data-bundle-review-panel="workflow"
+  >
+    <div class="bundle-workflow-overview">
+      <div>
+        <span class="bundle-review-kicker"><span data-lang="zh">执行边界</span><span data-lang="en">Execution boundary</span></span>
+        <h3>{{ review.workflow_shape or workflow.collaboration_intent or workflow.preset or "-" }}</h3>
+      </div>
+      <span>{{ workflow.steps|length }} <span data-lang="zh">步</span><span data-lang="en">steps</span></span>
+    </div>
+    <ol class="bundle-workflow-steps" data-testid="bundle-review-workflow-steps">
+      {% for step in workflow.steps %}
+      {% set role_label = namespace(value=step.role_id) %}
+      {% for role in workflow.roles %}
+        {% if role.id == step.role_id %}{% set role_label.value = role.name %}{% endif %}
+      {% endfor %}
+      {% set policy = step.action_policy|default({}) %}
+      <li data-workspace-policy="{{ policy.workspace|default('unspecified') }}">
+        <span class="bundle-workflow-step-index">{{ loop.index }}</span>
+        <div>
+          <strong>{{ role_label.value }}</strong>
+          <span>{{ step.id }}</span>
+        </div>
+        <div class="bundle-workflow-step-policy">
+          <span>{% if policy.workspace == "read_only" %}<span data-lang="zh">只读</span><span data-lang="en">Read-only</span>{% elif policy.workspace == "workspace_write" %}<span data-lang="zh">可写工作区</span><span data-lang="en">Workspace write</span>{% else %}{{ policy.workspace or "-" }}{% endif %}</span>
+          {% if policy.can_block %}<span><span data-lang="zh">可阻断</span><span data-lang="en">Can block</span></span>{% endif %}
+          {% if policy.can_finish_run %}<span><span data-lang="zh">可收口</span><span data-lang="en">Can close</span></span>{% endif %}
+        </div>
+      </li>
+      {% else %}
+      <li class="bundle-review-empty-copy"><span data-lang="zh">没有可展示的运行步骤。</span><span data-lang="en">No run steps are available.</span></li>
+      {% endfor %}
+    </ol>
+    {% if control_summary.controls %}
+    <div class="bundle-review-controls" data-testid="bundle-review-controls">
+      <h3><span data-lang="zh">风险触发控制</span><span data-lang="en">Risk-triggered controls</span></h3>
+      {% for control in control_summary.controls %}
+      <div><strong>{{ control.signal }}</strong><span>{{ control.role_name or control.role_id }} · {{ control.mode }} · {{ control.max_fires_per_run }}</span></div>
+      {% endfor %}
+    </div>
+    {% endif %}
+    <div class="bundle-review-panel-footer">
+      <a class="ghost-button" href="#bundle-linked-assets" data-open-bundle-management>
+        <span data-lang="zh">管理底层角色与流程</span><span data-lang="en">Manage roles and flow</span>
+      </a>
+    </div>
+  </section>
+
+  <section
+    class="bundle-review-panel"
+    id="bundle-review-panel-contract"
+    role="tabpanel"
+    aria-labelledby="bundle-review-tab-contract"
+    data-testid="bundle-review-contract-panel"
+    data-bundle-review-panel="contract"
+  >
+    <section class="bundle-contract-preview" data-testid="bundle-spec-preview">
+      <header>
+        <div>
+          <span class="bundle-review-kicker"><span data-lang="zh">冻结输入</span><span data-lang="en">Frozen input</span></span>
+          <h3><span data-lang="zh">Loop 契约全文</span><span data-lang="en">Full Loop contract</span></h3>
+        </div>
+        {% if review.coverage_summary %}<span>{{ review.coverage_summary }}</span>{% endif %}
+      </header>
+      <div class="markdown-body">{{ spec_rendered_html | safe }}</div>
+    </section>
+    <div class="bundle-review-panel-footer">
+      <a class="ghost-button" href="#bundle-detail-form" data-open-bundle-management>
+        <span data-lang="zh">编辑契约源文件</span><span data-lang="en">Edit contract source</span>
+      </a>
+    </div>
+  </section>
+</section>

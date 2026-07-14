@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from strategy_source_architecture_test_support import design_boundary_source
+
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
@@ -22,7 +24,7 @@ def test_alignment_context_factory_delegates_executor_context_wiring() -> None:
     session_layout_context_source = (
         REPO_ROOT / "src" / "loopora" / "service_alignment_session_layout_context.py"
     ).read_text(encoding="utf-8")
-    design_source = (REPO_ROOT / "design" / "contracts.md").read_text(encoding="utf-8")
+    design_source = design_boundary_source()
 
     assert "from loopora.service_alignment_context_protocols import AlignmentFactoryService" in factory_source
     assert "from loopora.service_alignment_context_resolution_factory import" in factory_source
@@ -69,3 +71,16 @@ def test_alignment_context_factory_delegates_executor_context_wiring() -> None:
     assert "service_alignment_executor_context.py" in design_source
     assert "service_alignment_orchestration_context.py" in design_source
     assert "service_alignment_session_layout_context.py" in design_source
+
+
+def test_alignment_orphan_recovery_has_dedicated_boundary() -> None:
+    alignment_source = (REPO_ROOT / "src" / "loopora" / "service_alignment.py").read_text(encoding="utf-8")
+    recovery_source = (REPO_ROOT / "src" / "loopora" / "service_alignment_recovery.py").read_text(encoding="utf-8")
+    app_source = (REPO_ROOT / "src" / "loopora" / "service_app.py").read_text(encoding="utf-8")
+    design_source = design_boundary_source()
+
+    assert "from loopora.service_alignment_recovery import" in alignment_source
+    assert "def reconcile_orphaned_alignment_sessions" in recovery_source
+    assert "def _alignment_session_is_orphaned" in recovery_source
+    assert "self.reconcile_orphaned_alignment_sessions()" in app_source
+    assert "service_alignment_recovery.py" in design_source

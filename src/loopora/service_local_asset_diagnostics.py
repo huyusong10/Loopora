@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from loopora.branding import state_dir_for_workdir
+from loopora.local_workdir_artifacts import state_dir_for_ready_workdir, stored_local_asset_path
 from loopora.service_alignment_artifacts import alignment_session_root
 from loopora.service_local_asset_orphans import (
     orphan_alignment_dirs,
@@ -110,6 +110,8 @@ def _records_without_dirs(context: LocalAssetDiagnosticsContext) -> list[dict]:
         if not session_id:
             continue
         root = _alignment_session_root(context.service, session, session_id)
+        if root is None:
+            continue
         if not root.exists():
             record_without_dir.append({"resource_type": "alignment_session", "resource_id": session_id, "path": str(root)})
     for run in context.run_records:
@@ -127,10 +129,13 @@ def _records_without_dirs(context: LocalAssetDiagnosticsContext) -> list[dict]:
     return record_without_dir
 
 
-def _alignment_session_root(_service, session: dict, session_id: str) -> Path:
+def _alignment_session_root(_service, session: dict, session_id: str) -> Path | None:
     if session.get("bundle_path"):
         return alignment_session_root(session)
-    return state_dir_for_workdir(session.get("workdir", "")) / "alignment_sessions" / session_id
+    state_dir = state_dir_for_ready_workdir(session.get("workdir"))
+    if state_dir is None:
+        return None
+    return state_dir / "alignment_sessions" / session_id
 
 
 def _append_registry_records_without_dirs(
@@ -150,8 +155,8 @@ def _append_registry_records_without_dirs(
             continue
         resource_type = str(row.get("resource_type") or "").strip()
         resource_id = str(row.get("resource_id") or "").strip()
-        path = Path(str(row.get("path") or ""))
-        if not resource_type or not resource_id or path.exists():
+        path = stored_local_asset_path(row.get("path"))
+        if not resource_type or not resource_id or path is None or path.exists():
             continue
         key = (resource_type, resource_id, str(path))
         has_live_owner = _registry_record_has_live_owner(

@@ -15,11 +15,13 @@ from loopora.run_takeaway_evidence import build_evidence_coverage as _build_evid
 from loopora.run_takeaways import build_run_key_takeaways as _build_run_key_takeaways
 from loopora.strategy_source import strategy_source_from_record
 from loopora.web_task_verdict_overviews import build_run_summary_snapshot as _build_run_summary_snapshot
+from loopora.web_task_verdict_overviews import lifecycle_failure_summary_pair as _lifecycle_failure_summary_pair
 from loopora.web_task_verdict_overviews import task_verdict_label as _task_verdict_label
 from loopora.web_task_verdict_overviews import task_verdict_status as _task_verdict_status
 from loopora.web_task_verdict_overviews import task_verdict_status_from_run as _task_verdict_status_from_run
 from loopora.web_task_verdict_overviews import verdict_safe_excerpt_pair as _verdict_safe_excerpt_pair
 from loopora.web_timeline_overviews import format_timeline_event as _format_timeline_event
+from loopora.web_url_utils import with_query_params
 
 
 def _artifact_record_or_404(run: dict, artifact_id: str) -> dict:
@@ -64,7 +66,15 @@ def _decorate_loop_overview(loop: dict) -> dict:
     task_verdict = loop.get("latest_task_verdict_json") if isinstance(loop.get("latest_task_verdict_json"), Mapping) else {}
     task_status = _task_verdict_status(task_verdict)
     task_label_zh, task_label_en = _task_verdict_label(task_status)
-    card_excerpt_zh, card_excerpt_en = _verdict_safe_excerpt_pair(task_verdict, run_status=latest_status, raw_excerpt=summary_excerpt)
+    lifecycle_excerpt_zh, lifecycle_excerpt_en = _lifecycle_failure_summary_pair(
+        run_status=latest_status,
+        error_message=loop.get("latest_error_message"),
+    )
+    card_excerpt_zh, card_excerpt_en = (
+        (lifecycle_excerpt_zh, lifecycle_excerpt_en)
+        if lifecycle_excerpt_zh or lifecycle_excerpt_en
+        else _verdict_safe_excerpt_pair(task_verdict, run_status=latest_status, raw_excerpt=summary_excerpt)
+    )
     hints = {
         "draft": ("还没有运行，先检查 Loop 契约和工作目录。", "No run yet. Start by checking the spec and workdir."),
         "queued": ("已经进入队列，点进去看最新状态。", "Queued up. Open it to see the current state."),
@@ -74,7 +84,9 @@ def _decorate_loop_overview(loop: dict) -> dict:
         "stopped": ("最近一次运行已停止。", "The latest run was stopped."),
     }
     hint_zh, hint_en = hints.get(latest_status, hints["draft"])
-    if latest_status == "succeeded" and task_status == "passed_with_residual_risk":
+    if lifecycle_excerpt_zh or lifecycle_excerpt_en:
+        hint_zh, hint_en = ("最近一次运行启动失败，需要重试运行。", "The latest run failed to start and needs retry.")
+    elif latest_status == "succeeded" and task_status == "passed_with_residual_risk":
         hint_zh, hint_en = ("最近一次 Loop 裁决带残余风险通过。", "The latest task verdict passed with residual risk.")
     elif latest_status == "succeeded" and task_status == "passed":
         hint_zh, hint_en = ("最近一次 Loop 裁决已通过。", "The latest task verdict passed.")
@@ -93,7 +105,9 @@ def _decorate_loop_overview(loop: dict) -> dict:
         "role_count": len(strategy_source.get("roles", []) if isinstance(strategy_source, Mapping) else []),
         "step_count": len(strategy_source.get("steps", []) if isinstance(strategy_source, Mapping) else []),
         "display_iter": _display_iter(loop.get("latest_current_iter")),
-        "card_href": f"/runs/{latest_run_id}" if latest_run_id else f"/loops/{loop['id']}",
+        "card_href": _loop_card_href(loop, latest_run_id=latest_run_id),
+        "detail_href": _loop_detail_href(loop),
+        "start_run_action": _loop_start_run_action(loop),
         "card_hint_zh": hint_zh,
         "card_hint_en": hint_en,
         "card_excerpt": card_excerpt_en or summary_excerpt,
@@ -106,6 +120,19 @@ def _decorate_loop_overview(loop: dict) -> dict:
         "bundle_id": str((bundle or {}).get("id", "") or "").strip(),
         "bundle_name": str((bundle or {}).get("name", "") or "").strip(),
     }
+
+
+def _loop_card_href(loop: Mapping[str, object], *, latest_run_id: object = "") -> str:
+    target = f"/runs/{latest_run_id}" if latest_run_id else f"/loops/{loop['id']}"
+    return with_query_params(target, workdir=str(loop.get("workdir") or "").strip() or None)
+
+
+def _loop_detail_href(loop: Mapping[str, object]) -> str:
+    return with_query_params(f"/loops/{loop['id']}", workdir=str(loop.get("workdir") or "").strip() or None)
+
+
+def _loop_start_run_action(loop: Mapping[str, object]) -> str:
+    return with_query_params(f"/loops/{loop['id']}/runs", workdir=str(loop.get("workdir") or "").strip() or None)
 
 
 def _decorate_run_overview(run: dict) -> dict:

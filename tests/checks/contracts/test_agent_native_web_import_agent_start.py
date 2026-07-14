@@ -66,7 +66,7 @@ def test_agent_loop_after_web_imported_candidate_still_uses_agent_native(
     assert not imported["session"].get("linked_run_id")
 
     def fail_nested_worker(run_id: str) -> None:
-        raise AssertionError(f"Agent-first imported sessions must not start an automation runner for {run_id}")
+        raise AssertionError(f"Agent-native imported sessions must not start an automation runner for {run_id}")
 
     monkeypatch.setattr(service, "start_run_async", fail_nested_worker)
 

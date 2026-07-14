@@ -43,19 +43,36 @@ def fake_provider_failure_message(scenario: str, request, context: FakePayloadCo
     return ""
 
 
-def fake_role_payload(scenario: str, request, context: FakePayloadContext) -> dict | None:
+def fake_role_payload(
+    scenario: str,
+    request,
+    context: FakePayloadContext,
+    *,
+    display_language: str = "en",
+) -> dict | None:
     if context.archetype in {"generator", "builder"}:
-        payload = fake_builder_payload(context.iter_id)
+        payload = fake_builder_payload(context.iter_id, display_language=display_language)
     elif request.role == "check_planner":
-        payload = fake_check_planner_payload(context.compiled_spec)
+        payload = fake_check_planner_payload(context.compiled_spec, display_language=display_language)
     elif context.archetype in {"tester", "inspector"}:
-        payload = fake_tester_payload(context.iter_id, context.checks, context.check_count)
+        payload = fake_tester_payload(
+            context.iter_id,
+            context.checks,
+            context.check_count,
+            display_language=display_language,
+        )
     elif context.archetype in {"verifier", "gatekeeper"}:
-        payload = fake_verifier_payload(scenario, context.iter_id, request, context.check_count)
+        payload = fake_verifier_payload(
+            scenario,
+            context.iter_id,
+            request,
+            context.check_count,
+            display_language=display_language,
+        )
     elif context.archetype in {"challenger", "guide"}:
-        payload = fake_challenger_payload(context.iter_id, request)
+        payload = fake_challenger_payload(context.iter_id, request, display_language=display_language)
     elif context.archetype == "custom":
-        payload = fake_custom_payload()
+        payload = fake_custom_payload(display_language=display_language)
     else:
         payload = None
     return payload

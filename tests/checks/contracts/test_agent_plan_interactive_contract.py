@@ -39,16 +39,18 @@ def test_agent_plan_contract_keeps_agent_native_planning_interactive() -> None:
     assert "alignment inputs, not a confirmed working agreement" in contract
     assert "## Message Preservation" in contract
     assert "Use `--message` for the current task context, not a lossy title" in contract
-    assert "do not compress away evidence modes, blockers, exception categories" in contract
+    assert "do not compress away the fit rationale, evidence modes, blockers, exception categories" in contract
     assert "Do not shrink those alignment inputs into a title-only `--message`" in contract
-    assert "Use the message-only form while alignment, working-agreement confirmation, or Web review is still pending" in contract
+    assert "Do not make a message-only plan call as the first planning attempt" in contract
+    assert "Use message-only form only when the host cannot continue the main-session dialogue" in contract
     assert 'plan --workdir "$PWD" --message "<non-empty task context>" --entry-source codex_project_skill --json --compact-json' in contract
+    assert 'plan --workdir "$PWD" --message "<confirmed task context>" --bundle-file <candidate-plan-file> --entry-source codex_project_skill --json --compact-json' in contract
     assert "short task summary" not in contract
     assert "do not replace the interactive alignment path with a one-shot candidate-file path" in contract
     assert "same Agent context binding / alignment_session_id" in contract
-    assert "appends to the existing planning conversation" in contract
+    assert "appends to that fallback conversation" in contract
     assert "do not author or repair a candidate file from that prompt until confirmation is explicit" in contract
-    assert "Do not make a message-only plan call as the first planning attempt" not in contract
+    assert "Candidate validation does not use a nested provider CLI" in contract
     assert "planning should author the Loop contract from current task context and managed references" not in contract
     assert "create the candidate plan file in step 3" not in contract
 
@@ -60,8 +62,8 @@ def test_agent_plan_contract_skeleton_matches_current_bundle_schema() -> None:
         marker_source="codex_project_skill",
     )
 
-    assert "Alignment or Web review:" in contract
-    assert "Confirmed bundle or repair:" in contract
+    assert "Confirmed candidate or repair:" in contract
+    assert "Non-interactive or Web fallback:" in contract
     assert 'plan --workdir "$PWD" --message "<non-empty task context>" --entry-source codex_project_skill --json --compact-json' in contract
     assert "# Success Surface\n    - ..." in contract
     assert "# Role Notes\n    ## Task Builder Notes" in contract
@@ -78,23 +80,25 @@ def test_agent_plan_contract_skeleton_matches_current_bundle_schema() -> None:
 def test_agent_native_design_keeps_plan_interactive() -> None:
     design = Path("design/contracts.md").read_text(encoding="utf-8")
 
-    assert "`/loopora-plan` is an interactive alignment path" in design
-    assert "message-only plan calls are the primary path while Loopora fit" in design
-    assert "message-only continuation is scoped by the same Agent context binding" in design
-    assert "append to that `alignment_session_id` instead of creating a new planning session" in design
+    assert "`/loopora-plan` keeps fit clarification, Loop-shaping questions, working-agreement review, and explicit confirmation in the current host main session" in design
+    assert "host-native alignment" in design
+    assert "explicit confirmation before candidate submission" in design
+    assert "Once explicit message-only Web fallback starts" in design
+    assert "Host-native dialogue does not need this executor session" in design
     assert "`waiting_user` / `continue_alignment_dialogue` result is a hard stop for the host Agent" in design
     assert "host inference, workdir probes, Web scraping, default policy, or Agent preference must not answer" in design
-    assert "A detailed first prompt is alignment input, not confirmation" in design
+    assert "a detailed first prompt remains alignment input, not confirmation" in design
     assert "A pure confirmation reply is stage-control input rather than task-anchor text" in design
     assert "pure confirmation wording as task-anchor requirement" in design
-    assert "Plan-stage guidance conducts interactive alignment from current task context and managed references" in design
+    assert "Plan-stage guidance conducts interactive alignment from current task context" in design
+    assert "pre-plan diagnostic must preserve complete output plus exit code" in design
     assert "Agent Native `/loopora-plan` managed authoring skeleton and Web alignment bundle guidance are schema guards" in design
     assert "Success Surface bullets" in design
     assert "Role Notes `## <Role Name> Notes` subheadings" in design
     assert 'non-GateKeeper `on_pass: "continue"`' in design
     assert "structured `inputs.evidence_query`" in design
-    assert "should author a candidate file before the first compact plan command" not in design
-    assert "message-only Web prefill as the primary plan path when a candidate file can be authored" not in design
+    assert "Planning performs no CLI preflight before host-native confirmation" in design
+    assert "After host-native confirmation and candidate authoring, the next Bash action is candidate validation" in design
 
 
 def test_cli_agent_plan_support_ticket_rounds_use_parallel_sla_workflow(sample_workdir: Path) -> None:

@@ -29,6 +29,8 @@ def test_alignment_session_summary_redacts_transcript_previews(tmp_path: Path) -
     assert summary["title"] == "Use Authorization: <secret omitted>"
     assert summary["last_message"] == "Cookie: <secret omitted>"
     assert summary["message_count"] == ALIGNMENT_SUMMARY_MESSAGE_COUNT
+    assert summary["status_label"] == "idle"
     assert summary["native_resume_available"] is True
+    assert summary["failure_recovery"] == {}
     assert "SESSION_SUMMARY_SECRET" not in rendered
     assert "SESSION_LAST_SECRET" not in rendered

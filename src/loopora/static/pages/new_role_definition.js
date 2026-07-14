@@ -8,7 +8,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const builtinTemplates = JSON.parse(document.getElementById("role-definition-builtin-templates-json")?.textContent || "{}");
   const archetypeInput = document.getElementById("role-definition-archetype-input");
   const executorKindInput = document.getElementById("role-definition-executor-kind-input");
-  const executorModeInput = document.getElementById("role-definition-executor-mode-input");
+  const executorModeInputs = Array.from(form.querySelectorAll("input[name='executor_mode']"));
   const promptMarkdownInput = document.getElementById("role-definition-prompt-markdown-input");
   const promptMarkdownPreview = document.getElementById("role-definition-prompt-markdown-preview");
   const promptMarkdownPreviewNote = document.getElementById("role-definition-prompt-preview-note");
@@ -36,6 +36,8 @@ document.addEventListener("DOMContentLoaded", () => {
   const archetypeSummary = document.getElementById("role-definition-archetype-summary");
   const archetypeRecommendation = document.getElementById("role-definition-archetype-recommendation");
   const archetypeWarning = document.getElementById("role-definition-archetype-warning");
+  const saveRoleDefinitionButton = form.querySelector("[data-testid='save-role-definition-button']");
+  const formError = form.querySelector("[data-asset-form-error]");
 
   const commandDrafts = new Map();
   let lastExecutorKind = executorKindInput?.value || "";
@@ -43,6 +45,37 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function localeText(zh, en) {
     return window.LooporaUI.pickText({zh, en});
+  }
+
+  function showStatus(element, message, kind = "") {
+    if (!element) {
+      return;
+    }
+    if (!message) {
+      element.hidden = true;
+      element.textContent = "";
+      element.className = "field-status";
+      return;
+    }
+    element.hidden = false;
+    element.textContent = message;
+    element.className = `field-status${kind ? ` is-${kind}` : ""}`;
+  }
+
+  function setButtonBusy(button, busy) {
+    if (button) {
+      button.disabled = Boolean(busy);
+    }
+  }
+
+  async function fetchJson(url, options = {}) {
+    try {
+      const response = await fetch(url, options);
+      const payload = await response.json().catch(() => ({}));
+      return {response, payload, error: null};
+    } catch (error) {
+      return {response: null, payload: {}, error};
+    }
   }
 
   function setBilingualText(element, zh, en) {
@@ -88,6 +121,18 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function currentArchetypeOption() {
     return archetypeInput?.selectedOptions?.[0] || null;
+  }
+
+  function selectedExecutorMode() {
+    const selected = executorModeInputs.find((input) => input.checked);
+    return String(selected?.value || "preset") === "command" ? "command" : "preset";
+  }
+
+  function setExecutorMode(nextMode) {
+    const resolvedMode = String(nextMode || "preset") === "command" ? "command" : "preset";
+    executorModeInputs.forEach((input) => {
+      input.checked = input.value === resolvedMode;
+    });
   }
 
   function templateMarkdownVariants(template) {
@@ -185,12 +230,102 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function isCommandMode() {
     const profile = selectedProfile();
-    return String(executorModeInput?.value || "preset") === "command" || Boolean(profile?.command_only);
+    return selectedExecutorMode() === "command" || Boolean(profile?.command_only);
   }
 
   function syncReasoningMirror() {
     if (reasoningMirrorInput) {
       reasoningMirrorInput.value = reasoningInput?.value || "";
+    }
+  }
+
+  function roleDefinitionPayload() {
+    const formData = new FormData(form);
+    return {
+      name: String(formData.get("name") || ""),
+      description: String(formData.get("description") || ""),
+      posture_notes: String(formData.get("posture_notes") || ""),
+      archetype: String(formData.get("archetype") || "builder"),
+      prompt_markdown: String(formData.get("prompt_markdown") || ""),
+      executor_kind: String(formData.get("executor_kind") || "codex"),
+      executor_mode: String(formData.get("executor_mode") || "preset"),
+      command_cli: String(formData.get("command_cli") || ""),
+      command_args_text: String(formData.get("command_args_text") || ""),
+      model: String(formData.get("model") || ""),
+      reasoning_effort: String(formData.get("reasoning_effort") || ""),
+    };
+  }
+
+  function roleDefinitionSurfaceMarker(payload) {
+    const id = String(payload?.role_definition?.id || "").trim();
+    return id ? `role:${id}` : "";
+  }
+
+  function redirectAfterRoleDefinitionSave(payload) {
+    window.location.href = window.LooporaUI.assetSaveRedirectUrl(payload, {
+      returnTo: form.dataset.returnTo || "",
+      surfaceUpdated: roleDefinitionSurfaceMarker(payload),
+      fallback: "/roles",
+    });
+  }
+
+  function recoveryFieldTargets() {
+    return {
+      executor_mode: () => document.querySelector("[data-testid='role-definition-executor-mode-switch']"),
+      reasoning_effort: () => reasoningInput,
+      prompt_markdown: () => promptMarkdownInput,
+    };
+  }
+
+  function recoveryFieldLabels() {
+    return {
+      name: localeText("名称", "Name"),
+      archetype: localeText("角色模板", "Role template"),
+      prompt_ref: "prompt_ref",
+      prompt_markdown: localeText("提示词正文", "Prompt Markdown"),
+      executor_kind: localeText("执行工具", "Execution tool"),
+      executor_mode: localeText("配置方式", "Configuration mode"),
+      command_cli: localeText("命令可执行文件", "Command executable"),
+      command_args_text: localeText("命令参数", "Command arguments"),
+      model: localeText("默认模型", "Default model"),
+      reasoning_effort: localeText("推理强度", "Reasoning effort"),
+    };
+  }
+
+  async function submitRoleDefinitionForm(event) {
+    event.preventDefault();
+    syncReasoningMirror();
+    const profile = selectedProfile();
+    if (profile?.command_only) {
+      setExecutorMode("command");
+    }
+    window.LooporaUI.clearAssetFieldRecovery(form, {statusElement: formError});
+    setButtonBusy(saveRoleDefinitionButton, true);
+    try {
+      const {response, payload, error} = await fetchJson(form.dataset.apiAction || "/api/role-definitions", {
+        method: form.dataset.apiMethod || "POST",
+        headers: {"Content-Type": "application/json", Accept: "application/json"},
+        body: JSON.stringify(roleDefinitionPayload()),
+      });
+      if (error || !response) {
+        showStatus(formError, localeText("无法保存角色定义。", "Unable to save the role definition."), "error");
+        return;
+      }
+      if (!response.ok) {
+        if (window.LooporaUI.renderAssetFieldRecovery(form, payload, {
+          statusElement: formError,
+          fieldTargets: recoveryFieldTargets(),
+          fieldLabels: recoveryFieldLabels(),
+          noteIdPrefix: "role-definition-field-recovery",
+        })) {
+          return;
+        }
+        showStatus(formError, payload.error || localeText("无法保存角色定义。", "Unable to save the role definition."), "error");
+        return;
+      }
+      redirectAfterRoleDefinitionSave(payload);
+    } finally {
+      setButtonBusy(saveRoleDefinitionButton, false);
     }
   }
 
@@ -411,21 +546,27 @@ document.addEventListener("DOMContentLoaded", () => {
   function setMode(nextMode) {
     const profile = selectedProfile();
     const resolvedMode = profile?.command_only ? "command" : nextMode;
-    if (executorModeInput) {
-      executorModeInput.value = resolvedMode;
-    }
+    setExecutorMode(resolvedMode);
     syncModeUI();
   }
 
   function syncModeButtons(profile) {
-    const activeMode = String(executorModeInput?.value || "preset");
-    modeButtons.forEach((button) => {
-      const mode = button.dataset.modeChoice || "";
+    const activeMode = selectedExecutorMode();
+    modeButtons.forEach((chip) => {
+      const mode = chip.dataset.modeChoice || "";
       const isActive = mode === activeMode;
-      button.classList.toggle("is-active", isActive);
-      button.setAttribute("aria-pressed", String(isActive));
+      const input = chip.querySelector("input[name='executor_mode']");
+      chip.classList.toggle("is-active", isActive);
       if (mode === "preset") {
-        button.disabled = Boolean(profile?.command_only);
+        const disabled = Boolean(profile?.command_only);
+        if (input) {
+          input.disabled = disabled;
+        }
+        chip.classList.toggle("is-disabled", disabled);
+        chip.setAttribute("aria-disabled", String(disabled));
+      } else {
+        chip.classList.remove("is-disabled");
+        chip.removeAttribute("aria-disabled");
       }
     });
   }
@@ -453,8 +594,8 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!profile) {
       return;
     }
-    if (profile.command_only && executorModeInput.value !== "command") {
-      executorModeInput.value = "command";
+    if (profile.command_only && selectedExecutorMode() !== "command") {
+      setExecutorMode("command");
     }
     const commandMode = isCommandMode();
 
@@ -563,10 +704,16 @@ document.addEventListener("DOMContentLoaded", () => {
     refreshExecutorFields({preserveUserModel: true, preserveUserEffort: true});
   });
 
-  modeButtons.forEach((button) => {
-    button.addEventListener("click", () => {
-      const nextMode = button.dataset.modeChoice || "preset";
-      if (nextMode === executorModeInput.value) {
+  modeButtons.forEach((chip) => {
+    const input = chip.querySelector("input[name='executor_mode']");
+    chip.addEventListener("click", (event) => {
+      if (input?.disabled) {
+        event.preventDefault();
+      }
+    });
+    input?.addEventListener("change", () => {
+      const nextMode = input.value || chip.dataset.modeChoice || "preset";
+      if (!input.checked) {
         return;
       }
       if (nextMode === "preset") {
@@ -596,13 +743,9 @@ document.addEventListener("DOMContentLoaded", () => {
     renderCommandPreview();
   });
 
-  form.addEventListener("submit", () => {
-    syncReasoningMirror();
-    const profile = selectedProfile();
-    if (profile?.command_only) {
-      executorModeInput.value = "command";
-    }
-  });
+  form.addEventListener("submit", submitRoleDefinitionForm);
+  form.addEventListener("input", () => window.LooporaUI.clearAssetFieldRecovery(form, {statusElement: formError}));
+  form.addEventListener("change", () => window.LooporaUI.clearAssetFieldRecovery(form, {statusElement: formError}));
 
   document.addEventListener("loopora:localechange", () => {
     localizeArchetypeOptions();

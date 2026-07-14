@@ -5,6 +5,7 @@ from loopora.agent_native_task_proof import (
     agent_task_proof_summary,
     with_agent_native_judgment_contract,
 )
+from loopora.run_worker_start import BACKGROUND_WORKER_START_ERROR
 from loopora.task_verdicts import PASSING_TASK_VERDICT_STATUSES
 
 
@@ -45,6 +46,29 @@ def test_agent_native_task_next_action_routes_terminal_unproven_runs_to_new_evid
     assert action["reason"] == "run_lifecycle_complete_task_not_proven"
     assert action["next_loop_command"] == "/loopora-run"
     assert action["task_verdict_summary"] == "Browser proof is missing."
+
+
+def test_agent_native_task_next_action_routes_lifecycle_failure_to_retry_not_evidence() -> None:
+    action = agent_native_task_next_action(
+        {
+            "complete": True,
+            "run": {
+                "status": "failed",
+                "error_message": BACKGROUND_WORKER_START_ERROR,
+                "task_verdict": {
+                    "status": "not_evaluated",
+                    "summary": "No evidence work started.",
+                },
+            },
+        }
+    )
+
+    assert action["kind"] == "retry_lifecycle_failure"
+    assert action["reason"] == "run_lifecycle_failure_retry"
+    assert action["next_loop_command"] == "/loopora-run"
+    assert action["plan_action"] == "retry_run_start_from_reviewed_loop"
+    assert action["recording_blocked_reason"] == "cannot accept lifecycle failure as a run result"
+    assert "do not treat this as an evidence pass" in action["guidance"]
 
 
 def test_agent_native_task_next_action_stops_terminal_passed_replay() -> None:
@@ -99,6 +123,28 @@ def test_agent_task_proof_summary_distinguishes_lifecycle_complete_from_unproven
     assert summary["lifecycle_vs_task"] == "run_lifecycle_complete_task_not_proven"
     assert summary["next_loop_command"] == "/loopora-run"
     assert summary["next_evidence_focus"] == "Audit proof is still missing."
+
+
+def test_agent_task_proof_summary_distinguishes_lifecycle_retry_from_evidence_gap() -> None:
+    summary = agent_task_proof_summary(
+        complete=True,
+        task_verdict_status="not_evaluated",
+        task_verdict_summary="No evidence work started.",
+        task_next_action={
+            "kind": "retry_lifecycle_failure",
+            "next_loop_command": "/loopora-run",
+            "plan_action": "retry_run_start_from_reviewed_loop",
+            "recording_blocked_reason": "cannot accept lifecycle failure as a run result",
+        },
+    )
+
+    assert summary["task_proven"] is False
+    assert summary["task_outcome"] == "not_proven_retry_lifecycle_failure"
+    assert summary["lifecycle_vs_task"] == "run_lifecycle_complete_task_not_proven"
+    assert summary["next_loop_command"] == "/loopora-run"
+    assert summary["next_plan_action"] == "retry_run_start_from_reviewed_loop"
+    assert summary["recording_blocked_reason"] == "cannot accept lifecycle failure as a run result"
+    assert "next_evidence_focus" not in summary
 
 
 def test_agent_task_proof_summary_allows_cli_to_compact_next_evidence_focus() -> None:

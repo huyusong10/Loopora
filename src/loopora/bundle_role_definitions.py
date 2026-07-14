@@ -5,7 +5,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from loopora.bundle_contract import BUNDLE_EXECUTION_FIELDS, BundleError
-from loopora.providers import normalize_executor_kind
+from loopora.loop_compose_validation import default_loop_role_execution_options
 from loopora.strategy_source import (
     StrategySourceError,
     normalize_strategy_archetype,
@@ -120,7 +120,7 @@ def _normalize_bundle_role_execution(entry: Mapping[str, Any], *, default_execut
     try:
         executor_kind_changed = (
             "executor_kind" in entry
-            and normalize_executor_kind(str(entry.get("executor_kind") or "").strip()) != str(default_execution.get("executor_kind") or "codex")
+            and _normalize_bundle_role_executor_kind(entry.get("executor_kind")) != str(default_execution.get("executor_kind") or "codex")
         )
     except ValueError as exc:
         raise BundleError(str(exc)) from exc
@@ -142,3 +142,21 @@ def _normalize_bundle_role_execution(entry: Mapping[str, Any], *, default_execut
         settings,
         default_executor_kind=str(default_execution.get("executor_kind") or "codex"),
     )
+
+
+def _normalize_bundle_role_executor_kind(value: object) -> str:
+    try:
+        return default_loop_role_execution_options(str(value or "").strip() or "codex").executor_kind
+    except ValueError as exc:
+        raise ValueError(_bundle_role_execution_error_message(str(exc))) from exc
+
+
+def _bundle_role_execution_error_message(message: str) -> str:
+    replacements = {
+        "invalid --executor:": "",
+        "invalid --completion-mode:": "",
+    }
+    for cli_prefix, replacement in replacements.items():
+        if message.startswith(cli_prefix):
+            return f"{replacement}{message[len(cli_prefix):]}".strip()
+    return message

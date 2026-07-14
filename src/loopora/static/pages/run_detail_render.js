@@ -319,7 +319,7 @@
         return;
       }
       node.hidden = false;
-      node.innerHTML = takeawayProjector.evidenceCoverageHtml(snapshot, runId);
+      node.innerHTML = takeawayProjector.evidenceCoverageHtml(snapshot, runId, getRun());
     }
 
     function renderEvidenceOutcome(snapshot = getTakeawaySnapshot(), run = getRun()) {

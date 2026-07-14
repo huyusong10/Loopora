@@ -65,6 +65,13 @@ def test_api_spec_init_validate_and_delete_loop(service_factory, tmp_path: Path,
         role_models={},
     )
 
+    preview_response = client.get(f"/api/loops/{loop['id']}/delete-preview")
+    assert preview_response.status_code == HTTPStatus.OK
+    preview = preview_response.json()
+    assert preview["delete_allowed"] is True
+    assert preview["would_delete"] == {"loop": loop["id"], "run_count": 0, "run_ids": []}
+    assert service.get_loop(loop["id"])["id"] == loop["id"]
+
     delete_response = client.delete(f"/api/loops/{loop['id']}")
     assert delete_response.status_code == HTTPStatus.OK
     assert delete_response.json()["id"] == loop["id"]
@@ -101,6 +108,50 @@ def test_api_spec_template_accepts_strategy_json_mapping(service_factory) -> Non
     assert "## GateKeeper Notes" in payload["content"]
     assert [item["role_name"] for item in payload["role_note_sections"]] == ["Builder", "GateKeeper"]
     assert "<h1>Task</h1>" in payload["rendered_html"]
+
+
+def test_api_spec_template_and_init_accept_orchestration_id(
+    tmp_path: Path,
+    service_factory,
+) -> None:
+    service = service_factory(scenario="success")
+    orchestration = service.create_orchestration(
+        name="Evidence Flow",
+        strategy_source={
+            "version": 1,
+            "roles": [
+                {
+                    "id": "evidence_reviewer",
+                    "name": "Evidence Reviewer",
+                    "archetype": "inspector",
+                    "prompt_ref": "inspector.md",
+                }
+            ],
+            "steps": [{"id": "review", "role_id": "evidence_reviewer"}],
+        },
+        prompt_files={},
+        role_models={},
+    )
+    client = TestClient(build_app(service=service))
+
+    template_response = client.post(
+        "/api/specs/template",
+        json={"locale": "en", "orchestration_id": orchestration["id"]},
+    )
+
+    assert template_response.status_code == HTTPStatus.OK
+    template_payload = template_response.json()
+    assert "## Evidence Reviewer Notes" in template_payload["content"]
+    assert template_payload["role_note_sections"][0]["role_name"] == "Evidence Reviewer"
+
+    spec_path = tmp_path / "orchestration-spec.md"
+    init_response = client.post(
+        "/api/specs/init",
+        json={"path": str(spec_path), "locale": "en", "orchestration_id": orchestration["id"]},
+    )
+
+    assert init_response.status_code == HTTPStatus.CREATED
+    assert "## Evidence Reviewer Notes" in spec_path.read_text(encoding="utf-8")
 
 
 def test_api_spec_template_and_init_reject_invalid_workflow_json(

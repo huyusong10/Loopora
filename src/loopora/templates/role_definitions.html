@@ -19,14 +19,18 @@
       <span data-lang="en">Role Definitions</span>
     </h1>
     <p class="hero-lede" data-testid="role-definitions-intro-copy">
-      <span data-lang="zh">这里分成两层：上面是你保存的团队角色，点进去就是修改；下面是系统内置模板，用来快速派生新的角色版本。</span>
-      <span data-lang="en">This page has two layers: your saved team roles on top, which open in edit mode, and the built-in templates below, which you can use as starting points for new variants.</span>
+      <span data-lang="zh">这里分成两层：上面是你保存的团队角色，点进去就是修改；下面是系统内置模板，用来快速派生新的角色版本。新任务通常先从创建路径开始，只有当职责需要跨多个 Loop 稳定复用时才自定义角色。</span>
+      <span data-lang="en">This page has two layers: your saved team roles on top, which open in edit mode, and the built-in templates below, which you can use as starting points for new variants. New tasks usually start from the creation path; customize roles when a responsibility needs stable reuse across Loops.</span>
     </p>
   </div>
   <div class="card-actions">
-    <a class="primary-button" href="/roles/new" data-testid="create-role-definition-link">
+    <a class="primary-button" href="{{ create_role_definition_href }}" data-testid="create-role-definition-link" data-workdir-context-link="workdir">
       <span data-lang="zh">新建角色</span>
       <span data-lang="en">Create role</span>
+    </a>
+    <a class="secondary-button" href="{{ nav_compose_href }}" data-testid="role-definitions-compose-link" data-workdir-context-link="workdir">
+      <span data-lang="zh">选择创建方式</span>
+      <span data-lang="en">Choose Creation Path</span>
     </a>
   </div>
 </section>
@@ -34,13 +38,13 @@
 <section class="panel" data-testid="role-definitions-list">
   <header class="panel-header">
     <h2><span data-lang="zh">已保存自定义角色</span><span data-lang="en">Saved custom roles</span></h2>
-    <span>{{ custom_role_definitions|length }}</span>
+    <span id="role-definition-count">{{ custom_role_definitions|length }}</span>
   </header>
   {% if custom_role_definitions %}
-  <div class="loop-grid role-card-grid role-card-grid--definitions">
+  <div class="loop-grid role-card-grid role-card-grid--definitions" id="role-definition-grid">
     {% for role_definition in custom_role_definitions %}
-    <article class="loop-card is-clickable" data-open-card="/roles/{{ role_definition.id }}/edit" data-testid="role-definition-card" data-role-definition-id="{{ role_definition.id }}" tabindex="0">
-      <a class="loop-card-link" href="/roles/{{ role_definition.id }}/edit" tabindex="-1" aria-hidden="true"></a>
+    <article class="loop-card is-clickable" data-open-card="{{ role_definition.editor_href }}" data-workdir-context-open-card="workdir" data-testid="role-definition-card" data-role-definition-id="{{ role_definition.id }}" tabindex="0">
+      <a class="loop-card-link" href="{{ role_definition.editor_href }}" data-workdir-context-link="workdir" tabindex="-1" aria-hidden="true"></a>
       <div class="loop-card-head">
         <div>
           <strong>{{ role_definition.name }}</strong>
@@ -61,21 +65,41 @@
       </p>
       {% if role_definition.deletable %}
       <div class="card-actions card-actions-compact">
-        <form method="post" action="/api/role-definitions/{{ role_definition.id }}" onsubmit="event.preventDefault(); fetch(this.action, {method: 'DELETE'}).then(() => window.location.reload());">
-          <button class="ghost-button danger-button" type="submit">
-            <span data-lang="zh">删除</span>
-            <span data-lang="en">Delete</span>
-          </button>
-        </form>
+        <button
+          class="ghost-button danger-button"
+          type="button"
+          data-delete-role-definition="{{ role_definition.id }}"
+          data-role-definition-name="{{ role_definition.name }}"
+          data-testid="delete-role-definition-button"
+        >
+          <span data-lang="zh">删除</span>
+          <span data-lang="en">Delete</span>
+        </button>
       </div>
       {% endif %}
     </article>
     {% endfor %}
   </div>
   {% else %}
-  <div class="empty-state">
+  <div class="empty-state" id="role-definitions-empty-state">
     <h3><span data-lang="zh">还没有自定义角色</span><span data-lang="en">No custom roles yet</span></h3>
-    <p><span data-lang="zh">先新建一个角色，或者从下面的内置模板派生一个团队版本。</span><span data-lang="en">Create a role first, or start from one of the built-in templates below.</span></p>
+    <p><span data-lang="zh">新任务可以先用 Web 对话或同一 Agent 设置走默认角色；当某个团队职责需要稳定复用时，再新建或从内置模板派生角色。</span><span data-lang="en">For a new task, start with Web conversation or Same-Agent Setup using default roles. Create or derive a role when a team responsibility needs stable reuse.</span></p>
+    <div class="card-actions">
+      <a class="primary-button" href="{{ nav_compose_href }}" data-testid="role-definitions-empty-compose-link" data-workdir-context-link="workdir">
+        <span data-lang="zh">选择创建方式</span>
+        <span data-lang="en">Choose Creation Path</span>
+      </a>
+      <a class="secondary-button" href="{{ create_role_definition_href }}" data-testid="role-definitions-empty-create-link" data-workdir-context-link="workdir">
+        <span data-lang="zh">新建角色</span>
+        <span data-lang="en">Create role</span>
+      </a>
+      {% if builtin_role_templates %}
+      <a class="ghost-button" href="{{ builtin_role_templates[0].editor_href }}" data-testid="role-definitions-empty-template-link" data-workdir-context-link="workdir">
+        <span data-lang="zh">从模板开始</span>
+        <span data-lang="en">Start from template</span>
+      </a>
+      {% endif %}
+    </div>
   </div>
   {% endif %}
 </section>
@@ -94,8 +118,8 @@
   </header>
   <div class="loop-grid role-card-grid role-card-grid--definitions">
     {% for role_definition in builtin_role_templates %}
-    <article class="loop-card is-clickable" data-open-card="/roles/{{ role_definition.id }}/edit" data-testid="builtin-role-template-card" data-role-definition-id="{{ role_definition.id }}" tabindex="0">
-      <a class="loop-card-link" href="/roles/{{ role_definition.id }}/edit" tabindex="-1" aria-hidden="true"></a>
+    <article class="loop-card is-clickable" data-open-card="{{ role_definition.editor_href }}" data-workdir-context-open-card="workdir" data-testid="builtin-role-template-card" data-role-definition-id="{{ role_definition.id }}" tabindex="0">
+      <a class="loop-card-link" href="{{ role_definition.editor_href }}" data-workdir-context-link="workdir" tabindex="-1" aria-hidden="true"></a>
       <div class="loop-card-head">
         <div class="loop-card-copy">
           <div class="label-with-help">

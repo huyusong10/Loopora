@@ -6,11 +6,15 @@ from loopora.structured_booleans import structured_bool_is_true
 from loopora.structured_numbers import structured_optional_non_negative_int
 from loopora.web_timeline_run_events import format_run_finished as _format_run_finished
 from loopora.web_timeline_run_events import format_run_result_accepted as _format_run_result_accepted
+from loopora.web_timeline_run_events import (
+    format_run_result_acceptance_reopened as _format_run_result_acceptance_reopened,
+)
 
 SIMPLE_TIMELINE_TITLES = {
     "run_started": "Run started",
     "stop_requested": "Stop requested",
     "run_result_accepted": "Evidence verdict recorded",
+    "run_result_acceptance_reopened": "Recorded evidence verdict reopened",
 }
 
 CONTROL_TIMELINE_TITLES = {
@@ -175,6 +179,7 @@ TIMELINE_EVENT_FORMATTERS = {
     "workspace_guard_triggered": _format_workspace_guard_triggered,
     "run_finished": _format_run_finished,
     "run_result_accepted": _format_run_result_accepted,
+    "run_result_acceptance_reopened": _format_run_result_acceptance_reopened,
     **dict.fromkeys(CONTROL_TIMELINE_TITLES, _format_control_event),
     **dict.fromkeys(PARALLEL_GROUP_TIMELINE_TITLES, _format_parallel_group_event),
 }

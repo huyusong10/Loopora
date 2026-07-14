@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from strategy_source_architecture_test_support import design_boundary_source
+
 from loopora.service_alignment_agent_entry_review import (
     agent_entry_candidate_adapter,
     agent_entry_candidate_payload,
@@ -24,7 +26,7 @@ def test_agent_entry_review_projection_has_dedicated_boundary() -> None:
     session_projection_source = (
         REPO_ROOT / "src" / "loopora" / "service_alignment_session_projection.py"
     ).read_text(encoding="utf-8")
-    design_source = (REPO_ROOT / "design" / "contracts.md").read_text(encoding="utf-8")
+    design_source = design_boundary_source()
 
     assert "from loopora.service_alignment_agent_entry_review import" in recovery_source
     assert "from loopora.service_alignment_agent_entry_review import" in session_projection_source

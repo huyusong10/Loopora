@@ -18,6 +18,15 @@ MIN_TAKEAWAY_ROLE_CONCLUSION_COUNT = 2
 MIN_TAKEAWAY_TARGET_COUNT = 5
 
 
+def _assert_coverage_target_basis(coverage: dict) -> None:
+    assert coverage["required_target_count"] >= 1
+    assert coverage["covered_required_target_count"] == coverage["required_target_count"]
+    assert coverage["missing_required_target_count"] == 0
+    assert coverage["blocked_required_target_count"] == 0
+    assert coverage["advisory_target_count"] >= 1
+    assert coverage["missing_advisory_target_count"] >= 1
+
+
 def test_api_run_key_takeaways_returns_iteration_role_conclusions(
     service_factory,
     sample_spec_file: Path,
@@ -66,6 +75,7 @@ def test_api_run_key_takeaways_returns_iteration_role_conclusions(
     assert set(coverage["covered_check_ids"]) == {"check_001", "check_002"}
     assert coverage["target_count"] >= MIN_TAKEAWAY_TARGET_COUNT
     assert coverage["missing_target_count"] >= 1
+    _assert_coverage_target_basis(coverage)
     assert coverage["top_gaps"]
     assert coverage["latest_gatekeeper"]["evidence_refs"]
     assert coverage["evidence_kind_counts"]["inspection"] >= 1

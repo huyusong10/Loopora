@@ -1,13 +1,18 @@
 from __future__ import annotations
 
-import html
 import logging
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
+from urllib.parse import parse_qs
 
 from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse, JSONResponse, Response
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
+
+from loopora.branding import APP_AUTH_COOKIE
+from loopora.token_security import token_matches
+from loopora.web_request_context import _request_wants_json
+from loopora.web_url_utils import safe_local_return_path
 
 
 StreamAfterResolver = Callable[[Request], int] | Callable[..., int]
@@ -96,26 +101,78 @@ class WebRouteContextBase:
     def json_error_from_exception(self, exc: BaseException) -> JSONResponse:
         return self.json_error(str(exc), status_code=self.error_status_code(exc))
 
-    def render_auth_required(self, request: Request) -> HTMLResponse:
+    def render_auth_form(
+        self,
+        request: Request,
+        *,
+        return_to: str,
+        status_code: int,
+        token_invalid: bool = False,
+    ) -> HTMLResponse:
         return HTMLResponse(
             self.templates.TemplateResponse(
                 request,
                 "auth.html",
-                {"request": request, "url_path": html.escape(request.url.path)},
+                {
+                    "request": request,
+                    "return_to": return_to,
+                    "token_invalid": token_invalid,
+                },
             ).body.decode(),
-            status_code=401,
+            status_code=status_code,
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+    def render_auth_required(self, request: Request) -> HTMLResponse:
+        return self.render_auth_form(
+            request,
+            return_to=_safe_request_return_path(request),
+            status_code=401,
+        )
+
+    async def submit_auth_token(self, request: Request) -> Response:
+        form = _urlencoded_form(await request.body())
+        return_to = safe_local_return_path(_first_form_value(form, "return_to")) or "/"
+        expected_token = self.access_state.get("auth_token")
+        if not expected_token:
+            return RedirectResponse(url=return_to, status_code=303)
+
+        if not token_matches(_first_form_value(form, "token"), expected_token):
+            return self.render_auth_form(
+                request,
+                return_to=return_to,
+                status_code=401,
+                token_invalid=True,
+            )
+
+        response = RedirectResponse(url=return_to, status_code=303)
+        response.set_cookie(APP_AUTH_COOKIE, str(expected_token), httponly=True, samesite="lax")
+        return response
+
     def auth_required_response(self, request: Request) -> Response:
-        accept_header = request.headers.get("accept", "")
-        if request.url.path.startswith("/api/") or "application/json" in accept_header:
+        if _request_wants_json(request):
             return JSONResponse(
                 {
                     "error": "auth token required",
-                    "hint": "append ?token=<your-token> once or send Authorization: Bearer <your-token>",
+                    "hint": "open the auth form or send Authorization: Bearer <your-token>",
                 },
                 status_code=401,
                 headers={"WWW-Authenticate": "Bearer"},
             )
         return self.render_auth_required(request)
+
+
+def _safe_request_return_path(request: Request) -> str:
+    target = request.url.path
+    if request.url.query:
+        target = f"{target}?{request.url.query}"
+    return safe_local_return_path(target) or "/"
+
+
+def _urlencoded_form(body: bytes) -> Mapping[str, list[str]]:
+    return parse_qs(body.decode("utf-8", errors="replace"), keep_blank_values=True)
+
+
+def _first_form_value(form: Mapping[str, list[str]], key: str) -> str:
+    values = form.get(key) or []
+    return str(values[0] if values else "").strip()

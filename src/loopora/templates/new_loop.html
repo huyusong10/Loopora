@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "partials/recovery_actions.html" import recovery_panel %}
 {% macro tip_button(zh, en, testid="") -%}
 <button
   class="help-dot help-dot--tips"
@@ -11,51 +12,72 @@
 {%- endmacro %}
 {% macro compose_sidebar(mode) -%}
 <aside class="bundle-chat-sidebar" data-testid="alignment-history-panel">
-  {% if mode == "bundle" %}
-  <button class="bundle-sidebar-action" type="button" id="alignment-new-session-button" data-testid="alignment-new-session-button">
-    <span data-lang="zh">新对话</span>
-    <span data-lang="en">New chat</span>
-  </button>
-  {% else %}
-  <a class="bundle-sidebar-action" href="/loops/new/bundle" data-testid="alignment-new-session-button">
-    <span data-lang="zh">新对话</span>
-    <span data-lang="en">New chat</span>
-  </a>
-  {% endif %}
-  <nav class="bundle-sidebar-nav" aria-label="{{ '编排入口' if page_locale == 'zh' else 'Composition paths' }}" data-testid="alignment-secondary-paths">
+  <nav class="bundle-sidebar-nav" aria-label="{{ '创建入口' if page_locale == 'zh' else 'Creation paths' }}" data-testid="alignment-secondary-paths">
     <a
       class="{% if mode == 'bundle' %}is-active{% endif %}"
-      href="/loops/new/bundle"
+      href="{{ create_choice_links.bundle }}"
       data-compose-mode-link="chat"
+      data-compose-path-kind="web_conversation"
       data-testid="alignment-path-chat"
+      data-workdir-context-link="alignment_workdir"
     >
-      <span data-lang="zh">对话编排 Loop</span>
-      <span data-lang="en">Chat composer</span>
+      <span data-lang="zh">Web 对话</span>
+      <span data-lang="en">Web conversation</span>
     </a>
     <a
-      href="/loops/new/manual#bundle-import-form"
+      href="{{ create_choice_links.agent }}"
+      data-compose-path-kind="same_agent_setup"
+      data-testid="alignment-path-agent-setup"
+      data-workdir-context-link="workdir"
+    >
+      <span data-lang="zh">同一 Agent 设置</span>
+      <span data-lang="en">Same-Agent Setup</span>
+    </a>
+    <a
+      href="{{ create_choice_links.import }}"
       data-compose-mode-link="import"
+      data-compose-path-kind="plan_file_import"
       data-testid="alignment-path-import"
+      data-workdir-context-link="workdir"
     >
       <span data-lang="zh">导入方案文件</span>
-      <span data-lang="en">Import plan file</span>
+      <span data-lang="en">Import Plan File</span>
     </a>
     <a
       class="{% if mode == 'manual' %}is-active{% endif %}"
-      href="/loops/new/manual#manual-loop-form"
+      href="{{ create_choice_links.manual }}"
       data-compose-mode-link="manual"
+      data-compose-path-kind="manual_expert"
       data-testid="alignment-path-manual"
+      data-workdir-context-link="workdir"
     >
-      <span data-lang="zh">手动编排</span>
-      <span data-lang="en">Manual composition</span>
+      <span data-lang="zh">手动专家模式</span>
+      <span data-lang="en">Manual expert mode</span>
     </a>
   </nav>
+  {% if mode == "bundle" %}
+  <button class="bundle-sidebar-action" type="button" id="alignment-new-session-button" data-testid="alignment-new-session-button" data-compose-action-kind="new_web_conversation">
+    <span data-lang="zh">开始新对话</span>
+    <span data-lang="en">Start new conversation</span>
+  </button>
+  {% else %}
+  <a class="bundle-sidebar-action" href="{{ create_choice_links.bundle }}" data-testid="alignment-new-session-button" data-workdir-context-link="alignment_workdir" data-compose-action-kind="new_web_conversation">
+    <span data-lang="zh">开始新对话</span>
+    <span data-lang="en">Start new conversation</span>
+  </a>
+  {% endif %}
   <details class="bundle-sidebar-history">
     <summary>
       <span data-lang="zh">最近对话</span>
       <span data-lang="en">Recent chats</span>
     </summary>
-    <div class="alignment-history-list" id="alignment-history-list" data-testid="alignment-history-list"></div>
+    <div
+      class="alignment-history-list"
+      id="alignment-history-list"
+      data-testid="alignment-history-list"
+      data-history-empty-start-href="{{ create_choice_links.bundle }}"
+      data-workdir-context-dataset-urls="historyEmptyStartHref:alignment_workdir"
+    ></div>
   </details>
 </aside>
 {%- endmacro %}
@@ -84,55 +106,268 @@
       <span data-lang="en">Choose how this loop starts.</span>
     </h1>
     <p>
-      <span data-lang="zh">如果你还在描述目标和判断方式，从对话编排开始。只有当你已经知道要用哪份契约、哪些检视角色和怎样的运行流程时，再进入手动编排。</span>
-      <span data-lang="en">Start with the loop-plan conversation when you are still shaping task judgment. Use manual expert mode only when you already know the contract, review roles, and run flow you want.</span>
+      <span data-lang="zh">不在 Agent 会话里时，从 Web 对话开始；已经在 Codex、Claude Code 或 OpenCode 里工作时，走同一 Agent 设置；已有已审查 Plan File 或明确契约时，再导入或手动编排。</span>
+      <span data-lang="en">Outside an Agent session, start with Web conversation. Already working in Codex, Claude Code, or OpenCode? Use Same-Agent Setup. Import a Plan File or compose manually only when you already have a reviewed plan artifact or exact contract.</span>
     </p>
   </div>
 </section>
 
-<section class="create-choice-grid" aria-label="{{ '创建方式' if page_locale == 'zh' else 'Creation paths' }}">
-  <article class="panel create-choice-card create-choice-card--primary" id="bundle-import-form" data-testid="loop-create-bundle-choice">
+<section class="panel create-choice-fit-review" data-testid="loop-create-fit-review" data-create-choice-fit-prompt>
+  <div>
+    <span class="eyebrow"><span data-lang="zh">还不确定？</span><span data-lang="en">Not sure yet?</span></span>
+    <h2><span data-lang="zh">先做适用性判断</span><span data-lang="en">Check fit before creating</span></h2>
+    <p>
+      <span data-lang="zh">用几分钟确认这项任务是否需要 Loopora：它是否有慢反馈、伪完成风险、可收集证据和需要保留的人类判断。完成后可以带着同一份任务判断回到 Agent 或 Web 创建路径。</span>
+      <span data-lang="en">Take a few minutes to decide whether this task needs Loopora: slow feedback, fake-done risk, collectable evidence, and judgment worth preserving. A completed review can carry the same task judgment back to same-Agent setup or the Fit Guide/Web choices route.</span>
+    </p>
+  </div>
+  <a class="ghost-button" href="{{ nav_tutorial_fit_href }}" data-testid="loop-create-fit-guide-link" data-workdir-context-link="workdir">
+    <span data-lang="zh">先判断是否适合</span>
+    <span data-lang="en">Check Fit First</span>
+  </a>
+</section>
+
+<section
+  class="panel create-choice-tutorial-handoff"
+  id="create-choice-tutorial-handoff"
+  data-testid="loop-create-tutorial-handoff"
+  data-current-workdir="{{ workdir_context or '' }}"
+  hidden
+>
+  <div class="create-choice-tutorial-handoff-copy">
+    <span class="eyebrow" data-testid="loop-create-tutorial-handoff-kicker">
+      <span data-lang="zh">来自适用性判断</span>
+      <span data-lang="en">From Fit Guide</span>
+    </span>
+    <h2 data-create-choice-handoff-title>
+      <span data-lang="zh">已有适配性判断草稿</span>
+      <span data-lang="en">Fit review draft is available</span>
+    </h2>
+    <p data-create-choice-handoff-description>
+      <span data-lang="zh">这份草稿保存在当前浏览器会话中。完整后可以进入 Web 对话；不完整时先补齐判断字段，或进入同一 Agent 设置复制补完命令。</span>
+      <span data-lang="en">This draft is stored in this browser session. Complete drafts can continue into Web conversation; incomplete drafts should be finished first or carried into Same-Agent Setup for the completion command.</span>
+    </p>
+    <details class="create-choice-tutorial-handoff-review" data-testid="loop-create-tutorial-handoff-review">
+      <summary>
+        <span data-lang="zh">审阅已带入的任务判断</span>
+        <span data-lang="en">Review carried task judgment</span>
+        <span class="create-choice-tutorial-handoff-review-count" data-testid="loop-create-tutorial-handoff-review-count"></span>
+      </summary>
+      <div class="create-choice-tutorial-handoff-summary" data-testid="loop-create-tutorial-handoff-inputs"></div>
+    </details>
+    <div class="create-choice-tutorial-handoff-meta" data-testid="loop-create-tutorial-handoff-meta"></div>
+  </div>
+  <div class="create-choice-tutorial-handoff-actions">
+    <a class="primary-button" href="{{ create_choice_links.bundle }}" data-create-choice-handoff-web data-create-choice-web-start data-testid="loop-create-tutorial-handoff-web-link" data-workdir-context-link="alignment_workdir">
+      <span data-lang="zh">进入 Web 对话</span>
+      <span data-lang="en">Continue in Web</span>
+    </a>
+    <a class="secondary-button" href="{{ nav_compose_href }}" data-create-choice-handoff-use-source data-testid="loop-create-tutorial-handoff-use-source" hidden>
+      <span data-lang="zh">使用来源项目</span>
+      <span data-lang="en">Use Source Project</span>
+    </a>
+    <a class="secondary-button" href="{{ nav_tools_href }}" data-create-choice-handoff-tools data-testid="loop-create-tutorial-handoff-tools-link">
+      <span data-lang="zh">同一 Agent 设置</span>
+      <span data-lang="en">Same-Agent Setup</span>
+    </a>
+    <a class="secondary-button" href="{{ nav_tutorial_fit_href }}" data-create-choice-handoff-finish data-testid="loop-create-tutorial-handoff-finish-link">
+      <span data-lang="zh">补齐适配性判断</span>
+      <span data-lang="en">Finish Fit Review</span>
+    </a>
+    <button class="secondary-button" type="button" data-create-choice-handoff-copy-direct data-testid="loop-create-tutorial-handoff-copy-direct" hidden>
+      <span data-lang="zh">复制直接路径命令</span>
+      <span data-lang="en">Copy Direct-Path Command</span>
+    </button>
+    <div class="agent-readiness-public-report" data-create-choice-handoff-direct-manual-copy data-testid="loop-create-tutorial-handoff-direct-manual-copy" hidden></div>
+    <button class="ghost-button" type="button" data-create-choice-handoff-clear data-testid="loop-create-tutorial-handoff-clear">
+      <span data-lang="zh">清除草稿</span>
+      <span data-lang="en">Clear Draft</span>
+    </button>
+  </div>
+</section>
+
+<section class="create-choice-grid" aria-label="{{ '开始或继续路径' if page_locale == 'zh' else 'Start or continue paths' }}">
+  <article class="panel create-choice-card create-choice-card--primary" data-testid="loop-create-bundle-choice">
     <div>
-      <span class="eyebrow"><span data-lang="zh">推荐</span><span data-lang="en">Recommended</span></span>
-      <h2><span data-lang="zh">对话编排 Loop</span><span data-lang="en">Compose Loop by Conversation</span></h2>
+      <span class="eyebrow"><span data-lang="zh">Web 对话</span><span data-lang="en">Web chat</span></span>
+      <div class="create-choice-card-route">
+        <h2><span data-lang="zh">对话编排 Loop</span><span data-lang="en">Compose Loop by Conversation</span></h2>
+        <a class="primary-button create-choice-card-route-action" href="{{ create_choice_links.bundle }}" data-create-choice-web-start data-testid="loop-create-bundle-link" data-workdir-context-link="alignment_workdir">
+          <span data-lang="zh">开始对话</span>
+          <span data-lang="en">Start Conversation</span>
+        </a>
+      </div>
       <p>
-        <span data-lang="zh">用自然语言描述任务、你会反复追问的判断和不能假完成的证据。Loopora 会让本机智能体把判断方式整理成候选 Loop，并展示目标、风险、证据路径和裁决方式。</span>
-        <span data-lang="en">Describe the task, the judgment you would keep checking, and the evidence that must not be faked. Loopora asks a local Agent to shape that judgment into a candidate Loop, then previews the goal, risks, evidence path, and verdict path.</span>
+        <span data-lang="zh">不在 Agent 会话里时，一句话说明任务即可开始。已有适配理由、伪完成风险、必需证据、判断取舍或直接路径上下文时可在首条消息一并带入；缺失判断由 Web 对话逐项补齐。</span>
+        <span data-lang="en">When you are not inside an Agent session, one task goal is enough to begin. Include known fit, fake-done, evidence, tradeoff, or direct-path judgment in the first message when available; Web conversation clarifies what is still missing.</span>
       </p>
     </div>
-    <a class="primary-button" href="/loops/new/bundle" data-testid="loop-create-bundle-link">
-      <span data-lang="zh">开始对话</span>
-      <span data-lang="en">Start Conversation</span>
-    </a>
+  </article>
+  <article class="panel create-choice-card create-choice-card--agent" data-testid="loop-create-agent-choice">
+    <div>
+      <span class="eyebrow"><span data-lang="zh">同一 Agent</span><span data-lang="en">Same-Agent</span></span>
+      <div class="create-choice-card-route">
+        <h2><span data-lang="zh">用同一 Agent 创建</span><span data-lang="en">Create in the same Agent</span></h2>
+        <a class="secondary-button create-choice-card-route-action" href="{{ create_choice_links.agent }}" data-create-choice-setup-start data-testid="loop-create-agent-link" data-workdir-context-link="workdir">
+          <span data-lang="zh">同一 Agent 设置</span>
+          <span data-lang="en">Same-Agent Setup</span>
+        </a>
+      </div>
+      <p>
+        <span data-lang="zh">已经在 Codex、Claude Code 或 OpenCode 里工作时，先设置同一 Agent 项目入口并确认 doctor 就绪，再在当前 Agent 里运行 `/loopora-plan`；READY 预览匹配任务判断后才运行 `/loopora-run`。Loopora 保留判断、证据和裁决，执行主体仍是你的当前 Agent。</span>
+        <span data-lang="en">When you are already working inside Codex, Claude Code, or OpenCode, set up the same-Agent project entry, confirm doctor readiness, then run `/loopora-plan` in that Agent; run `/loopora-run` only after the READY preview matches the task judgment. Loopora keeps the judgment, evidence, and verdict while your current Agent remains the executor.</span>
+      </p>
+    </div>
   </article>
   <article class="panel create-choice-card" id="manual-loop-form" data-testid="loop-create-manual-choice">
     <div>
-      <span class="eyebrow"><span data-lang="zh">专家路径</span><span data-lang="en">Expert mode</span></span>
-      <h2><span data-lang="zh">手动编排 Loop</span><span data-lang="en">Create Loop Manually</span></h2>
+      <span class="eyebrow"><span data-lang="zh">专家路径</span><span data-lang="en">Expert path</span></span>
+      <div class="create-choice-card-route">
+        <h2><span data-lang="zh">导入 Plan File 或手动编排</span><span data-lang="en">Import Plan File or compose manually</span></h2>
+        <div class="create-choice-card-actions create-choice-card-route-actions">
+          <a class="secondary-button" href="{{ create_choice_links.import }}" data-create-choice-expert-start data-testid="loop-create-import-link" data-workdir-context-link="workdir">
+            <span data-lang="zh">导入 Plan File</span>
+            <span data-lang="en">Import Plan File</span>
+          </a>
+          <a class="ghost-button" href="{{ create_choice_links.manual }}" data-create-choice-expert-start data-testid="loop-create-manual-link" data-workdir-context-link="workdir">
+            <span data-lang="zh">手动创建</span>
+            <span data-lang="en">Manual Form</span>
+          </a>
+        </div>
+      </div>
       <p>
-        <span data-lang="zh">直接选择 Loop 契约、工作目录、流程和运行参数。适合你已经知道要用哪份契约、哪些检视角色和怎样的运行流程。</span>
-        <span data-lang="en">Choose the Loop contract, run directory, flow, and runtime settings directly. Use this when you already know the contract, review roles, and run flow you want.</span>
+        <span data-lang="zh">已经有已审查 Plan File，或已经明确 Loop 契约、检视角色、工作目录和运行流程时，从这里进入完整专家路径。</span>
+        <span data-lang="en">Use the full expert path when you already have a reviewed Plan File, or when the Loop contract, review roles, run directory, and flow are already clear.</span>
       </p>
     </div>
-    <a class="secondary-button" href="/loops/new/manual#manual-loop-form" data-testid="loop-create-manual-link">
-      <span data-lang="zh">进入手动创建</span>
-      <span data-lang="en">Open Manual Form</span>
-    </a>
+  </article>
+  {% set existing_work_available = create_choice_existing_work.has_work|default(false) %}
+  {% set existing_hidden_work_available = create_choice_existing_work.has_hidden_work|default(false) %}
+  {% set existing_activity_available = create_choice_existing_work.has_activity|default(false) %}
+  {% set existing_saved_available = create_choice_existing_work.has_saved_loops|default(false) %}
+  {% set existing_attention_available = create_choice_existing_work.active_attention_count|default(0) > 0 %}
+  {% set existing_primary_activity_href = create_choice_existing_work.primary_activity_href|default("") %}
+  {% set existing_primary_activity_action_kind = create_choice_existing_work.primary_activity_action_kind|default("") %}
+  {% set existing_primary_activity_action_zh = create_choice_existing_work.primary_activity_action_zh|default("") %}
+  {% set existing_primary_activity_action_en = create_choice_existing_work.primary_activity_action_en|default("") %}
+  {% set existing_primary_activity_available = existing_primary_activity_href %}
+  {% set existing_primary_alignment_available = create_choice_existing_work.primary_activity_source_kind|default("") == "alignment_session" and existing_primary_activity_href %}
+  {% set existing_primary_alignment_ready = existing_primary_alignment_available and existing_primary_activity_action_kind == "review_alignment_bundle" %}
+  {% set existing_primary_activity_display_action_kind = existing_primary_activity_action_kind if existing_primary_activity_available and existing_primary_activity_action_kind else ('review_attention' if existing_attention_available else 'review_recent_activity') %}
+  {% set existing_recent_available = create_choice_existing_work.recent_loop_count|default(0) > 0 %}
+  {% set existing_saved_loop_count = create_choice_existing_work.loop_count|default(0) %}
+  {% set existing_primary_saved_loop_href = create_choice_existing_work.primary_saved_loop_href|default("") %}
+  {% set existing_single_saved_loop_available = existing_saved_loop_count == 1 and existing_primary_saved_loop_href %}
+  {% set existing_saved_review_href = existing_primary_saved_loop_href if existing_single_saved_loop_available else create_choice_links.existing_saved %}
+  {% set existing_saved_action_kind = 'open_saved_loop' if existing_single_saved_loop_available else 'review_saved_loops' %}
+  <article
+    class="panel create-choice-card create-choice-card--existing{% if not existing_work_available %} is-empty{% endif %}"
+    data-existing-work-state="{{ 'available' if existing_work_available else 'empty' }}"
+    data-testid="loop-create-existing-choice"
+  >
+    <div>
+      <span class="eyebrow"><span data-lang="zh">已有工作</span><span data-lang="en">Existing work</span></span>
+      <div class="create-choice-card-route">
+        <h2>
+          {% if existing_work_available %}
+          <span data-lang="zh">审查或继续工作</span><span data-lang="en">Review or Continue Work</span>
+          {% else %}
+          <span data-lang="zh">暂无已有工作</span><span data-lang="en">No Existing Work Yet</span>
+          {% endif %}
+        </h2>
+        <div class="create-choice-card-actions create-choice-card-route-actions">
+          {% if existing_work_available %}
+          {% if existing_activity_available %}
+          <a class="secondary-button" href="{{ existing_primary_activity_href if existing_primary_activity_available else create_choice_links.existing_attention }}" data-existing-action-kind="{{ existing_primary_activity_display_action_kind }}" data-testid="loop-create-existing-attention-link" data-workdir-context-link="workdir">
+            {% if existing_primary_alignment_ready %}
+            <span data-lang="zh">审阅并创建 Loop</span>
+            <span data-lang="en">Review and create Loop</span>
+            {% elif existing_primary_activity_action_zh or existing_primary_activity_action_en %}
+            <span data-lang="zh">{{ existing_primary_activity_action_zh }}</span>
+            <span data-lang="en">{{ existing_primary_activity_action_en }}</span>
+            {% elif existing_primary_alignment_available %}
+            <span data-lang="zh">继续 Web 对话</span>
+            <span data-lang="en">Continue Web Conversation</span>
+            {% elif existing_attention_available %}
+            <span data-lang="zh">查看待处理</span>
+            <span data-lang="en">Needs Attention</span>
+            {% elif existing_recent_available %}
+            <span data-lang="zh">查看最近记录</span>
+            <span data-lang="en">Recent Activity</span>
+            {% else %}
+            <span data-lang="zh">查看进展</span>
+            <span data-lang="en">Review Activity</span>
+            {% endif %}
+          </a>
+          {% endif %}
+          {% if existing_saved_available %}
+          <a class="{{ 'ghost-button' if existing_activity_available else 'secondary-button' }}" href="{{ existing_saved_review_href }}" data-existing-action-kind="{{ existing_saved_action_kind }}" data-testid="loop-create-existing-saved-link" data-workdir-context-link="workdir">
+            {% if existing_single_saved_loop_available %}
+            <span data-lang="zh">打开已保存 Loop</span>
+            <span data-lang="en">Open saved Loop</span>
+            {% elif existing_activity_available %}
+            <span data-lang="zh">已保存 Loop</span>
+            <span data-lang="en">Saved Loops</span>
+            {% else %}
+            <span data-lang="zh">查看已保存 Loop</span>
+            <span data-lang="en">Review Saved Loops</span>
+            {% endif %}
+          </a>
+          {% endif %}
+          {% else %}
+          {% if existing_hidden_work_available %}
+          <a class="secondary-button" href="{{ create_choice_existing_work.all_work_href|default('/') }}" data-existing-action-kind="view_all_work" data-testid="loop-create-existing-show-all-link">
+            <span data-lang="zh">查看全部工作</span>
+            <span data-lang="en">View All Work</span>
+          </a>
+          {% else %}
+          <span class="secondary-button is-disabled" aria-disabled="true" data-testid="loop-create-existing-empty-state">
+            <span data-lang="zh">还没有可继续的工作</span>
+            <span data-lang="en">Nothing to continue yet</span>
+          </span>
+          {% endif %}
+          {% endif %}
+        </div>
+      </div>
+      <p>
+        {% if existing_work_available %}
+        <span data-lang="zh">已经有 Web 对话、Loop 或运行记录时，优先打开最相关的继续入口；如果有多项已保存 Loop，再回到库区比较证据、裁决状态、残余风险和下一步动作。</span>
+        <span data-lang="en">When Web conversations, Loops, or runs already exist, open the most relevant continuation target first; if several saved Loops exist, use the library to compare evidence, verdict state, residual risk, and next action.</span>
+        {% elif existing_hidden_work_available %}
+        <span data-lang="zh">当前目标项目暂无可继续的工作；其它目标项目里已有工作，可切换到全部工作台复查。</span>
+        <span data-lang="en">There is nothing to continue for this target project yet; other target projects already have work you can review from the full workspace.</span>
+        {% else %}
+        <span data-lang="zh">开始 Web 对话或创建第一个 Loop 后，这里会变成复查当前进展、证据、裁决状态和下一步动作的入口。</span>
+        <span data-lang="en">After a Web conversation starts or the first Loop exists, this card becomes the path for reviewing progress, evidence, verdict state, and next action.</span>
+        {% endif %}
+      </p>
+    </div>
   </article>
 </section>
 <script>
+  const manualLoopFormHref = {{ create_choice_links.manual|tojson }};
+  const bundleImportHref = {{ create_choice_links.import|tojson }};
   if (window.location.hash === "#manual-loop-form") {
-    window.location.replace("/loops/new/manual#manual-loop-form");
+    window.location.replace(manualLoopFormHref);
   } else if (window.location.hash === "#bundle-import-form") {
-    window.location.replace("/loops/new/manual#bundle-import-form");
+    window.location.replace(bundleImportHref);
   }
 </script>
+<script src="{{ static_asset_url('pages/create_choice.js') }}" defer></script>
 {% else %}
-<section class="compose-shell bundle-chat-shell" data-testid="loop-compose-shell" data-compose-mode="{{ create_page_mode }}">
+<section
+  class="compose-shell bundle-chat-shell"
+  data-testid="loop-compose-shell"
+  data-compose-mode="{{ create_page_mode }}"
+  data-compose-import-href="{{ create_choice_links.import }}"
+  data-compose-manual-href="{{ create_choice_links.manual }}"
+  data-tutorial-fit-href="{{ nav_tutorial_fit_href }}"
+  data-workdir-context-dataset-urls="composeImportHref:workdir composeManualHref:workdir tutorialFitHref:workdir"
+>
   {{ compose_sidebar(create_page_mode) }}
 
 {% if create_page_mode == "bundle" %}
-  <section class="bundle-chat-main" data-testid="loop-alignment-panel">
+  <section class="bundle-chat-main" data-testid="loop-alignment-panel" data-alignment-entry-phase="task">
     <div class="bundle-chat-scroll" id="alignment-scroll-region" data-testid="alignment-scroll-region">
     {% if access_state.remote_access_enabled %}
     <div class="callout" data-testid="remote-path-callout">
@@ -145,14 +380,22 @@
     {% endif %}
     <div class="bundle-chat-empty" id="alignment-empty-state" data-testid="alignment-empty-state">
       <h1>
-        <span data-lang="zh">要把哪件任务编排成 Loop？</span>
-        <span data-lang="en">What task should become a Loop?</span>
+        <span data-lang="zh" data-alignment-entry-copy="task">先说清任务，Loopora 会追问关键判断。</span>
+        <span data-lang="en" data-alignment-entry-copy="task">Start with the task. Loopora will clarify the judgment.</span>
+        <span data-lang="zh" data-alignment-entry-copy="reviewed" hidden>任务判断已就绪，开始编排对话。</span>
+        <span data-lang="en" data-alignment-entry-copy="reviewed" hidden>Task judgment is ready. Start the planning conversation.</span>
+        <span data-lang="zh" data-alignment-entry-copy="partial" hidden>任务草稿已带入，Loopora 会补齐缺失判断。</span>
+        <span data-lang="en" data-alignment-entry-copy="partial" hidden>Task draft applied. Loopora will clarify what is missing.</span>
       </h1>
       <p class="alignment-empty-lede">
-        <span data-lang="zh">先写任务，再写什么不算完成、需要哪些证据、哪些风险必须阻断收尾。</span>
-        <span data-lang="en">Describe the task, what would be fake-done, what evidence is required, and which risks must block closure.</span>
+        <span data-lang="zh" data-alignment-entry-copy="task">一句话说明要完成什么就能开始。Loopora 会一次追问一个仍缺失的完成标准、证据或风险判断。</span>
+        <span data-lang="en" data-alignment-entry-copy="task">One sentence describing the outcome is enough to begin. Loopora asks one focused follow-up at a time for missing success, evidence, or risk judgment.</span>
+        <span data-lang="zh" data-alignment-entry-copy="reviewed" hidden>确认任务目标后即可开始；完整验收判断已收在下方，只有需要修改时再展开。</span>
+        <span data-lang="en" data-alignment-entry-copy="reviewed" hidden>Confirm the task goal and start. The reviewed judgment stays collapsed below until you need to edit it.</span>
+        <span data-lang="zh" data-alignment-entry-copy="partial" hidden>确认任务目标后即可开始；已知判断已经带入，空白部分会在对话中逐项补齐。</span>
+        <span data-lang="en" data-alignment-entry-copy="partial" hidden>Confirm the task goal and start. Known judgment is carried in, and blanks will be clarified in conversation.</span>
       </p>
-      <details class="alignment-starter-disclosure">
+      <details class="alignment-starter-disclosure" data-alignment-entry-task-only>
         <summary>
           <span data-lang="zh">需要例子时再展开</span>
           <span data-lang="en">Open examples only when useful</span>
@@ -164,12 +407,16 @@
           data-testid="alignment-starter-card"
           data-goal-zh="把 React 组件库迁移成 Vue 版本，直到可以审查交付。"
           data-goal-en="Port a React component library to Vue until it is reviewable for delivery."
+          data-fit-zh="迁移需要多轮等价证据、缺口复核和最终 GateKeeper 裁决，单次 Agent 输出容易只证明新 demo。"
+          data-fit-en="The migration needs multi-round equivalence evidence, gap review, and a final GateKeeper verdict; one Agent pass can easily prove only new demos."
           data-fake-done-zh="Vue 项目能跑不算完成；只跑新写的干净 demo 不算等价证明。"
           data-fake-done-en="A runnable Vue project is not enough; newly written clean demos are not equivalence proof."
           data-evidence-zh="必须证明核心组件、props、事件、状态行为和原 demo 与 React 版本等价。"
           data-evidence-en="Prove equivalence for core components, props, events, state behavior, and original demos."
-          data-context-zh="隐藏未迁移项、越界新增 API 或用弱证据包装完成必须阻断；低优先级组件可作为可见且有人接手的残余风险。"
-          data-context-en="Hidden unmigrated items, scope-expanding APIs, or weak evidence packaged as completion must block closure; low-priority components may remain only as visible, owned residual risk."
+          data-tradeoffs-zh="隐藏未迁移项、越界新增 API 或用弱证据包装完成必须阻断；低优先级组件可作为可见且有人接手的残余风险。"
+          data-tradeoffs-en="Hidden unmigrated items, scope-expanding APIs, or weak evidence packaged as completion must block closure; low-priority components may remain only as visible, owned residual risk."
+          data-context-zh="先保护等价交付，再考虑新组件体验。"
+          data-context-en="Protect equivalent delivery first; defer new component polish."
         >
           <strong><span data-lang="zh">组件迁移交付证据</span><span data-lang="en">Component migration evidence</span></strong>
           <span data-lang="zh">等价、原 demo、未迁移项、越界新增</span>
@@ -181,12 +428,16 @@
           data-testid="alignment-starter-card"
           data-goal-zh="重构账单权限，保持客户、财务和客服视角的数据可见性安全。"
           data-goal-en="Refactor billing permissions while keeping customer, finance, and support visibility safe."
+          data-fit-zh="权限重构需要跨角色证据和残余风险裁决，不能只靠一次绿色测试。"
+          data-fit-en="Permission refactoring needs cross-role evidence and residual-risk judgment, not only one green test pass."
           data-fake-done-zh="测试变绿但未证明无越权不算完成。"
           data-fake-done-en="Green tests are not enough if overreach is not proven impossible."
           data-evidence-zh="证明客户、财务和客服视角下的数据可见性没有越权。"
           data-evidence-en="Prove customer, finance, and support visibility cannot overreach."
-          data-context-zh="先修根因和补证据，暂缓 UI 打磨。"
-          data-context-en="Fix the root cause and evidence first; defer UI polish."
+          data-tradeoffs-zh="先修根因和补证据，暂缓 UI 打磨。"
+          data-tradeoffs-en="Fix the root cause and evidence first; defer UI polish."
+          data-context-zh="保留客服、财务和客户三种视角的复核路径。"
+          data-context-en="Keep review paths for support, finance, and customer viewpoints."
         >
           <strong><span data-lang="zh">账单权限重构</span><span data-lang="en">Billing permission refactor</span></strong>
           <span data-lang="zh">防越权、强证据、先根因</span>
@@ -198,12 +449,16 @@
           data-testid="alignment-starter-card"
           data-goal-zh="排查并修复偶发支付回调丢失。"
           data-goal-en="Investigate and repair intermittent missing payment callbacks."
+          data-fit-zh="偶发问题需要复现、日志边界、修复证据和恢复路径在多轮中收敛。"
+          data-fit-en="The intermittent failure needs reproduction, log boundaries, repair evidence, and recovery proof to converge across rounds."
           data-fake-done-zh="用“无法复现”包装完成不算完成。"
           data-fake-done-en="Packaging 'cannot reproduce' as done is fake completion."
           data-evidence-zh="固定可复现证据、日志边界、失败路径和恢复路径。"
           data-evidence-en="Pin reproducible evidence, logging boundaries, the failure path, and the recovery path."
-          data-context-zh="小步修复，不扩大范围；若失败路径或恢复路径仍不可见，必须阻断收尾。"
-          data-context-en="Repair narrowly without broadening scope; if the failure or recovery path stays invisible, closure must block."
+          data-tradeoffs-zh="小步修复，不扩大范围；若失败路径或恢复路径仍不可见，必须阻断收尾。"
+          data-tradeoffs-en="Repair narrowly without broadening scope; if the failure or recovery path stays invisible, closure must block."
+          data-context-zh="优先保留最小复现实验和回调日志。"
+          data-context-en="Keep the smallest reproduction and callback logs as the priority."
         >
           <strong><span data-lang="zh">支付回调丢失排查</span><span data-lang="en">Missing payment callback triage</span></strong>
           <span data-lang="zh">先固定证据，再修复</span>
@@ -212,6 +467,13 @@
       </div>
       </details>
     </div>
+
+    <section
+      class="alignment-source-context-bridge alignment-tutorial-handoff-bridge"
+      id="alignment-tutorial-handoff-bridge"
+      data-testid="alignment-tutorial-handoff-bridge"
+      hidden
+    ></section>
 
     <section class="alignment-chat" id="alignment-chat" data-testid="alignment-chat" hidden>
       <div class="alignment-chat-head">
@@ -264,13 +526,9 @@
           <p class="panel-note" id="alignment-ready-note"></p>
         </div>
         <div class="card-actions card-actions-compact">
-          <button class="secondary-button" type="button" id="alignment-revise-preview-button" data-testid="alignment-revise-preview-button" hidden>
+          <button class="secondary-button" type="button" id="alignment-revise-preview-button" data-testid="alignment-revise-preview-button" aria-expanded="false" aria-controls="alignment-start-form" hidden>
             <span data-lang="zh">调整预览</span>
             <span data-lang="en">Revise preview</span>
-          </button>
-          <button class="primary-button" type="button" id="alignment-import-run-button" data-testid="alignment-import-run-button">
-            <span data-lang="zh">复核后创建并运行</span>
-            <span data-lang="en">Review, create, run</span>
           </button>
         </div>
       </header>
@@ -279,12 +537,12 @@
       <section class="alignment-review-gate" id="alignment-review-gate" data-testid="alignment-review-gate" hidden>
         <div class="alignment-review-gate-copy">
           <span class="alignment-review-gate-kicker">
-            <span data-lang="zh">运行前复核</span>
-            <span data-lang="en">Pre-run review</span>
+            <span data-lang="zh">READY 复核</span>
+            <span data-lang="en">READY review</span>
           </span>
           <strong>
-            <span data-lang="zh">READY 只表示方案通过校验；运行前先确认判断真的落进可执行 Loop。</span>
-            <span data-lang="en">READY only means the plan passed validation; confirm the judgment is actually compiled into the runnable Loop.</span>
+            <span data-lang="zh">READY 只证明方案通过校验；承诺前确认判断、证据和运行目录。</span>
+            <span data-lang="en">READY proves plan validation only; confirm judgment, evidence, and run directory before committing.</span>
           </strong>
         </div>
         <div class="alignment-review-gate-facts" data-testid="alignment-review-gate-facts">
@@ -301,9 +559,34 @@
         </label>
         <p class="alignment-review-gate-status" id="alignment-review-gate-status" data-testid="alignment-review-gate-status" aria-live="polite"></p>
       </section>
-      <div class="alignment-artifact-stage" data-testid="alignment-artifact-stage">
-        <div class="workflow-loop-card alignment-workflow-card alignment-workflow-card--hero" id="alignment-workflow-diagram" data-testid="alignment-workflow-diagram"></div>
-      </div>
+      <section class="alignment-ready-actions" id="alignment-ready-actions" data-testid="alignment-ready-actions" hidden>
+        <div class="alignment-ready-action" data-ready-action="save" data-testid="alignment-ready-save-action" hidden>
+          <div>
+            <strong><span data-lang="zh">仅保存</span><span data-lang="en">Save only</span></strong>
+            <p id="alignment-ready-save-description">
+              <span data-lang="zh">不启动 Run；之后从 Loop 详情继续。</span>
+              <span data-lang="en">Does not start a Run; continue later from Loop detail.</span>
+            </p>
+          </div>
+          <button class="secondary-button" type="button" id="alignment-import-save-button" data-testid="alignment-import-save-button" hidden>
+            <span data-lang="zh">保存 Loop</span>
+            <span data-lang="en">Save Loop</span>
+          </button>
+        </div>
+        <div class="alignment-ready-action" data-ready-action="run" data-testid="alignment-ready-run-action" hidden>
+          <div>
+            <strong id="alignment-ready-run-title"><span data-lang="zh">立即运行</span><span data-lang="en">Run now</span></strong>
+            <p id="alignment-ready-run-description">
+              <span data-lang="zh">立即启动第一个 Web Run。</span>
+              <span data-lang="en">Starts the first Web Run immediately.</span>
+            </p>
+          </div>
+          <button class="primary-button" type="button" id="alignment-import-run-button" data-testid="alignment-import-run-button">
+            <span data-lang="zh">创建并运行</span>
+            <span data-lang="en">Create and run</span>
+          </button>
+        </div>
+      </section>
       <div class="alignment-decision-strip" data-testid="alignment-artifact-summary">
         <p class="alignment-decision-risk" id="alignment-artifact-risk">-</p>
         <div class="alignment-decision-facts">
@@ -316,9 +599,21 @@
           </span>
           <div class="alignment-artifact-source" id="alignment-artifact-source" data-testid="alignment-artifact-source" hidden>
             <span class="alignment-artifact-source-path" id="alignment-source-path" hidden></span>
-            <button class="ghost-button" type="button" id="alignment-source-open-button" data-testid="alignment-source-open-button" hidden>
+            <button
+              class="ghost-button"
+              type="button"
+              id="alignment-source-open-button"
+              data-testid="alignment-source-open-button"
+              data-path-action-mode="{{ 'open' if access_state.native_dialogs_enabled else 'copy' }}"
+              hidden
+            >
+              {% if access_state.native_dialogs_enabled %}
               <span data-lang="zh">打开源文件</span>
               <span data-lang="en">Open source file</span>
+              {% else %}
+              <span data-lang="zh">复制源文件路径</span>
+              <span data-lang="en">Copy source path</span>
+              {% endif %}
             </button>
             <button class="ghost-button" type="button" id="alignment-source-sync-button" data-testid="alignment-source-sync-button" hidden>
               <span data-lang="zh">重新同步</span>
@@ -327,22 +622,35 @@
           </div>
         </div>
       </div>
-      <section class="alignment-control-summary" id="alignment-control-summary" data-testid="alignment-control-summary"></section>
-      <section class="alignment-judgment-map" id="alignment-judgment-map" data-testid="alignment-judgment-map" hidden></section>
-      <section class="alignment-diagnostics-strip" id="alignment-diagnostics-strip" data-testid="alignment-diagnostics-strip" hidden></section>
       <div class="alignment-preview-tabs" data-testid="alignment-preview-tabs" role="tablist" aria-label="{{ 'Loop 预览' if page_locale == 'zh' else 'Loop plan preview' }}">
-        <button type="button" class="alignment-preview-tab is-active" data-preview-tab="spec" data-testid="alignment-preview-tab-spec" role="tab" aria-selected="true">
-          <span data-lang="zh">Loop 契约</span><span data-lang="en">spec</span>
+        <button type="button" class="alignment-preview-tab is-active" id="alignment-preview-tab-review" data-preview-tab="review" data-testid="alignment-preview-tab-review" role="tab" aria-selected="true" aria-controls="alignment-preview-panel-review">
+          <span data-lang="zh">判断复核</span><span data-lang="en">Judgment</span>
         </button>
-        <button type="button" class="alignment-preview-tab" data-preview-tab="roles" data-testid="alignment-preview-tab-roles" role="tab" aria-selected="false">
-          <span data-lang="zh">角色</span><span data-lang="en">roles</span>
+        <button type="button" class="alignment-preview-tab" id="alignment-preview-tab-workflow" data-preview-tab="workflow" data-testid="alignment-preview-tab-workflow" role="tab" aria-selected="false" aria-controls="alignment-preview-panel-workflow" tabindex="-1">
+          <span data-lang="zh">运行流程</span><span data-lang="en">Workflow</span>
+        </button>
+        <button type="button" class="alignment-preview-tab" id="alignment-preview-tab-spec" data-preview-tab="spec" data-testid="alignment-preview-tab-spec" role="tab" aria-selected="false" aria-controls="alignment-preview-panel-spec" tabindex="-1">
+          <span data-lang="zh">完整契约</span><span data-lang="en">Contract</span>
+        </button>
+        <button type="button" class="alignment-preview-tab" id="alignment-preview-tab-roles" data-preview-tab="roles" data-testid="alignment-preview-tab-roles" role="tab" aria-selected="false" aria-controls="alignment-preview-panel-roles" tabindex="-1">
+          <span data-lang="zh">角色</span><span data-lang="en">Roles</span>
         </button>
       </div>
       <div class="alignment-preview-panels">
-        <section class="alignment-preview-section" data-preview-panel="spec">
+        <section class="alignment-preview-section" id="alignment-preview-panel-review" data-preview-panel="review" data-testid="alignment-preview-panel-review" role="tabpanel" aria-labelledby="alignment-preview-tab-review">
+          <section class="alignment-control-summary" id="alignment-control-summary" data-testid="alignment-control-summary"></section>
+          <section class="alignment-judgment-map" id="alignment-judgment-map" data-testid="alignment-judgment-map" hidden></section>
+          <section class="alignment-diagnostics-strip" id="alignment-diagnostics-strip" data-testid="alignment-diagnostics-strip" hidden></section>
+        </section>
+        <section class="alignment-preview-section" id="alignment-preview-panel-workflow" data-preview-panel="workflow" data-testid="alignment-preview-panel-workflow" role="tabpanel" aria-labelledby="alignment-preview-tab-workflow" hidden>
+          <div class="alignment-artifact-stage" data-testid="alignment-artifact-stage">
+            <div class="workflow-loop-card alignment-workflow-card alignment-workflow-card--hero" id="alignment-workflow-diagram" data-testid="alignment-workflow-diagram"></div>
+          </div>
+        </section>
+        <section class="alignment-preview-section" id="alignment-preview-panel-spec" data-preview-panel="spec" role="tabpanel" aria-labelledby="alignment-preview-tab-spec" hidden>
           <article class="preview-box markdown-preview" id="alignment-spec-preview" data-testid="alignment-spec-preview"></article>
         </section>
-        <section class="alignment-preview-section" data-preview-panel="roles" hidden>
+        <section class="alignment-preview-section" id="alignment-preview-panel-roles" data-preview-panel="roles" role="tabpanel" aria-labelledby="alignment-preview-tab-roles" hidden>
           <div class="alignment-role-list" id="alignment-role-list" data-testid="alignment-role-list"></div>
         </section>
       </div>
@@ -351,27 +659,70 @@
 
     <form class="alignment-start-form bundle-chat-composer" id="alignment-start-form" data-testid="alignment-start-form">
       <div class="field-status is-error" id="alignment-error" aria-live="polite" hidden></div>
+      <section
+        class="manual-recovery-panel"
+        id="alignment-recovery-panel"
+        data-testid="alignment-workdir-recovery"
+        data-recovery-panel
+        hidden
+      ></section>
       <section class="alignment-judgment-brief" data-testid="alignment-judgment-brief" aria-labelledby="alignment-judgment-brief-title">
         <div class="alignment-judgment-brief-head">
           <strong id="alignment-judgment-brief-title">
-            <span data-lang="zh">先写任务判断</span>
-            <span data-lang="en">Judgment brief first</span>
+            <span data-lang="zh">任务</span>
+            <span data-lang="en">Task</span>
           </strong>
-          <span>
-            <span data-lang="zh">这三项会进入首条对话记录。</span>
-            <span data-lang="en">These three fields are sent into the first transcript entry.</span>
+          <span class="alignment-entry-brief-copy">
+            <span data-lang="zh" data-alignment-entry-copy="task">一句话即可开始，后续判断由对话补齐。</span>
+            <span data-lang="en" data-alignment-entry-copy="task">One sentence is enough; the conversation fills the remaining judgment.</span>
+            <span data-lang="zh" data-alignment-entry-copy="reviewed" hidden>已带入完整 Fit Review；只在需要时修改。</span>
+            <span data-lang="en" data-alignment-entry-copy="reviewed" hidden>Complete Fit Review applied; edit only when needed.</span>
+            <span data-lang="zh" data-alignment-entry-copy="partial" hidden>已带入 Fit Review 草稿；空白项由对话补齐。</span>
+            <span data-lang="en" data-alignment-entry-copy="partial" hidden>Fit Review draft applied; conversation fills the blanks.</span>
           </span>
         </div>
-        <div class="alignment-judgment-grid">
+        <label class="alignment-judgment-field alignment-task-goal-field">
+          <span><span data-lang="zh">要完成什么？</span><span data-lang="en">What needs to be accomplished?</span></span>
+          <textarea
+            id="alignment-task-goal"
+            name="alignment_task_goal"
+            rows="3"
+            aria-required="true"
+            aria-describedby="alignment-error"
+            data-testid="alignment-task-goal-input"
+            placeholder="{{ '例如：把 React 组件库迁移成 Vue 版本，并证明核心行为与原版本等价。' if page_locale == 'zh' else 'For example: port a React component library to Vue and prove its core behavior remains equivalent.' }}"
+          ></textarea>
+        </label>
+        <details class="alignment-judgment-details" id="alignment-judgment-details" data-testid="alignment-judgment-details">
+          <summary>
+            <span data-lang="zh" data-alignment-entry-copy="task">已有验收判断？一次带入（可选）</span>
+            <span data-lang="en" data-alignment-entry-copy="task">Already know the acceptance judgment? Add it now (optional)</span>
+            <span class="alignment-entry-handoff-summary" data-alignment-entry-handoff-summary data-testid="alignment-entry-handoff-summary" hidden></span>
+          </summary>
+          <p class="alignment-judgment-details-note">
+            <span data-lang="zh">不必现在填满。已明确的内容会减少后续追问；空白项由对话逐步补齐。</span>
+            <span data-lang="en">You do not need to fill every field now. Known judgment reduces follow-ups; blanks are clarified in conversation.</span>
+          </p>
+          <div class="alignment-judgment-grid">
           <label class="alignment-judgment-field">
-            <span><span data-lang="zh">任务目标</span><span data-lang="en">Task goal</span></span>
+            <span><span data-lang="zh">Loopora 适配理由</span><span data-lang="en">Loopora fit reason</span></span>
             <textarea
-              id="alignment-task-goal"
-              name="alignment_task_goal"
+              id="alignment-loopora-fit-reason"
+              name="alignment_loopora_fit_reason"
               rows="2"
-              data-testid="alignment-task-goal-input"
-              placeholder="{{ '例如：把 React 组件库迁移成 Vue 版本，直到可以审查交付。' if page_locale == 'zh' else 'For example: port a React component library to Vue until it is reviewable for delivery.' }}"
-            >{{ request.query_params.get('alignment_task_goal', '') }}</textarea>
+              data-testid="alignment-loopora-fit-reason-input"
+              placeholder="{{ '例如：需要多轮证据、缺口复核和 GateKeeper 裁决，不适合一次性 Agent 输出。' if page_locale == 'zh' else 'For example: needs multi-round evidence, gap review, and GateKeeper judgment rather than one Agent pass.' }}"
+            ></textarea>
+          </label>
+          <label class="alignment-judgment-field">
+            <span><span data-lang="zh">直接路径检查</span><span data-lang="en">Direct-path check</span></span>
+            <textarea
+              id="alignment-direct-path-check"
+              name="alignment_direct_path_check"
+              rows="2"
+              data-testid="alignment-direct-path-check-input"
+              placeholder="{{ '可选：为什么直接 Agent、/goal、硬性检查或项目流程不足以裁决这件事。' if page_locale == 'zh' else 'Optional: why direct Agent work, /goal, hard checks, or the project workflow is not enough here.' }}"
+            ></textarea>
           </label>
           <label class="alignment-judgment-field">
             <span><span data-lang="zh">伪完成风险</span><span data-lang="en">Fake-done risk</span></span>
@@ -381,7 +732,7 @@
               rows="2"
               data-testid="alignment-fake-done-risk-input"
               placeholder="{{ '例如：页面能提交不算完成；模拟资格规则不算证明。' if page_locale == 'zh' else 'For example: a clickable page or mocked eligibility is not enough.' }}"
-            >{{ request.query_params.get('alignment_fake_done_risk', '') }}</textarea>
+            ></textarea>
           </label>
           <label class="alignment-judgment-field">
             <span><span data-lang="zh">必需证据</span><span data-lang="en">Required evidence</span></span>
@@ -391,9 +742,20 @@
               rows="2"
               data-testid="alignment-required-evidence-input"
               placeholder="{{ '例如：权限、资格、支付失败接管和审计链路都有可追溯证据。' if page_locale == 'zh' else 'For example: authorization, eligibility, failure handoff, and audit proof.' }}"
-            >{{ request.query_params.get('alignment_required_evidence', '') }}</textarea>
+            ></textarea>
+          </label>
+          <label class="alignment-judgment-field">
+            <span><span data-lang="zh">判断取舍</span><span data-lang="en">Judgment tradeoffs</span></span>
+            <textarea
+              id="alignment-judgment-tradeoffs"
+              name="alignment_judgment_tradeoffs"
+              rows="2"
+              data-testid="alignment-judgment-tradeoffs-input"
+              placeholder="{{ '例如：先保护权限和审计证据，低优先级体验问题只能作为有人接手的残余风险。' if page_locale == 'zh' else 'For example: protect authorization and audit proof first; lower-priority UX issues can remain only as owned residual risk.' }}"
+            ></textarea>
           </label>
         </div>
+        </details>
       </section>
       <div class="alignment-composer-box">
         <textarea
@@ -402,13 +764,21 @@
           rows="1"
           data-testid="alignment-message-input"
           placeholder="{{ '补充说明、阻断风险、残余风险或优先级…' if page_locale == 'zh' else 'Additional blockers, residual risk, priorities...' }}"
-        >{{ request.query_params.get('alignment_message', '') }}</textarea>
-        <button class="alignment-send-button" type="submit" id="alignment-send-button" data-testid="alignment-send-button" aria-label="{{ '发送' if page_locale == 'zh' else 'Send' }}">↑</button>
+        ></textarea>
+        <button class="alignment-send-button" type="submit" id="alignment-send-button" data-testid="alignment-send-button" aria-label="{{ '开始对话' if page_locale == 'zh' else 'Start conversation' }}">
+          <span data-send-label><span data-lang="zh">开始对话</span><span data-lang="en">Start conversation</span></span>
+        </button>
       </div>
       <div class="alignment-composer-chips">
-        <button class="alignment-chip" type="button" id="alignment-workdir-chip" data-open-panel="workdir" data-testid="alignment-workdir-chip" aria-expanded="false" aria-controls="alignment-tools-menu">
-          <span data-lang="zh">选择运行目录</span>
-          <span data-lang="en">Choose run directory</span>
+        <button
+          class="alignment-chip"
+          type="button"
+          id="alignment-workdir-chip"
+          data-testid="alignment-workdir-chip"
+          {% if demo_mode %}disabled aria-disabled="true"{% else %}data-open-panel="workdir" aria-expanded="false" aria-controls="alignment-tools-menu"{% endif %}
+        >
+          <span data-lang="zh">{{ 'Demo 创建沙盒' if demo_mode else '选择运行目录' }}</span>
+          <span data-lang="en">{{ 'Demo playground' if demo_mode else 'Choose run directory' }}</span>
         </button>
         <button class="alignment-chip" type="button" id="alignment-agent-chip" data-open-panel="advanced" data-testid="alignment-agent-chip" aria-expanded="false" aria-controls="alignment-tools-menu">
           <span data-lang="zh">Codex</span>
@@ -419,15 +789,27 @@
           <span data-lang="en">Idle</span>
         </button>
       </div>
+      <p
+        class="alignment-executor-readiness"
+        id="alignment-executor-readiness"
+        data-testid="alignment-executor-readiness"
+        data-readiness-kind="checking"
+        aria-live="polite"
+      >
+        <span data-lang="zh">正在检查所选智能体命令…</span>
+        <span data-lang="en">Checking the selected Agent command…</span>
+      </p>
     </form>
 
     <div class="alignment-tools-menu" id="alignment-tools-menu" data-testid="alignment-tools-menu" hidden>
       <div class="alignment-tool-popover-head">
         <div class="alignment-tool-tabs">
+        {% if not demo_mode %}
         <button type="button" data-open-panel="workdir">
           <span data-lang="zh">运行目录</span>
           <span data-lang="en">Run directory</span>
         </button>
+        {% endif %}
         <button type="button" data-open-panel="advanced">
           <span data-lang="zh">智能体</span>
           <span data-lang="en">Agent</span>
@@ -437,16 +819,23 @@
       </div>
       <section class="alignment-tool-panel" data-tool-panel="workdir" data-testid="alignment-workdir-panel">
         <h3><span data-lang="zh">目标项目目录</span><span data-lang="en">Target project directory</span></h3>
+        {% if access_state.remote_access_enabled %}
+        <p class="field-note" data-testid="alignment-remote-path-note">
+          <span data-lang="zh">当前是网络访问模式，请填写服务端机器上的项目绝对路径。</span>
+          <span data-lang="en">Network access mode is on; enter an absolute project path from the server machine.</span>
+        </p>
+        {% endif %}
         <div class="input-with-action">
           <input
             id="alignment-workdir"
             name="alignment_workdir"
             list="recent-workdir-options"
             data-testid="alignment-workdir"
-            value="{{ request.query_params.get('alignment_workdir', '') }}"
+            value="{{ demo_playground_workdir if demo_mode else (request.query_params.get('alignment_workdir') or request.query_params.get('workdir', '')) }}"
             placeholder="/absolute/path/to/project"
+            {% if demo_mode %}readonly aria-readonly="true"{% endif %}
           />
-          {% if access_state.native_dialogs_enabled %}
+          {% if access_state.native_dialogs_enabled and not demo_mode %}
           <button
             class="ghost-button"
             type="button"
@@ -485,14 +874,46 @@
             <span><span data-lang="zh">配置方式</span><span data-lang="en">Configuration mode</span></span>
           </span>
           <div class="executor-mode-switch" data-testid="alignment-executor-mode-switch" role="group" aria-label="{{ '对话执行器配置方式' if page_locale == 'zh' else 'Conversation executor configuration mode' }}">
-            <button class="executor-mode-chip" type="button" id="alignment-mode-preset-button" data-alignment-mode-choice="preset" data-testid="alignment-mode-preset-button">
-              <strong><span data-lang="zh">预设</span><span data-lang="en">Preset</span></strong>
-            </button>
-            <button class="executor-mode-chip" type="button" id="alignment-mode-command-button" data-alignment-mode-choice="command" data-testid="alignment-mode-command-button">
-              <strong><span data-lang="zh">自定义命令</span><span data-lang="en">Custom command</span></strong>
-            </button>
+            <label
+              class="executor-mode-chip"
+              id="alignment-mode-preset-button"
+              data-alignment-mode-choice="preset"
+              data-testid="alignment-mode-preset-button"
+            >
+              <input
+                class="executor-mode-radio"
+                type="radio"
+                id="alignment-mode-preset-input"
+                name="alignment_executor_mode"
+                form="alignment-start-form"
+                value="preset"
+                data-testid="alignment-mode-preset-input"
+                checked
+              />
+              <span class="executor-mode-chip-body">
+                <strong><span data-lang="zh">预设</span><span data-lang="en">Preset</span></strong>
+              </span>
+            </label>
+            <label
+              class="executor-mode-chip"
+              id="alignment-mode-command-button"
+              data-alignment-mode-choice="command"
+              data-testid="alignment-mode-command-button"
+            >
+              <input
+                class="executor-mode-radio"
+                type="radio"
+                id="alignment-mode-command-input"
+                name="alignment_executor_mode"
+                form="alignment-start-form"
+                value="command"
+                data-testid="alignment-mode-command-input"
+              />
+              <span class="executor-mode-chip-body">
+                <strong><span data-lang="zh">自定义命令</span><span data-lang="en">Custom command</span></strong>
+              </span>
+            </label>
           </div>
-          <input type="hidden" id="alignment-executor-mode" name="alignment_executor_mode" value="preset" data-testid="alignment-executor-mode-input" />
           <small class="field-note" id="alignment-executor-mode-note"></small>
         </div>
         <section class="executor-config-card" id="alignment-preset-card">
@@ -510,7 +931,7 @@
           <div class="executor-config-body" id="alignment-preset-body">
             <label id="alignment-model-field">
               <span><span data-lang="zh">模型</span><span data-lang="en">Model</span></span>
-              <input id="alignment-model" name="alignment_model" placeholder="{{ '留空使用 Codex CLI 默认模型' if page_locale == 'zh' else 'Leave blank for Codex CLI default' }}" />
+              <input id="alignment-model" name="alignment_model" placeholder="{{ '留空使用所选工具的默认模型' if page_locale == 'zh' else 'Leave blank for the selected tool default model' }}" />
             </label>
             <label id="alignment-reasoning-field">
               <span><span data-lang="zh">推理强度</span><span data-lang="en">Reasoning effort</span></span>
@@ -530,7 +951,7 @@
           <div class="executor-config-body">
             <label>
               <span><span data-lang="zh">命令可执行文件</span><span data-lang="en">Command executable</span></span>
-              <input id="alignment-command-cli" name="alignment_command_cli" placeholder="codex" />
+              <input id="alignment-command-cli" name="alignment_command_cli" placeholder="codex | claude | opencode | custom" />
               <small class="field-note" id="alignment-command-cli-note"></small>
             </label>
             <label>
@@ -560,6 +981,12 @@
       </p>
     </div>
     {% endif %}
+    <section
+      class="alignment-source-context-bridge manual-direct-handoff-bridge"
+      id="manual-direct-handoff-bridge"
+      data-testid="manual-direct-handoff-bridge"
+      hidden
+    ></section>
 <section
   class="panel manual-bundle-import-panel compose-mode-section"
   id="bundle-import-form"
@@ -569,10 +996,10 @@
 >
   <header class="panel-header">
     <div>
-      <h2><span data-lang="zh">导入方案文件</span><span data-lang="en">Import existing plan file</span></h2>
+      <h2><span data-lang="zh">导入 Plan File</span><span data-lang="en">Import existing Plan File</span></h2>
       <p class="panel-note">
         <span data-lang="zh">如果你已经有一份方案文件，可以先预览 Loop 契约、角色和流程，再创建 Loop 或直接运行。</span>
-        <span data-lang="en">If you already have a plan file, preview the contract, roles, and flow before creating or running the loop.</span>
+        <span data-lang="en">If you already have a Plan File, preview the contract, roles, and flow before creating or running the loop.</span>
       </p>
     </div>
   </header>
@@ -582,8 +1009,20 @@
     <span data-lang="en">The next import will explicitly replace plan <code>{{ import_values.replace_bundle_id }}</code>.</span>
   </div>
   {% endif %}
-  <form class="manual-bundle-import-form" id="bundle-import-form-fields" method="post" action="/loops/new/manual/import-bundle" data-testid="loop-bundle-import-form">
+  <form class="manual-bundle-import-form" id="bundle-import-form-fields" method="post" action="{{ loop_import_form_action }}" data-testid="loop-bundle-import-form" data-workdir-context-form="workdir">
     <div class="field-status is-error" id="bundle-import-error" aria-live="polite" {% if not import_error %}hidden{% endif %}>{{ import_error or "" }}</div>
+    {{ recovery_panel(import_recovery, "loop-bundle-import-recovery", render_empty=true, workdir_context=workdir_context, return_to=current_return_to) }}
+    <input type="hidden" name="import_intent" value="{{ 'replace' if import_values.replace_bundle_id else 'import' }}" />
+    {% if import_values.replace_bundle_id %}
+    <input type="hidden" id="bundle-import-replace-id" name="replace_bundle_id" value="{{ import_values.replace_bundle_id }}" />
+    {% endif %}
+    <input
+      type="hidden"
+      id="bundle-preview-reviewed"
+      name="bundle_preview_reviewed"
+      value="{{ import_values.bundle_preview_reviewed }}"
+      data-testid="bundle-preview-reviewed"
+    />
     <div class="form-grid">
       <label>
         <span><span data-lang="zh">方案文件路径</span><span data-lang="en">Plan file path</span></span>
@@ -603,17 +1042,17 @@
           {% endif %}
         </div>
       </label>
-      <label>
-        <span><span data-lang="zh">替换已有方案 ID</span><span data-lang="en">Replace plan id</span></span>
-        <input id="bundle-import-replace-id" name="replace_bundle_id" value="{{ import_values.replace_bundle_id }}" />
-      </label>
       <label class="wide">
         <span><span data-lang="zh">方案文件内容</span><span data-lang="en">Plan file content</span></span>
         <textarea id="bundle-import-yaml" name="bundle_yaml" rows="8">{{- import_values.bundle_yaml -}}</textarea>
       </label>
       <label class="checkbox-row wide">
-        <input type="checkbox" name="start_immediately" value="1" {% if import_values.start_immediately %}checked{% endif %} />
+        <input type="checkbox" name="start_immediately" value="1" data-testid="bundle-import-start-immediately" {% if import_values.start_immediately %}checked{% endif %} />
         <span><span data-lang="zh">导入后立即开始运行</span><span data-lang="en">Start immediately after import</span></span>
+        <small class="field-note" data-testid="bundle-import-start-review-note">
+          <span data-lang="zh">立即运行前需要先预览 Plan File。</span>
+          <span data-lang="en">Preview the Plan File before starting it immediately.</span>
+        </small>
       </label>
     </div>
     <div class="card-actions">
@@ -639,8 +1078,13 @@
       </div>
       <div class="card-actions card-actions-compact">
         <button class="primary-button" type="button" id="bundle-preview-import-button" data-testid="bundle-preview-import-button" hidden>
+          {% if import_values.replace_bundle_id %}
+          <span data-lang="zh">替换为此预览</span>
+          <span data-lang="en">Replace With Preview</span>
+          {% else %}
           <span data-lang="zh">按预览导入</span>
           <span data-lang="en">Import Preview</span>
+          {% endif %}
         </button>
       </div>
     </header>
@@ -659,9 +1103,21 @@
         </span>
         <div class="alignment-artifact-source" id="alignment-artifact-source" data-testid="alignment-artifact-source" hidden>
           <span class="alignment-artifact-source-path" id="alignment-source-path" hidden></span>
-          <button class="ghost-button" type="button" id="alignment-source-open-button" data-testid="alignment-source-open-button" hidden>
+          <button
+            class="ghost-button"
+            type="button"
+            id="alignment-source-open-button"
+            data-testid="alignment-source-open-button"
+            data-path-action-mode="{{ 'open' if access_state.native_dialogs_enabled else 'copy' }}"
+            hidden
+          >
+            {% if access_state.native_dialogs_enabled %}
             <span data-lang="zh">打开源文件</span>
             <span data-lang="en">Open source file</span>
+            {% else %}
+            <span data-lang="zh">复制源文件路径</span>
+            <span data-lang="en">Copy source path</span>
+            {% endif %}
           </button>
         </div>
       </div>
@@ -697,17 +1153,18 @@
 <form
   class="panel form-panel form-panel-wide"
   method="post"
-  action="/loops/new/manual"
+  action="{{ loop_manual_form_action }}"
   id="new-loop-form"
   data-testid="loop-create-form"
+  data-workdir-context-form="workdir"
   data-restore-draft="{{ 'true' if allow_draft_restore else 'false' }}"
 >
   <header class="panel-header">
     <div>
       <h2><span data-lang="zh">手动编排</span><span data-lang="en">Manual Expert Mode</span></h2>
       <p class="panel-note">
-        <span data-lang="zh">如果你已经准备好了 Loop 契约、角色定义和流程编排，可以直接用这张表单创建 Loop。它仍然是完整能力，不是降级路径。</span>
-        <span data-lang="en">If the Loop contract, role definitions, and flow are already prepared, create the loop directly here. This remains the full expert path, not a reduced mode.</span>
+        <span data-lang="zh">如果你已经明确 Loop 契约，并且知道该使用哪套内置或自定义流程，可以直接用这张表单创建 Loop。新任务仍应优先走 Web 对话或同一 Agent 设置；角色和流程自定义留给稳定复用的团队资产。</span>
+        <span data-lang="en">If the Loop contract is already clear and you know which built-in or custom flow to use, create the loop directly here. New tasks should still start from Web conversation or Same-Agent Setup; role and flow customization is for reusable team assets.</span>
       </p>
     </div>
   </header>
@@ -717,6 +1174,21 @@
     aria-live="polite"
     {% if not form_error %}hidden{% endif %}
   >{{ form_error or "" }}</div>
+  {% set manual_loop_recovery = form_recovery if form_recovery else {} %}
+  {{ recovery_panel(
+    manual_loop_recovery,
+    "manual-loop-recovery",
+    panel_id="manual-recovery-panel",
+    summary_id="manual-recovery-summary",
+    actions_id="manual-recovery-actions",
+    status_id="manual-recovery-copy-status",
+    actions_testid="manual-loop-recovery-actions",
+    title_zh="创建被可恢复条件阻塞",
+    title_en="Creation is blocked by recoverable setup",
+    render_empty=true,
+    workdir_context=workdir_context,
+    return_to=current_return_to,
+  ) }}
 
   <div class="field-status" id="draft-status" aria-live="polite" hidden></div>
   <div class="card-actions" id="draft-actions" hidden>
@@ -759,23 +1231,37 @@
           ) }}
         </span>
       </span>
-      <div class="input-with-action">
+      <div class="input-with-action{% if demo_mode %} demo-locked-workdir{% endif %}">
         <input
           id="workdir-input"
           name="workdir"
-          value="{{ form_values.workdir }}"
+          value="{{ demo_playground_workdir if demo_mode else form_values.workdir }}"
           list="recent-workdir-options"
           data-placeholder-zh="/absolute/path/to/project"
           data-placeholder-en="/absolute/path/to/project"
           placeholder="/absolute/path/to/project"
           required
+          {% if demo_mode %}title="{{ demo_playground_workdir }}"{% endif %}
+          {% if demo_mode %}readonly aria-readonly="true" data-testid="demo-manual-workdir"{% endif %}
         />
-        <button class="ghost-button" type="button" id="browse-workdir" data-testid="workdir-browse-button" {% if not access_state.native_dialogs_enabled %}disabled aria-disabled="true"{% endif %}>
+        {% if demo_mode %}
+        <span class="field-note" data-testid="demo-workdir-locked-note">
+          <span data-lang="zh">隔离 Demo 固定使用临时创建沙盒。</span>
+          <span data-lang="en">The isolated Demo is fixed to its temporary creation playground.</span>
+        </span>
+        {% elif access_state.native_dialogs_enabled %}
+        <button class="ghost-button" type="button" id="browse-workdir" data-testid="workdir-browse-button">
           <span data-lang="zh">浏览</span>
           <span data-lang="en">Browse</span>
         </button>
+        {% else %}
+        <span class="field-note" data-testid="manual-workdir-remote-path-note">
+          <span data-lang="zh">请粘贴服务端机器上的项目绝对路径。</span>
+          <span data-lang="en">Paste an absolute project path from the server machine.</span>
+        </span>
+        {% endif %}
       </div>
-      {% if recent_workdirs %}
+      {% if recent_workdirs and not demo_mode %}
       <small class="field-note">
         <span data-lang="zh">最近运行目录：</span>
         <span data-lang="en">Recent run directories:</span>
@@ -800,14 +1286,14 @@
         <span class="label-with-help">
           <span><span data-lang="zh">契约路径</span><span data-lang="en">Spec path</span></span>
           {{ tip_button(
-            "如果不知道 Loop 契约该怎么写，先去流程编排里找最接近的例子，再按你的需求改。要是暂时还不想把成功条件写死，也可以先省略完成条件，让系统在运行开始时自动冻结检查项。",
-            "If you're not sure how to write the Loop contract, start from the closest flow example and adapt it to your case. If you're not ready to lock the success conditions yet, you can omit Done When and let the system freeze checks at run start.",
+            "如果还不确定 Loop 契约该怎么写，先回 Web 对话把任务目标、伪完成风险、证据和判断取舍说清楚；只有已经走专家路径时，才用流程样例辅助整理契约。",
+            "If you're not sure how to write the Loop contract yet, go back to Web conversation and clarify the task goal, fake-done risk, evidence, and judgment tradeoffs first. Use flow examples only as expert-path assistance.",
             "loop-spec-tip"
           ) }}
         </span>
-        <a class="inline-hint-link" href="/orchestrations">
-          <span data-lang="zh">不知道怎么写？先去流程编排看样例。</span>
-          <span data-lang="en">Not sure how to write it yet? Start with a flow example.</span>
+        <a class="inline-hint-link" href="{{ create_choice_links.bundle }}" data-testid="manual-spec-web-guidance-link" data-workdir-context-link="alignment_workdir">
+          <span data-lang="zh">不确定？先用 Web 对话整理判断。</span>
+          <span data-lang="en">Not sure yet? Start with Web conversation.</span>
         </a>
       </span>
       <div class="input-with-action input-with-multi-actions">
@@ -820,10 +1306,17 @@
           placeholder="/absolute/path/to/spec.md"
           required
         />
-        <button class="ghost-button" type="button" id="browse-spec" {% if not access_state.native_dialogs_enabled %}disabled aria-disabled="true"{% endif %}>
+        {% if access_state.native_dialogs_enabled %}
+        <button class="ghost-button" type="button" id="browse-spec">
           <span data-lang="zh">浏览</span>
           <span data-lang="en">Browse</span>
         </button>
+        {% else %}
+        <span class="field-note" data-testid="manual-spec-remote-path-note">
+          <span data-lang="zh">请填写服务端机器上的契约文件绝对路径。</span>
+          <span data-lang="en">Enter an absolute spec file path from the server machine.</span>
+        </span>
+        {% endif %}
         <button class="ghost-button" type="button" id="edit-spec" data-testid="spec-editor-button" aria-haspopup="dialog">
           <span data-lang="zh">编辑</span>
           <span data-lang="en">Edit</span>
@@ -848,22 +1341,22 @@
             ) }}
           </h2>
           <p class="field-note">
-            <span data-lang="zh">先在“角色定义”和“流程编排”里把角色协作关系整理好，再回到这里挑一套配置投入运行。</span>
-            <span data-lang="en">Shape role definitions and flow first, then come back here to run one of those plans.</span>
+            <span data-lang="zh">默认先选内置流程即可；只有某个职责或流程需要跨多个 Loop 稳定复用时，再去“角色定义”或“流程编排”派生团队版本。</span>
+            <span data-lang="en">Start with a built-in flow by default. Derive team-specific Roles or Flows only when a responsibility or process needs stable reuse across Loops.</span>
           </p>
         </div>
         <div class="card-actions card-actions-compact">
-          <a class="secondary-button" href="/roles">
+          <a class="secondary-button" href="{{ composer_roles_href }}" data-testid="manual-roles-link" data-workdir-context-link="workdir">
             <span data-lang="zh">角色定义</span>
             <span data-lang="en">Roles</span>
           </a>
-          <a class="ghost-button" href="/orchestrations">
+          <a class="ghost-button" href="{{ composer_orchestrations_href }}" data-testid="manual-orchestrations-link" data-workdir-context-link="workdir">
             <span data-lang="zh">流程编排</span>
             <span data-lang="en">Flows</span>
           </a>
-          <a class="ghost-button" href="/tutorial">
-            <span data-lang="zh">使用教程</span>
-            <span data-lang="en">Tutorial</span>
+          <a class="ghost-button" href="{{ nav_tutorial_href }}" data-testid="manual-fit-guide-link" data-workdir-context-link="workdir">
+            <span data-lang="zh">适用性判断</span>
+            <span data-lang="en">Fit Guide</span>
           </a>
         </div>
       </header>
@@ -889,6 +1382,145 @@
         </label>
       </div>
       <div class="field-status" id="orchestration-summary" aria-live="polite"></div>
+    </section>
+
+    <section class="wide panel workflow-editor-panel manual-execution-panel" data-testid="manual-execution-settings-panel">
+      <header class="panel-header workflow-editor-header">
+        <div>
+          <h2 class="panel-title-with-help">
+            <span><span data-lang="zh">执行设置</span><span data-lang="en">Execution settings</span></span>
+            {{ tip_button(
+              "这里是 Loop 层级的执行器回退设置。带执行快照的角色仍以“角色定义”为准；没有快照的旧流程会使用这里的执行工具、模型或命令模板。",
+              "These are loop-level executor fallback settings. Roles with execution snapshots still use Role Definitions; older flows without snapshots use this tool, model, or command template.",
+              "loop-execution-settings-tip"
+            ) }}
+          </h2>
+          <p class="field-note">
+            <span data-lang="zh">如果你要给某个角色固定提示词、模型或执行命令，优先去“角色定义”里改；这里只处理 Loop 层级默认值。</span>
+            <span data-lang="en">To pin a role prompt, model, or command, edit Role Definitions first. This section only controls loop-level defaults.</span>
+          </p>
+        </div>
+      </header>
+      <div class="form-grid">
+        <label>
+          <span><span data-lang="zh">执行工具</span><span data-lang="en">Execution tool</span></span>
+          <select id="manual-executor-kind-input" name="executor_kind" data-testid="manual-executor-kind-input">
+            {% for profile in executor_profiles %}
+            <option value="{{ profile.key }}" {% if form_values.executor_kind == profile.key %}selected{% endif %}>
+              {{ profile.label_zh if page_locale == "zh" else profile.label }}
+            </option>
+            {% endfor %}
+          </select>
+        </label>
+
+        <div class="field-cluster">
+          <span class="label-row">
+            <span><span data-lang="zh">配置方式</span><span data-lang="en">Configuration mode</span></span>
+          </span>
+          <div class="executor-mode-switch" data-testid="manual-executor-mode-switch" role="group" aria-label="{{ '手动 Loop 执行器配置方式' if page_locale == 'zh' else 'Manual Loop executor configuration mode' }}">
+            <label
+              class="executor-mode-chip"
+              id="manual-mode-preset-button"
+              data-manual-mode-choice="preset"
+              data-testid="manual-mode-preset-button"
+            >
+              <input
+                class="executor-mode-radio"
+                type="radio"
+                name="executor_mode"
+                id="manual-mode-preset-input"
+                value="preset"
+                data-testid="manual-mode-preset-input"
+                {% if form_values.executor_mode != "command" %}checked{% endif %}
+              />
+              <span class="executor-mode-chip-body">
+                <strong><span data-lang="zh">预设</span><span data-lang="en">Preset</span></strong>
+                <span class="executor-mode-copy">
+                  <span data-lang="zh">Loopora 根据执行工具生成命令</span>
+                  <span data-lang="en">Loopora assembles the command for the selected tool</span>
+                </span>
+              </span>
+            </label>
+            <label
+              class="executor-mode-chip"
+              id="manual-mode-command-button"
+              data-manual-mode-choice="command"
+              data-testid="manual-mode-command-button"
+            >
+              <input
+                class="executor-mode-radio"
+                type="radio"
+                name="executor_mode"
+                id="manual-mode-command-input"
+                value="command"
+                data-testid="manual-mode-command-input"
+                {% if form_values.executor_mode == "command" %}checked{% endif %}
+              />
+              <span class="executor-mode-chip-body">
+                <strong><span data-lang="zh">直接命令</span><span data-lang="en">Direct command</span></strong>
+                <span class="executor-mode-copy">
+                  <span data-lang="zh">直接维护 CLI 和参数模板</span>
+                  <span data-lang="en">Own the CLI executable and argv template directly</span>
+                </span>
+              </span>
+            </label>
+          </div>
+          <small class="field-note" id="manual-executor-mode-note"></small>
+        </div>
+      </div>
+
+      <div class="executor-config-grid">
+        <section class="executor-config-card" id="manual-preset-card">
+          <header class="executor-config-head">
+            <strong><span data-lang="zh">预设配置</span><span data-lang="en">Preset config</span></strong>
+            <span class="executor-config-state" id="manual-preset-state">
+              <span data-lang="zh">当前生效</span>
+              <span data-lang="en">Active</span>
+            </span>
+          </header>
+          <p class="executor-config-empty" id="manual-preset-empty" hidden>
+            <span data-lang="zh">自定义执行工具只支持直接命令，预设配置不会单独生效。</span>
+            <span data-lang="en">Custom execution tools only support direct command, so preset controls do not apply on their own.</span>
+          </p>
+          <div class="executor-config-body" id="manual-preset-body">
+            <label>
+              <span><span data-lang="zh">模型</span><span data-lang="en">Model</span></span>
+              <input id="manual-model-input" name="model" value="{{ form_values.model }}" data-testid="manual-model-input" />
+              <small class="field-note" id="manual-model-note"></small>
+            </label>
+            <label id="manual-reasoning-field">
+              <span><span data-lang="zh">推理强度</span><span data-lang="en">Reasoning effort</span></span>
+              <input id="manual-reasoning-effort-input" name="reasoning_effort" value="{{ form_values.reasoning_effort }}" data-testid="manual-reasoning-effort-input" />
+              <small class="field-note" id="manual-reasoning-note"></small>
+            </label>
+          </div>
+        </section>
+
+        <section class="executor-config-card" id="manual-command-card">
+          <header class="executor-config-head">
+            <strong><span data-lang="zh">直接命令</span><span data-lang="en">Direct command</span></strong>
+            <span class="executor-config-state" id="manual-command-state">
+              <span data-lang="zh">当前生效</span>
+              <span data-lang="en">Active</span>
+            </span>
+          </header>
+          <div class="executor-config-body">
+            <label>
+              <span><span data-lang="zh">命令可执行文件</span><span data-lang="en">Command executable</span></span>
+              <input id="manual-command-cli-input" name="command_cli" value="{{ form_values.command_cli }}" data-testid="manual-command-cli-input" placeholder="codex | claude | opencode | custom" />
+              <small class="field-note" id="manual-command-cli-note"></small>
+            </label>
+            <label>
+              <span><span data-lang="zh">参数模板</span><span data-lang="en">Argument template</span></span>
+              <textarea id="manual-command-args-input" name="command_args_text" rows="6" spellcheck="false" data-testid="manual-command-args-input">{{ form_values.command_args_text }}</textarea>
+              <small class="field-note">
+                <span data-lang="zh">每行一个参数；常用占位符包括 `{workdir}` `{schema_path}` `{output_path}` `{prompt}` `{model}` `{reasoning_effort}`。</span>
+                <span data-lang="en">Use one argument per line. Common placeholders include `{workdir}` `{schema_path}` `{output_path}` `{prompt}` `{model}` `{reasoning_effort}`.</span>
+              </small>
+            </label>
+          </div>
+        </section>
+      </div>
     </section>
 
     <label id="completion-mode-field" data-testid="loop-completion-mode-field">
@@ -1005,7 +1637,7 @@
   </div>
 
   <label class="checkbox-row">
-    <input type="checkbox" name="start_immediately" value="1" {% if form_values.start_immediately %}checked{% endif %} />
+    <input type="checkbox" name="start_immediately" value="1" data-testid="manual-loop-start-immediately" {% if form_values.start_immediately %}checked{% endif %} />
     <span class="label-with-help">
       <span><span data-lang="zh">创建后立即开始运行</span><span data-lang="en">Create and start immediately</span></span>
       {{ tip_button(
@@ -1021,7 +1653,7 @@
       <span data-lang="zh">保存 Loop</span>
       <span data-lang="en">Save loop</span>
     </button>
-    <a class="ghost-button" href="/">
+    <a class="ghost-button" href="{{ nav_home_href }}" data-testid="manual-cancel-link" data-workdir-context-link="workdir">
       <span data-lang="zh">取消</span>
       <span data-lang="en">Cancel</span>
     </a>
@@ -1071,6 +1703,14 @@
           </span>
         </div>
       </div>
+      <div
+        class="manual-recovery-panel"
+        id="spec-editor-recovery-panel"
+        data-recovery-panel
+        data-testid="spec-editor-recovery"
+        aria-live="polite"
+        hidden
+      ></div>
       <div class="markdown-workbench markdown-workbench--editor spec-preview-workbench" data-testid="spec-editor-workbench">
         <div class="markdown-workbench-grid">
           <section class="markdown-workbench-panel spec-editor-panel" id="spec-editor-source-panel">
@@ -1126,85 +1766,16 @@
     };
     window.addEventListener("hashchange", syncActiveMode);
     syncActiveMode();
-
-    const historyList = document.getElementById("alignment-history-list");
-    if (!historyList) {
-      return;
-    }
-    const localeText = (zh, en) => window.LooporaUI?.pickText ? window.LooporaUI.pickText({zh, en}) : zh;
-    const statusLabel = (status, stage = "") => {
-      if (status === "waiting_user" && stage) {
-        const stageLabels = {
-          clarifying: localeText("判断不足，需要补充", "Judgment incomplete"),
-          agreement_ready: localeText("等待确认协议", "Waiting for agreement"),
-          confirmed: localeText("已确认协议", "Agreement confirmed"),
-          compiling: localeText("正在编译方案", "Compiling plan"),
-          ready_review: localeText("等待复核", "Waiting for review"),
-        };
-        if (stageLabels[stage]) {
-          return stageLabels[stage];
-        }
-      }
-      const labels = {
-        idle: localeText("未开始", "Idle"),
-        running: localeText("编排中", "Composing"),
-        waiting_user: localeText("等待回复", "Waiting"),
-        validating: localeText("校验中", "Validating"),
-        repairing: localeText("自动修复", "Repairing"),
-        ready: localeText("方案已准备好", "Plan ready"),
-        failed: localeText("失败", "Failed"),
-        imported: localeText("已导入", "Imported"),
-        running_loop: localeText("运行中", "Running loop"),
-      };
-      return labels[status] || status || "-";
-    };
-    const escapeHtml = (value) => String(value ?? "")
-      .replaceAll("&", "&amp;")
-      .replaceAll("<", "&lt;")
-      .replaceAll(">", "&gt;")
-      .replaceAll('"', "&quot;")
-      .replaceAll("'", "&#39;");
-    const renderHistory = (sessions) => {
-      historyList.innerHTML = "";
-      if (!sessions.length) {
-        const empty = document.createElement("p");
-        empty.className = "field-note";
-        empty.textContent = localeText("还没有历史对话。", "No recent chats yet.");
-        historyList.append(empty);
-        return;
-      }
-      sessions.forEach((session) => {
-        const item = document.createElement("article");
-        const activeStatuses = new Set(["running", "validating", "repairing"]);
-        const status = String(session.status || "");
-        const stage = String(session.alignment_stage || "");
-        item.className = `alignment-history-item${activeStatuses.has(status) ? " is-running" : ""}`;
-        item.dataset.testid = "alignment-history-item";
-        item.dataset.sessionStatus = status;
-        item.innerHTML = `
-          <a class="alignment-history-open" href="/loops/new/bundle?alignment_session_id=${encodeURIComponent(session.id)}" data-testid="alignment-history-open">
-            <strong>${escapeHtml(session.title || session.id)}</strong>
-            <span class="alignment-history-status">
-              <span class="alignment-history-status-dot" aria-hidden="true"></span>
-              <span>${escapeHtml(statusLabel(session.status, stage))} · ${escapeHtml(session.executor_kind || "")}</span>
-            </span>
-          </a>
-        `;
-        historyList.append(item);
-      });
-    };
-    fetch("/api/alignments/sessions?limit=30", {headers: {Accept: "application/json"}})
-      .then((response) => response.ok ? response.json() : {sessions: []})
-      .then((payload) => renderHistory(payload.sessions || []))
-      .catch(() => {});
   })();
 </script>
 <script src="{{ static_asset_url('markdown_workbench.js') }}" defer></script>
 <script src="{{ static_asset_url('pages/workflow_diagram.js') }}" defer></script>
 <script src="{{ static_asset_url('pages/bundle_import.js') }}" defer></script>
+<script src="{{ static_asset_url('pages/alignment_history.js') }}" defer></script>
 <script src="{{ static_asset_url('pages/new_loop.js') }}" defer></script>
 {% elif create_page_mode == "bundle" %}
 <script src="{{ static_asset_url('pages/workflow_diagram.js') }}" defer></script>
+<script src="{{ static_asset_url('pages/alignment_history.js') }}" defer></script>
 <script src="{{ static_asset_url('pages/alignment.js') }}" defer></script>
 {% endif %}
 {% endif %}

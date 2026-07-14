@@ -1,913 +1,108 @@
 from __future__ import annotations
 
-"""Shared domain-risk patterns for alignment traceability classifiers."""
+"""Compatibility aggregate for alignment traceability domain-risk patterns."""
 
-MIGRATION_ROLLBACK_INTEGRITY_PATTERN = (
-    r"(?:(?:\b(?:migration|migrate|migrated|schema[- ]?migration)\b|迁移|迁到).{0,160}"
-    r"(?:\b(?:rollback|roll\s+back|roll-back|dry[- ]?run|row[- ]?count|checksum|data[- ]?integrity|"
-    r"data\s+loss|lossless|reconcile|reconciliation)\b|回滚|试跑|行数|校验和|数据不丢|数据丢失|"
-    r"数据完整|完整性|对账|金额不丢|状态不丢)"
-    r"|(?:\b(?:rollback|roll\s+back|roll-back|dry[- ]?run|row[- ]?count|checksum|data[- ]?integrity|"
-    r"data\s+loss|lossless|reconcile|reconciliation)\b|回滚|试跑|行数|校验和|数据不丢|数据丢失|"
-    r"数据完整|完整性|对账|金额不丢|状态不丢).{0,160}"
-    r"(?:\b(?:migration|migrate|migrated|schema[- ]?migration)\b|迁移|迁到)"
-    r"|(?:\b(?:backfill)\b|回填).{0,120}"
-    r"(?:\b(?:migration|migrate|migrated|schema[- ]?migration|rollback|roll\s+back|roll-back|"
-    r"dry[- ]?run|row[- ]?count|checksum|data[- ]?integrity|data\s+loss|lossless)\b|"
-    r"迁移|迁到|回滚|试跑|行数|校验和|数据不丢|数据丢失|数据完整|完整性)"
-    r"|(?:\b(?:migration|migrate|migrated|schema[- ]?migration|rollback|roll\s+back|roll-back|"
-    r"dry[- ]?run|row[- ]?count|checksum|data[- ]?integrity|data\s+loss|lossless)\b|"
-    r"迁移|迁到|回滚|试跑|行数|校验和|数据不丢|数据丢失|数据完整|完整性).{0,120}"
-    r"(?:\b(?:backfill)\b|回填))"
+from loopora.alignment_traceability_domain_patterns_delivery import (
+    MIGRATION_ROLLBACK_INTEGRITY_PATTERN,
+    BACKWARD_COMPATIBILITY_PATTERN,
+    EVALUATION_SET_PATTERN,
+    HUMAN_REVIEW_QUALITY_PATTERN,
+    RAG_GROUNDING_TOOL_SAFETY_PATTERN,
+    INCIDENT_ROOT_CAUSE_REPRO_PATTERN,
+    REGRESSION_MONITORING_GUARD_PATTERN,
+    FEATURE_FLAG_ROLLOUT_SAFETY_PATTERN,
+    EXTERNAL_PROVIDER_CONTRACT_PATTERN,
+    RESILIENCE_RETRY_TIMEOUT_PATTERN,
+)
+from loopora.alignment_traceability_domain_patterns_trust import (
+    KYC_AML_SANCTIONS_SCREENING_PATTERN,
+    TENANT_ISOLATION_PATTERN,
+    AUTHORIZATION_POLICY_CONSISTENCY_PATTERN,
+    DATA_RESIDENCY_REGIONAL_ISOLATION_PATTERN,
+    SUPPORT_IMPERSONATION_BREAKGLASS_PATTERN,
+    IDENTITY_SSO_ASSERTION_PATTERN,
+    IDENTITY_PROVISIONING_ROLE_MAPPING_PATTERN,
+    AUTH_SESSION_TOKEN_LIFECYCLE_PATTERN,
+    KEY_ROTATION_SECRET_LIFECYCLE_PATTERN,
+    ACCESSIBILITY_A11Y_PATTERN,
+    LOCALE_I18N_PATTERN,
+)
+from loopora.alignment_traceability_domain_patterns_data import (
+    FILE_UPLOAD_STORAGE_SAFETY_PATTERN,
+    DATA_IMPORT_VALIDATION_IDEMPOTENCY_PATTERN,
+    CONCURRENCY_CONFLICT_RESOLUTION_PATTERN,
+    INVENTORY_RESERVATION_CONSISTENCY_PATTERN,
+    USAGE_QUOTA_METERING_PATTERN,
+    SUBSCRIPTION_ENTITLEMENT_BILLING_PATTERN,
+    TAX_CALCULATION_COMPLIANCE_PATTERN,
+    BACKUP_RESTORE_RECOVERY_PATTERN,
+    CDC_REPLICATION_CONSISTENCY_PATTERN,
+    AUDIT_LOG_INTEGRITY_RETENTION_PATTERN,
+    CACHE_INVALIDATION_CONSISTENCY_PATTERN,
+    SEARCH_INDEX_CONSISTENCY_PATTERN,
+    DATA_LIFECYCLE_DELETION_RETENTION_PATTERN,
+    CONSENT_PREFERENCE_GOVERNANCE_PATTERN,
+)
+from loopora.alignment_traceability_domain_patterns_operations import (
+    ANALYTICS_EVENT_INTEGRITY_PATTERN,
+    EXPERIMENT_ASSIGNMENT_CONSISTENCY_PATTERN,
+    ASYNC_JOB_LIFECYCLE_PATTERN,
+    QUEUE_FAILURE_RECOVERY_PATTERN,
+    SCHEDULE_TIMEZONE_RECURRENCE_PATTERN,
+    WEBHOOK_SIGNATURE_REPLAY_ORDERING_PATTERN,
+    BILLING_LEDGER_RECONCILIATION_PATTERN,
+    DISPUTE_CHARGEBACK_LIFECYCLE_PATTERN,
+    PAYOUT_SETTLEMENT_RECONCILIATION_PATTERN,
+    METRIC_REPORTING_RECONCILIATION_PATTERN,
+    NOTIFICATION_SUBSCRIPTION_DELIVERABILITY_PATTERN,
 )
 
-BACKWARD_COMPATIBILITY_PATTERN = (
-    r"\b(?:backward(?:s)?[- ]?compat(?:ible|ibility)?|compat(?:ible|ibility)|legacy|"
-    r"old\s+(?:api|apis|client|clients|report|reports)|"
-    r"existing\s+(?:api|apis|client|clients|report|reports|consumer|consumers))\b"
-    r"|向后兼容|兼容|旧\s*API|老\s*API|旧客户端|老客户端|旧报表|老报表|历史报表"
-)
 
-EVALUATION_SET_PATTERN = (
-    r"\b(?:eval(?:uation)?[- ]?set|evaluation[- ]?set|test[- ]?set|golden[- ]?(?:set|queries?|examples?)|"
-    r"negative[- ]?(?:examples?|cases?|samples?)|regression[- ]?(?:samples?|set|queries?)|holdout|"
-    r"top[- ]?\d+|demo[- ]?quer(?:y|ies)|single[- ]?query|benchmark\s+score)\b"
-    r"|评测集|评估集|黄金样本|黄金查询|负例|负样本|回归样本|回归集|真实查询|查询集|单个查询|单点上涨"
-)
-
-HUMAN_REVIEW_QUALITY_PATTERN = (
-    r"\b(?:human[- ]?review|manual[- ]?review|review[- ]?rubric|relevance|hallucination|groundedness|"
-    r"faithfulness|quality[- ]?review)\b"
-    r"|人工评审|人工审核|评审标准|相关性|幻觉|事实性|可信度|质量评审"
-)
-
-RAG_GROUNDING_TOOL_SAFETY_PATTERN = (
-    r"(?:(?:\b(?:rag|retrieval[- ]?augmented|knowledge[- ]?base[- ]?(?:qa|q&a|chatbot)|"
-    r"support[- ]?chatbot|answer[- ]?grounding|grounded[- ]?answer(?:s)?|source[- ]?ground(?:ed|ing)|"
-    r"retrieved[- ]?(?:source|chunk|chunks|context)|source[- ]?chunk(?:s)?|citation[- ]?span(?:s)?|"
-    r"answer[- ]?faithfulness|citation[- ]?precision|no[- ]?answer[- ]?behavior|"
-    r"prompt[- ]?injection|jailbreak|document[- ]?injection|tool[- ]?call[- ]?allowlist|"
-    r"tool[- ]?use[- ]?allowlist)\b|"
-    r"知识库问答|知识库\s*chatbot|\bRAG\b|检索增强|答案溯源|答案引用|引用片段|引用跨度|"
-    r"来源片段|检索片段|来源可追踪|答案忠实度|引用准确率|无答案行为|"
-    r"提示词注入|文档注入|越狱|工具调用白名单|工具白名单).{0,360}"
-    r"(?:\b(?:citation(?:s)?|source[- ]?span(?:s)?|document[- ]?version(?:s)?|retrieval[- ]?acl|"
-    r"tenant[- ]?filter(?:ing)?|permission[- ]?filtered[- ]?retrieval|top[- ]?k[- ]?recall|"
-    r"golden[- ]?(?:q&a|qa|questions?)|negative[- ]?prompt[- ]?injection|"
-    r"system[- ]?prompt[- ]?leak(?:age)?|unauthorized[- ]?tool(?:s)?|"
-    r"tool[- ]?call[- ]?proof|pii[- ]?leak(?:age)?|secret[- ]?leak(?:age)?|"
-    r"fallback|handoff|human[- ]?handoff|multilingual[- ]?quer(?:y|ies)|demo[- ]?question|"
-    r"plausible[- ]?answer|embedding[- ]?search|ui[- ]?citation(?:s)?)\b|"
-    r"引用|来源跨度|文档版本|检索权限|租户过滤|权限过滤检索|top-k\s*召回|黄金问答|"
-    r"负向提示词注入|系统提示词泄露|未授权工具|工具调用证明|PII\s*泄露|密钥泄露|"
-    r"兜底|人工接管|多语言查询|demo\s*问题|答案看起来合理|向量搜索|嵌入搜索|界面引用)"
-    r"|(?:\b(?:citation(?:s)?|source[- ]?span(?:s)?|document[- ]?version(?:s)?|retrieval[- ]?acl|"
-    r"tenant[- ]?filter(?:ing)?|permission[- ]?filtered[- ]?retrieval|top[- ]?k[- ]?recall|"
-    r"golden[- ]?(?:q&a|qa|questions?)|negative[- ]?prompt[- ]?injection|"
-    r"system[- ]?prompt[- ]?leak(?:age)?|unauthorized[- ]?tool(?:s)?|"
-    r"tool[- ]?call[- ]?proof|pii[- ]?leak(?:age)?|secret[- ]?leak(?:age)?|"
-    r"fallback|handoff|human[- ]?handoff|multilingual[- ]?quer(?:y|ies)|demo[- ]?question|"
-    r"plausible[- ]?answer|embedding[- ]?search|ui[- ]?citation(?:s)?)\b|"
-    r"引用|来源跨度|文档版本|检索权限|租户过滤|权限过滤检索|top-k\s*召回|黄金问答|"
-    r"负向提示词注入|系统提示词泄露|未授权工具|工具调用证明|PII\s*泄露|密钥泄露|"
-    r"兜底|人工接管|多语言查询|demo\s*问题|答案看起来合理|向量搜索|嵌入搜索|界面引用).{0,360}"
-    r"(?:\b(?:rag|retrieval[- ]?augmented|knowledge[- ]?base[- ]?(?:qa|q&a|chatbot)|"
-    r"support[- ]?chatbot|answer[- ]?grounding|grounded[- ]?answer(?:s)?|source[- ]?ground(?:ed|ing)|"
-    r"retrieved[- ]?(?:source|chunk|chunks|context)|source[- ]?chunk(?:s)?|citation[- ]?span(?:s)?|"
-    r"answer[- ]?faithfulness|citation[- ]?precision|no[- ]?answer[- ]?behavior|"
-    r"prompt[- ]?injection|jailbreak|document[- ]?injection|tool[- ]?call[- ]?allowlist|"
-    r"tool[- ]?use[- ]?allowlist)\b|"
-    r"知识库问答|知识库\s*chatbot|\bRAG\b|检索增强|答案溯源|答案引用|引用片段|引用跨度|"
-    r"来源片段|检索片段|来源可追踪|答案忠实度|引用准确率|无答案行为|"
-    r"提示词注入|文档注入|越狱|工具调用白名单|工具白名单))"
-)
-
-INCIDENT_ROOT_CAUSE_REPRO_PATTERN = (
-    r"\b(?:root[- ]?cause|repro|reproduce|reproduced|reproduction|trigger[- ]?condition|triggering[- ]?condition|"
-    r"failure[- ]?mode)\b"
-    r"|根因|复现|触发条件|故障模式"
-)
-
-REGRESSION_MONITORING_GUARD_PATTERN = (
-    r"\b(?:regression[- ]?(?:test|tests|guard|coverage)|monitor(?:ing)?|alerts?|alerting|recurrence|"
-    r"release[- ]?guard|rollback[- ]?path|runbook|canary)\b"
-    r"|回归测试|回归防护|监控|告警|复发|发布防护|回滚路径|运行手册|灰度"
-)
-
-FEATURE_FLAG_ROLLOUT_SAFETY_PATTERN = (
-    r"(?:(?:\b(?:feature[- ]?flag(?:s)?|flagged[- ]?rollout|release[- ]?flag|rollout|canary|"
-    r"gradual[- ]?rollout|staged[- ]?rollout|beta[- ]?cohort|cohort|percentage[- ]?rollout)\b|"
-    r"feature\s*flag|功能开关|特性开关|发布开关|灰度发布|灰度|渐进发布|分阶段发布|beta\s*cohort|用户分群).{0,220}"
-    r"(?:\b(?:kill[- ]?switch|default[- ]?off|cohort[- ]?target(?:ing)?|targeting|targeted|"
-    r"percentage|percent[- ]?rollout|sticky[- ]?assignment|exposure[- ]?consistency|"
-    r"session[- ]?consistency|rollback|roll\s+back|roll-back|blast[- ]?radius|"
-    r"error[- ]?rate|conversion[- ]?rate|alert[- ]?threshold(?:s)?)\b|"
-    r"熔断开关|一键回退|默认关闭|命中分群|目标分群|百分比|稳定分配|曝光一致|session\s*一致|"
-    r"会话一致|回滚|影响面|错误率|转化率|告警阈值)"
-    r"|(?:\b(?:kill[- ]?switch|default[- ]?off|cohort[- ]?target(?:ing)?|targeting|targeted|"
-    r"percentage|percent[- ]?rollout|sticky[- ]?assignment|exposure[- ]?consistency|"
-    r"session[- ]?consistency|rollback|roll\s+back|roll-back|blast[- ]?radius|"
-    r"error[- ]?rate|conversion[- ]?rate|alert[- ]?threshold(?:s)?)\b|"
-    r"熔断开关|一键回退|默认关闭|命中分群|目标分群|百分比|稳定分配|曝光一致|session\s*一致|"
-    r"会话一致|回滚|影响面|错误率|转化率|告警阈值).{0,220}"
-    r"(?:\b(?:feature[- ]?flag(?:s)?|flagged[- ]?rollout|release[- ]?flag|rollout|canary|"
-    r"gradual[- ]?rollout|staged[- ]?rollout|beta[- ]?cohort|cohort|percentage[- ]?rollout)\b|"
-    r"feature\s*flag|功能开关|特性开关|发布开关|灰度发布|灰度|渐进发布|分阶段发布|beta\s*cohort|用户分群))"
-)
-
-EXTERNAL_PROVIDER_CONTRACT_PATTERN = (
-    r"\b(?:sandbox|provider[- ]?contract|external[- ]?(?:api|provider)|third[- ]?party|"
-    r"vendor[- ]?(?:api|provider)|real\s+(?:rate|rates|response|responses)|"
-    r"contract[- ]?(?:probe|proof|verification))\b"
-    r"|第三方|外部(?:接口|API|供应商|provider)|供应商|沙箱|真实(?:费率|响应|返回)|契约探测|契约证明"
-)
-
-KYC_AML_SANCTIONS_SCREENING_PATTERN = (
-    r"(?:(?:\b(?:kyc|kyb|aml|customer[- ]?due[- ]?diligence|enhanced[- ]?due[- ]?diligence|"
-    r"identity[- ]?verification|business[- ]?verification|business[- ]?registry|beneficial[- ]?owner(?:s)?|"
-    r"document[- ]?(?:ocr|verification)|liveness|address[- ]?verification|"
-    r"sanctions?[- ]?screening|sanctions?[- ]?list|pep|politically[- ]?exposed[- ]?person|"
-    r"adverse[- ]?media|watchlist[- ]?screening|watchlist|risk[- ]?score|manual[- ]?review[- ]?queue|"
-    r"rescreen(?:ing)?|periodic[- ]?rescreen(?:ing)?|appeal|resubmission)\b|"
-    r"实名认证|企业认证|商户认证|身份核验|企业核验|工商登记|受益所有人|实益拥有人|"
-    r"证件\s*OCR|证件核验|活体检测|地址核验|反洗钱|制裁筛查|制裁名单|PEP|政治公众人物|"
-    r"负面媒体|观察名单|名单筛查|风险评分|人工复核队列|人工审核队列|定期复筛|重新筛查|申诉|重新提交).{0,360}"
-    r"(?:\b(?:provider[- ]?sandbox|sandbox[- ]?approved|provider[- ]?status|ui[- ]?verified|"
-    r"approved|rejected|manual[- ]?review|false[- ]?positive|false[- ]?negative|expired[- ]?document|"
-    r"fraudulent[- ]?document|decision[- ]?reason(?:s)?|reason[- ]?code(?:s)?|audit[- ]?trail|"
-    r"webhook[- ]?signature|webhook[- ]?replay|out[- ]?of[- ]?order|idempotenc(?:y|e)|"
-    r"payout[- ]?hold|payout[- ]?release|hold[- ]?release|ledger[- ]?reconciliation|"
-    r"retention|region[- ]?retention|monitoring[- ]?alerts?)\b|"
-    r"沙箱通过|供应商状态|界面显示已认证|已认证|通过|拒绝|人工复核|人工审核|误报|漏报|"
-    r"过期证件|欺诈证件|欺诈文件|决策原因|原因码|审计轨迹|审计日志|webhook\s*签名|"
-    r"webhook\s*重放|乱序|幂等|打款冻结|打款放行|付款冻结|付款放行|冻结释放|账本对账|"
-    r"区域留存|留存|监控告警)"
-    r"|(?:\b(?:provider[- ]?sandbox|sandbox[- ]?approved|provider[- ]?status|ui[- ]?verified|"
-    r"approved|rejected|manual[- ]?review|false[- ]?positive|false[- ]?negative|expired[- ]?document|"
-    r"fraudulent[- ]?document|decision[- ]?reason(?:s)?|reason[- ]?code(?:s)?|audit[- ]?trail|"
-    r"webhook[- ]?signature|webhook[- ]?replay|out[- ]?of[- ]?order|idempotenc(?:y|e)|"
-    r"payout[- ]?hold|payout[- ]?release|hold[- ]?release|ledger[- ]?reconciliation|"
-    r"retention|region[- ]?retention|monitoring[- ]?alerts?)\b|"
-    r"沙箱通过|供应商状态|界面显示已认证|已认证|通过|拒绝|人工复核|人工审核|误报|漏报|"
-    r"过期证件|欺诈证件|欺诈文件|决策原因|原因码|审计轨迹|审计日志|webhook\s*签名|"
-    r"webhook\s*重放|乱序|幂等|打款冻结|打款放行|付款冻结|付款放行|冻结释放|账本对账|"
-    r"区域留存|留存|监控告警).{0,360}"
-    r"(?:\b(?:kyc|kyb|aml|customer[- ]?due[- ]?diligence|enhanced[- ]?due[- ]?diligence|"
-    r"identity[- ]?verification|business[- ]?verification|business[- ]?registry|beneficial[- ]?owner(?:s)?|"
-    r"document[- ]?(?:ocr|verification)|liveness|address[- ]?verification|"
-    r"sanctions?[- ]?screening|sanctions?[- ]?list|pep|politically[- ]?exposed[- ]?person|"
-    r"adverse[- ]?media|watchlist[- ]?screening|watchlist|risk[- ]?score|manual[- ]?review[- ]?queue|"
-    r"rescreen(?:ing)?|periodic[- ]?rescreen(?:ing)?|appeal|resubmission)\b|"
-    r"实名认证|企业认证|商户认证|身份核验|企业核验|工商登记|受益所有人|实益拥有人|"
-    r"证件\s*OCR|证件核验|活体检测|地址核验|反洗钱|制裁筛查|制裁名单|PEP|政治公众人物|"
-    r"负面媒体|观察名单|名单筛查|风险评分|人工复核队列|人工审核队列|定期复筛|重新筛查|申诉|重新提交))"
-)
-
-RESILIENCE_RETRY_TIMEOUT_PATTERN = (
-    r"\b(?:timeout|timeouts|rate[- ]?limit|rate[- ]?limited|retry|retries|backoff|fallback|"
-    r"circuit[- ]?breaker|degrad(?:e|ed|ation)|partial[- ]?failure|transient[- ]?failure|"
-    r"network[- ]?failure)\b"
-    r"|超时|限流|重试|退避|降级|熔断|部分失败|瞬时失败|网络失败|兜底"
-)
-
-TENANT_ISOLATION_PATTERN = (
-    r"\b(?:tenant[- ]?isolation|cross[- ]?tenant|direct[- ]?object[- ]?id|object[- ]?id|idor|"
-    r"row[- ]?level[- ]?security|rls|role[- ]?matrix|owner/member/viewer|org\s+[ab]|"
-    r"tenant[- ]?domain[- ]?binding|domain[- ]?binding|tenant[- ]?access|seller[- ]?tenant)\b"
-    r"|租户隔离|跨租户|直接对象\s*ID|对象\s*ID|越权|行级权限|行级安全|角色矩阵|组织隔离|租户域名|域名绑定|串租户|串数据|租户访问"
-)
-
-AUTHORIZATION_POLICY_CONSISTENCY_PATTERN = (
-    r"(?:(?:\b(?:authorization[- ]?policy|policy[- ]?(?:engine|decision|version|evaluation)|"
-    r"rbac|abac|role[- ]?hierarchy|resource[- ]?scope|team[- ]?membership|"
-    r"owner/admin/viewer|deny[- ]?overrides[- ]?allow|field[- ]?level[- ]?permissions?|"
-    r"permission[- ]?matrix|access[- ]?matrix|authorization[- ]?matrix|"
-    r"policy[- ]?decision[- ]?trace|pdp|pep|opa|casbin)\b|"
-    r"授权策略|权限策略|策略引擎|策略决策|策略版本|策略评估|RBAC|ABAC|"
-    r"角色层级|资源范围|团队成员关系|拒绝优先|字段级权限|权限矩阵|访问矩阵|授权矩阵|"
-    r"策略决策追踪|策略决策链).{0,320}"
-    r"(?:\b(?:api[- ]?endpoint(?:s)?|endpoint[- ]?enforcement|ui[- ]?affordance(?:s)?|"
-    r"background[- ]?job(?:s)?|export(?:s)?|report(?:s)?|audit[- ]?log|"
-    r"role[- ]?change(?:s)?|group[- ]?mapping|scim|sso|temporary[- ]?permission(?:s)?|"
-    r"policy[- ]?version[- ]?rollout|cache[- ]?invalidation|cache[- ]?stale|revocation|"
-    r"negative[- ]?authorization[- ]?cases?|cross[- ]?resource[- ]?escalation|"
-    r"middleware|hidden[- ]?button|hide[- ]?button|happy[- ]?path[- ]?endpoint|"
-    r"admin[- ]?role)\b|"
-    r"API\s*端点|端点强制|界面入口|后台任务|异步任务|导出|报表|审计日志|"
-    r"角色变更|组映射|临时权限|策略版本发布|缓存失效|缓存陈旧|撤销|吊销|"
-    r"负向授权|跨资源提权|只隐藏按钮|隐藏按钮|只加中间件|中间件|只检查管理员|"
-    r"只检查\s*admin|happy\s*path\s*端点)"
-    r"|(?:\b(?:api[- ]?endpoint(?:s)?|endpoint[- ]?enforcement|ui[- ]?affordance(?:s)?|"
-    r"background[- ]?job(?:s)?|export(?:s)?|report(?:s)?|audit[- ]?log|"
-    r"role[- ]?change(?:s)?|group[- ]?mapping|scim|sso|temporary[- ]?permission(?:s)?|"
-    r"policy[- ]?version[- ]?rollout|cache[- ]?invalidation|cache[- ]?stale|revocation|"
-    r"negative[- ]?authorization[- ]?cases?|cross[- ]?resource[- ]?escalation|"
-    r"middleware|hidden[- ]?button|hide[- ]?button|happy[- ]?path[- ]?endpoint|"
-    r"admin[- ]?role)\b|"
-    r"API\s*端点|端点强制|界面入口|后台任务|异步任务|导出|报表|审计日志|"
-    r"角色变更|组映射|临时权限|策略版本发布|缓存失效|缓存陈旧|撤销|吊销|"
-    r"负向授权|跨资源提权|只隐藏按钮|隐藏按钮|只加中间件|中间件|只检查管理员|"
-    r"只检查\s*admin|happy\s*path\s*端点).{0,320}"
-    r"(?:\b(?:authorization[- ]?policy|policy[- ]?(?:engine|decision|version|evaluation)|"
-    r"rbac|abac|role[- ]?hierarchy|resource[- ]?scope|team[- ]?membership|"
-    r"owner/admin/viewer|deny[- ]?overrides[- ]?allow|field[- ]?level[- ]?permissions?|"
-    r"permission[- ]?matrix|access[- ]?matrix|authorization[- ]?matrix|"
-    r"policy[- ]?decision[- ]?trace|pdp|pep|opa|casbin)\b|"
-    r"授权策略|权限策略|策略引擎|策略决策|策略版本|策略评估|RBAC|ABAC|"
-    r"角色层级|资源范围|团队成员关系|拒绝优先|字段级权限|权限矩阵|访问矩阵|授权矩阵|"
-    r"策略决策追踪|策略决策链))"
-)
-
-DATA_RESIDENCY_REGIONAL_ISOLATION_PATTERN = (
-    r"(?:(?:\b(?:data[- ]?residen(?:cy|ce)|regional[- ]?isolation|region[- ]?isolation|"
-    r"tenant[- ]?residency|residency[- ]?policy|data[- ]?region|region[- ]?routing|"
-    r"region[- ]?policy|data[- ]?location|data[- ]?boundary|wrong[- ]?region|"
-    r"(?:eu|us|uk|apac)\s+(?:tenant|region))\b|数据驻留|区域隔离|地区隔离|租户驻留|"
-    r"驻留策略|数据区域|区域路由|区域策略|数据边界|错误区域|错区).{0,360}"
-    r"(?:\b(?:primary[- ]?(?:db|database)|object[- ]?storage|blob[- ]?storage|"
-    r"search[- ]?index|cache|queue|backup(?:s)?|logs?|analytics[- ]?export|"
-    r"third[- ]?party[- ]?processor|processor(?:s)?|subprocessor(?:s)?|"
-    r"subprocessor[- ]?allowlist|dpa|encryption[- ]?key[- ]?region|key[- ]?region|"
-    r"cross[- ]?region[- ]?failover|migration|backfill|support[- ]?access|"
-    r"admin[- ]?access|data[- ]?export|audit[- ]?log|observability[- ]?trace|"
-    r"cross[- ]?region[- ]?egress|wrong[- ]?region[- ]?write|"
-    r"stale[- ]?residency[- ]?policy|processor[- ]?mismatch)\b|主库|主数据库|对象存储|"
-    r"搜索索引|缓存|队列|备份|日志|分析导出|第三方处理方|处理方|子处理方|"
-    r"处理方名单|DPA|加密密钥区域|密钥区域|跨区故障转移|跨区域故障转移|迁移|回填|"
-    r"客服访问|管理员访问|数据导出|审计日志|观测追踪|跨区出站|跨区域出站|错区写入|"
-    r"错误区域写入|驻留策略陈旧|处理方不匹配)"
-    r"|(?:\b(?:primary[- ]?(?:db|database)|object[- ]?storage|blob[- ]?storage|"
-    r"search[- ]?index|cache|queue|backup(?:s)?|logs?|analytics[- ]?export|"
-    r"third[- ]?party[- ]?processor|processor(?:s)?|subprocessor(?:s)?|"
-    r"subprocessor[- ]?allowlist|dpa|encryption[- ]?key[- ]?region|key[- ]?region|"
-    r"cross[- ]?region[- ]?failover|migration|backfill|support[- ]?access|"
-    r"admin[- ]?access|data[- ]?export|audit[- ]?log|observability[- ]?trace|"
-    r"cross[- ]?region[- ]?egress|wrong[- ]?region[- ]?write|"
-    r"stale[- ]?residency[- ]?policy|processor[- ]?mismatch)\b|主库|主数据库|对象存储|"
-    r"搜索索引|缓存|队列|备份|日志|分析导出|第三方处理方|处理方|子处理方|"
-    r"处理方名单|DPA|加密密钥区域|密钥区域|跨区故障转移|跨区域故障转移|迁移|回填|"
-    r"客服访问|管理员访问|数据导出|审计日志|观测追踪|跨区出站|跨区域出站|错区写入|"
-    r"错误区域写入|驻留策略陈旧|处理方不匹配).{0,360}"
-    r"(?:\b(?:data[- ]?residen(?:cy|ce)|regional[- ]?isolation|region[- ]?isolation|"
-    r"tenant[- ]?residency|residency[- ]?policy|data[- ]?region|region[- ]?routing|"
-    r"region[- ]?policy|data[- ]?location|data[- ]?boundary|wrong[- ]?region|"
-    r"(?:eu|us|uk|apac)\s+(?:tenant|region))\b|数据驻留|区域隔离|地区隔离|租户驻留|"
-    r"驻留策略|数据区域|区域路由|区域策略|数据边界|错误区域|错区))"
-)
-
-SUPPORT_IMPERSONATION_BREAKGLASS_PATTERN = (
-    r"(?:(?:\b(?:support[- ]?impersonation|user[- ]?impersonation|customer[- ]?impersonation|"
-    r"admin[- ]?impersonation|impersonat(?:e|ed|ing|ion)|login[- ]?as|act(?:ing)?[- ]?as|"
-    r"on[-_ ]?behalf[-_ ]?of|sudo[- ]?mode|break[- ]?glass(?:[- ]?access)?|"
-    r"emergency[- ]?access)\b|"
-    r"代理登录|代登录|冒充登录|模拟用户|代客操作|客服代入|管理员代入|"
-    r"紧急访问|破窗访问).{0,300}"
-    r"(?:\b(?:approved[- ]?ticket|ticket[- ]?approval|customer[- ]?consent|reason[- ]?code|approval|"
-    r"supervisor[- ]?approval|time[- ]?bound|limited[- ]?duration|ttl|expires?|expiry|"
-    r"session[- ]?attribution|acting[-_ ]?as|on[-_ ]?behalf[-_ ]?of|"
-    r"mfa|step[- ]?up(?:[- ]?approval)?|pii[- ]?mask(?:ing)?|"
-    r"sensitive[- ]?data[- ]?view|destructive[- ]?action|tenant[- ]?isolation|audit[- ]?log|"
-    r"tamper[- ]?evident|immutable|revoke|revoked|revocation|viewed[- ]?records?|change[- ]?records?|"
-    r"export[- ]?attempt(?:s)?|download[- ]?attempt(?:s)?|no[- ]?ticket[- ]?impersonation|"
-    r"after[- ]?hours[- ]?access|bulk[- ]?record[- ]?view|long[- ]?running[- ]?session)\b|"
-    r"审批工单|工单审批|客户同意|原因码|主管审批|限时|时限|有效期|过期|"
-    r"会话归因|真实操作者|代理身份|代表用户|目标用户|MFA|二次审批|升级审批|"
-    r"共享管理员令牌|共享管理员token|PII\s*遮蔽|敏感数据查看|破坏性操作|租户隔离|"
-    r"审计日志|不可篡改|防篡改|撤销|吊销|查看记录|变更记录|导出尝试|下载尝试|"
-    r"无工单代理|非工单代理|下班访问|批量查看|长会话)"
-    r"|(?:\b(?:approved[- ]?ticket|ticket[- ]?approval|customer[- ]?consent|reason[- ]?code|approval|"
-    r"supervisor[- ]?approval|time[- ]?bound|limited[- ]?duration|ttl|expires?|expiry|"
-    r"session[- ]?attribution|acting[-_ ]?as|on[-_ ]?behalf[-_ ]?of|"
-    r"mfa|step[- ]?up(?:[- ]?approval)?|pii[- ]?mask(?:ing)?|"
-    r"sensitive[- ]?data[- ]?view|destructive[- ]?action|tenant[- ]?isolation|audit[- ]?log|"
-    r"tamper[- ]?evident|immutable|revoke|revoked|revocation|viewed[- ]?records?|change[- ]?records?|"
-    r"export[- ]?attempt(?:s)?|download[- ]?attempt(?:s)?|no[- ]?ticket[- ]?impersonation|"
-    r"after[- ]?hours[- ]?access|bulk[- ]?record[- ]?view|long[- ]?running[- ]?session)\b|"
-    r"审批工单|工单审批|客户同意|原因码|主管审批|限时|时限|有效期|过期|"
-    r"会话归因|真实操作者|代理身份|代表用户|目标用户|MFA|二次审批|升级审批|"
-    r"共享管理员令牌|共享管理员token|PII\s*遮蔽|敏感数据查看|破坏性操作|租户隔离|"
-    r"审计日志|不可篡改|防篡改|撤销|吊销|查看记录|变更记录|导出尝试|下载尝试|"
-    r"无工单代理|非工单代理|下班访问|批量查看|长会话).{0,300}"
-    r"(?:\b(?:support[- ]?impersonation|user[- ]?impersonation|customer[- ]?impersonation|"
-    r"admin[- ]?impersonation|impersonat(?:e|ed|ing|ion)|login[- ]?as|act(?:ing)?[- ]?as|"
-    r"on[-_ ]?behalf[-_ ]?of|sudo[- ]?mode|break[- ]?glass(?:[- ]?access)?|"
-    r"emergency[- ]?access|support[- ]?access|admin[- ]?access)\b|"
-    r"代理登录|代登录|冒充登录|模拟用户|代客操作|客服代入|客服访问|管理员代入|"
-    r"管理员访问|紧急访问|破窗访问))"
-)
-
-FILE_UPLOAD_STORAGE_SAFETY_PATTERN = (
-    r"(?:(?:\b(?:file[- ]?upload|upload(?:ed|ing)?|attachment[- ]?upload|object[- ]?storage|blob[- ]?storage|"
-    r"s3|bucket|signed[- ]?url|presigned[- ]?url|pre[- ]?signed[- ]?url)\b|文件上传|上传文件|附件上传|"
-    r"对象存储|存储桶|签名\s*URL|预签名|直链访问).{0,180}"
-    r"(?:\b(?:mime|content[- ]?type|file[- ]?type|file[- ]?size|size[- ]?limit|malware|virus|"
-    r"antivirus|scan(?:ned|ning)?|quarantine|unsafe[- ]?file|access[- ]?control|"
-    r"direct[- ]?object[- ]?access|orphan(?:ed)?[- ]?upload|failed[- ]?upload[- ]?cleanup|"
-    r"cleanup|storage[- ]?access)\b|MIME|content-type|文件类型|文件大小|大小限制|病毒|恶意文件|恶意|"
-    r"扫描|隔离|访问控制|直链访问|孤儿文件|失败上传清理|清理)"
-    r"|(?:\b(?:mime|content[- ]?type|file[- ]?type|file[- ]?size|size[- ]?limit|malware|virus|"
-    r"antivirus|scan(?:ned|ning)?|quarantine|unsafe[- ]?file|access[- ]?control|"
-    r"direct[- ]?object[- ]?access|orphan(?:ed)?[- ]?upload|failed[- ]?upload[- ]?cleanup|"
-    r"cleanup|storage[- ]?access)\b|MIME|content-type|文件类型|文件大小|大小限制|病毒|恶意文件|恶意|"
-    r"扫描|隔离|访问控制|直链访问|孤儿文件|失败上传清理|清理).{0,180}"
-    r"(?:\b(?:file[- ]?upload|upload(?:ed|ing)?|attachment[- ]?upload|object[- ]?storage|blob[- ]?storage|"
-    r"s3|bucket|signed[- ]?url|presigned[- ]?url|pre[- ]?signed[- ]?url)\b|文件上传|上传文件|附件上传|"
-    r"对象存储|存储桶|签名\s*URL|预签名|直链访问))"
-)
-
-DATA_IMPORT_VALIDATION_IDEMPOTENCY_PATTERN = (
-    r"(?:(?:\b(?:csv[- ]?import|data[- ]?import|bulk[- ]?import|customer[- ]?import|record[- ]?import|"
-    r"row[- ]?import|import[- ]?job|importer)\b|CSV\s*导入|数据导入|批量导入|客户导入|记录导入|导入任务).{0,200}"
-    r"(?:\b(?:field[- ]?mapping|column[- ]?mapping|schema[- ]?validation|type[- ]?validation|required[- ]?columns?|"
-    r"malformed[- ]?rows?|bad[- ]?rows?|partial[- ]?failure|row[- ]?level[- ]?errors?|error[- ]?report|"
-    r"import[- ]?preview|dry[- ]?run|idempotent[- ]?retry|dedupe|external[- ]?id|duplicate[- ]?rows?)\b|"
-    r"字段映射|列映射|schema\s*校验|类型校验|必填列|坏行|错误行|部分失败|行级错误|错误报告|导入预览|"
-    r"试跑|幂等重试|重复导入|去重|重复客户)"
-    r"|(?:\b(?:field[- ]?mapping|column[- ]?mapping|schema[- ]?validation|type[- ]?validation|required[- ]?columns?|"
-    r"malformed[- ]?rows?|bad[- ]?rows?|partial[- ]?failure|row[- ]?level[- ]?errors?|error[- ]?report|"
-    r"import[- ]?preview|dry[- ]?run|idempotent[- ]?retry|dedupe|external[- ]?id|duplicate[- ]?rows?)\b|"
-    r"字段映射|列映射|schema\s*校验|类型校验|必填列|坏行|错误行|部分失败|行级错误|错误报告|导入预览|"
-    r"试跑|幂等重试|重复导入|去重|重复客户).{0,200}"
-    r"(?:\b(?:csv[- ]?import|data[- ]?import|bulk[- ]?import|customer[- ]?import|record[- ]?import|"
-    r"row[- ]?import|import[- ]?job|importer)\b|CSV\s*导入|数据导入|批量导入|客户导入|记录导入|导入任务))"
-)
-
-CONCURRENCY_CONFLICT_RESOLUTION_PATTERN = (
-    r"(?:(?:\b(?:concurrent[- ]?edit(?:s|ing)?|collaborative[- ]?(?:document[- ]?)?edit(?:s|ing)?|multi[- ]?user[- ]?edit(?:s|ing)?|"
-    r"offline[- ]?edit(?:ing)?|offline[- ]?sync|simultaneous[- ]?edit(?:ing)?|same[- ]?(?:document|record|note))\b|"
-    r"\bsame[- ]?paragraph\b|协作(?:文档|编辑)|协同编辑|多人编辑|同时编辑|离线编辑|离线同步|同一(?:文档|记录|笔记|段落)).{0,200}"
-    r"(?:\b(?:version[- ]?conflict|optimistic[- ]?lock(?:ing)?|base[- ]?version|etag|revision[- ]?check|"
-    r"merge[- ]?conflict|conflict[- ]?resolution|safe[- ]?merge|silent[- ]?overwrite|"
-    r"lost[- ]?update|replay[- ]?idempotenc(?:y|e)|resolved[- ]?by|merge[- ]?outcome)\b|"
-    r"版本冲突|乐观锁|基础版本|版本检查|合并冲突|冲突解决|安全\s*merge|安全合并|静默覆盖|覆盖别人改动|"
-    r"丢失更新|重放幂等|冲突提示|保留两边内容|resolved_by|merge outcome)"
-    r"|(?:\b(?:version[- ]?conflict|optimistic[- ]?lock(?:ing)?|base[- ]?version|etag|revision[- ]?check|"
-    r"merge[- ]?conflict|conflict[- ]?resolution|safe[- ]?merge|silent[- ]?overwrite|"
-    r"lost[- ]?update|replay[- ]?idempotenc(?:y|e)|resolved[- ]?by|merge[- ]?outcome)\b|"
-    r"版本冲突|乐观锁|基础版本|版本检查|合并冲突|冲突解决|安全\s*merge|安全合并|静默覆盖|覆盖别人改动|"
-    r"丢失更新|重放幂等|冲突提示|保留两边内容|resolved_by|merge outcome).{0,200}"
-    r"(?:\b(?:concurrent[- ]?edit(?:s|ing)?|collaborative[- ]?(?:document[- ]?)?edit(?:s|ing)?|multi[- ]?user[- ]?edit(?:s|ing)?|"
-    r"offline[- ]?edit(?:ing)?|offline[- ]?sync|simultaneous[- ]?edit(?:ing)?|same[- ]?(?:document|record|note))\b|"
-    r"\bsame[- ]?paragraph\b|协作(?:文档|编辑)|协同编辑|多人编辑|同时编辑|离线编辑|离线同步|同一(?:文档|记录|笔记|段落)))"
-)
-
-INVENTORY_RESERVATION_CONSISTENCY_PATTERN = (
-    r"(?:(?:\b(?:stock|sku|inventory[- ]?reservation|reserved[- ]?inventory|seat|event[- ]?ticket|ticket[- ]?inventory|ticket[- ]?stock|capacity|"
-    r"availability|booking|appointment|inventory[- ]?(?:ledger|journal))\b|"
-    r"库存|SKU|库存预留|座位|票务|票|名额|容量|可用量|预约|库存流水|库存账本).{0,240}"
-    r"(?:\b(?:oversell|over[- ]?sell|overbook|over[- ]?book|concurrent|race[- ]?condition|ttl|"
-    r"expiry|expire|release|released|cancel(?:lation)?|refund|payment[- ]?webhook|webhook|"
-    r"idempotent|idempotency|ledger|reconcile|reconciliation|low[- ]?stock|out[- ]?of[- ]?stock|"
-    r"sold[- ]?out|stock[- ]?out|retry|hold[- ]?expiry|release[- ]?reason)\b|"
-    r"超卖|超订|并发|竞争|竞态|到期|过期|释放|取消|退款|支付回调|回调|幂等|库存流水|"
-    r"库存账本|对账|低库存|售罄|无库存|失败支付|重试|释放原因)"
-    r"|(?:\b(?:oversell|over[- ]?sell|overbook|over[- ]?book|concurrent|race[- ]?condition|ttl|"
-    r"expiry|expire|release|released|cancel(?:lation)?|refund|payment[- ]?webhook|webhook|"
-    r"idempotent|idempotency|ledger|reconcile|reconciliation|low[- ]?stock|out[- ]?of[- ]?stock|"
-    r"sold[- ]?out|stock[- ]?out|retry|hold[- ]?expiry|release[- ]?reason)\b|"
-    r"超卖|超订|并发|竞争|竞态|到期|过期|释放|取消|退款|支付回调|回调|幂等|库存流水|"
-    r"库存账本|对账|低库存|售罄|无库存|失败支付|重试|释放原因).{0,240}"
-    r"(?:\b(?:stock|sku|inventory[- ]?reservation|reserved[- ]?inventory|seat|event[- ]?ticket|ticket[- ]?inventory|ticket[- ]?stock|capacity|"
-    r"availability|booking|appointment|inventory[- ]?(?:ledger|journal))\b|"
-    r"库存|SKU|库存预留|座位|票务|票|名额|容量|可用量|预约|库存流水|库存账本))"
-)
-
-USAGE_QUOTA_METERING_PATTERN = (
-    r"(?:(?:\b(?:usage[- ]?meter(?:ing|ed)?|usage[- ]?event(?:s)?|metering|metered[- ]?usage|"
-    r"usage[- ]?ledger|quota(?:s)?|quota[- ]?enforcement|usage[- ]?limit(?:s)?|"
-    r"rate[- ]?limit(?:s|ing)?|api[- ]?usage|billing[- ]?period|plan[- ]?(?:quota|limit)|"
-    r"metering[- ]?version)\b|"
-    r"用量计量|用量事件|用量账本|配额|额度|用量限制|限额|API\s*用量|计量版本|计费周期).{0,260}"
-    r"(?:\b(?:duplicate[- ]?usage[- ]?events?|idempotenc(?:y|e)|idempotent[- ]?key|"
-    r"concurrent[- ]?(?:api[- ]?)?calls?|plan[- ]?(?:upgrade|downgrade|change)|"
-    r"billing[- ]?period[- ]?reset|reset[- ]?timezone|quota[- ]?window|hard[- ]?limit|"
-    r"grace[- ]?limit|overage|over[- ]?use|under[- ]?count|over[- ]?count|"
-    r"invoice|subscription[- ]?provider|reconcile|reconciliation|low[- ]?balance|"
-    r"low[- ]?quota|exhaust(?:ed|ion)?|retry|reset[- ]?run)\b|"
-    r"重复用量|幂等|幂等键|并发调用|套餐升级|套餐降级|套餐变更|计费周期重置|"
-    r"重置时区|配额窗口|硬限额|宽限额度|超用|少计|多计|发票|订阅供应商|"
-    r"对账|低余量|低额度|额度耗尽|重试|重置任务)"
-    r"|(?:\b(?:duplicate[- ]?usage[- ]?events?|idempotenc(?:y|e)|idempotent[- ]?key|"
-    r"concurrent[- ]?(?:api[- ]?)?calls?|plan[- ]?(?:upgrade|downgrade|change)|"
-    r"billing[- ]?period[- ]?reset|reset[- ]?timezone|quota[- ]?window|hard[- ]?limit|"
-    r"grace[- ]?limit|overage|over[- ]?use|under[- ]?count|over[- ]?count|"
-    r"invoice|subscription[- ]?provider|reconcile|reconciliation|low[- ]?balance|"
-    r"low[- ]?quota|exhaust(?:ed|ion)?|retry|reset[- ]?run)\b|"
-    r"重复用量|幂等|幂等键|并发调用|套餐升级|套餐降级|套餐变更|计费周期重置|"
-    r"重置时区|配额窗口|硬限额|宽限额度|超用|少计|多计|发票|订阅供应商|"
-    r"对账|低余量|低额度|额度耗尽|重试|重置任务).{0,260}"
-    r"(?:\b(?:usage[- ]?meter(?:ing|ed)?|usage[- ]?event(?:s)?|metering|metered[- ]?usage|"
-    r"usage[- ]?ledger|quota(?:s)?|quota[- ]?enforcement|usage[- ]?limit(?:s)?|"
-    r"rate[- ]?limit(?:s|ing)?|api[- ]?usage|billing[- ]?period|plan[- ]?(?:quota|limit)|"
-    r"metering[- ]?version)\b|"
-    r"用量计量|用量事件|用量账本|配额|额度|用量限制|限额|API\s*用量|计量版本|计费周期))"
-)
-
-SUBSCRIPTION_ENTITLEMENT_BILLING_PATTERN = (
-    r"(?:(?:\b(?:entitlement(?:s)?|entitlement[- ]?(?:sync|state|propagation)|"
-    r"team[- ]?member[- ]?entitlement(?:s)?|feature[- ]?access|seat[- ]?(?:entitlement|access)|"
-    r"proration|prorated|credit[- ]?memo|invoice[- ]?total|provider[- ]?checkout|"
-    r"upgrade[- ]?immediate|downgrade[- ]?(?:next[- ]?cycle|delayed|at[- ]?period[- ]?end)|"
-    r"effective[- ]?(?:now|next[- ]?cycle))\b|"
-    r"权益|权益生效|权益同步|团队成员权益|团队成员|功能权限|按比例|按比例调整|proration|贷项|credit\s*memo|"
-    r"发票总额|provider\s*checkout|立即生效|下个周期生效|降级延迟|周期结束生效).{0,320}"
-    r"(?:\b(?:upgrade[- ]?immediate|downgrade[- ]?(?:next[- ]?cycle|delayed|at[- ]?period[- ]?end)|"
-    r"effective[- ]?(?:now|next[- ]?cycle)|team[- ]?member[- ]?entitlement(?:s)?|feature[- ]?access|"
-    r"quota[- ]?(?:history|carryover)|historical[- ]?usage|ledger[- ]?reconciliation|"
-    r"invoice[- ]?reconciliation|provider[- ]?reconciliation|webhook[- ]?replay|out[- ]?of[- ]?order|"
-    r"duplicate[- ]?click(?:s)?|idempotenc(?:y|e)|rollback|tenant[- ]?boundary)\b|"
-    r"立即生效|下个周期生效|降级延迟|周期结束生效|团队成员|功能权限|历史用量|配额历史|"
-    r"账本对账|发票对账|供应商对账|provider\s*对账|webhook\s*重放|乱序|重复点击|幂等|回滚|租户边界|"
-    r"订阅套餐|套餐升级|套餐降级|套餐变更|订阅升级|订阅降级|订阅变更)"
-    r"|(?:\b(?:upgrade[- ]?immediate|downgrade[- ]?(?:next[- ]?cycle|delayed|at[- ]?period[- ]?end)|"
-    r"effective[- ]?(?:now|next[- ]?cycle)|team[- ]?member[- ]?entitlement(?:s)?|feature[- ]?access|"
-    r"quota[- ]?(?:history|carryover)|historical[- ]?usage|ledger[- ]?reconciliation|"
-    r"invoice[- ]?reconciliation|provider[- ]?reconciliation|webhook[- ]?replay|out[- ]?of[- ]?order|"
-    r"duplicate[- ]?click(?:s)?|idempotenc(?:y|e)|rollback|tenant[- ]?boundary)\b|"
-    r"立即生效|下个周期生效|降级延迟|周期结束生效|团队成员|功能权限|历史用量|配额历史|"
-    r"账本对账|发票对账|供应商对账|provider\s*对账|webhook\s*重放|乱序|重复点击|幂等|回滚|租户边界).{0,320}"
-    r"(?:\b(?:entitlement(?:s)?|entitlement[- ]?(?:sync|state|propagation)|"
-    r"team[- ]?member[- ]?entitlement(?:s)?|feature[- ]?access|seat[- ]?(?:entitlement|access)|"
-    r"proration|prorated|credit[- ]?memo|invoice[- ]?total|provider[- ]?checkout|"
-    r"upgrade[- ]?immediate|downgrade[- ]?(?:next[- ]?cycle|delayed|at[- ]?period[- ]?end)|"
-    r"effective[- ]?(?:now|next[- ]?cycle))\b|"
-    r"权益|权益生效|权益同步|团队成员权益|团队成员|功能权限|按比例|按比例调整|proration|贷项|credit\s*memo|"
-    r"发票总额|provider\s*checkout|立即生效|下个周期生效|降级延迟|周期结束生效))"
-)
-
-TAX_CALCULATION_COMPLIANCE_PATTERN = (
-    r"(?:(?:\b(?:sales[- ]?tax|vat|gst|tax[- ]?calculation|tax[- ]?calculator|tax[- ]?rate(?:s)?|"
-    r"tax[- ]?provider|tax[- ]?ledger|tax[- ]?inclusive|tax[- ]?exclusive|taxability|tax[- ]?exemption|"
-    r"exemption[- ]?certificate|reverse[- ]?charge|jurisdiction(?:s)?|nexus|tax[- ]?version|"
-    r"tax[- ]?code(?:s)?)\b|"
-    r"税费|销售税|增值税|VAT|GST|税率|税费计算|税务供应商|税费账本|税务账本|"
-    r"含税|不含税|征税|免税|免税证书|反向征税|税区|税务辖区|经济关联|税务版本|税码).{0,280}"
-    r"(?:\b(?:jurisdiction(?:s)?|nexus|taxability|digital[- ]?goods|physical[- ]?goods|"
-    r"shipping[- ]?address|billing[- ]?address|exemption[- ]?certificate|reverse[- ]?charge|"
-    r"round(?:ing)?|discount|coupon|shipping[- ]?fee|refund|invoice|provider[- ]?request[- ]?id|"
-    r"rate[- ]?(?:source|change|effective[- ]?date)|effective[- ]?date|timezone|tax[- ]?ledger|"
-    r"reconcile|reconciliation|currency[- ]?rounding|inclusive|exclusive)\b|"
-    r"税区|税务辖区|经济关联|商品税类|数字商品|实物商品|收货地址|账单地址|免税证书|"
-    r"反向征税|四舍五入|折扣|优惠券|运费|退款|发票|供应商请求|税率来源|税率变更|"
-    r"生效日期|时区|税费账本|税务账本|对账|币种取整|含税|不含税)"
-    r"|(?:\b(?:jurisdiction(?:s)?|nexus|taxability|digital[- ]?goods|physical[- ]?goods|"
-    r"shipping[- ]?address|billing[- ]?address|exemption[- ]?certificate|reverse[- ]?charge|"
-    r"round(?:ing)?|discount|coupon|shipping[- ]?fee|refund|invoice|provider[- ]?request[- ]?id|"
-    r"rate[- ]?(?:source|change|effective[- ]?date)|effective[- ]?date|timezone|tax[- ]?ledger|"
-    r"reconcile|reconciliation|currency[- ]?rounding|inclusive|exclusive)\b|"
-    r"税区|税务辖区|经济关联|商品税类|数字商品|实物商品|收货地址|账单地址|免税证书|"
-    r"反向征税|四舍五入|折扣|优惠券|运费|退款|发票|供应商请求|税率来源|税率变更|"
-    r"生效日期|时区|税费账本|税务账本|对账|币种取整|含税|不含税).{0,280}"
-    r"(?:\b(?:sales[- ]?tax|vat|gst|tax[- ]?calculation|tax[- ]?calculator|tax[- ]?rate(?:s)?|"
-    r"tax[- ]?provider|tax[- ]?ledger|tax[- ]?inclusive|tax[- ]?exclusive|taxability|tax[- ]?exemption|"
-    r"exemption[- ]?certificate|reverse[- ]?charge|jurisdiction(?:s)?|nexus|tax[- ]?version|"
-    r"tax[- ]?code(?:s)?)\b|"
-    r"税费|销售税|增值税|VAT|GST|税率|税费计算|税务供应商|税费账本|税务账本|"
-    r"含税|不含税|征税|免税|免税证书|反向征税|税区|税务辖区|经济关联|税务版本|税码))"
-)
-
-BACKUP_RESTORE_RECOVERY_PATTERN = (
-    r"(?:(?:\b(?:backup(?:s)?|backup[- ]?snapshot(?:s)?|database[- ]?snapshot(?:s)?|"
-    r"db[- ]?snapshot(?:s)?|cross[- ]?region[- ]?snapshot(?:s)?|snapshot[- ]?(?:file|id)|"
-    r"restore|restored|restoring|disaster[- ]?recovery|"
-    r"point[- ]?in[- ]?time[- ]?recovery|pitr|rpo|rto|restore[- ]?drill|backup[- ]?job)\b|"
-    r"备份|备份快照|数据库快照|跨区域快照|快照文件|快照\s*id|灾难恢复|容灾|"
-    r"时间点恢复|恢复演练|备份任务|备份作业).{0,300}"
-    r"(?:\b(?:restore[- ]?drill|point[- ]?in[- ]?time[- ]?recovery|pitr|rpo|rto|cross[- ]?region|"
-    r"encryption[- ]?key|key[- ]?access|retention[- ]?policy|legal[- ]?hold|schema[- ]?migration|"
-    r"isolated[- ]?environment|tenant[- ]?restore|full[- ]?(?:database|db)[- ]?restore|checksum|"
-    r"row[- ]?count|application[- ]?smoke[- ]?test|backup[- ]?id|snapshot[- ]?id|restore[- ]?run|"
-    r"key[- ]?id|failure[- ]?reason|replication[- ]?lag|expired[- ]?backup|"
-    r"restore[- ]?permission|audit|monitor(?:ing)?|alert(?:ing|s)?)\b|"
-    r"恢复演练|时间点恢复|跨区域|加密密钥|密钥访问|保留策略|法律保留|schema\s*迁移|"
-    r"隔离环境|租户恢复|全量库恢复|校验和|行数|应用冒烟|备份\s*id|快照\s*id|"
-    r"恢复任务|密钥\s*id|失败原因|复制延迟|过期备份|恢复权限|审计|监控|告警)"
-    r"|(?:\b(?:restore[- ]?drill|point[- ]?in[- ]?time[- ]?recovery|pitr|rpo|rto|cross[- ]?region|"
-    r"encryption[- ]?key|key[- ]?access|retention[- ]?policy|legal[- ]?hold|schema[- ]?migration|"
-    r"isolated[- ]?environment|tenant[- ]?restore|full[- ]?(?:database|db)[- ]?restore|checksum|"
-    r"row[- ]?count|application[- ]?smoke[- ]?test|backup[- ]?id|snapshot[- ]?id|restore[- ]?run|"
-    r"key[- ]?id|failure[- ]?reason|replication[- ]?lag|expired[- ]?backup|"
-    r"restore[- ]?permission|audit|monitor(?:ing)?|alert(?:ing|s)?)\b|"
-    r"恢复演练|时间点恢复|跨区域|加密密钥|密钥访问|保留策略|法律保留|schema\s*迁移|"
-    r"隔离环境|租户恢复|全量库恢复|校验和|行数|应用冒烟|备份\s*id|快照\s*id|"
-    r"恢复任务|密钥\s*id|失败原因|复制延迟|过期备份|恢复权限|审计|监控|告警).{0,300}"
-    r"(?:\b(?:backup(?:s)?|backup[- ]?snapshot(?:s)?|database[- ]?snapshot(?:s)?|"
-    r"db[- ]?snapshot(?:s)?|cross[- ]?region[- ]?snapshot(?:s)?|snapshot[- ]?(?:file|id)|"
-    r"restore|restored|restoring|disaster[- ]?recovery|"
-    r"point[- ]?in[- ]?time[- ]?recovery|pitr|rpo|rto|restore[- ]?drill|backup[- ]?job)\b|"
-    r"备份|备份快照|数据库快照|跨区域快照|快照文件|快照\s*id|灾难恢复|容灾|"
-    r"时间点恢复|恢复演练|备份任务|备份作业))"
-)
-
-CDC_REPLICATION_CONSISTENCY_PATTERN = (
-    r"(?:(?:\b(?:cdc|change[- ]?data[- ]?capture|logical[- ]?replication|streaming[- ]?replication|"
-    r"replication|replicat(?:e|ed|ing)|replica(?:tion)?[- ]?connector|postgres(?:ql)?|source[- ]?table|"
-    r"sync[- ]?job(?:s)?|"
-    r"warehouse[- ]?sync|read[- ]?model(?:s)?|sync[- ]?connector)\b|CDC|变更数据捕获|逻辑复制|"
-    r"流式复制|复制同步|同步任务|同步作业|同步连接器|数仓同步|读模型|源表|Postgres).{0,360}"
-    r"(?:\b(?:snapshot[- ]?backfill|backfill|lsn|watermark|checkpoint|out[- ]?of[- ]?order|"
-    r"duplicate[- ]?event(?:s)?|event[- ]?count|schema[- ]?evolution|column[- ]?rename|"
-    r"delete[- ]?tombstone|tombstone|replay[- ]?from[- ]?checkpoint|checkpoint[- ]?replay|"
-    r"source[- ]?row[- ]?count|checksum|warehouse[- ]?aggregate|aggregate[- ]?reconciliation|replication[- ]?lag|"
-    r"stale[- ]?checkpoint|dlq|dead[- ]?letter|poison[- ]?(?:event|message)|sync[- ]?failure|"
-    r"connector[- ]?version|failure[- ]?reason)\b|"
-    r"快照回填|回填|水位|检查点|乱序事件|重复事件|事件数|schema\s*演进|列重命名|"
-    r"删除墓碑|墓碑|从检查点重放|源表行数|源行数|校验和|聚合对账|复制延迟|陈旧检查点|"
-    r"死信|毒丸事件|同步失败|连接器版本|失败原因)"
-    r"|(?:\b(?:snapshot[- ]?backfill|backfill|lsn|watermark|checkpoint|out[- ]?of[- ]?order|"
-    r"duplicate[- ]?event(?:s)?|event[- ]?count|schema[- ]?evolution|column[- ]?rename|"
-    r"delete[- ]?tombstone|tombstone|replay[- ]?from[- ]?checkpoint|checkpoint[- ]?replay|"
-    r"source[- ]?row[- ]?count|checksum|warehouse[- ]?aggregate|aggregate[- ]?reconciliation|replication[- ]?lag|"
-    r"stale[- ]?checkpoint|dlq|dead[- ]?letter|poison[- ]?(?:event|message)|sync[- ]?failure|"
-    r"connector[- ]?version|failure[- ]?reason)\b|"
-    r"快照回填|回填|水位|检查点|乱序事件|重复事件|事件数|schema\s*演进|列重命名|"
-    r"删除墓碑|墓碑|从检查点重放|源表行数|源行数|校验和|聚合对账|复制延迟|陈旧检查点|"
-    r"死信|毒丸事件|同步失败|连接器版本|失败原因).{0,360}"
-    r"(?:\b(?:cdc|change[- ]?data[- ]?capture|logical[- ]?replication|streaming[- ]?replication|"
-    r"replication|replicat(?:e|ed|ing)|replica(?:tion)?[- ]?connector|postgres(?:ql)?|source[- ]?table|"
-    r"sync[- ]?job(?:s)?|"
-    r"warehouse[- ]?sync|read[- ]?model(?:s)?|sync[- ]?connector)\b|CDC|变更数据捕获|逻辑复制|"
-    r"流式复制|复制同步|同步任务|同步作业|同步连接器|数仓同步|读模型|源表|Postgres))"
-)
-
-AUDIT_LOG_INTEGRITY_RETENTION_PATTERN = (
-    r"(?:(?:\b(?:audit[- ]?trail|compliance[- ]?audit|security[- ]?audit[- ]?log|audit[- ]?log(?:s)?|"
-    r"admin[- ]?audit[- ]?log(?:s)?|activity[- ]?log(?:s)?)\b|"
-    r"合规审计|审计追踪|审计轨迹|审计日志|管理员审计|操作日志).{0,320}"
-    r"(?:\b(?:append[- ]?only|immutable|tamper[- ]?evident|tamper[- ]?proof|hash[- ]?chain|"
-    r"worm[- ]?storage|write[- ]?once[- ]?read[- ]?many|retention[- ]?policy|legal[- ]?hold|"
-    r"before/after|before[- ]?after|before[- ]?and[- ]?after|reason[- ]?code|request[- ]?id|"
-    r"user[- ]?agent|clock[- ]?skew|monotonic[- ]?timestamp|sequence[- ]?gap|gap[- ]?in[- ]?sequence|"
-    r"siem|exporter|stale[- ]?exporter|logging[- ]?failure|log[- ]?integrity)\b|"
-    r"追加写|只追加|不可变|不可篡改|防篡改|篡改可见|哈希链|WORM|一次写入多次读取|"
-    r"保留策略|法律保留|前后差异|变更前后|原因码|请求\s*id|用户代理|时钟偏移|"
-    r"时间戳单调|序列缺口|序号缺口|日志缺口|SIEM|导出器|导出延迟|日志失败|日志完整性)"
-    r"|(?:\b(?:append[- ]?only|immutable|tamper[- ]?evident|tamper[- ]?proof|hash[- ]?chain|"
-    r"worm[- ]?storage|write[- ]?once[- ]?read[- ]?many|retention[- ]?policy|legal[- ]?hold|"
-    r"before/after|before[- ]?after|before[- ]?and[- ]?after|reason[- ]?code|request[- ]?id|"
-    r"user[- ]?agent|clock[- ]?skew|monotonic[- ]?timestamp|sequence[- ]?gap|gap[- ]?in[- ]?sequence|"
-    r"siem|exporter|stale[- ]?exporter|logging[- ]?failure|log[- ]?integrity)\b|"
-    r"追加写|只追加|不可变|不可篡改|防篡改|篡改可见|哈希链|WORM|一次写入多次读取|"
-    r"保留策略|法律保留|前后差异|变更前后|原因码|请求\s*id|用户代理|时钟偏移|"
-    r"时间戳单调|序列缺口|序号缺口|日志缺口|SIEM|导出器|导出延迟|日志失败|日志完整性).{0,320}"
-    r"(?:\b(?:audit[- ]?trail|compliance[- ]?audit|security[- ]?audit[- ]?log|audit[- ]?log(?:s)?|"
-    r"admin[- ]?audit[- ]?log(?:s)?|activity[- ]?log(?:s)?)\b|"
-    r"合规审计|审计追踪|审计轨迹|审计日志|管理员审计|操作日志))"
-)
-
-CACHE_INVALIDATION_CONSISTENCY_PATTERN = (
-    r"(?:(?:\b(?:cache|caches|cached|caching|cdn|edge[- ]?cache|redis|read[- ]?model|read[- ]?models|"
-    r"materiali[sz]ed[- ]?view)\b|缓存|CDN|边缘缓存|Redis|读模型|物化视图).{0,220}"
-    r"(?:\b(?:invalidate|invalidated|invalidation|cache[- ]?flush|flush|purge|ttl|freshness|fresh|stale|"
-    r"stale[- ]?(?:cache|read|reads|data)|read[- ]?your[- ]?writes|read[- ]?after[- ]?write|"
-    r"origin[- ]?fetch|refetch|revalidate|cache[- ]?key|cache[- ]?keys|key[- ]?isolation|"
-    r"eventual[- ]?consistency|consistency|write[- ]?through)\b|"
-    r"失效|刷新|清理缓存|缓存清理|过期|回源|重新验证|陈旧|旧价|旧状态|读写一致|写后读|最终一致|"
-    r"缓存\s*key|缓存键|key\s*隔离|缓存隔离|一致性)"
-    r"|(?:\b(?:invalidate|invalidated|invalidation|cache[- ]?flush|flush|purge|ttl|freshness|fresh|stale|"
-    r"stale[- ]?(?:cache|read|reads|data)|read[- ]?your[- ]?writes|read[- ]?after[- ]?write|"
-    r"origin[- ]?fetch|refetch|revalidate|cache[- ]?key|cache[- ]?keys|key[- ]?isolation|"
-    r"eventual[- ]?consistency|consistency|write[- ]?through)\b|"
-    r"失效|刷新|清理缓存|缓存清理|过期|回源|重新验证|陈旧|旧价|旧状态|读写一致|写后读|最终一致|"
-    r"缓存\s*key|缓存键|key\s*隔离|缓存隔离|一致性).{0,220}"
-    r"(?:\b(?:cache|caches|cached|caching|cdn|edge[- ]?cache|redis|read[- ]?model|read[- ]?models|"
-    r"materiali[sz]ed[- ]?view)\b|缓存|CDN|边缘缓存|Redis|读模型|物化视图))"
-)
-
-SEARCH_INDEX_CONSISTENCY_PATTERN = (
-    r"(?:(?:\b(?:search[- ]?index(?:es)?|full[- ]?text[- ]?search|knowledge[- ]?base[- ]?search|"
-    r"document[- ]?index(?:es)?|indexer|indexing|reindex(?:ing)?|re-index(?:ing)?|"
-    r"search[- ]?results?|vector[- ]?index(?:es)?)\b|"
-    r"全文搜索|知识库搜索|搜索索引|文档索引|索引重建|重建索引|增量索引|搜索结果).{0,260}"
-    r"(?:\b(?:acl|tenant[- ]?acl|permission[- ]?filter(?:ing)?|access[- ]?filter(?:ing)?|"
-    r"authorization[- ]?filter(?:ing)?|incremental[- ]?(?:indexing|sync)|create/update/delete|"
-    r"created?/updated?/deleted?|deleted[- ]?document(?:s)?|stale[- ]?index|index[- ]?(?:lag|freshness)|"
-    r"reindex[- ]?(?:run|backfill)|backfill|watermark|cursor|retry|pagination|stable[- ]?sort(?:ing)?|"
-    r"sort[- ]?order|result[- ]?leak(?:age)?)\b|"
-    r"ACL|权限过滤|租户\s*ACL|增量同步|增量更新|新建|更新|删除文档|已删除文档|无权限文档|"
-    r"索引延迟|索引滞后|陈旧索引|索引新鲜度|回填|水位|游标|失败重试|分页稳定|排序稳定|结果泄露)"
-    r"|(?:\b(?:acl|tenant[- ]?acl|permission[- ]?filter(?:ing)?|access[- ]?filter(?:ing)?|"
-    r"authorization[- ]?filter(?:ing)?|incremental[- ]?(?:indexing|sync)|create/update/delete|"
-    r"created?/updated?/deleted?|deleted[- ]?document(?:s)?|stale[- ]?index|index[- ]?(?:lag|freshness)|"
-    r"reindex[- ]?(?:run|backfill)|backfill|watermark|cursor|retry|pagination|stable[- ]?sort(?:ing)?|"
-    r"sort[- ]?order|result[- ]?leak(?:age)?)\b|"
-    r"ACL|权限过滤|租户\s*ACL|增量同步|增量更新|新建|更新|删除文档|已删除文档|无权限文档|"
-    r"索引延迟|索引滞后|陈旧索引|索引新鲜度|回填|水位|游标|失败重试|分页稳定|排序稳定|结果泄露).{0,260}"
-    r"(?:\b(?:search[- ]?index(?:es)?|full[- ]?text[- ]?search|knowledge[- ]?base[- ]?search|"
-    r"document[- ]?index(?:es)?|indexer|indexing|reindex(?:ing)?|re-index(?:ing)?|"
-    r"search[- ]?results?|vector[- ]?index(?:es)?)\b|"
-    r"全文搜索|知识库搜索|搜索索引|文档索引|索引重建|重建索引|增量索引|搜索结果))"
-)
-
-DATA_LIFECYCLE_DELETION_RETENTION_PATTERN = (
-    r"(?:(?:\b(?:gdpr|erasure|right[- ]?to[- ]?be[- ]?forgotten|purge|purged|purging|"
-    r"anonymi[sz](?:e|ed|ation)|retention|retention[- ]?exception|data[- ]?lifecycle|"
-    r"async[- ]?cleanup|personal[- ]?data|pii)\b|"
-    r"擦除|清除个人信息|删除个人信息|匿名化|留存|保留例外|保留期限|异步清理|个人信息).{0,220}"
-    r"(?:\b(?:primary[- ]?database|search[- ]?index(?:es)?|cache(?:s|d)?|backup(?:s)?|"
-    r"export[- ]?reports?|audit|billing|retention[- ]?exception|async[- ]?cleanup)\b|"
-    r"主库|搜索索引|缓存|备份|导出报表|审计|账务|保留例外|异步清理)"
-    r"|(?:\b(?:primary[- ]?database|search[- ]?index(?:es)?|cache(?:s|d)?|backup(?:s)?|"
-    r"export[- ]?reports?|audit|billing|retention[- ]?exception|async[- ]?cleanup)\b|"
-    r"主库|搜索索引|缓存|备份|导出报表|审计|账务|保留例外|异步清理).{0,220}"
-    r"(?:\b(?:gdpr|erasure|right[- ]?to[- ]?be[- ]?forgotten|purge|purged|purging|"
-    r"anonymi[sz](?:e|ed|ation)|retention|retention[- ]?exception|data[- ]?lifecycle|"
-    r"async[- ]?cleanup|personal[- ]?data|pii)\b|"
-    r"擦除|清除个人信息|删除个人信息|匿名化|留存|保留例外|保留期限|异步清理|个人信息))"
-)
-
-CONSENT_PREFERENCE_GOVERNANCE_PATTERN = (
-    r"(?:(?:\b(?:consent[- ]?(?:management|governance|ledger|record|version|proof|center|preference[- ]?center)|"
-    r"consent\s+(?:and\s+)?preference[- ]?center|"
-    r"cookie[- ]?consent|privacy[- ]?preference(?:s)?|consent[- ]?preference(?:s)?|"
-    r"marketing[- ]?opt[- ]?in|tracking[- ]?consent|vendor[- ]?consent|"
-    r"third[- ]?party[- ]?vendor[- ]?consent|legal[- ]?basis|purpose[- ]?id|"
-    r"do[- ]?not[- ]?(?:sell|share)|ccpa[- ]?opt[- ]?out|withdraw(?:al)?[- ]?consent|"
-    r"re[- ]?consent[- ]?required)\b|"
-    r"同意管理|同意治理|同意账本|同意记录|同意版本|Cookie\s*同意|隐私偏好|同意偏好|"
-    r"营销同意|追踪同意|供应商同意|第三方供应商同意|法律依据|处理目的|目的\s*id|"
-    r"撤回同意|重新同意|拒绝出售|拒绝共享).{0,320}"
-    r"(?:\b(?:policy[- ]?version|purpose[- ]?id|purpose(?:s)?|legal[- ]?basis|region(?:al)?[- ]?rules?|"
-    r"source|timestamp|ip|user[- ]?agent|immutable[- ]?audit|audit[- ]?log|withdraw(?:al)?|"
-    r"analytics[- ]?event(?:s)?|marketing[- ]?campaign(?:s)?|vendor[- ]?sync|provider[- ]?sync|"
-    r"double[- ]?opt[- ]?in|unsubscribe|suppression[- ]?list|dsar[- ]?export|deletion[- ]?request|"
-    r"account[- ]?preference[- ]?merge|preference[- ]?cache|stale[- ]?preference[- ]?cache|"
-    r"consent[- ]?drift|vendor[- ]?mismatch|tracking[- ]?without[- ]?consent|"
-    r"localstorage|consent=true)\b|"
-    r"政策版本|处理目的|目的\s*id|法律依据|区域规则|地区规则|来源|时间戳|用户代理|"
-    r"不可篡改审计|审计日志|撤回|分析事件|营销活动|供应商同步|服务商同步|双重同意|"
-    r"退订|抑制名单|抑制列表|DSAR\s*导出|删除请求|账号偏好合并|偏好缓存|陈旧偏好缓存|"
-    r"同意漂移|供应商不匹配|未同意追踪|localStorage|consent=true)"
-    r"|(?:\b(?:policy[- ]?version|purpose[- ]?id|purpose(?:s)?|legal[- ]?basis|region(?:al)?[- ]?rules?|"
-    r"source|timestamp|ip|user[- ]?agent|immutable[- ]?audit|audit[- ]?log|withdraw(?:al)?|"
-    r"analytics[- ]?event(?:s)?|marketing[- ]?campaign(?:s)?|vendor[- ]?sync|provider[- ]?sync|"
-    r"double[- ]?opt[- ]?in|unsubscribe|suppression[- ]?list|dsar[- ]?export|deletion[- ]?request|"
-    r"account[- ]?preference[- ]?merge|preference[- ]?cache|stale[- ]?preference[- ]?cache|"
-    r"consent[- ]?drift|vendor[- ]?mismatch|tracking[- ]?without[- ]?consent|"
-    r"localstorage|consent=true)\b|"
-    r"政策版本|处理目的|目的\s*id|法律依据|区域规则|地区规则|来源|时间戳|用户代理|"
-    r"不可篡改审计|审计日志|撤回|分析事件|营销活动|供应商同步|服务商同步|双重同意|"
-    r"退订|抑制名单|抑制列表|DSAR\s*导出|删除请求|账号偏好合并|偏好缓存|陈旧偏好缓存|"
-    r"同意漂移|供应商不匹配|未同意追踪|localStorage|consent=true).{0,320}"
-    r"(?:\b(?:consent[- ]?(?:management|governance|ledger|record|version|proof|center|preference[- ]?center)|"
-    r"consent\s+(?:and\s+)?preference[- ]?center|"
-    r"cookie[- ]?consent|privacy[- ]?preference(?:s)?|consent[- ]?preference(?:s)?|"
-    r"marketing[- ]?opt[- ]?in|tracking[- ]?consent|vendor[- ]?consent|"
-    r"third[- ]?party[- ]?vendor[- ]?consent|legal[- ]?basis|purpose[- ]?id|"
-    r"do[- ]?not[- ]?(?:sell|share)|ccpa[- ]?opt[- ]?out|withdraw(?:al)?[- ]?consent|"
-    r"re[- ]?consent[- ]?required)\b|"
-    r"同意管理|同意治理|同意账本|同意记录|同意版本|Cookie\s*同意|隐私偏好|同意偏好|"
-    r"营销同意|追踪同意|供应商同意|第三方供应商同意|法律依据|处理目的|目的\s*id|"
-    r"撤回同意|重新同意|拒绝出售|拒绝共享))"
-)
-
-ANALYTICS_EVENT_INTEGRITY_PATTERN = (
-    r"\b(?:analytics|telemetry|instrumentation|tracking|event[- ]?schema|event\s+payload|"
-    r"analytics[- ]?events?|funnel|warehouse|clickstream|segment\.com|segment[- ]?(?:event|analytics|tracking)|"
-    r"amplitude|mixpanel|ga4|"
-    r"event[- ]?integrity)\b"
-    r"|埋点|数据埋点|事件上报|事件\s*schema|事件结构|事件载荷|漏斗|分析事件|数仓|数据仓库|点击流|上报"
-)
-
-EXPERIMENT_ASSIGNMENT_CONSISTENCY_PATTERN = (
-    r"\b(?:a/b|ab[- ]?test|split[- ]?test|experiment(?:s)?|variant|assignment|exposure|"
-    r"feature[- ]?flag|treatment|control[- ]?group|bucket(?:ing)?)\b"
-    r"|A/B|AB\s*实验|实验曝光|实验分流|实验分桶|实验分组|实验组|对照组|分桶|变体"
-)
-
-ASYNC_JOB_LIFECYCLE_PATTERN = (
-    r"\b(?:async[- ]?job|background[- ]?(?:job|worker)|job[- ]?queue|queued[- ]?job|"
-    r"worker(?:s)?|job[- ]?status|job[- ]?lifecycle|persist(?:ed|ent)?[- ]?(?:job|queue)|"
-    r"pending/running/succeeded/failed|pending[- ]?running[- ]?succeeded[- ]?failed)\b"
-    r"|异步任务|后台任务|任务队列|后台\s*worker|入队|出队|持久化入队|任务状态|任务生命周期|"
-    r"pending/running/succeeded/failed|待处理/运行中/成功/失败"
-)
-
-QUEUE_FAILURE_RECOVERY_PATTERN = (
-    r"\b(?:dead[- ]?letter|deadletter|dlq|poison[- ]?message|failure[- ]?queue|failed[- ]?jobs?|"
-    r"recoverable[- ]?queue|requeue|resume|resumable|refresh[- ]?recovery|job[- ]?recovery|"
-    r"retry[- ]?budget)\b"
-    r"|死信|死信队列|失败队列|失败任务|可恢复队列|重新入队|恢复队列|状态恢复|断线刷新|刷新恢复"
-)
-
-SCHEDULE_TIMEZONE_RECURRENCE_PATTERN = (
-    r"(?:(?:\b(?:schedul(?:e|ed|er|ing)|scheduled[- ]?job|cron|cron[- ]?expression|recurr(?:ing|ence)?|"
-    r"recurring[- ]?job|periodic[- ]?job|digest[- ]?scheduler|calendar[- ]?job)\b|定时|定期|调度|周期任务|"
-    r"周期执行|重复执行|定时发送|定时任务).{0,180}"
-    r"(?:\b(?:time[- ]?zone|timezone|local[- ]?time|dst|daylight[- ]?saving|missed[- ]?run|"
-    r"catch[- ]?up|catchup|backfill|skipped[- ]?run|scheduled[- ]?at|sent[- ]?at|"
-    r"run[- ]?window|calendar[- ]?boundary)\b|时区|本地时间|用户本地时间|夏令时|错过执行|漏执行|补偿|补发|"
-    r"只补一次|执行窗口|调度时间|发送时间)"
-    r"|(?:\b(?:time[- ]?zone|timezone|local[- ]?time|dst|daylight[- ]?saving|missed[- ]?run|"
-    r"catch[- ]?up|catchup|backfill|skipped[- ]?run|scheduled[- ]?at|sent[- ]?at|"
-    r"run[- ]?window|calendar[- ]?boundary)\b|时区|本地时间|用户本地时间|夏令时|错过执行|漏执行|补偿|补发|"
-    r"只补一次|执行窗口|调度时间|发送时间).{0,180}"
-    r"(?:\b(?:schedul(?:e|ed|er|ing)|scheduled[- ]?job|cron|cron[- ]?expression|recurr(?:ing|ence)?|"
-    r"recurring[- ]?job|periodic[- ]?job|digest[- ]?scheduler|calendar[- ]?job)\b|定时|定期|调度|周期任务|"
-    r"周期执行|重复执行|定时发送|定时任务))"
-)
-
-WEBHOOK_SIGNATURE_REPLAY_ORDERING_PATTERN = (
-    r"(?:(?:\b(?:webhook(?:s)?|webhook[- ]?signature|signed[- ]?webhook(?:s)?|provider[- ]?event(?:s)?|"
-    r"stripe[- ]?(?:signature|event)|signed[- ]?event(?:s)?)\b|webhook|供应商事件|provider事件|"
-    r"签名事件|Stripe\s*事件).{0,220}"
-    r"(?:\b(?:event[- ]?replay|replay(?:ed)?[- ]?event(?:s)?|signature[- ]?(?:verification|verified|validation)|"
-    r"out[- ]?of[- ]?order|event[- ]?ordering|ordering[- ]?proof|duplicate[- ]?event(?:s)?)\b|"
-    r"事件重放|重放事件|签名验证|签名校验|事件签名|乱序|事件乱序|事件顺序|重复事件)"
-    r"|(?:\b(?:event[- ]?replay|replay(?:ed)?[- ]?event(?:s)?|signature[- ]?(?:verification|verified|validation)|"
-    r"out[- ]?of[- ]?order|event[- ]?ordering|ordering[- ]?proof|duplicate[- ]?event(?:s)?)\b|"
-    r"事件重放|重放事件|签名验证|签名校验|事件签名|乱序|事件乱序|事件顺序|重复事件).{0,220}"
-    r"(?:\b(?:webhook(?:s)?|webhook[- ]?signature|signed[- ]?webhook(?:s)?|provider[- ]?event(?:s)?|"
-    r"stripe[- ]?(?:signature|event)|signed[- ]?event(?:s)?)\b|webhook|供应商事件|provider事件|"
-    r"签名事件|Stripe\s*事件))"
-)
-
-BILLING_LEDGER_RECONCILIATION_PATTERN = (
-    r"\b(?:billing[- ]?ledger|ledger[- ]?reconciliation|invoice[- ]?reconciliation|subscription[- ]?reconciliation|"
-    r"entitlement(?:s)?|entitlement[- ]?sync|provider[- ]?ledger|stripe[- ]?(?:dashboard|fixture)|"
-    r"invoice[- ]?amount|subscription[- ]?state|subscription[- ]?status)\b"
-    r"|账本对账|台账对账|账务对账|发票对账|订阅对账|订阅权限|权益同步|本地账本|本地台账|发票金额|订阅状态|Stripe\s*对账"
-)
-
-DISPUTE_CHARGEBACK_LIFECYCLE_PATTERN = (
-    r"(?:(?:\b(?:payment[- ]?dispute(?:s)?|dispute[- ]?lifecycle|chargeback[- ]?lifecycle|"
-    r"chargeback(?:s)?|retrieval[- ]?request(?:s)?|representment|dispute[- ]?evidence|"
-    r"evidence[- ]?submission|evidence[- ]?package|issuer|acquirer|reason[- ]?code(?:s)?|"
-    r"provisional[- ]?(?:credit|debit)|partial[- ]?dispute|duplicate[- ]?dispute|"
-    r"refund[- ]?overlap|dispute[- ]?webhook(?:s)?|dispute[- ]?id)\b|"
-    r"支付争议|付款争议|拒付生命周期|争议生命周期|拒付|争议扣款|调单请求|调单|再请款|"
-    r"争议证据|证据提交|证据包|发卡行|收单行|原因码|临时贷记|临时扣记|部分争议|重复争议|"
-    r"退款重叠|争议\s*webhook|争议\s*id).{0,360}"
-    r"(?:\b(?:dispute\.created|dispute\.updated|dispute\.closed|provider[- ]?dispute[- ]?id|"
-    r"provider[- ]?fixture(?:s)?|webhook[- ]?signature|webhook[- ]?replay|out[- ]?of[- ]?order|"
-    r"submission[- ]?deadline|deadline[- ]?scheduler|merchant[- ]?response[- ]?sla|"
-    r"order[- ]?fulfillment[- ]?evidence|customer[- ]?notification|notification[- ]?delivery|"
-    r"win|won|loss|lost|closed|happy[- ]?path[- ]?close|stripe[- ]?dashboard|"
-    r"balance[- ]?adjustment|invoice[- ]?adjustment|ledger[- ]?entries?|payout[- ]?hold|"
-    r"payout[- ]?release|audit[- ]?trail|stale[- ]?dispute|failed[- ]?dispute[- ]?alert(?:s)?)\b|"
-    r"争议创建|争议更新|争议关闭|供应商争议\s*id|供应商样本|webhook\s*签名|"
-    r"webhook\s*重放|乱序|提交截止|截止调度|商户响应\s*SLA|履约证据|客户通知|通知送达|"
-    r"胜诉|败诉|关闭|happy\s*path\s*关闭|Stripe\s*dashboard|余额调整|发票调整|账本分录|"
-    r"打款冻结|打款放行|审计轨迹|过期争议|卡住的争议|争议失败告警)"
-    r"|(?:\b(?:dispute\.created|dispute\.updated|dispute\.closed|provider[- ]?dispute[- ]?id|"
-    r"provider[- ]?fixture(?:s)?|webhook[- ]?signature|webhook[- ]?replay|out[- ]?of[- ]?order|"
-    r"submission[- ]?deadline|deadline[- ]?scheduler|merchant[- ]?response[- ]?sla|"
-    r"order[- ]?fulfillment[- ]?evidence|customer[- ]?notification|notification[- ]?delivery|"
-    r"win|won|loss|lost|closed|happy[- ]?path[- ]?close|stripe[- ]?dashboard|"
-    r"balance[- ]?adjustment|invoice[- ]?adjustment|ledger[- ]?entries?|payout[- ]?hold|"
-    r"payout[- ]?release|audit[- ]?trail|stale[- ]?dispute|failed[- ]?dispute[- ]?alert(?:s)?)\b|"
-    r"争议创建|争议更新|争议关闭|供应商争议\s*id|供应商样本|webhook\s*签名|"
-    r"webhook\s*重放|乱序|提交截止|截止调度|商户响应\s*SLA|履约证据|客户通知|通知送达|"
-    r"胜诉|败诉|关闭|happy\s*path\s*关闭|Stripe\s*dashboard|余额调整|发票调整|账本分录|"
-    r"打款冻结|打款放行|审计轨迹|过期争议|卡住的争议|争议失败告警).{0,360}"
-    r"(?:\b(?:payment[- ]?dispute(?:s)?|dispute[- ]?lifecycle|chargeback[- ]?lifecycle|"
-    r"chargeback(?:s)?|retrieval[- ]?request(?:s)?|representment|dispute[- ]?evidence|"
-    r"evidence[- ]?submission|evidence[- ]?package|issuer|acquirer|reason[- ]?code(?:s)?|"
-    r"provisional[- ]?(?:credit|debit)|partial[- ]?dispute|duplicate[- ]?dispute|"
-    r"refund[- ]?overlap|dispute[- ]?webhook(?:s)?|dispute[- ]?id)\b|"
-    r"支付争议|付款争议|拒付生命周期|争议生命周期|拒付|争议扣款|调单请求|调单|再请款|"
-    r"争议证据|证据提交|证据包|发卡行|收单行|原因码|临时贷记|临时扣记|部分争议|重复争议|"
-    r"退款重叠|争议\s*webhook|争议\s*id))"
-)
-
-PAYOUT_SETTLEMENT_RECONCILIATION_PATTERN = (
-    r"(?:(?:\b(?:marketplace[- ]?payout(?:s)?|seller[- ]?payout(?:s)?|merchant[- ]?payout(?:s)?|"
-    r"payout[- ]?batch(?:es)?|payout(?:s)?|seller[- ]?balance|merchant[- ]?balance|"
-    r"provider[- ]?transfer(?:s)?|bank[- ]?transfer(?:s)?|connected[- ]?account(?:s)?)\b|"
-    r"卖家打款|商家打款|商户打款|卖家结算|商家结算|商户结算|提现批次|打款批次|"
-    r"打款|付款批次|卖家余额|商家余额|商户余额|供应商转账|银行转账|连接账户).{0,360}"
-    r"(?:\b(?:seller[- ]?balance[- ]?ledger|balance[- ]?ledger|platform[- ]?fee|"
-    r"chargeback(?:s)?|adjustment(?:s)?|hold(?:s)?|reserve(?:s)?|negative[- ]?balance|"
-    r"payout[- ]?batch[- ]?cutoff|cutoff|fx[- ]?round(?:ing)?|currency[- ]?round(?:ing)?|"
-    r"provider[- ]?transfer[- ]?id|bank[- ]?account|kyc[- ]?hold|failed[- ]?payout|failed[- ]?transfer|"
-    r"payout[- ]?retry|reversal(?:s)?|double[- ]?payout|payout[- ]?report|bank[- ]?statement|"
-    r"stuck[- ]?payout|reconciliation[- ]?mismatch|ledger[- ]?entry[- ]?id|payout[- ]?batch[- ]?id)\b|"
-    r"卖家余额账本|商家余额账本|商户余额账本|平台费|拒付|争议扣款|调账|调整|"
-    r"资金冻结|保证金|准备金|负余额|批次截断|批次截止|汇率取整|币种取整|"
-    r"供应商转账\s*id|银行账户|KYC\s*冻结|打款失败|转账失败|打款重试|冲正|撤销转账|"
-    r"重复打款|双重打款|打款报表|银行流水|银行对账单|卡住的打款|对账不一致|"
-    r"账本分录\s*id|打款批次\s*id)"
-    r"|(?:\b(?:seller[- ]?balance[- ]?ledger|balance[- ]?ledger|platform[- ]?fee|"
-    r"chargeback(?:s)?|adjustment(?:s)?|hold(?:s)?|reserve(?:s)?|negative[- ]?balance|"
-    r"payout[- ]?batch[- ]?cutoff|cutoff|fx[- ]?round(?:ing)?|currency[- ]?round(?:ing)?|"
-    r"provider[- ]?transfer[- ]?id|bank[- ]?account|kyc[- ]?hold|failed[- ]?payout|failed[- ]?transfer|"
-    r"payout[- ]?retry|reversal(?:s)?|double[- ]?payout|payout[- ]?report|bank[- ]?statement|"
-    r"stuck[- ]?payout|reconciliation[- ]?mismatch|ledger[- ]?entry[- ]?id|payout[- ]?batch[- ]?id)\b|"
-    r"卖家余额账本|商家余额账本|商户余额账本|平台费|拒付|争议扣款|调账|调整|"
-    r"资金冻结|保证金|准备金|负余额|批次截断|批次截止|汇率取整|币种取整|"
-    r"供应商转账\s*id|银行账户|KYC\s*冻结|打款失败|转账失败|打款重试|冲正|撤销转账|"
-    r"重复打款|双重打款|打款报表|银行流水|银行对账单|卡住的打款|对账不一致|"
-    r"账本分录\s*id|打款批次\s*id).{0,360}"
-    r"(?:\b(?:marketplace[- ]?payout(?:s)?|seller[- ]?payout(?:s)?|merchant[- ]?payout(?:s)?|"
-    r"payout[- ]?batch(?:es)?|payout(?:s)?|seller[- ]?balance|merchant[- ]?balance|"
-    r"provider[- ]?transfer(?:s)?|bank[- ]?transfer(?:s)?|connected[- ]?account(?:s)?)\b|"
-    r"卖家打款|商家打款|商户打款|卖家结算|商家结算|商户结算|提现批次|打款批次|"
-    r"打款|付款批次|卖家余额|商家余额|商户余额|供应商转账|银行转账|连接账户))"
-)
-
-METRIC_REPORTING_RECONCILIATION_PATTERN = (
-    r"(?:(?:\b(?:mrr|arr|monthly[- ]?recurring[- ]?revenue|annual[- ]?recurring[- ]?revenue|"
-    r"revenue[- ]?(?:dashboard|report|segment)|metric(?:s)?[- ]?(?:definition|version|reporting)?|"
-    r"dashboard[- ]?metric|reporting[- ]?metric|kpi)\b|"
-    r"收入看板|收入报表|收入分组|指标口径|指标定义|指标版本|指标).{0,320}"
-    r"(?:\b(?:metric[- ]?definition|definition[- ]?version|metric[- ]?version|reconciliation|"
-    r"ledger[- ]?reconciliation|invoice[- ]?reconciliation|provider[- ]?reconciliation|currency|fx|"
-    r"exchange[- ]?rate|exchange[- ]?rate[- ]?date|cutoff|month[- ]?cutoff|timezone|time[- ]?zone|"
-    r"proration|refund|discount|coupon|trial|downgrade|upgrade|paused[- ]?subscription|backfill|"
-    r"historical[- ]?backfill|locked[- ]?month|restate|revenue[- ]?segment)\b|"
-    r"对账|账本|台账|发票|供应商对账|币种|汇率|汇率日期|时区|截断|月结|试用|优惠券|折扣|"
-    r"退款|按比例计费|升级|降级|暂停订阅|回填|历史回填|锁账|旧月锁账|重算|收入分组)"
-    r"|(?:\b(?:metric[- ]?definition|definition[- ]?version|metric[- ]?version|reconciliation|"
-    r"ledger[- ]?reconciliation|invoice[- ]?reconciliation|provider[- ]?reconciliation|currency|fx|"
-    r"exchange[- ]?rate|exchange[- ]?rate[- ]?date|cutoff|month[- ]?cutoff|timezone|time[- ]?zone|"
-    r"proration|refund|discount|coupon|trial|downgrade|upgrade|paused[- ]?subscription|backfill|"
-    r"historical[- ]?backfill|locked[- ]?month|restate|revenue[- ]?segment)\b|"
-    r"对账|账本|台账|发票|供应商对账|币种|汇率|汇率日期|时区|截断|月结|试用|优惠券|折扣|"
-    r"退款|按比例计费|升级|降级|暂停订阅|回填|历史回填|锁账|旧月锁账|重算|收入分组).{0,320}"
-    r"(?:\b(?:mrr|arr|monthly[- ]?recurring[- ]?revenue|annual[- ]?recurring[- ]?revenue|"
-    r"revenue[- ]?(?:dashboard|report|segment)|metric(?:s)?[- ]?(?:definition|version|reporting)?|"
-    r"dashboard[- ]?metric|reporting[- ]?metric|kpi)\b|"
-    r"收入看板|收入报表|收入分组|指标口径|指标定义|指标版本|指标))"
-)
-
-IDENTITY_SSO_ASSERTION_PATTERN = (
-    r"\b(?:saml|oidc|openid[- ]?connect|idp[- ]?metadata|identity[- ]?provider[- ]?metadata|"
-    r"assertion[- ]?signature|signed[- ]?assertion|saml[- ]?assertion|oidc[- ]?claims?|"
-    r"metadata[- ]?signature|issuer[- ]?validation|audience[- ]?validation)\b"
-    r"|单点登录|身份提供商|身份断言|断言签名|签名断言|元数据签名|IdP\s*元数据|发行方校验|受众校验"
-)
-
-IDENTITY_PROVISIONING_ROLE_MAPPING_PATTERN = (
-    r"\b(?:jit[- ]?provision(?:ing)?|just[- ]?in[- ]?time[- ]?provision(?:ing)?|scim|"
-    r"role[- ]?mapping|group[- ]?mapping|attribute[- ]?mapping|provision(?:ed|ing)?[- ]?user|"
-    r"owner/admin/member|admin/member|sso[- ]?role(?:s)?)\b"
-    r"|即时开通|用户开通|自动开通|角色映射|组映射|属性映射|权限映射|SSO\s*角色|owner/admin/member"
-)
-
-AUTH_SESSION_TOKEN_LIFECYCLE_PATTERN = (
-    r"(?:(?:\b(?:password[- ]?reset|reset[- ]?(?:token|link|email)|email[- ]?verification|"
-    r"verification[- ]?(?:token|link)|session(?:s)?|refresh[- ]?token(?:s)?|auth[- ]?token(?:s)?)\b|"
-    r"密码重置|重置(?:令牌|链接|邮件)|验证(?:令牌|链接)|会话|刷新令牌|登录令牌|认证令牌).{0,220}"
-    r"(?:\b(?:one[- ]?time|single[- ]?use|expiry|expires?|expiration|ttl|replay|replayed|"
-    r"replay[- ]?prevention|token[- ]?hash(?:ing)?|hash(?:ed)?[- ]?token|revocation|revoke|revoked|"
-    r"session[- ]?invalidation|session[- ]?revocation|invalidate[- ]?(?:session|sessions|tokens?)|"
-    r"refresh[- ]?token[- ]?rotation|enumeration[- ]?resistance|rate[- ]?limit(?:ing)?)\b|"
-    r"一次性|单次使用|过期|有效期|重放|防重放|令牌哈希|哈希存储|撤销|失效|会话失效|会话撤销|"
-    r"刷新令牌轮换|枚举防护|限流)"
-    r"|(?:\b(?:one[- ]?time|single[- ]?use|expiry|expires?|expiration|ttl|replay|replayed|"
-    r"replay[- ]?prevention|token[- ]?hash(?:ing)?|hash(?:ed)?[- ]?token|revocation|revoke|revoked|"
-    r"session[- ]?invalidation|session[- ]?revocation|invalidate[- ]?(?:session|sessions|tokens?)|"
-    r"refresh[- ]?token[- ]?rotation|enumeration[- ]?resistance|rate[- ]?limit(?:ing)?)\b|"
-    r"一次性|单次使用|过期|有效期|重放|防重放|令牌哈希|哈希存储|撤销|失效|会话失效|会话撤销|"
-    r"刷新令牌轮换|枚举防护|限流).{0,220}"
-    r"(?:\b(?:password[- ]?reset|reset[- ]?(?:token|link|email)|email[- ]?verification|"
-    r"verification[- ]?(?:token|link)|session(?:s)?|refresh[- ]?token(?:s)?|auth[- ]?token(?:s)?)\b|"
-    r"密码重置|重置(?:令牌|链接|邮件)|验证(?:令牌|链接)|会话|刷新令牌|登录令牌|认证令牌))"
-)
-
-KEY_ROTATION_SECRET_LIFECYCLE_PATTERN = (
-    r"(?:(?:\b(?:api[- ]?key(?:s)?|access[- ]?key(?:s)?|service[- ]?account[- ]?secret(?:s)?|"
-    r"client[- ]?secret(?:s)?|secret(?:s)?|credential(?:s)?|kms[- ]?key(?:s)?)\b|"
-    r"API\s*key|访问密钥|服务账号密钥|客户端密钥|密钥|凭据|KMS\s*密钥).{0,260}"
-    r"(?:\b(?:key[- ]?rotation|secret[- ]?rotation|rotat(?:e|ed|ion)|"
-    r"overlap[- ]?window|zero[- ]?downtime|compromised[- ]?key|revoke|revoked|revocation|"
-    r"key[- ]?scope|scope|tenant[- ]?binding|hash(?:ed)?|kms[- ]?encrypt(?:ed|ion)|encrypted[- ]?storage|"
-    r"rotation[- ]?schedule|expiry|expires?|expiration|last[- ]?used|telemetry|key[- ]?id|"
-    r"stale[- ]?key|rotation[- ]?failure|failed[- ]?rotation|rollback)\b|"
-    r"密钥轮换|密钥旋转|轮换|重叠窗口|无中断|被盗密钥|泄露密钥|撤销|吊销|失效|"
-    r"密钥范围|权限范围|租户绑定|哈希|哈希存储|KMS\s*加密|加密存储|轮换计划|过期|有效期|"
-    r"最后使用|使用遥测|密钥\s*id|陈旧密钥|轮换失败|回滚)"
-    r"|(?:\b(?:key[- ]?rotation|secret[- ]?rotation|rotat(?:e|ed|ion)|"
-    r"overlap[- ]?window|zero[- ]?downtime|compromised[- ]?key|revoke|revoked|revocation|"
-    r"key[- ]?scope|scope|tenant[- ]?binding|hash(?:ed)?|kms[- ]?encrypt(?:ed|ion)|encrypted[- ]?storage|"
-    r"rotation[- ]?schedule|expiry|expires?|expiration|last[- ]?used|telemetry|key[- ]?id|"
-    r"stale[- ]?key|rotation[- ]?failure|failed[- ]?rotation|rollback)\b|"
-    r"密钥轮换|密钥旋转|轮换|重叠窗口|无中断|被盗密钥|泄露密钥|撤销|吊销|失效|"
-    r"密钥范围|权限范围|租户绑定|哈希|哈希存储|KMS\s*加密|加密存储|轮换计划|过期|有效期|"
-    r"最后使用|使用遥测|密钥\s*id|陈旧密钥|轮换失败|回滚).{0,260}"
-    r"(?:\b(?:api[- ]?key(?:s)?|access[- ]?key(?:s)?|service[- ]?account[- ]?secret(?:s)?|"
-    r"client[- ]?secret(?:s)?|secret(?:s)?|credential(?:s)?|kms[- ]?key(?:s)?)\b|"
-    r"API\s*key|访问密钥|服务账号密钥|客户端密钥|密钥|凭据|KMS\s*密钥))"
-)
-
-ACCESSIBILITY_A11Y_PATTERN = (
-    r"\b(?:accessibility|a11y|screen[- ]?reader|keyboard(?:[- ]?navigation)?|aria|"
-    r"focus(?:[- ]?(?:trap|order|management))?|wcag|axe|contrast|tab(?:bing)?|"
-    r"live[- ]?region|error[- ]?(?:announcement|message))\b"
-    r"|无障碍|可访问|读屏|屏幕阅读器|键盘|焦点|焦点陷阱|对比度|错误提示|错误播报"
-)
-
-LOCALE_I18N_PATTERN = (
-    r"\b(?:locale|locali[sz]ation|i18n|translation|language|chinese|english|"
-    r"language[- ]?switch|display[- ]?language|user[- ]?language|ui[- ]?language)\b"
-    r"|多语言|国际化|本地化|翻译|语言切换|展示语言|用户语言|界面语言|任务语言|中文|英文|英语"
-)
-
-NOTIFICATION_SUBSCRIPTION_DELIVERABILITY_PATTERN = (
-    r"\b(?:unsubscribe|unsubscribed|subscription[- ]?preference(?:s)?|preference[- ]?center|"
-    r"email[- ]?preference(?:s)?|opt[- ]?(?:out|in)|suppression[- ]?list|suppressed|"
-    r"bounce(?:d)?|complaint(?:s)?|spam[- ]?complaint(?:s)?|deliverability|delivery[- ]?event(?:s)?|"
-    r"provider[- ]?delivery|message[- ]?delivery|sendgrid|mailgun|ses)\b"
-    r"|退订|取消订阅|订阅偏好|偏好中心|邮件偏好|抑制名单|抑制列表|退信|投诉|垃圾邮件投诉|"
-    r"送达|投递|送达事件|投递事件|送达率|邮件服务商"
+__all__ = (
+    "ACCESSIBILITY_A11Y_PATTERN",
+    "ANALYTICS_EVENT_INTEGRITY_PATTERN",
+    "ASYNC_JOB_LIFECYCLE_PATTERN",
+    "AUDIT_LOG_INTEGRITY_RETENTION_PATTERN",
+    "AUTHORIZATION_POLICY_CONSISTENCY_PATTERN",
+    "AUTH_SESSION_TOKEN_LIFECYCLE_PATTERN",
+    "BACKUP_RESTORE_RECOVERY_PATTERN",
+    "BACKWARD_COMPATIBILITY_PATTERN",
+    "BILLING_LEDGER_RECONCILIATION_PATTERN",
+    "CACHE_INVALIDATION_CONSISTENCY_PATTERN",
+    "CDC_REPLICATION_CONSISTENCY_PATTERN",
+    "CONCURRENCY_CONFLICT_RESOLUTION_PATTERN",
+    "CONSENT_PREFERENCE_GOVERNANCE_PATTERN",
+    "DATA_IMPORT_VALIDATION_IDEMPOTENCY_PATTERN",
+    "DATA_LIFECYCLE_DELETION_RETENTION_PATTERN",
+    "DATA_RESIDENCY_REGIONAL_ISOLATION_PATTERN",
+    "DISPUTE_CHARGEBACK_LIFECYCLE_PATTERN",
+    "EVALUATION_SET_PATTERN",
+    "EXPERIMENT_ASSIGNMENT_CONSISTENCY_PATTERN",
+    "EXTERNAL_PROVIDER_CONTRACT_PATTERN",
+    "FEATURE_FLAG_ROLLOUT_SAFETY_PATTERN",
+    "FILE_UPLOAD_STORAGE_SAFETY_PATTERN",
+    "HUMAN_REVIEW_QUALITY_PATTERN",
+    "IDENTITY_PROVISIONING_ROLE_MAPPING_PATTERN",
+    "IDENTITY_SSO_ASSERTION_PATTERN",
+    "INCIDENT_ROOT_CAUSE_REPRO_PATTERN",
+    "INVENTORY_RESERVATION_CONSISTENCY_PATTERN",
+    "KEY_ROTATION_SECRET_LIFECYCLE_PATTERN",
+    "KYC_AML_SANCTIONS_SCREENING_PATTERN",
+    "LOCALE_I18N_PATTERN",
+    "METRIC_REPORTING_RECONCILIATION_PATTERN",
+    "MIGRATION_ROLLBACK_INTEGRITY_PATTERN",
+    "NOTIFICATION_SUBSCRIPTION_DELIVERABILITY_PATTERN",
+    "PAYOUT_SETTLEMENT_RECONCILIATION_PATTERN",
+    "QUEUE_FAILURE_RECOVERY_PATTERN",
+    "RAG_GROUNDING_TOOL_SAFETY_PATTERN",
+    "REGRESSION_MONITORING_GUARD_PATTERN",
+    "RESILIENCE_RETRY_TIMEOUT_PATTERN",
+    "SCHEDULE_TIMEZONE_RECURRENCE_PATTERN",
+    "SEARCH_INDEX_CONSISTENCY_PATTERN",
+    "SUBSCRIPTION_ENTITLEMENT_BILLING_PATTERN",
+    "SUPPORT_IMPERSONATION_BREAKGLASS_PATTERN",
+    "TAX_CALCULATION_COMPLIANCE_PATTERN",
+    "TENANT_ISOLATION_PATTERN",
+    "USAGE_QUOTA_METERING_PATTERN",
+    "WEBHOOK_SIGNATURE_REPLAY_ORDERING_PATTERN",
 )

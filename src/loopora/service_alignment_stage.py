@@ -2,17 +2,35 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from loopora.service_alignment_agreement_stage import (
-    AlignmentAgreementReadyStagePlan as AlignmentAgreementReadyStagePlan,
-    AlignmentUserMessageStagePlan as AlignmentUserMessageStagePlan,
-    alignment_agreement_ready_stage_plan as alignment_agreement_ready_stage_plan,
+from loopora.service_alignment_agreement_decisions import (
     alignment_agreement_readiness_checklist_issues as alignment_agreement_readiness_checklist_issues,
-    alignment_agreement_text_snippet as alignment_agreement_text_snippet,
-    alignment_agreement_working_agreement as alignment_agreement_working_agreement,
-    alignment_merge_improvement_context as alignment_merge_improvement_context,
+)
+from loopora.service_alignment_agreement_decisions import (
     alignment_message_confirms_agreement as alignment_message_confirms_agreement,
-    alignment_user_message_stage_plan as alignment_user_message_stage_plan,
+)
+from loopora.service_alignment_agreement_projection import (
+    AlignmentAgreementReadyStagePlan as AlignmentAgreementReadyStagePlan,
+)
+from loopora.service_alignment_agreement_projection import (
+    alignment_agreement_ready_stage_plan as alignment_agreement_ready_stage_plan,
+)
+from loopora.service_alignment_agreement_projection import (
+    alignment_agreement_text_snippet as alignment_agreement_text_snippet,
+)
+from loopora.service_alignment_agreement_projection import (
+    alignment_agreement_working_agreement as alignment_agreement_working_agreement,
+)
+from loopora.service_alignment_agreement_projection import (
+    alignment_merge_improvement_context as alignment_merge_improvement_context,
+)
+from loopora.service_alignment_agreement_projection import (
     alignment_visible_agreement_message as alignment_visible_agreement_message,
+)
+from loopora.service_alignment_user_message_stage import (
+    AlignmentUserMessageStagePlan as AlignmentUserMessageStagePlan,
+)
+from loopora.service_alignment_user_message_stage import (
+    alignment_user_message_stage_plan as alignment_user_message_stage_plan,
 )
 from loopora.service_alignment_clarifying_questions import (
     alignment_questionnaire_overload as alignment_questionnaire_overload,
@@ -123,12 +141,7 @@ def alignment_bundle_stage_error(gate: AlignmentBundleStageGate) -> str:
 
 def alignment_bundle_stage_missing_items(gate: AlignmentBundleStageGate) -> list[str]:
     items: list[str] = []
-    ready_for_bundle_gate = (
-        gate.stage in gate.confirmed_stages
-        and gate.phase == "bundle"
-        and bool(gate.agreement_summary)
-        and isinstance(gate.checklist, dict)
-    )
+    ready_for_bundle_gate = gate.stage in gate.confirmed_stages and gate.phase == "bundle" and bool(gate.agreement_summary) and isinstance(gate.checklist, dict)
     if ready_for_bundle_gate and isinstance(gate.checklist, dict):
         missing = [key for key in gate.readiness_keys if gate.checklist.get(key) is not True]
         if missing:

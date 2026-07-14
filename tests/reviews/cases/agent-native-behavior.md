@@ -10,6 +10,10 @@ targets:
       - .loopora/real-probes/*phase-report.json
       - .loopora/real-probes/**/*phase-report.json
     paths_env: LOOPORA_REVIEW_ARTIFACTS
+    missing_hint: >-
+      configure an Agent host command template from tests/probes/real_environment/README.md, then run
+      `LOOPORA_REAL_AGENT_TIMEOUT_SECONDS=1200 uv run python tests/probes/real_environment/run_real_probes.py --suite real-agent --agent-targets codex --max-parallel 1`;
+      or pass `--artifact phase=.loopora/real-probes/real-agent-phase-report.json` when reviewing an existing report
   - id: agent-native-handbook
     type: text_globs
     title: Agent-native design and probe handbook

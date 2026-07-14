@@ -131,20 +131,13 @@ def _assert_metric_reporting_ready_round(third_summary: dict, alignment_session_
     assert "deletion, retention, legal hold" not in ready_projection_text
     assert "deletion-retention" not in ready_projection_text
     assert "Confirm; use this metric reporting direction" not in ready_projection_text
-    assert third_summary["ready_review_projection"]["traceability"]["mapped_count"] == third_summary[
-        "ready_review_projection"
-    ]["traceability"]["required_count"]
+    assert (
+        third_summary["ready_review_projection"]["traceability"]["mapped_count"] == third_summary["ready_review_projection"]["traceability"]["required_count"]
+    )
 
 
 def _metric_reporting_bundle_text(sample_workdir: Path, alignment_session_id: str) -> str:
-    return (
-        sample_workdir
-        / ".loopora"
-        / "alignment_sessions"
-        / alignment_session_id
-        / "artifacts"
-        / "bundle.yml"
-    ).read_text(encoding="utf-8")
+    return (sample_workdir / ".loopora" / "alignment_sessions" / alignment_session_id / "artifacts" / "bundle.yml").read_text(encoding="utf-8")
 
 
 def _assert_metric_reporting_bundle(bundle_text: str) -> None:
@@ -189,6 +182,7 @@ def _assert_metric_reporting_bundle(bundle_text: str) -> None:
     for verify_ref in (
         "metric-reconciliation",
         "ledger-reconciliation",
+        "provider-contract",
         "metric-definition",
         "edge-case-aggregation",
         "fx-cutoff-timezone",
@@ -238,9 +232,7 @@ def test_success_categories_detect_metric_reporting_reconciliation_without_migra
 
 def test_fake_done_and_evidence_categories_detect_chart_export_only_metric_risk() -> None:
     fake_labels = [label for label, _pattern in agent_candidate_fake_done_categories(MRR_DASHBOARD_TASK_TEXT)]
-    evidence_labels = [
-        label for label, _pattern in agent_candidate_evidence_preference_categories(MRR_DASHBOARD_TASK_TEXT)
-    ]
+    evidence_labels = [label for label, _pattern in agent_candidate_evidence_preference_categories(MRR_DASHBOARD_TASK_TEXT)]
 
     assert "reporting/metric-reconciliation" in fake_labels
     assert "reporting/metric-reconciliation" in evidence_labels
@@ -317,8 +309,7 @@ def test_agent_first_traceability_blocks_chart_export_only_mrr_candidate(sample_
         "residual risk; only check chart rendering and CSV export.\n"
     )
     role_by_key["gatekeeper"]["prompt_markdown"] += (
-        "\n可以接受 metric definition、对账、汇率日期、cutoff、锁账回填、权限分段和 audit proof 后续补，"
-        "只要图表和 CSV 可用。\n"
+        "\n可以接受 metric definition、对账、汇率日期、cutoff、锁账回填、权限分段和 audit proof 后续补，只要图表和 CSV 可用。\n"
     )
 
     issues = alignment_agent_candidate_traceability_issues(MRR_DASHBOARD_TASK_TEXT, bundle)

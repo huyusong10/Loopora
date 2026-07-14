@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from loopora.bundles import load_bundle_text, read_bundle_file_text
+from loopora.bundles import BundleError, load_bundle_text, read_bundle_file_text
 from loopora.service_alignment_context import alignment_context_option_by_id, alignment_source_option_seed_kind
 from loopora.service_alignment_run_source_projection import (
     alignment_run_artifact_paths,
@@ -120,7 +120,10 @@ def alignment_source_seed_from_alignment_session_option(service: object, option:
         source_session = service.get_alignment_session(source_session_id)
     except LooporaError:
         source_session = {}
-    source_bundle = load_bundle_text(read_bundle_file_text(bundle_path))
+    try:
+        source_bundle = load_bundle_text(read_bundle_file_text(bundle_path))
+    except (BundleError, OSError, ValueError) as exc:
+        raise LooporaError("selected workdir context is no longer available") from exc
     return alignment_session_source_seed(
         option,
         source_session,

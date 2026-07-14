@@ -3,6 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 
 from loopora.bundles import bundle_to_yaml
+from loopora.executor_fake_payloads import alignment_bundle_yaml
+from loopora.service_agent_adapters import AgentBundleCandidateRequest
 
 
 def create_bundle_detail_loop(service, *, sample_spec_file: Path, sample_workdir: Path, name: str) -> dict:
@@ -39,3 +41,18 @@ def import_derived_bundle(
             )
         )
     )
+
+
+def import_agent_first_bundle(service, *, tmp_path: Path, sample_workdir: Path) -> dict:
+    bundle_file = tmp_path / "agent-first-bundle.yml"
+    bundle_file.write_text(alignment_bundle_yaml(str(sample_workdir.resolve())), encoding="utf-8")
+    generated = service.create_agent_bundle_candidate(
+        AgentBundleCandidateRequest(
+            adapter="codex",
+            workdir=sample_workdir,
+            message="Prepare an Agent-native plan file.",
+            bundle_file=bundle_file,
+            entry_source="codex_project_skill",
+        )
+    )
+    return service.import_alignment_bundle(generated["session"]["id"], start_immediately=False)

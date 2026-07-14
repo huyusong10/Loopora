@@ -16,7 +16,7 @@ from loopora.executor_result_files import (
     write_executor_schema_file,
 )
 from loopora.executor_session_refs import ensure_resume_session_ref
-from loopora.executor_types import ExecutorError, ExecutorProcessRequest, RoleRequest
+from loopora.executor_types import ExecutionStopped, ExecutorError, ExecutorProcessRequest, RoleRequest
 
 
 class RealExecutorProviderFlowMixin:
@@ -48,8 +48,12 @@ class RealExecutorProviderFlowMixin:
             )
         )
 
-        if return_code != 0:
-            raise ExecutorError(f"codex exec failed for role={request.role} exit_code={return_code}")
+        self._raise_for_unsuccessful_process(
+            return_code,
+            request=request,
+            should_stop=should_stop,
+            failure_label="codex exec failed",
+        )
 
         if not request.output_path.exists():
             raise ExecutorError(f"codex exec did not produce an output file for role={request.role}")
@@ -94,8 +98,12 @@ class RealExecutorProviderFlowMixin:
                 line_handler=lambda line: self._handle_claude_line(line, state, emit_event, request),
             )
         )
-        if return_code != 0:
-            raise ExecutorError(f"claude print failed for role={request.role} exit_code={return_code}")
+        self._raise_for_unsuccessful_process(
+            return_code,
+            request=request,
+            should_stop=should_stop,
+            failure_label="claude print failed",
+        )
         payload = state.get("structured_output")
         if not isinstance(payload, dict):
             raise ExecutorError(f"claude did not produce structured output for role={request.role}")
@@ -129,8 +137,12 @@ class RealExecutorProviderFlowMixin:
                 line_handler=lambda line: self._handle_opencode_line(line, state, emit_event, request),
             )
         )
-        if return_code != 0:
-            raise ExecutorError(f"opencode run failed for role={request.role} exit_code={return_code}")
+        self._raise_for_unsuccessful_process(
+            return_code,
+            request=request,
+            should_stop=should_stop,
+            failure_label="opencode run failed",
+        )
         payload = parse_structured_output_from_text(state.get("latest_text") or "\n".join(state["text_parts"]))
         if not isinstance(payload, dict):
             raise ExecutorError(f"opencode did not produce a valid JSON object for role={request.role}")
@@ -159,8 +171,12 @@ class RealExecutorProviderFlowMixin:
                 line_handler=lambda line: emit_event("codex_event", self._decode_json_line(line)),
             )
         )
-        if return_code != 0:
-            raise ExecutorError(f"custom exec failed for role={request.role} exit_code={return_code}")
+        self._raise_for_unsuccessful_process(
+            return_code,
+            request=request,
+            should_stop=should_stop,
+            failure_label="custom exec failed",
+        )
         if not request.output_path.exists():
             raise ExecutorError(f"custom exec did not produce an output file for role={request.role}")
         payload = read_executor_json_object_output(
@@ -173,3 +189,17 @@ class RealExecutorProviderFlowMixin:
             self._capture_session_ref(request, payload)
             ensure_resume_session_ref(request)
         return payload
+
+    @staticmethod
+    def _raise_for_unsuccessful_process(
+        return_code: int,
+        *,
+        request: RoleRequest,
+        should_stop: Callable[[], bool],
+        failure_label: str,
+    ) -> None:
+        if return_code == 0:
+            return
+        if should_stop():
+            raise ExecutionStopped(f"run {request.run_id} stopped while {request.role} was running")
+        raise ExecutorError(f"{failure_label} for role={request.role} exit_code={return_code}")

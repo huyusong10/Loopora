@@ -471,7 +471,12 @@ def _write_artifact_paths(target: dict[str, Any], output_dir: Path, cli_artifact
     hints: list[str] = []
     if not files:
         lines.append("No artifact files matched this optional target.")
-        hints.append(f"{target_id}: no artifacts matched; run the probe or pass --artifact when reviewing behavior evidence")
+        missing_hint = str(
+            target.get("missing_hint")
+            or "run the probe or pass --artifact when reviewing behavior evidence"
+        )
+        lines.extend(["", f"Next evidence step: {missing_hint}"])
+        hints.append(f"{target_id}: no artifacts matched; {missing_hint}")
     for path in files:
         preview, truncated = _read_text_preview(path, max_bytes)
         lines.extend(

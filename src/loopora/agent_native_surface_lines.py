@@ -70,7 +70,7 @@ def _native_surface_dispatch_lines(surface: dict, dispatch: dict) -> list[str]:
     nested_provider_cli = str(dispatch.get("nested_provider_cli") or "").strip()
     targets = _native_surface_target_agents(surface)
     if not (orchestrator and targets):
-        return []
+        return [f"- execution: nested provider CLI={nested_provider_cli}"] if nested_provider_cli else []
     nested_note = f"; nested provider CLI={nested_provider_cli}" if nested_provider_cli else ""
     return [f"- dispatch: {orchestrator} -> {', '.join(targets[:4])}{nested_note}"]
 

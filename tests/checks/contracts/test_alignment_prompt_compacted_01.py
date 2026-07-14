@@ -4,7 +4,13 @@ from __future__ import annotations
 from pathlib import Path
 
 from loopora.alignment_guidance import load_alignment_guidance_assets
-from loopora.service_alignment_prompting import AlignmentPromptBuildContext, build_alignment_prompt
+from loopora.service_alignment_prompting import (
+    AlignmentPromptBuildContext,
+    alignment_prompt_guidance_profile,
+    alignment_prompt_transcript_projection,
+    build_alignment_prompt,
+    build_alignment_prompt_text,
+)
 
 
 def test_build_alignment_prompt_collects_context_inputs_before_rendering(tmp_path: Path) -> None:
@@ -13,8 +19,7 @@ def test_build_alignment_prompt_collects_context_inputs_before_rendering(tmp_pat
     calls: list[tuple[str, str]] = []
 
     context = AlignmentPromptBuildContext(
-        current_bundle_text=lambda path: calls.append(("bundle", str(path)))
-        or "version: 1\nmetadata:\n  name: Context Bundle\n",
+        current_bundle_text=lambda path: calls.append(("bundle", str(path))) or "version: 1\nmetadata:\n  name: Context Bundle\n",
         workdir_snapshot=lambda path: calls.append(("workdir", str(path))) or "Top-level entries (1 shown):\n- src/",
         user_language_hint=lambda session: calls.append(("language", str(session["id"]))) or "Use Chinese.",
     )
@@ -40,6 +45,124 @@ def test_build_alignment_prompt_collects_context_inputs_before_rendering(tmp_pat
     assert "Context Bundle" in prompt
     assert "Top-level entries (1 shown):" in prompt
     assert "Use Chinese." in prompt
+
+
+def test_alignment_prompt_transcript_projection_preserves_task_anchor_and_recent_branch() -> None:
+    transcript = [{"role": "user", "content": "Original task anchor", "created_at": "0"}]
+    transcript.extend(
+        {
+            "role": "assistant" if index % 2 == 0 else "user",
+            "content": f"decision-branch-{index}",
+            "created_at": str(index + 1),
+        }
+        for index in range(20)
+    )
+
+    projection = alignment_prompt_transcript_projection(transcript)
+
+    metadata = projection[0]
+    assert metadata["kind"] == "transcript_projection"
+    assert metadata["total_entries"] == len(transcript)
+    assert metadata["omitted_entries"] > 0
+    assert metadata["task_anchor_retained"] is True
+    projected_content = [entry.get("content") for entry in projection[1:]]
+    assert projected_content[0] == "Original task anchor"
+    assert "decision-branch-0" not in projected_content
+    assert "decision-branch-19" in projected_content
+
+    prompt = build_alignment_prompt_text(
+        {
+            "bundle_path": "/tmp/bundle.yml",
+            "workdir": "/tmp/project",
+            "alignment_stage": "clarifying",
+            "transcript": transcript,
+            "working_agreement": {},
+        },
+        mode="normal",
+    )
+    assert '"kind": "transcript_projection"' in prompt
+    assert "Original task anchor" in prompt
+    assert "decision-branch-0" not in prompt
+    assert "decision-branch-19" in prompt
+
+
+def test_alignment_prompt_transcript_projection_bounds_long_content_without_hiding_truncation() -> None:
+    task_anchor = "ANCHOR-BEGIN\n" + ("x" * 30_000) + "\nANCHOR-END"
+    transcript = [{"role": "user", "content": task_anchor}]
+    transcript.extend({"role": "assistant", "content": "y" * 10_000} for _ in range(20))
+
+    projection = alignment_prompt_transcript_projection(transcript)
+
+    metadata = projection[0]
+    projected_anchor = projection[1]
+    assert metadata["content_truncated"] is True
+    assert metadata["omitted_entries"] > 0
+    assert projected_anchor["content_truncated"] is True
+    assert projected_anchor["original_content_chars"] == len(task_anchor)
+    assert projected_anchor["content"].startswith("ANCHOR-BEGIN")
+    assert projected_anchor["content"].endswith("ANCHOR-END")
+    assert len(projected_anchor["content"]) < len(task_anchor)
+
+
+def test_alignment_prompt_guidance_profiles_keep_full_bundle_material_for_compile_stages() -> None:
+    assets = load_alignment_guidance_assets()
+    base_session = {
+        "bundle_path": "/tmp/bundle.yml",
+        "workdir": "/tmp/project",
+        "transcript": [],
+        "working_agreement": {},
+    }
+
+    clarifying = build_alignment_prompt_text(
+        {**base_session, "alignment_stage": "clarifying"},
+        mode="normal",
+    )
+    agreement = build_alignment_prompt_text(
+        {**base_session, "alignment_stage": "agreement_ready"},
+        mode="normal",
+    )
+    confirmed = build_alignment_prompt_text(
+        {**base_session, "alignment_stage": "confirmed"},
+        mode="normal",
+    )
+    repair = build_alignment_prompt_text(
+        {**base_session, "alignment_stage": "clarifying"},
+        mode="repair",
+    )
+
+    assert assets.bundle_contract.strip() not in clarifying
+    assert assets.bundle_contract.strip() not in agreement
+    assert assets.bundle_contract.strip() in confirmed
+    assert assets.bundle_contract.strip() in repair
+    assert "Private complete-run rehearsal example" not in clarifying
+    assert "Private complete-run rehearsal example" in confirmed
+    assert len(agreement) < len(clarifying) < len(confirmed)
+    assert alignment_prompt_guidance_profile({"alignment_stage": "agreement_ready"}, mode="normal") == "agreement"
+    assert alignment_prompt_guidance_profile({"alignment_stage": "clarifying"}, mode="repair") == "bundle"
+
+
+def test_alignment_prompt_guidance_loads_improvement_policy_only_for_improvement_sessions() -> None:
+    assets = load_alignment_guidance_assets()
+    base_session = {
+        "bundle_path": "/tmp/bundle.yml",
+        "workdir": "/tmp/project",
+        "alignment_stage": "clarifying",
+        "transcript": [],
+        "working_agreement": {},
+    }
+
+    normal_prompt = build_alignment_prompt_text(base_session, mode="normal")
+    improvement_prompt = build_alignment_prompt_text(
+        {
+            **base_session,
+            "working_agreement": {"mode": "improvement", "source": {}},
+        },
+        mode="normal",
+    )
+
+    assert assets.feedback_improvement.strip() not in normal_prompt
+    assert assets.feedback_improvement.strip() in improvement_prompt
+
 
 # Merged from test_alignment_prompt_source_context.py
 
@@ -69,6 +192,40 @@ def test_alignment_improvement_context_text_renders_selected_spec_and_redacts_so
     assert "PROMPT_SPEC_TOKEN_SECRET" not in context
     assert "<secret omitted>" in context
     assert "Bundle Improvement Context" not in context
+
+
+def test_alignment_prompt_omits_model_visible_local_source_paths() -> None:
+    source_spec_path = "/private/source-context/spec.md"
+    prompt = build_alignment_prompt_text(
+        {
+            "id": "align_prompt_paths",
+            "bundle_path": "/tmp/current-session/bundle.yml",
+            "workdir": "/tmp/current-session/project",
+            "alignment_stage": "clarifying",
+            "transcript": [],
+            "working_agreement": {
+                "mode": "selected_source",
+                "source": {
+                    "source_type": "spec_file",
+                    "spec_path": source_spec_path,
+                    "source_bundle_path": "/private/source-context/artifacts/bundle.yml",
+                    "artifact_paths": {
+                        "spec": source_spec_path,
+                        "run_contract": "contract/run_contract.json",
+                    },
+                    "spec_markdown": "Preserve the selected source content.",
+                },
+            },
+        },
+        mode="normal",
+        workdir_snapshot="Workdir could not be inspected.",
+    )
+
+    assert source_spec_path not in prompt
+    assert "/private/source-context/artifacts/bundle.yml" not in prompt
+    assert "<local path omitted>" in prompt
+    assert "contract/run_contract.json" in prompt
+    assert "Preserve the selected source content." in prompt
 
 
 def test_alignment_improvement_context_text_renders_run_evidence_context_with_redaction() -> None:
@@ -111,6 +268,46 @@ def test_alignment_current_bundle_prompt_text_reads_and_redacts_bundle(tmp_path:
     assert "<secret omitted>" in text
     assert alignment_current_bundle_prompt_text(tmp_path / "missing.yml") == ""
 
+
+def test_alignment_current_bundle_prompt_text_redacts_low_level_read_errors(tmp_path: Path, monkeypatch) -> None:
+    bundle_path = tmp_path / "bundle.yml"
+    local_path = tmp_path / "private" / "bundle.yml"
+    bundle_path.write_text("version: 1\nmetadata:\n  name: Existing Bundle\n", encoding="utf-8")
+
+    def fail_read_bundle_file_text(*_args, **_kwargs):
+        raise OSError(f"permission denied: {local_path}")
+
+    monkeypatch.setattr(
+        "loopora.service_alignment_prompt_source_projection.read_bundle_file_text",
+        fail_read_bundle_file_text,
+    )
+
+    text = alignment_current_bundle_prompt_text(bundle_path)
+
+    assert text == "Current bundle file could not be read."
+    assert str(local_path) not in text
+    assert "permission denied" not in text
+
+
+def test_alignment_current_bundle_prompt_text_redacts_low_level_probe_errors(tmp_path: Path, monkeypatch) -> None:
+    bundle_path = tmp_path / "bundle.yml"
+    local_path = tmp_path / "private" / "bundle.yml"
+    original_exists = Path.exists
+
+    def fail_exists(path: Path) -> bool:
+        if path == bundle_path:
+            raise OSError(f"permission denied: {local_path}")
+        return original_exists(path)
+
+    monkeypatch.setattr(Path, "exists", fail_exists)
+
+    text = alignment_current_bundle_prompt_text(bundle_path)
+
+    assert text == "Current bundle file could not be read."
+    assert str(local_path) not in text
+    assert "permission denied" not in text
+
+
 # Merged from test_alignment_prompt_stage_policy.py
 import pytest
 
@@ -134,15 +331,9 @@ def test_alignment_stage_policy_text_selects_repair_and_ready_sections() -> None
         ]
     )
 
-    repair_policy = alignment_stage_policy_text(
-        {"alignment_stage": "ready_review"}, mode="repair", compiler_gates=compiler_gates
-    )
-    ready_policy = alignment_stage_policy_text(
-        {"alignment_stage": "ready_review"}, mode="generate", compiler_gates=compiler_gates
-    )
-    confirmed_policy = alignment_stage_policy_text(
-        {"alignment_stage": "confirmed"}, mode="generate", compiler_gates=compiler_gates
-    )
+    repair_policy = alignment_stage_policy_text({"alignment_stage": "ready_review"}, mode="repair", compiler_gates=compiler_gates)
+    ready_policy = alignment_stage_policy_text({"alignment_stage": "ready_review"}, mode="generate", compiler_gates=compiler_gates)
+    confirmed_policy = alignment_stage_policy_text({"alignment_stage": "confirmed"}, mode="generate", compiler_gates=compiler_gates)
 
     assert repair_policy == "Common policy.\n\nRepair policy."
     assert ready_policy == "Common policy.\n\nReady policy."
@@ -152,6 +343,7 @@ def test_alignment_stage_policy_text_selects_repair_and_ready_sections() -> None
 def test_alignment_stage_policy_text_fails_closed_when_policy_section_is_missing() -> None:
     with pytest.raises(LooporaError, match="Common"):
         alignment_stage_policy_text({"alignment_stage": "clarifying"}, mode="generate", compiler_gates="## Clarifying\nPolicy")
+
 
 # Merged from test_alignment_prompt_template_helpers.py
 
@@ -268,10 +460,7 @@ def test_alignment_relevant_examples_prompt_text_avoids_generic_audit_compliance
     )
     consent_merge_selected = alignment_relevant_examples_prompt_text(
         assets.examples,
-        context_text=(
-            "Build consent preference governance where anonymous cookie consent can merge into the user's account "
-            "preference ledger after login."
-        ),
+        context_text=("Build consent preference governance where anonymous cookie consent can merge into the user's account preference ledger after login."),
     )
 
     assert "Compliance audit trail example" not in support_dashboard_selected
@@ -350,8 +539,9 @@ def test_alignment_relevant_examples_prompt_text_selects_vague_refactor_only_for
     assert "Improvement from vague refactor critique example" in selected
     assert "Improvement from run evidence example" not in selected
 
+
 # Merged from test_alignment_prompt_text_rendering.py
-from loopora.service_alignment_prompting import alignment_relevant_examples_prompt_text, build_alignment_prompt_text
+from loopora.service_alignment_prompting import alignment_relevant_examples_prompt_text
 
 
 def test_build_alignment_prompt_text_renders_repair_context_and_redacts_session_values() -> None:

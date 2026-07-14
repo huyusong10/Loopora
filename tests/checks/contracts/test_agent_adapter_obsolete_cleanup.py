@@ -46,6 +46,28 @@ def test_claude_adapter_refuses_unowned_obsolete_command_wrappers(service_factor
     assert not (workdir / ".loopora" / "adapters" / "claude" / "manifest.json").exists()
 
 
+def test_claude_adapter_checks_host_config_before_removing_obsolete_managed_entries(
+    service_factory,
+    tmp_path: Path,
+) -> None:
+    service = service_factory(scenario="success")
+    workdir = tmp_path / "project"
+    command = workdir / ".claude" / "commands" / "loopora-plan.md"
+    settings = workdir / ".claude" / "settings.json"
+    command.parent.mkdir(parents=True)
+    obsolete_content = f"<!-- {agent_adapters.MANAGED_MARKERS['claude']} legacy command -->\n"
+    command.write_text(obsolete_content, encoding="utf-8")
+    settings.write_text("{not json\n", encoding="utf-8")
+
+    with pytest.raises(LooporaConflictError, match="Claude Code settings"):
+        service.install_agent_adapter("claude", workdir=workdir)
+
+    assert command.read_text(encoding="utf-8") == obsolete_content
+    assert settings.read_text(encoding="utf-8") == "{not json\n"
+    assert not (workdir / ".claude" / "skills" / "loopora-plan" / "SKILL.md").exists()
+    assert not (workdir / ".loopora" / "adapters" / "claude" / "manifest.json").exists()
+
+
 @pytest.mark.parametrize(
     ("adapter", "old_paths"),
     [

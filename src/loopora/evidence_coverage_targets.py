@@ -3,6 +3,8 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
+from loopora.runtime_task_language import runtime_task_language, runtime_task_text
+
 
 def with_coverage_targets(compiled_spec: Mapping[str, Any], *, completion_mode: str = "gatekeeper") -> dict:
     spec = dict(compiled_spec)
@@ -11,6 +13,7 @@ def with_coverage_targets(compiled_spec: Mapping[str, Any], *, completion_mode: 
 
 
 def build_coverage_targets(compiled_spec: Mapping[str, Any], *, completion_mode: str = "gatekeeper") -> list[dict]:
+    task_language = runtime_task_language(compiled_spec)
     targets: list[dict] = []
     for check in list(compiled_spec.get("checks") or []):
         if not isinstance(check, Mapping):
@@ -39,7 +42,7 @@ def build_coverage_targets(compiled_spec: Mapping[str, Any], *, completion_mode:
                 "kind": "success_surface",
                 "source_section": "Success Surface",
                 "source_id": f"surface_{index:03d}",
-                "label": f"Success surface {index}",
+                "label": runtime_task_text(task_language, f"Success surface {index}", f"成功面 {index}"),
                 "text": text,
                 "required": False,
             }
@@ -52,7 +55,7 @@ def build_coverage_targets(compiled_spec: Mapping[str, Any], *, completion_mode:
                 "kind": "fake_done",
                 "source_section": "Fake Done",
                 "source_id": f"risk_{index:03d}",
-                "label": f"Fake Done risk {index}",
+                "label": runtime_task_text(task_language, f"Fake Done risk {index}", f"伪完成风险 {index}"),
                 "text": text,
                 "required": False,
             }
@@ -65,7 +68,7 @@ def build_coverage_targets(compiled_spec: Mapping[str, Any], *, completion_mode:
                 "kind": "evidence_preference",
                 "source_section": "Evidence Preferences",
                 "source_id": f"pref_{index:03d}",
-                "label": f"Evidence preference {index}",
+                "label": runtime_task_text(task_language, f"Evidence preference {index}", f"证据偏好 {index}"),
                 "text": text,
                 "required": False,
             }
@@ -78,8 +81,12 @@ def build_coverage_targets(compiled_spec: Mapping[str, Any], *, completion_mode:
                 "kind": "gatekeeper",
                 "source_section": "Workflow",
                 "source_id": "finish",
-                "label": "GateKeeper finish",
-                "text": "GateKeeper may finish only after citing supporting upstream evidence refs or measured self evidence.",
+                "label": runtime_task_text(task_language, "GateKeeper finish", "GateKeeper 收尾"),
+                "text": runtime_task_text(
+                    task_language,
+                    "GateKeeper may finish only after citing supporting upstream evidence refs or measured self evidence.",
+                    "GateKeeper 只有在引用了可支持结论的上游证据，或提供了可度量的自身证据后，才可以结束 Run。",
+                ),
                 "required": True,
             }
         )

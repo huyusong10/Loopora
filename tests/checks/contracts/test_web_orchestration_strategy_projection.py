@@ -1,6 +1,10 @@
 from __future__ import annotations
 
-from web_static_projection_support import REPO_ROOT, STATIC_ROOT
+from pathlib import Path
+
+
+REPO_ROOT = Path(__file__).resolve().parents[3]
+STATIC_ROOT = REPO_ROOT / "src" / "loopora" / "static"
 
 
 def test_orchestration_surfaces_prefer_strategy_source_projection_names() -> None:

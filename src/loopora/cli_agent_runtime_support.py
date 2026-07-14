@@ -1,42 +1,129 @@
 from __future__ import annotations
 
-import json
 import os
 import shlex
 from pathlib import Path
 
 import typer
 
-from loopora.agent_adapters import prefix_loopora_command
-from loopora.agent_web import ensure_local_web_service, web_url_for_path
+from loopora.agent_adapter_command_prefix import copyable_loopora_command
+from loopora.agent_web import discover_local_web_service, web_url_for_path
+from loopora.cli_agent_result_files import read_result_file_object
 from loopora.cli_shared import call_spawn_background_worker
 from loopora.service import LooporaError
 
 
-def attach_web_url(result: dict, *, path_key: str, url_key: str, no_web: bool) -> None:
+def attach_web_url(
+    result: dict,
+    *,
+    path_key: str,
+    url_key: str,
+    no_web: bool,
+    workdir: Path | str | None = None,
+) -> None:
     path = str(result.get(path_key) or "")
     if not path:
         return
+    web_start_workdir = _result_workdir(result, workdir)
     if no_web:
-        result[url_key] = path
+        _attach_relative_web_url(
+            result,
+            path=path,
+            url_key=url_key,
+            status="relative_path_web_not_started",
+            workdir=web_start_workdir,
+        )
         return
-    web = ensure_local_web_service()
+    web = discover_local_web_service()
     result["web"] = web
-    result[url_key] = web_url_for_path(path, web=web)
+    if _web_url_available(web):
+        result[url_key] = web_url_for_path(path, web=web)
+        return
+    _attach_relative_web_url(
+        result,
+        path=path,
+        url_key=url_key,
+        status=_relative_web_status(web),
+        web=web,
+        workdir=web_start_workdir,
+    )
 
 
-def attach_recoverable_context_preview_urls(result: dict, *, no_web: bool) -> None:
+def _attach_relative_web_url(  # noqa: PLR0913 - URL fallback fields stay explicit at each recovery call site.
+    target: dict,
+    *,
+    path: str,
+    url_key: str,
+    status: str,
+    web: dict[str, object] | None = None,
+    workdir: Path | str | None = None,
+) -> None:
+    target[url_key] = path
+    target[f"{url_key}_status"] = status
+    target[f"{url_key}_web_start_command"] = _web_start_command(web=web, workdir=workdir)
+
+
+def _web_url_available(web: dict[str, object]) -> bool:
+    return web.get("reused") is True and not str(web.get("warning") or "").strip()
+
+
+def _relative_web_status(web: dict[str, object]) -> str:
+    return "relative_path_web_not_running" if web.get("start_available") is True else "relative_path_web_unavailable"
+
+
+def _web_start_command(web: dict[str, object] | None = None, *, workdir: Path | str | None = None) -> str:
+    port = 8742
+    if isinstance(web, dict):
+        try:
+            port = int(web.get("port") or port)
+        except (TypeError, ValueError):
+            port = 8742
+    workdir_arg = f" --workdir {agent_command_workdir_arg(Path(workdir))}" if workdir not in (None, "") else ""
+    return copyable_loopora_command(f"loopora serve --open{workdir_arg} --host 127.0.0.1 --port {port}")
+
+
+def attach_recoverable_context_preview_urls(result: dict, *, no_web: bool, workdir: Path | str | None = None) -> None:
     resolution = result.get("context_resolution") if isinstance(result.get("context_resolution"), dict) else {}
     choices = [choice for choice in resolution.get("choices") or [] if isinstance(choice, dict)]
     preview_choices = [choice for choice in choices if str(choice.get("preview_path") or "").strip()]
     if not preview_choices:
         return
-    web = None if no_web else ensure_local_web_service()
+    web_start_workdir = _result_workdir(result, workdir)
+    web = None if no_web else discover_local_web_service()
     if web:
         result["web"] = web
     for choice in preview_choices:
         path = str(choice.get("preview_path") or "").strip()
-        choice["preview_url"] = path if no_web else web_url_for_path(path, web=web)
+        if no_web:
+            _attach_relative_web_url(
+                choice,
+                path=path,
+                url_key="preview_url",
+                status="relative_path_web_not_started",
+                workdir=web_start_workdir,
+            )
+        elif web and _web_url_available(web):
+            choice["preview_url"] = web_url_for_path(path, web=web)
+        else:
+            _attach_relative_web_url(
+                choice,
+                path=path,
+                url_key="preview_url",
+                status=_relative_web_status(web or {}),
+                web=web,
+                workdir=web_start_workdir,
+            )
+
+
+def _result_workdir(result: dict, explicit_workdir: Path | str | None) -> Path | str | None:
+    if explicit_workdir not in (None, ""):
+        return explicit_workdir
+    workdir = str(result.get("workdir") or "").strip()
+    if workdir:
+        return workdir
+    run = result.get("run") if isinstance(result.get("run"), dict) else {}
+    run_workdir = str(run.get("workdir") or "").strip()
+    return run_workdir or None
 
 
 def resolved_entry_source(entry_source: str) -> str:
@@ -55,7 +142,7 @@ def agent_plan_cli_command(  # noqa: PLR0913 - preserves the existing command-he
     command_bits = [
         "loopora",
         "agent",
-        str(adapter).strip(),
+        shlex.quote(str(adapter).strip()),
         "plan",
         "--workdir",
         shlex.quote(str(workdir)),
@@ -71,21 +158,21 @@ def agent_plan_cli_command(  # noqa: PLR0913 - preserves the existing command-he
     if normalized_entry_source:
         command_bits.extend(["--entry-source", shlex.quote(normalized_entry_source)])
     command = " ".join(command_bits)
-    return prefix_loopora_command(command, entry_source=normalized_entry_source)
+    return copyable_loopora_command(command, entry_source=normalized_entry_source)
 
 
 def agent_next_command_hint(*, adapter: str, context_id: str, run_id: str, entry_source: str = "", workdir: Path | None = None) -> str:
-    bits = [f"loopora agent {adapter} next", "--workdir", agent_command_workdir_arg(workdir)]
+    bits = ["loopora", "agent", shlex.quote(str(adapter)), "next", "--workdir", agent_command_workdir_arg(workdir)]
     if run_id:
-        bits.append(f"--run-id {run_id}")
+        bits.extend(["--run-id", shlex.quote(str(run_id))])
     elif context_id:
-        bits.append(f"--context-id {context_id}")
+        bits.extend(["--context-id", shlex.quote(str(context_id))])
     bits.extend(["--json", "--compact-json"])
     normalized_entry_source = str(entry_source or "").strip()
     if normalized_entry_source:
         bits.extend(["--entry-source", shlex.quote(normalized_entry_source)])
     command = " ".join(bits)
-    return prefix_loopora_command(command, entry_source=normalized_entry_source)
+    return copyable_loopora_command(command, entry_source=normalized_entry_source)
 
 
 def agent_command_workdir_arg(workdir: Path | None) -> str:
@@ -115,24 +202,35 @@ def print_web_status(result: dict) -> None:
     base_url = str(web.get("base_url") or "").strip()
     if not base_url:
         return
-    if web.get("started"):
-        typer.echo(f"web: started {base_url}")
-    elif web.get("reused"):
+    if web.get("reused"):
         typer.echo(f"web: reused {base_url}")
+    elif web.get("start_available"):
+        typer.echo(f"web: not running {base_url}")
     else:
-        typer.echo(f"web: {base_url}")
+        typer.echo(f"web: unavailable {base_url}")
     warning = str(web.get("warning") or "").strip()
     if warning:
         typer.echo(f"web_warning: {warning}")
 
 
+def print_web_url(result: dict, *, path_key: str, url_key: str) -> None:
+    url = str(result.get(url_key) or result.get(path_key) or "").strip()
+    if url:
+        typer.echo(f"{url_key}: {url}")
+    url_status = str(result.get(f"{url_key}_status") or "").strip()
+    if url_status:
+        typer.echo(f"{url_key}_status: {url_status}")
+    web_start_command = str(result.get(f"{url_key}_web_start_command") or "").strip()
+    if web_start_command:
+        typer.echo(f"{url_key}_web_start_command: {web_start_command}")
+
+
+def print_preview_url(result: dict, *, path_key: str = "preview_path", url_key: str = "preview_url") -> None:
+    print_web_url(result, path_key=path_key, url_key=url_key)
+
+
 def read_result_json(path: Path) -> tuple[dict, dict]:
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
-        raise LooporaError(f"result file is not valid JSON: {path}: {exc}") from exc
-    if not isinstance(payload, dict):
-        raise LooporaError("result file must contain one JSON object")
+    payload = read_result_file_object(path)
     if "loopora_host_dispatch" in payload or "result" in payload:
         host_dispatch = payload.get("loopora_host_dispatch")
         result = payload.get("result")

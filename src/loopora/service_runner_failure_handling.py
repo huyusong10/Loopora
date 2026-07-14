@@ -10,6 +10,8 @@ from loopora.runner_run_requests import RunnerExhaustionRequest
 
 logger = get_logger(__name__)
 
+RUN_LOCAL_RUNTIME_ERROR = "run could not access local runtime resources"
+
 
 class ServiceRunnerFailureHandlingMixin:
     def _handle_runner_exhaustion(
@@ -231,7 +233,7 @@ class ServiceRunnerFailureHandlingMixin:
         run_dir: Path,
         exc: Exception,
     ) -> dict:
-        error_text = str(exc)
+        error_text = runner_unexpected_failure_message(exc)
         log_exception(
             logger,
             "service.run.execution.crashed",
@@ -240,3 +242,9 @@ class ServiceRunnerFailureHandlingMixin:
             **self._run_log_context(run),
         )
         return self._finalize_crashed_run(run_id, run, run_dir, error_text=error_text, hydrate=True)
+
+
+def runner_unexpected_failure_message(exc: Exception) -> str:
+    if isinstance(exc, OSError):
+        return RUN_LOCAL_RUNTIME_ERROR
+    return str(exc) or type(exc).__name__

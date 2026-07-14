@@ -1,11 +1,19 @@
 from __future__ import annotations
 
 from pathlib import Path
+from urllib.parse import quote
 
 import pytest
 
 from bundle_lifecycle_test_support import _bundle_yaml
 from loopora.service_types import LooporaConflictError
+from web_api_test_support import _assert_web_delete_preview_action_projection
+from web_loop_creation_api_test_support import loop_creation_role, loop_creation_step, loop_creation_workflow
+from web_orchestration_api_test_support import (
+    create_release_builder_role_definition,
+    role_definition_snapshot_workflow,
+    web_client,
+)
 
 
 def test_bundle_delete_refuses_unowned_linked_assets(
@@ -77,6 +85,42 @@ def test_bundle_delete_refuses_active_linked_runs(
     assert service.repository.get_run(run["id"])["status"] == "queued"
 
 
+def test_bundle_delete_preview_reports_active_linked_run_blocker_without_mutating(
+    service_factory,
+    sample_workdir: Path,
+) -> None:
+    service = service_factory(scenario="success")
+    imported = service.import_bundle_text(_bundle_yaml(sample_workdir))
+    run = service.start_run(imported["loop_id"])
+
+    preview = service.preview_bundle_delete(imported["id"])
+
+    assert preview["status"] == "dry_run"
+    assert preview["delete_allowed"] is False
+    assert preview["would_delete"] == {
+        "bundle": imported["id"],
+        "linked_loop": imported["loop_id"],
+        "linked_orchestration": imported["orchestration_id"],
+        "linked_role_definition_count": len(imported["role_definition_ids"]),
+        "linked_role_definition_ids": imported["role_definition_ids"],
+        "linked_run_count": 1,
+        "linked_run_ids": [run["id"]],
+    }
+    assert preview["blocked_by_active_runs"] == [run["id"]]
+    assert preview["blockers"] == [{"kind": "active_runs", "run_ids": [run["id"]]}]
+    assert preview["does_not_delete"] == [
+        "original_exported_yaml_file",
+        "source_project_workdir",
+        "non_bundle_owned_assets",
+        "external_provider_history",
+    ]
+    response = web_client(service).get(f"/api/bundles/{imported['id']}/delete-preview")
+    assert response.status_code == 200
+    _assert_web_delete_preview_action_projection(response.json())
+    assert service.repository.get_bundle(imported["id"]) is not None
+    assert service.repository.get_run(run["id"])["status"] == "queued"
+
+
 def test_bundle_delete_refuses_orchestration_referenced_by_external_loop(
     service_factory,
     sample_workdir: Path,
@@ -128,3 +172,118 @@ def test_bundle_delete_refuses_role_definitions_referenced_by_external_orchestra
 
     assert service.repository.get_bundle(imported["id"]) is not None
     assert service.repository.get_orchestration(external_orchestration["id"]) is not None
+
+
+def test_role_definition_delete_preview_blocks_referenced_orchestrations(service_factory) -> None:
+    service = service_factory(scenario="success")
+    role_definition = create_release_builder_role_definition(service)
+    orchestration = service.create_orchestration(
+        name="Role Consumer",
+        strategy_source=role_definition_snapshot_workflow(role_definition["id"]),
+    )
+
+    preview = service.preview_role_definition_delete(role_definition["id"])
+
+    assert preview["delete_allowed"] is False
+    assert preview["would_delete"] == {
+        "role_definition": role_definition["id"],
+        "referencing_orchestration_count": 1,
+        "referencing_orchestration_ids": [orchestration["id"]],
+    }
+    assert preview["blockers"] == [{"kind": "referenced_by_orchestrations", "orchestration_ids": [orchestration["id"]]}]
+    with pytest.raises(LooporaConflictError, match="referenced by orchestrations"):
+        service.delete_role_definition(role_definition["id"])
+    assert service.repository.get_role_definition(role_definition["id"]) is not None
+
+    response = web_client(service).get(f"/api/role-definitions/{role_definition['id']}/delete-preview")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["delete_allowed"] is False
+    _assert_web_delete_preview_action_projection(payload)
+
+
+def test_orchestration_delete_preview_blocks_referenced_loops(
+    service_factory,
+    sample_spec_file: Path,
+    sample_workdir: Path,
+) -> None:
+    service = service_factory(scenario="success")
+    orchestration = service.create_orchestration(
+        name="Loop Consumer",
+        strategy_source=_loop_runnable_workflow(),
+    )
+    loop = service.create_loop(
+        name="Referenced Loop",
+        spec_path=sample_spec_file,
+        workdir=sample_workdir,
+        model="gpt-5.4",
+        reasoning_effort="medium",
+        max_iters=3,
+        max_role_retries=1,
+        delta_threshold=0.005,
+        trigger_window=2,
+        regression_window=2,
+        orchestration_id=orchestration["id"],
+    )
+
+    preview = service.preview_orchestration_delete(orchestration["id"])
+
+    assert preview["delete_allowed"] is False
+    assert preview["would_delete"] == {
+        "orchestration": orchestration["id"],
+        "referencing_loop_count": 1,
+        "referencing_loop_ids": [loop["id"]],
+    }
+    assert preview["blockers"] == [{"kind": "referenced_by_loops", "loop_ids": [loop["id"]]}]
+    with pytest.raises(LooporaConflictError, match="referenced by loops"):
+        service.delete_orchestration(orchestration["id"])
+    assert service.repository.get_orchestration(orchestration["id"]) is not None
+
+    response = web_client(service).get(f"/api/orchestrations/{orchestration['id']}/delete-preview")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["delete_allowed"] is False
+    _assert_web_delete_preview_action_projection(payload)
+
+
+def test_unreferenced_role_and_orchestration_delete_previews_allow_deletion(service_factory) -> None:
+    service = service_factory(scenario="success")
+    role_definition = create_release_builder_role_definition(service)
+    orchestration = service.create_orchestration(name="Disposable Flow", strategy_source=loop_creation_workflow())
+
+    role_preview = service.preview_role_definition_delete(role_definition["id"])
+    orchestration_preview = service.preview_orchestration_delete(orchestration["id"])
+    client = web_client(service)
+    role_response = client.get(f"/api/role-definitions/{role_definition['id']}/delete-preview")
+    orchestration_response = client.get(f"/api/orchestrations/{orchestration['id']}/delete-preview")
+
+    assert role_preview["delete_allowed"] is True
+    assert role_preview["would_delete"]["referencing_orchestration_count"] == 0
+    assert orchestration_preview["delete_allowed"] is True
+    assert orchestration_preview["would_delete"]["referencing_loop_count"] == 0
+    assert role_response.status_code == orchestration_response.status_code == 200
+    _assert_web_delete_preview_action_projection(
+        role_response.json(),
+        expected_kind="delete_role_definition",
+        expected_endpoint=f"/api/role-definitions/{quote(role_definition['id'], safe='')}",
+    )
+    _assert_web_delete_preview_action_projection(
+        orchestration_response.json(),
+        expected_kind="delete_orchestration",
+        expected_endpoint=f"/api/orchestrations/{quote(orchestration['id'], safe='')}",
+    )
+    assert service.delete_role_definition(role_definition["id"])["deleted"] is True
+    assert service.delete_orchestration(orchestration["id"])["id"] == orchestration["id"]
+
+
+def _loop_runnable_workflow() -> dict:
+    return loop_creation_workflow(
+        roles=[
+            loop_creation_role("builder", "Builder", "builder"),
+            loop_creation_role("gatekeeper", "GateKeeper", "gatekeeper"),
+        ],
+        steps=[
+            loop_creation_step("builder_step", "builder"),
+            loop_creation_step("gatekeeper_step", "gatekeeper", on_pass="finish_run"),
+        ],
+    )

@@ -6,6 +6,7 @@ from textwrap import dedent
 import pytest
 
 from bundle_lifecycle_test_support import _bundle_yaml
+from loopora.branding import state_dir_for_workdir
 from loopora.service import LooporaError
 
 
@@ -89,3 +90,27 @@ def test_bundle_delete_keeps_managed_dir_and_records_when_graph_delete_fails(
     assert service.repository.get_loop(loop_id) is not None
     assert service.repository.get_orchestration(orchestration_id) is not None
     assert all(service.repository.get_role_definition(role_id) is not None for role_id in role_definition_ids)
+
+
+def test_bundle_delete_does_not_remove_current_directory_loop_artifact_for_blank_saved_workdir(
+    monkeypatch,
+    tmp_path: Path,
+    service_factory,
+    sample_workdir: Path,
+) -> None:
+    service = service_factory(scenario="success")
+    imported = service.import_bundle_text(_bundle_yaml(sample_workdir))
+    loop_id = imported["loop_id"]
+    wrong_cwd = tmp_path / "wrong-cwd"
+    fake_loop_dir = state_dir_for_workdir(wrong_cwd) / "loops" / loop_id
+    fake_loop_dir.mkdir(parents=True)
+    sentinel = fake_loop_dir / "sentinel.txt"
+    sentinel.write_text("must survive\n", encoding="utf-8")
+    with service.repository.transaction() as connection:
+        connection.execute("UPDATE loop_definitions SET workdir = ? WHERE id = ?", ("", loop_id))
+    monkeypatch.chdir(wrong_cwd)
+
+    deleted = service.delete_bundle(imported["id"])
+
+    assert deleted == {"id": imported["id"], "deleted": True}
+    assert sentinel.read_text(encoding="utf-8") == "must survive\n"

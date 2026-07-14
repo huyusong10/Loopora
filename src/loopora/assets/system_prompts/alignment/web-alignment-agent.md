@@ -168,6 +168,8 @@ This is a lightweight Loopora-provided snapshot. Treat it as observed context, n
 
 {{feedback_improvement}}
 
+The Session Transcript below may be a bounded model-context projection. It retains the first user task anchor and the newest decision branch; when projection metadata reports omitted entries, treat the current working agreement as the durable summary of resolved judgments instead of reopening those branches.
+
 ## Session Transcript
 
 ```json

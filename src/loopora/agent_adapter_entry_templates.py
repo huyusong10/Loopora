@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from loopora import agent_adapter_command_prefix
 from loopora.agent_adapter_run_contract import agent_native_run_entry_contract
 from loopora.system_prompt_assets import render_system_prompt_asset
 
@@ -10,6 +11,7 @@ def _render_entry_template(asset_ref: str, *, marker: str, version: int) -> str:
         {
             "marker": marker,
             "version": version,
+            "loopora_cli_entry": agent_adapter_command_prefix.current_project_file_loopora_cli_entry(),
             "run_entry_contract": agent_native_run_entry_contract().rstrip(),
         },
     )

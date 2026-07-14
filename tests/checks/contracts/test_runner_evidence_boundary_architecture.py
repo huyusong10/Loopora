@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from strategy_source_architecture_test_support import design_boundary_source
+
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
@@ -17,7 +19,7 @@ def test_runner_gatekeeper_output_normalization_has_dedicated_boundary() -> None
     gatekeeper_evidence_gate_source = (
         REPO_ROOT / "src" / "loopora" / "runner_gatekeeper_evidence_gate.py"
     ).read_text(encoding="utf-8")
-    contracts_source = (REPO_ROOT / "design" / "contracts.md").read_text(encoding="utf-8")
+    contracts_source = design_boundary_source()
 
     assert "from loopora.service_runner_gatekeeper_output import ServiceRunnerGatekeeperOutputMixin" in support_source
     assert "class ServiceRunnerGatekeeperOutputMixin" in gatekeeper_output_source
@@ -73,7 +75,7 @@ def test_evidence_coverage_target_construction_has_dedicated_boundary() -> None:
     run_takeaway_iteration_verdicts_source = (
         REPO_ROOT / "src" / "loopora" / "run_takeaway_iteration_verdicts.py"
     ).read_text(encoding="utf-8")
-    contracts_source = (REPO_ROOT / "design" / "contracts.md").read_text(encoding="utf-8")
+    contracts_source = design_boundary_source()
 
     for marker in ("def with_coverage_targets", "def build_coverage_targets", "def parse_target_verify_ref"):
         assert marker in target_source

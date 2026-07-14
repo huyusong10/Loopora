@@ -24,12 +24,12 @@ FILE_ROOT_QUERY_PATTERN = rf"^(workdir|{APP_SLUG})$"
 def app_home_path() -> Path:
     configured = os.environ.get(APP_HOME_ENV, "").strip()
     if configured:
-        return Path(configured).expanduser()
+        return Path(configured).expanduser().resolve()
     return Path.home() / APP_STATE_DIRNAME
 
 
 def state_dir_for_workdir(workdir: str | Path) -> Path:
-    base_dir = Path(workdir)
+    base_dir = Path(workdir).expanduser().resolve()
     return base_dir / APP_STATE_DIRNAME
 
 

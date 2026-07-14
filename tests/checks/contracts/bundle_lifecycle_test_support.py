@@ -7,7 +7,7 @@ from textwrap import dedent
 from loopora.settings import app_home
 
 
-def _bundle_yaml(workdir: Path, *, collaboration_summary: str = "Prefer evidence before rushing forward.") -> str:
+def _bundle_yaml(workdir: Path | str, *, collaboration_summary: str = "Prefer evidence before rushing forward.") -> str:
     return (
         dedent(
             f"""

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from contextlib import suppress
 from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
@@ -21,7 +22,14 @@ def ensure_parent(path: Path) -> None:
 
 def write_json(path: Path, payload: dict) -> None:
     ensure_parent(path)
-    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    tmp = path.with_name(f".{path.name}.tmp.{uuid4().hex}")
+    try:
+        tmp.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        tmp.replace(path)
+    except Exception:
+        with suppress(OSError):
+            tmp.unlink()
+        raise
 
 
 def read_json(path: Path) -> dict:

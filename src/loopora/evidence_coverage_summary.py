@@ -4,11 +4,15 @@ from collections.abc import Mapping
 from typing import Any
 
 from loopora.coverage_target_semantics import coverage_target_is_required
+from loopora.runtime_task_language import runtime_task_text
 from loopora.structured_numbers import structured_non_negative_int
 
 
 def summarize_evidence_coverage_projection(projection: Mapping[str, Any], *, coverage_path_available: bool = True) -> dict:
     coverage_path = str(projection.get("coverage_path") or "").strip() if coverage_path_available else ""
+    targets = [dict(item) for item in list(projection.get("targets") or []) if isinstance(item, Mapping)]
+    required_targets = [item for item in targets if coverage_target_is_required(item)]
+    advisory_targets = [item for item in targets if not coverage_target_is_required(item)]
     return {
         "ledger_path": str(projection.get("ledger_path") or ""),
         "coverage_path": coverage_path,
@@ -25,12 +29,24 @@ def summarize_evidence_coverage_projection(projection: Mapping[str, Any], *, cov
         "weak_target_count": structured_non_negative_int(projection.get("weak_target_count")),
         "missing_target_count": structured_non_negative_int(projection.get("missing_target_count")),
         "blocked_target_count": structured_non_negative_int(projection.get("blocked_target_count")),
+        **_requirement_counts(required_targets, "required"),
+        **_requirement_counts(advisory_targets, "advisory"),
         "top_gaps": _projection_mapping_list(projection.get("top_gaps"), limit=5),
         "evidence_kind_counts": _mapping_or_empty(projection.get("evidence_kind_counts")),
         "artifact_ref_count": structured_non_negative_int(projection.get("artifact_ref_count")),
         "residual_risk_count": structured_non_negative_int(projection.get("residual_risk_count")),
         "risk_signals": _projection_string_list(projection.get("risk_signals"), limit=5),
         "latest_gatekeeper": _mapping_or_empty(projection.get("latest_gatekeeper")),
+    }
+
+
+def _requirement_counts(targets: list[dict], requirement: str) -> dict[str, int]:
+    return {
+        f"{requirement}_target_count": len(targets),
+        **{
+            f"{status}_{requirement}_target_count": sum(1 for target in targets if str(target.get("status") or "missing").strip().lower() == status)
+            for status in ("covered", "weak", "missing", "blocked")
+        },
     }
 
 
@@ -69,19 +85,43 @@ def top_coverage_gaps(target_rows: list[dict]) -> list[dict]:
     ]
 
 
-def coverage_summary(status: str, top_gaps: list[dict]) -> dict:
+def coverage_summary(status: str, top_gaps: list[dict], *, language: str = "en") -> dict:
     if status == "covered":
-        reason = "Required and advisory coverage targets have supporting evidence."
+        reason = runtime_task_text(
+            language,
+            "Required and advisory coverage targets have supporting evidence.",
+            "必需和建议覆盖目标都已有支持证据。",
+        )
     elif status == "weak":
-        reason = "Required targets are covered, but advisory evidence is incomplete."
+        reason = runtime_task_text(
+            language,
+            "Required targets are covered, but advisory evidence is incomplete.",
+            "必需覆盖目标已经证明，但建议证据仍不完整。",
+        )
     elif status == "partial":
-        reason = "Required coverage targets still lack direct evidence."
+        reason = runtime_task_text(
+            language,
+            "Required coverage targets still lack direct evidence.",
+            "必需覆盖目标仍缺少直接证据。",
+        )
     elif status == "blocked":
-        reason = "GateKeeper or target evidence reported a blocker."
+        reason = runtime_task_text(
+            language,
+            "GateKeeper or target evidence reported a blocker.",
+            "GateKeeper 或目标证据报告了阻断项。",
+        )
     elif status == "legacy":
-        reason = "This run does not have a readable evidence ledger."
+        reason = runtime_task_text(
+            language,
+            "This run does not have a readable evidence ledger.",
+            "这个 Run 没有可读取的证据账本。",
+        )
     else:
-        reason = "No evidence ledger entries are available yet."
+        reason = runtime_task_text(
+            language,
+            "No evidence ledger entries are available yet.",
+            "证据账本中还没有可用条目。",
+        )
     return {
         "status": status,
         "reason": reason,

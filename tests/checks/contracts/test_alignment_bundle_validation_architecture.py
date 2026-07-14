@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from strategy_source_architecture_test_support import design_boundary_source
+
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
@@ -16,7 +18,7 @@ def test_alignment_bundle_validation_payloads_have_dedicated_boundary() -> None:
     preview_source = (REPO_ROOT / "src" / "loopora" / "service_alignment_bundle_preview.py").read_text(
         encoding="utf-8"
     )
-    design_source = (REPO_ROOT / "design" / "contracts.md").read_text(encoding="utf-8")
+    design_source = design_boundary_source()
 
     assert "from loopora.service_alignment_bundle_validation_payloads import" in lifecycle_source
     assert "from loopora.service_alignment_bundle_validation_payloads import" in preview_source

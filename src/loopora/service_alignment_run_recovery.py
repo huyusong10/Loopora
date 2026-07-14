@@ -8,6 +8,7 @@ from loopora.service_alignment_context import (
     bounded_alignment_context_options,
 )
 from loopora.service_alignment_run_context_choices import (
+    AgentRunContextNextActionRequest,
     agent_run_context_choice_payload,
     agent_run_context_next_action,
 )
@@ -15,6 +16,7 @@ from loopora.service_alignment_run_context_recovery_fields import (
     agent_failed_preview_choice_repair_fields,
     agent_run_context_task_verdict,
 )
+from loopora.run_result_recording import run_result_is_lifecycle_failure, run_result_recording_blocked_reason
 from loopora.service_types import LooporaError
 
 
@@ -112,6 +114,8 @@ def agent_run_context_choice_from_session(
     linked_run_status = ""
     task_verdict_status = ""
     task_verdict_summary = ""
+    linked_run_lifecycle_failure = False
+    recording_blocked_reason = ""
     linked_run_found = True
     if linked_run_id:
         try:
@@ -120,14 +124,22 @@ def agent_run_context_choice_from_session(
             task_verdict = agent_run_context_task_verdict(run)
             task_verdict_status = str(task_verdict.get("status") or "")
             task_verdict_summary = str(task_verdict.get("summary") or "")
+            linked_run_lifecycle_failure = run_result_is_lifecycle_failure(run)
+            recording_blocked_reason = run_result_recording_blocked_reason(
+                run,
+                task_verdict_status=task_verdict_status,
+            )
         except LooporaError:
             linked_run_found = False
     next_action = agent_run_context_next_action(
-        session_status=str(session.get("status") or ""),
-        linked_run_id=linked_run_id,
-        linked_run_status=linked_run_status,
-        task_verdict_status=task_verdict_status,
-        linked_run_found=linked_run_found,
+        AgentRunContextNextActionRequest(
+            session_status=str(session.get("status") or ""),
+            linked_run_id=linked_run_id,
+            linked_run_status=linked_run_status,
+            task_verdict_status=task_verdict_status,
+            linked_run_lifecycle_failure=linked_run_lifecycle_failure,
+            linked_run_found=linked_run_found,
+        )
     )
     choice = agent_run_context_choice_payload(
         session,
@@ -137,6 +149,8 @@ def agent_run_context_choice_from_session(
         linked_run_status=linked_run_status,
         task_verdict_status=task_verdict_status,
         task_verdict_summary=task_verdict_summary,
+        linked_run_lifecycle_failure=linked_run_lifecycle_failure,
+        recording_blocked_reason=recording_blocked_reason,
         next_action=next_action,
     )
     if next_action == "repair_failed_preview":

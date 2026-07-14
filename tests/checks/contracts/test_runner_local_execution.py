@@ -24,8 +24,8 @@ def test_same_workdir_concurrent_run_is_rejected(service_factory, sample_spec_fi
     service.start_run_async(first_run["id"])
 
     try:
-        deadline = time.time() + 5
-        while time.time() < deadline:
+        deadline = time.monotonic() + 5
+        while time.monotonic() < deadline:
             status = service.get_run(first_run["id"])["status"]
             if status == "running":
                 break
@@ -74,8 +74,8 @@ def test_execute_run_rejects_duplicate_local_worker(
     thread.start()
 
     try:
-        deadline = time.time() + 5
-        while time.time() < deadline and not service._is_run_active_locally(run["id"]):
+        deadline = time.monotonic() + 5
+        while time.monotonic() < deadline and not service._is_run_active_locally(run["id"]):
             time.sleep(0.01)
 
         with pytest.raises(LooporaError, match="already executing in this process"):
@@ -94,8 +94,8 @@ def test_async_run_cleans_up_thread_bookkeeping(service_factory, sample_spec_fil
     run = service.start_run(loop["id"])
     service.start_run_async(run["id"])
 
-    deadline = time.time() + 5
-    while time.time() < deadline:
+    deadline = time.monotonic() + 5
+    while time.monotonic() < deadline:
         current = service.get_run(run["id"])
         if current["status"] in {"succeeded", "failed", "stopped"}:
             break

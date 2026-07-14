@@ -36,10 +36,16 @@ def _step_outputs_by_archetype(run_dir: Path) -> dict[str, list[dict]]:
     return outputs
 
 
+def complete_strategy_archetypes(run: dict) -> list[str]:
+    iteration_log = _read_jsonl(Path(run["runs_dir"]) / "iteration_log.jsonl")
+    workflow_entry = next(entry for entry in iteration_log if entry["phase"] == "complete")
+    return [step["archetype"] for step in workflow_entry["strategy_steps"]]
+
+
 def _wait_for_terminal_run(service: LooporaService, run_id: str, *, timeout: float = 5.0) -> dict:
-    deadline = time.time() + timeout
+    deadline = time.monotonic() + timeout
     current = service.get_run(run_id)
-    while time.time() < deadline:
+    while time.monotonic() < deadline:
         current = service.get_run(run_id)
         if current["status"] in {"succeeded", "failed", "stopped"}:
             return current

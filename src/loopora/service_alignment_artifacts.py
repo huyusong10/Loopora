@@ -1,14 +1,19 @@
 from __future__ import annotations
 
 import json
+import logging
+from collections.abc import Callable
 from dataclasses import dataclass
 from hashlib import sha256
 from pathlib import Path
 
+from loopora.diagnostics import get_logger, log_exception
 from loopora.event_redaction import redact_sensitive_text
-from loopora.service_alignment_decision_options import normalize_alignment_decision_options
+from loopora.service_alignment_decision_option_normalization import normalize_alignment_decision_options
 from loopora.service_alignment_source_context import redact_alignment_source_value
 from loopora.structured_numbers import structured_non_negative_int
+
+logger = get_logger(__name__)
 
 
 @dataclass(frozen=True)
@@ -121,6 +126,24 @@ def write_alignment_transcript_log(session: dict) -> None:
         encoding="utf-8",
     )
     write_alignment_manifest(session)
+
+
+def write_alignment_transcript_log_best_effort(
+    session: dict,
+    *,
+    writer: Callable[[dict], None] = write_alignment_transcript_log,
+) -> None:
+    try:
+        writer(session)
+    except OSError as exc:
+        log_exception(
+            logger,
+            "alignment.transcript_artifact.write_failed",
+            "Failed to write alignment transcript artifact",
+            error=exc,
+            level=logging.WARNING,
+            session_id=session.get("id"),
+        )
 
 
 def write_alignment_validation_artifacts(session: dict, validation: dict, *, invocation_dir: Path) -> None:
@@ -241,6 +264,25 @@ def write_alignment_validation_log(session: dict, validation: dict) -> None:
         repair=attempt > 0,
     )
     write_alignment_validation_artifacts(session, validation, invocation_dir=invocation_dir)
+
+
+def write_alignment_validation_log_best_effort(
+    session: dict,
+    validation: dict,
+    *,
+    writer: Callable[[dict, dict], None] = write_alignment_validation_log,
+) -> None:
+    try:
+        writer(session, validation)
+    except OSError as exc:
+        log_exception(
+            logger,
+            "alignment.validation_artifact.write_failed",
+            "Failed to write alignment validation artifact",
+            error=exc,
+            level=logging.WARNING,
+            session_id=session.get("id"),
+        )
 
 
 def alignment_repair_attempts(session: dict | None, *, invalid_default: int = 0) -> int:

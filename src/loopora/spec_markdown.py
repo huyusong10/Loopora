@@ -4,6 +4,7 @@ import re
 from typing import Any
 
 from loopora.evidence_coverage_targets import with_coverage_targets
+from loopora.runtime_task_language import runtime_task_language_from_text, runtime_task_text
 from loopora.strategy_source import (
     normalize_strategy_role_display_name,
     strategy_archetype_display_name,
@@ -30,6 +31,7 @@ class SpecError(ValueError):
 
 def compile_markdown_spec(markdown_text: str) -> dict:
     cleaned_markdown = _strip_html_comments(markdown_text)
+    task_language = runtime_task_language_from_text(cleaned_markdown)
     sections = _split_sections(cleaned_markdown)
     _reject_legacy_sections(sections)
     missing = [section for section in REQUIRED_SECTIONS if not sections.get(section, "").strip()]
@@ -37,7 +39,7 @@ def compile_markdown_spec(markdown_text: str) -> dict:
         raise SpecError(f"missing top-level sections: {', '.join(missing)}")
 
     done_when_section = sections.get("Done When", "")
-    checks = _extract_done_when_checks(done_when_section)
+    checks = _extract_done_when_checks(done_when_section, language=task_language)
     if done_when_section.strip() and not checks:
         raise SpecError("`# Done When` must contain at least one top-level bullet item")
     role_notes = _extract_role_notes(sections.get("Role Notes", ""))
@@ -45,10 +47,7 @@ def compile_markdown_spec(markdown_text: str) -> dict:
     for heading, field_name in LIST_SECTIONS.items():
         values = _extract_bullet_list(sections.get(heading, ""), heading=heading)
         list_sections[field_name] = values
-    text_sections = {
-        field_name: sections.get(heading, "").strip()
-        for heading, field_name in TEXT_SECTIONS.items()
-    }
+    text_sections = {field_name: sections.get(heading, "").strip() for heading, field_name in TEXT_SECTIONS.items()}
 
     compiled_checks = []
     for index, check in enumerate(checks, start=1):
@@ -114,7 +113,7 @@ def _strip_html_comments(markdown_text: str) -> str:
     return HTML_COMMENT_PATTERN.sub("", markdown_text)
 
 
-def _extract_done_when_checks(section_text: str) -> list[dict[str, str]]:
+def _extract_done_when_checks(section_text: str, *, language: str) -> list[dict[str, str]]:
     matches = list(BULLET_ITEM_PATTERN.finditer(section_text))
     checks: list[dict[str, str]] = []
     for index, match in enumerate(matches, start=1):
@@ -124,9 +123,17 @@ def _extract_done_when_checks(section_text: str) -> list[dict[str, str]]:
             {
                 "title": title,
                 "body": body,
-                "when": "Someone evaluates the latest workspace state against the run contract.",
+                "when": runtime_task_text(
+                    language,
+                    "Someone evaluates the latest workspace state against the run contract.",
+                    "有人依据冻结的 Run 契约检查最新工作区状态。",
+                ),
                 "expect": body,
-                "fail_if": f"The workspace still does not satisfy this outcome: {body}",
+                "fail_if": runtime_task_text(
+                    language,
+                    f"The workspace still does not satisfy this outcome: {body}",
+                    f"最新工作区仍未满足该结果：{body}",
+                ),
             }
         )
     return checks

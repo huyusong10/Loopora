@@ -6,7 +6,9 @@ from typing import Protocol
 
 
 class AlignmentFactorySettings(Protocol):
+    polling_interval_seconds: float
     role_idle_timeout_seconds: float
+    stop_grace_period_seconds: float
 
 
 class AlignmentFactoryService(Protocol):
@@ -30,6 +32,8 @@ class AlignmentFactoryService(Protocol):
     def get_alignment_session(self, session_id: str) -> dict: ...
 
     def start_alignment_session_async(self, session_id: str) -> None: ...
+
+    def retry_alignment_generation(self, session_id: str, **raw_settings: object) -> dict: ...
 
     def get_alignment_workdir_context(self, workdir: Path) -> dict: ...
 

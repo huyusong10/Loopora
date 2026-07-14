@@ -24,6 +24,7 @@ from loopora.evidence_coverage_targets import (
 )
 from loopora.residual_risk_support import residual_risk_is_meaningful
 from loopora.run_artifacts import RunArtifactLayout, read_jsonl
+from loopora.runtime_task_language import runtime_task_language, runtime_task_text
 from loopora.structured_numbers import structured_non_negative_int
 from loopora.utils import read_json, utc_now, write_json
 
@@ -49,10 +50,11 @@ def build_evidence_coverage_projection(layout: RunArtifactLayout) -> dict:
     compiled_spec = _safe_read_json_artifact(layout.contract_compiled_spec_path)
     run_contract = _safe_read_json_artifact(layout.run_contract_path)
     completion_mode = str(run_contract.get("completion_mode") or "gatekeeper").strip().lower() or "gatekeeper"
+    task_language = runtime_task_language(compiled_spec)
     targets = build_coverage_targets(compiled_spec, completion_mode=completion_mode)
     ledger_exists = layout.evidence_ledger_path.exists()
     evidence_items = read_jsonl(layout.evidence_ledger_path)
-    target_state = _initial_target_state(targets)
+    target_state = _initial_target_state(targets, language=task_language)
     evidence_kind_counts: Counter[str] = Counter()
     artifact_ref_count = 0
     risk_signals: list[str] = []
@@ -80,14 +82,14 @@ def build_evidence_coverage_projection(layout: RunArtifactLayout) -> dict:
             if item_projection.get("latest_gatekeeper"):
                 latest_gatekeeper = dict(item_projection["latest_gatekeeper"])
 
-        _apply_gatekeeper_target(target_state, latest_gatekeeper)
+        _apply_gatekeeper_target(target_state, latest_gatekeeper, language=task_language)
         status = _overall_coverage_status(target_state)
 
     target_rows = [_target_projection(row) for row in target_state.values()]
     top_gaps = _top_coverage_gaps(target_rows)
     covered_check_ids = [row["source_id"] for row in target_rows if row["kind"] == "done_when" and row["status"] == "covered"]
     missing_check_ids = [row["source_id"] for row in target_rows if row["kind"] == "done_when" and row["status"] != "covered"]
-    summary = _coverage_summary(status, top_gaps)
+    summary = _coverage_summary(status, top_gaps, language=task_language)
     return {
         "schema_version": 1,
         "generated_at": utc_now(),
@@ -124,7 +126,7 @@ def _safe_read_json_artifact(path) -> dict:
     return payload if isinstance(payload, dict) else {}
 
 
-def _initial_target_state(targets: list[dict]) -> dict[str, dict]:
+def _initial_target_state(targets: list[dict], *, language: str) -> dict[str, dict]:
     rows: dict[str, dict] = {}
     for target in targets:
         target_id = str(target.get("id") or "").strip()
@@ -133,7 +135,12 @@ def _initial_target_state(targets: list[dict]) -> dict[str, dict]:
         rows[target_id] = {
             **target,
             "status": "missing",
-            "reason": "No evidence has verified this coverage target.",
+            "reason": runtime_task_text(
+                language,
+                "No evidence has verified this coverage target.",
+                "还没有证据验证这个覆盖目标。",
+            ),
+            "_display_language": language,
             "evidence_refs": [],
             "artifact_refs": [],
         }

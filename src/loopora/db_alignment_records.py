@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+from collections.abc import Iterable
 
 from loopora.db_alignment_event_artifacts import alignment_event_artifact_root
 from loopora.db_alignment_event_records import RepositoryAlignmentEventRecordsMixin
@@ -58,6 +59,7 @@ class RepositoryAlignmentRecordsMixin(RepositoryAlignmentEventRecordsMixin):
                 ),
             )
             session_root = alignment_event_artifact_root(payload["bundle_path"])
+            normalized_asset_root = self._normalize_local_asset_path(session_root)
             connection.execute(
                 """
                 INSERT INTO local_asset_roots
@@ -71,7 +73,7 @@ class RepositoryAlignmentRecordsMixin(RepositoryAlignmentEventRecordsMixin):
                 """,
                 (
                     payload["id"],
-                    str(session_root),
+                    normalized_asset_root,
                     payload["workdir"],
                     payload["id"],
                     now,
@@ -189,6 +191,22 @@ class RepositoryAlignmentRecordsMixin(RepositoryAlignmentEventRecordsMixin):
                 SELECT * FROM alignment_sessions
                 ORDER BY updated_at DESC, created_at DESC
                 """
+            ).fetchall()
+        return [self._decode_row(row) for row in rows]
+
+    def list_active_alignment_sessions(self, active_statuses: Iterable[str]) -> list[dict]:
+        statuses = sorted({str(status).strip() for status in active_statuses if str(status).strip()})
+        if not statuses:
+            return []
+        placeholders = ", ".join("?" for _ in statuses)
+        with self._connect() as connection:
+            rows = connection.execute(
+                f"""
+                SELECT * FROM alignment_sessions
+                WHERE status IN ({placeholders})
+                ORDER BY updated_at ASC, created_at ASC
+                """,
+                statuses,
             ).fetchall()
         return [self._decode_row(row) for row in rows]
 

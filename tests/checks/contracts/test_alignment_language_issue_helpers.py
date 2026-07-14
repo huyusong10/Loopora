@@ -8,7 +8,7 @@ from loopora.service_alignment_language import (
     alignment_message_is_language_neutral_confirmation,
     alignment_prefers_spanish,
 )
-from loopora.executor_alignment_payloads import _alignment_task_anchor_from_user_message
+from loopora.executor_alignment_task_anchors import alignment_task_anchor_from_user_message
 
 
 def test_alignment_agreement_language_issues_are_disabled_when_chinese_is_not_preferred() -> None:
@@ -164,21 +164,11 @@ def test_alignment_prefers_spanish_uses_substantive_task_text_not_confirmation()
     assert alignment_message_is_language_neutral_confirmation("Confirm; use this break-glass policy-first direction.")
     assert alignment_message_is_language_neutral_confirmation("Confirm; use this compliance contract-first direction.")
     assert alignment_message_is_language_neutral_confirmation("Confirm; use this residency contract-first direction.")
-    assert alignment_message_is_language_neutral_confirmation(
-        "Confirm; use this webhook contract-first parallel evidence direction."
-    )
-    assert alignment_message_is_language_neutral_confirmation(
-        "Confirm; use this identity contract-first parallel evidence direction."
-    )
-    assert alignment_message_is_language_neutral_confirmation(
-        "Confirm; use this key rotation contract-first parallel evidence direction."
-    )
-    assert alignment_message_is_language_neutral_confirmation(
-        "Confirm; use this prompt asset ownership contract-first parallel evidence direction."
-    )
-    assert alignment_message_is_language_neutral_confirmation(
-        "Confirm; use this backup recovery contract-first parallel evidence direction."
-    )
+    assert alignment_message_is_language_neutral_confirmation("Confirm; use this webhook contract-first parallel evidence direction.")
+    assert alignment_message_is_language_neutral_confirmation("Confirm; use this identity contract-first parallel evidence direction.")
+    assert alignment_message_is_language_neutral_confirmation("Confirm; use this key rotation contract-first parallel evidence direction.")
+    assert alignment_message_is_language_neutral_confirmation("Confirm; use this prompt asset ownership contract-first parallel evidence direction.")
+    assert alignment_message_is_language_neutral_confirmation("Confirm; use this backup recovery contract-first parallel evidence direction.")
     assert alignment_message_is_language_neutral_confirmation("Confirmo; usa esta dirección.")
     assert alignment_message_is_language_neutral_confirmation("Confirmo; usa esta policy-first dirección.")
     assert alignment_message_is_language_neutral_confirmation("Confirmo este acuerdo de trabajo.")
@@ -202,15 +192,12 @@ def test_alignment_prefers_spanish_uses_substantive_task_text_not_confirmation()
 
 
 def test_alignment_task_anchor_strips_mixed_confirmation_adjustment_prefix() -> None:
-    assert _alignment_task_anchor_from_user_message(
-        "确认，但要调整：GateKeeper 不能接受截图或口头总结，必须看到命令输出。"
-    ) == "GateKeeper 不能接受截图或口头总结，必须看到命令输出"
-    assert _alignment_task_anchor_from_user_message("Looks good, but add a stricter proof gate.") == (
-        "add a stricter proof gate"
+    assert (
+        alignment_task_anchor_from_user_message("确认，但要调整：GateKeeper 不能接受截图或口头总结，必须看到命令输出。")
+        == "GateKeeper 不能接受截图或口头总结，必须看到命令输出"
     )
-    assert _alignment_task_anchor_from_user_message("Confirmo, pero ajusta la evidencia mínima.") == (
-        "ajusta la evidencia mínima"
-    )
+    assert alignment_task_anchor_from_user_message("Looks good, but add a stricter proof gate.") == ("add a stricter proof gate")
+    assert alignment_task_anchor_from_user_message("Confirmo, pero ajusta la evidencia mínima.") == ("ajusta la evidencia mínima")
 
 
 def test_alignment_generation_display_language_projects_spanish_from_substantive_task_text() -> None:
@@ -220,8 +207,7 @@ def test_alignment_generation_display_language_projects_spanish_from_substantive
             {
                 "role": "user",
                 "content": (
-                    "Necesito implementar una exportación CSV de datos de clientes para auditoría; "
-                    "debe probar permisos, redacción de teléfonos y aislamiento."
+                    "Necesito implementar una exportación CSV de datos de clientes para auditoría; debe probar permisos, redacción de teléfonos y aislamiento."
                 ),
             },
             {"role": "user", "content": "ok"},
@@ -246,10 +232,7 @@ def test_alignment_generation_display_language_does_not_treat_repeated_english_l
             {"role": "user", "content": "Confirm; use this direction."},
         ],
         "working_agreement": {
-            "summary": (
-                "This task needs Loopora because enterprise identity tenants can fail in production if SAML, "
-                "SCIM, audit, or migration proof is weak."
-            ),
+            "summary": ("This task needs Loopora because enterprise identity tenants can fail in production if SAML, SCIM, audit, or migration proof is weak."),
             "readiness_evidence": {
                 "loop_fit": (
                     "One Agent pass plus one human review is not enough for IdP variability, SCIM lifecycle drift, "

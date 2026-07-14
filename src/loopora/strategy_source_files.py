@@ -17,6 +17,13 @@ from loopora.strategy_source_prompt_assets import (
 )
 
 
+def resolve_strategy_source_file_path(path: Path) -> Path:
+    try:
+        return path.expanduser().resolve()
+    except (OSError, RuntimeError) as exc:
+        raise WorkflowError("strategy source file could not be read") from exc
+
+
 def resolve_strategy_prompt_files(
     strategy_source: dict,
     provided_prompt_files: dict[str, str] | None = None,
@@ -51,11 +58,16 @@ def resolve_prompt_files(
 
 
 def load_strategy_source_file(path: Path) -> tuple[dict[str, Any], dict[str, str]]:
+    resolved_path = resolve_strategy_source_file_path(path)
     try:
-        raw_text = path.read_text(encoding="utf-8")
+        raw_text = resolved_path.read_text(encoding="utf-8")
     except UnicodeDecodeError as exc:
         raise WorkflowError("workflow file must be UTF-8 encoded YAML or JSON") from exc
-    suffix = path.suffix.lower()
+    except FileNotFoundError as exc:
+        raise WorkflowError("strategy source file does not exist") from exc
+    except OSError as exc:
+        raise WorkflowError("strategy source file could not be read") from exc
+    suffix = resolved_path.suffix.lower()
     try:
         payload = (yaml.safe_load(raw_text) or {}) if suffix in {".yaml", ".yml"} else json.loads(raw_text)
     except yaml.YAMLError as exc:

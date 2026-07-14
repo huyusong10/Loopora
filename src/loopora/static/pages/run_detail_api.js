@@ -8,7 +8,10 @@
       payload = {};
     }
     if (!response.ok) {
-      throw new Error(payload.error || `request failed: ${response.status}`);
+      const error = new Error(payload.error || `request failed: ${response.status}`);
+      error.payload = payload;
+      error.status = response.status;
+      throw error;
     }
     return payload;
   }

@@ -2,8 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from loopora.executor_command_args import validate_command_args_text
-from loopora.providers import executor_profile, normalize_executor_kind, normalize_executor_mode, normalize_reasoning_setting
+from loopora.loop_compose_validation import normalize_loop_compose_execution_options
 from loopora.service_types import LooporaError
 
 
@@ -42,27 +41,36 @@ def alignment_executor_settings_from_raw(raw_request: dict[str, object]) -> Alig
 
 def normalize_alignment_executor_settings(request: AlignmentExecutorSettingsRequest) -> dict:
     try:
-        kind = normalize_executor_kind(request.executor_kind)
-        profile = executor_profile(kind)
-        mode = "command" if profile.command_only else normalize_executor_mode(request.executor_mode)
-        if mode == "preset":
-            return {
-                "executor_kind": kind,
-                "executor_mode": mode,
-                "command_cli": "",
-                "command_args_text": "",
-                "model": str(request.model or profile.default_model or "").strip(),
-                "reasoning_effort": normalize_reasoning_setting(request.reasoning_effort, executor_kind=kind),
-            }
-        normalized_cli = str(request.command_cli or profile.cli_name or "").strip()
-        validate_command_args_text(request.command_args_text, executor_kind=kind)
+        settings = normalize_loop_compose_execution_options(
+            executor_kind=request.executor_kind,
+            executor_mode=request.executor_mode,
+            reasoning_effort=request.reasoning_effort,
+            completion_mode="gatekeeper",
+            command_cli=request.command_cli,
+            command_args_text=request.command_args_text,
+            model=request.model,
+            force_command_mode_for_command_only_executor=True,
+        )
         return {
-            "executor_kind": kind,
-            "executor_mode": mode,
-            "command_cli": normalized_cli,
-            "command_args_text": str(request.command_args_text or ""),
-            "model": str(request.model or "").strip(),
-            "reasoning_effort": str(request.reasoning_effort or "").strip(),
+            "executor_kind": settings.executor_kind,
+            "executor_mode": settings.executor_mode,
+            "command_cli": settings.command_cli,
+            "command_args_text": settings.command_args_text,
+            "model": settings.model,
+            "reasoning_effort": settings.reasoning_effort,
         }
     except ValueError as exc:
-        raise LooporaError(str(exc)) from exc
+        raise LooporaError(_alignment_executor_settings_error_message(str(exc))) from exc
+
+
+def _alignment_executor_settings_error_message(message: str) -> str:
+    replacements = {
+        "invalid --executor:": "invalid executor_kind:",
+        "invalid --executor-mode:": "invalid executor_mode:",
+        "invalid --reasoning-effort:": "invalid reasoning_effort:",
+        "invalid --command-arg:": "invalid command_args_text:",
+    }
+    for cli_prefix, field_prefix in replacements.items():
+        if message.startswith(cli_prefix):
+            return f"{field_prefix}{message[len(cli_prefix):]}"
+    return message

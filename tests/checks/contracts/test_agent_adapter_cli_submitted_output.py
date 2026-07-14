@@ -71,6 +71,21 @@ def test_agent_cli_submitted_step_prints_blocking_items_only_for_blocked_status(
     assert "submitted_next_action: Produce new project-owned proof" in none_action_output
     assert "cite a non-blocked supporting evidence ref" in none_action_output
 
+    custom_blocked_step = {
+        "step_id": "custom_check_step",
+        "status": "blocked",
+        "evidence_refs": ["ev_custom"],
+        "blocking_items": ["custom_role_blocker: produce direct audit evidence before continuing"],
+        "recommended_next_action": "No action needed.",
+    }
+    cli_agent_adapter_commands._print_agent_submitted_step(custom_blocked_step)
+
+    custom_blocked_output = capsys.readouterr().out
+    custom_blocked_summary = cli_agent_adapter_commands._agent_submitted_step_summary(custom_blocked_step)
+    assert "submitted_next_action: No action needed." not in custom_blocked_output
+    assert "submitted_next_action: Resolve the listed blocking items before continuing evidence." in custom_blocked_output
+    assert custom_blocked_summary["recommended_next_action"] == "Resolve the listed blocking items before continuing evidence."
+
 
 def test_agent_cli_submitted_step_summarizes_coverage_results(capsys) -> None:
     submitted_step = {

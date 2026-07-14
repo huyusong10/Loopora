@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from loopora.events.projection_cache import run_projection_bundle_for_run
+from loopora.loop_run_progress import build_loop_run_progress
 from loopora.run_projection_fields import projection_first_run_record_fields
 from loopora.service_asset_common import normalize_role_models
 from loopora.service_loop_prompt_files import ServiceLoopPromptFileMixin
@@ -98,6 +99,7 @@ class ServiceLoopRecordMixin(ServiceLoopPromptFileMixin):
             raise LooporaNotFoundError(f"unknown loop: {loop_id}")
         loop = self._hydrate_loop_files(loop)
         loop["runs"] = [self._hydrate_run_files(run) for run in self.repository.list_runs_for_loop(loop_id)]
+        loop["run_progress"] = build_loop_run_progress(loop["runs"])
         return loop
 
     def get_run(self, run_id: str) -> dict:
@@ -119,6 +121,8 @@ class ServiceLoopRecordMixin(ServiceLoopPromptFileMixin):
         if kind == "loop":
             payload = self._hydrate_loop_files(payload)
             payload["runs"] = [self._hydrate_run_files(run) for run in self.repository.list_runs_for_loop(payload["id"])]
+            payload["run_progress"] = build_loop_run_progress(payload["runs"])
         else:
             payload = self._hydrate_run_files(payload)
+            payload["continuation"] = self.run_continuation_state(str(payload["id"]))
         return kind, payload

@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
+
 from loopora.run_takeaway_judgment import empty_judgment_contract
 from loopora.structured_numbers import structured_non_negative_int
+from loopora.task_verdicts import PASSING_TASK_VERDICT_STATUSES
 
 ACCEPTANCE_EVIDENCE_BUCKETS = ("proven", "weak", "unproven", "blocking", "residual_risk")
+ACCEPTANCE_TARGET_GROUPS = ("required", "advisory")
 
 
 def recorded_verdict_kind_for_task_status(task_verdict_status: object) -> str:
@@ -52,6 +56,7 @@ def run_acceptance_evidence_payload_from_takeaways(takeaways: dict, *, evidence_
         "manifest_path": str(evidence_manifest.get("manifest_path") or ""),
         "evidence_count": structured_non_negative_int(takeaways.get("evidence_count")),
         "evidence_bucket_counts": bucket_counts,
+        "coverage_target_basis": acceptance_coverage_target_basis(evidence_coverage),
     }
 
 
@@ -84,6 +89,83 @@ def empty_run_acceptance_evidence_payload(*, evidence_source_event_id: int, evid
         "manifest_path": "",
         "evidence_count": 0,
         "evidence_bucket_counts": dict.fromkeys(ACCEPTANCE_EVIDENCE_BUCKETS, 0),
+        "coverage_target_basis": empty_acceptance_coverage_target_basis(),
+    }
+
+
+def acceptance_coverage_target_basis(coverage: Mapping[str, object]) -> dict[str, dict[str, int]]:
+    return {
+        group: _acceptance_target_group(coverage, group)
+        for group in ACCEPTANCE_TARGET_GROUPS
+    }
+
+
+def normalize_acceptance_coverage_target_basis(value: object) -> dict[str, dict[str, int]]:
+    raw = value if isinstance(value, Mapping) else {}
+    return {
+        group: _normalize_acceptance_target_group(raw.get(group))
+        for group in ACCEPTANCE_TARGET_GROUPS
+    }
+
+
+def empty_acceptance_coverage_target_basis() -> dict[str, dict[str, int]]:
+    return normalize_acceptance_coverage_target_basis({})
+
+
+def recorded_advisory_follow_up_available(task_verdict_status: object, target_basis: object) -> bool:
+    status = str(task_verdict_status or "").strip().lower()
+    basis = normalize_acceptance_coverage_target_basis(target_basis)
+    required = basis["required"]
+    advisory = basis["advisory"]
+    return (
+        status in PASSING_TASK_VERDICT_STATUSES
+        and required["total"] > 0
+        and required["covered"] == required["total"]
+        and required["open"] == 0
+        and advisory["open"] > 0
+    )
+
+
+def _acceptance_target_group(coverage: Mapping[str, object], group: str) -> dict[str, int]:
+    return _normalized_target_group_counts(
+        total=coverage.get(f"{group}_target_count"),
+        covered=coverage.get(f"covered_{group}_target_count"),
+        weak=coverage.get(f"weak_{group}_target_count"),
+        unproven=coverage.get(f"missing_{group}_target_count"),
+        blocking=coverage.get(f"blocked_{group}_target_count"),
+    )
+
+
+def _normalize_acceptance_target_group(value: object) -> dict[str, int]:
+    raw = value if isinstance(value, Mapping) else {}
+    return _normalized_target_group_counts(
+        total=raw.get("total"),
+        covered=raw.get("covered"),
+        weak=raw.get("weak"),
+        unproven=raw.get("unproven"),
+        blocking=raw.get("blocking"),
+    )
+
+
+def _normalized_target_group_counts(
+    *,
+    total: object,
+    covered: object,
+    weak: object,
+    unproven: object,
+    blocking: object,
+) -> dict[str, int]:
+    counts = {
+        "covered": structured_non_negative_int(covered),
+        "weak": structured_non_negative_int(weak),
+        "unproven": structured_non_negative_int(unproven),
+        "blocking": structured_non_negative_int(blocking),
+    }
+    open_count = counts["weak"] + counts["unproven"] + counts["blocking"]
+    return {
+        "total": max(structured_non_negative_int(total), counts["covered"] + open_count),
+        **counts,
+        "open": open_count,
     }
 
 

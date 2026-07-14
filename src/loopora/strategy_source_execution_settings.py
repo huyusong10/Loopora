@@ -3,21 +3,22 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from loopora.executor_command_args import validate_command_args_text
-from loopora.providers import executor_profile, normalize_executor_kind, normalize_executor_mode, normalize_reasoning_setting
+from loopora.loop_compose_validation import default_loop_role_execution_options, normalize_loop_role_execution_options
 from loopora.strategy_source_constants import ROLE_EXECUTION_FIELDS
 
 
 def default_strategy_role_execution_settings(executor_kind: str = "codex") -> dict[str, str]:
-    profile = executor_profile(executor_kind)
-    default_mode = "command" if profile.command_only else "preset"
+    try:
+        execution_options = default_loop_role_execution_options(executor_kind)
+    except ValueError as exc:
+        raise ValueError(_strategy_role_execution_settings_error_message(str(exc))) from exc
     return {
-        "executor_kind": profile.key,
-        "executor_mode": default_mode,
-        "command_cli": profile.cli_name,
-        "command_args_text": "\n".join(profile.command_args_template) if default_mode == "command" else "",
-        "model": profile.default_model,
-        "reasoning_effort": profile.effort_default,
+        "executor_kind": execution_options.executor_kind,
+        "executor_mode": execution_options.executor_mode,
+        "command_cli": execution_options.command_cli,
+        "command_args_text": execution_options.command_args_text,
+        "model": execution_options.model,
+        "reasoning_effort": execution_options.reasoning_effort,
     }
 
 
@@ -31,34 +32,24 @@ def normalize_strategy_role_execution_settings(
     default_executor_kind: str = "codex",
 ) -> dict[str, str]:
     settings = dict(raw_settings or {})
-    executor_kind = normalize_executor_kind(str(settings.get("executor_kind", default_executor_kind)).strip() or default_executor_kind)
-    executor_mode = normalize_executor_mode(str(settings.get("executor_mode", "preset")).strip() or "preset")
-    profile = executor_profile(executor_kind)
-    model = str(settings.get("model", "")).strip()
-    reasoning_effort = str(settings.get("reasoning_effort", "")).strip()
-    command_cli = str(settings.get("command_cli", "")).strip()
-    command_args_text = str(settings.get("command_args_text", ""))
-
-    if profile.command_only and executor_mode != "command":
-        raise ValueError(f"{profile.label} only supports command mode")
-
-    if executor_mode == "preset":
-        command_cli = profile.cli_name
-        command_args_text = ""
-        reasoning_effort = normalize_reasoning_setting(reasoning_effort, executor_kind=executor_kind)
-        if not model and profile.default_model:
-            model = profile.default_model
-    else:
-        command_cli = command_cli or profile.cli_name
-        validate_command_args_text(command_args_text, executor_kind=executor_kind)
-
+    try:
+        execution_options = normalize_loop_role_execution_options(
+            executor_kind=str(settings.get("executor_kind", default_executor_kind)).strip() or default_executor_kind,
+            executor_mode=str(settings.get("executor_mode", "preset")).strip() or "preset",
+            command_cli=str(settings.get("command_cli", "")).strip(),
+            command_args_text=str(settings.get("command_args_text", "")),
+            model=str(settings.get("model", "")).strip(),
+            reasoning_effort=str(settings.get("reasoning_effort", "")).strip(),
+        )
+    except ValueError as exc:
+        raise ValueError(_strategy_role_execution_settings_error_message(str(exc))) from exc
     return {
-        "executor_kind": executor_kind,
-        "executor_mode": executor_mode,
-        "command_cli": command_cli,
-        "command_args_text": command_args_text,
-        "model": model,
-        "reasoning_effort": reasoning_effort,
+        "executor_kind": execution_options.executor_kind,
+        "executor_mode": execution_options.executor_mode,
+        "command_cli": execution_options.command_cli,
+        "command_args_text": execution_options.command_args_text,
+        "model": execution_options.model,
+        "reasoning_effort": execution_options.reasoning_effort,
     }
 
 
@@ -78,3 +69,17 @@ def strategy_role_uses_execution_snapshot(role: Mapping[str, Any] | None) -> boo
 
 def role_uses_execution_snapshot(role: Mapping[str, Any] | None) -> bool:
     return strategy_role_uses_execution_snapshot(role)
+
+
+def _strategy_role_execution_settings_error_message(message: str) -> str:
+    replacements = {
+        "invalid --executor:": "",
+        "invalid --executor-mode:": "",
+        "invalid --reasoning-effort:": "",
+        "invalid --command-arg:": "",
+        "invalid --completion-mode:": "",
+    }
+    for cli_prefix, replacement in replacements.items():
+        if message.startswith(cli_prefix):
+            return f"{replacement}{message[len(cli_prefix):]}".strip()
+    return message

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typer.testing import CliRunner
 
+from loopora import agent_adapter_command_prefix
 from loopora import cli
 from loopora import cli_agent_runtime_commands
 
@@ -20,6 +21,8 @@ def test_agent_next_summary_reports_dispatch_recovery_commands_when_target_confi
     home = tmp_path / "loopora home"
     workdir = tmp_path / "project"
     monkeypatch.setenv("LOOPORA_HOME", str(home))
+    monkeypatch.setattr(agent_adapter_command_prefix, "current_loopora_cli_entry", lambda: "uv run loopora")
+    source_entry = agent_adapter_command_prefix.current_project_file_loopora_cli_entry()
 
     summary = cli_agent_adapter_commands._agent_next_summary(
         {
@@ -46,6 +49,8 @@ def test_agent_next_summary_reports_dispatch_recovery_commands_when_target_confi
     dispatch_unavailable = next_step["dispatch_unavailable"]
     assert dispatch_unavailable["reason"] == "target_agent_config_missing"
     assert dispatch_unavailable["target_agent"] == "loopora-inspector"
+    assert f"{source_entry} agent codex check" in dispatch_unavailable["check_command"]
+    assert f"{source_entry} init codex" in dispatch_unavailable["repair_command"]
     _assert_loopora_cli_command(
         dispatch_unavailable["check_command"],
         f"loopora agent codex check --workdir {workdir}",

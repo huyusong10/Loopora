@@ -27,7 +27,7 @@ class RepositoryLocalAssetRecordsMixin:
             request = LocalAssetRootUpsertRequest(**raw_request)
         normalized_state = self._normalize_local_asset_state(request.state)
         now = utc_now()
-        normalized_path = str(Path(request.path).expanduser())
+        normalized_path = self._normalize_local_asset_path(request.path)
         with self.transaction() as connection:
             connection.execute(
                 """
@@ -78,7 +78,7 @@ class RepositoryLocalAssetRecordsMixin:
         path_clause = ""
         if path is not None:
             path_clause = " AND path = ?"
-            params.append(str(Path(path).expanduser()))
+            params.append(self._normalize_local_asset_path(path))
         with self.transaction() as connection:
             cursor = connection.execute(
                 f"""
@@ -99,7 +99,7 @@ class RepositoryLocalAssetRecordsMixin:
                 SET state = ?, updated_at = ?
                 WHERE path = ?
                 """,
-                (normalized_state, utc_now(), str(Path(path).expanduser())),
+                (normalized_state, utc_now(), self._normalize_local_asset_path(path)),
             )
         return int(cursor.rowcount or 0)
 
@@ -141,3 +141,13 @@ class RepositoryLocalAssetRecordsMixin:
         if normalized not in {"active", "cleaned", "orphaned"}:
             return "active"
         return normalized
+
+    @staticmethod
+    def _normalize_local_asset_path(path: str | Path) -> str:
+        raw_path = str(path or "").strip()
+        if not raw_path:
+            raise ValueError("local asset path is required")
+        candidate = Path(raw_path).expanduser()
+        if not candidate.is_absolute():
+            raise ValueError("local asset path must be absolute")
+        return str(candidate.absolute())

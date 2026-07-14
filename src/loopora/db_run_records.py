@@ -6,26 +6,34 @@ import logging
 from loopora.db_shared import logger
 from loopora.diagnostics import log_event
 from loopora.events.run_record_events import append_run_created_event_for_connection
-from loopora.service_types import ACTIVE_RUN_STATUSES, LooporaConflictError
+from loopora.service_types import ACTIVE_RUN_STATUSES, ACTIVE_WORKDIR_CONFLICT_MESSAGE, LooporaConflictError
 from loopora.utils import utc_now
+from loopora.workdir_inputs import same_workdir_identity
 
 
 class RepositoryRunRecordsMixin:
     def create_run(self, payload: dict) -> dict:
         now = utc_now()
+        normalized_asset_root = self._normalize_local_asset_path(payload["runs_dir"])
         with self.transaction() as connection:
             if payload["status"] in ACTIVE_RUN_STATUSES:
-                active_run = connection.execute(
+                active_runs = connection.execute(
                     """
-                    SELECT id
+                    SELECT id, workdir
                     FROM loop_runs
-                    WHERE workdir = ? AND status IN ('queued', 'running', 'awaiting_agent')
-                    LIMIT 1
-                    """,
-                    (payload["workdir"],),
-                ).fetchone()
-                if active_run and active_run["id"] != payload["id"]:
-                    raise LooporaConflictError(f"another active run is already using {payload['workdir']}")
+                    WHERE status IN ('queued', 'running', 'awaiting_agent')
+                    """
+                ).fetchall()
+                active_run = next(
+                    (
+                        run
+                        for run in active_runs
+                        if run["id"] != payload["id"] and same_workdir_identity(run["workdir"], payload["workdir"])
+                    ),
+                    None,
+                )
+                if active_run:
+                    raise LooporaConflictError(ACTIVE_WORKDIR_CONFLICT_MESSAGE)
             connection.execute(
                 """
                 INSERT INTO loop_runs (
@@ -97,7 +105,7 @@ class RepositoryRunRecordsMixin:
                 """,
                 (
                     payload["id"],
-                    payload["runs_dir"],
+                    normalized_asset_root,
                     payload["workdir"],
                     payload["loop_id"],
                     now,

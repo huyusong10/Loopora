@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Protocol
 
 from loopora.bundles import BundleError
+from loopora.service_bundle_file_writes import write_bundle_text_atomically
 from loopora.service_alignment_artifacts import alignment_repair_attempts
 from loopora.service_alignment_bundle_lifecycle import (
     AlignmentBundleLifecycleContext,
@@ -15,6 +16,7 @@ from loopora.service_alignment_bundle_lifecycle import (
     alignment_bundle_validation_failure,
     alignment_bundle_validation_success,
 )
+from loopora.service_alignment_bundle_validation_payloads import ALIGNMENT_BUNDLE_SAVE_FAILED_ERROR
 from loopora.service_alignment_execution import (
     AlignmentExecutionState,
     AlignmentSessionTransitionPlan,
@@ -53,6 +55,9 @@ def handle_alignment_bundle_candidate(
     bundle_yaml: str,
 ) -> AlignmentExecutionState | None:
     ok, error = write_and_validate_alignment_bundle(context, session_id, bundle_yaml)
+    if not ok and error == ALIGNMENT_BUNDLE_SAVE_FAILED_ERROR:
+        context.fail_session(session_id, error)
+        return None
     repair_attempts = 0
     if not ok:
         session = context.get_session(session_id)
@@ -83,8 +88,10 @@ def write_and_validate_alignment_bundle(
 ) -> tuple[bool, str]:
     session = context.get_session(session_id)
     bundle_path = Path(session["bundle_path"])
-    bundle_path.parent.mkdir(parents=True, exist_ok=True)
-    bundle_path.write_text(bundle_yaml.rstrip() + "\n", encoding="utf-8")
+    try:
+        write_bundle_text_atomically(bundle_path, bundle_yaml.rstrip() + "\n")
+    except OSError:
+        return _record_alignment_bundle_save_failure(context, session_id, bundle_path)
     session = apply_alignment_bundle_write_started(
         context.repository,
         session_id,
@@ -94,7 +101,9 @@ def write_and_validate_alignment_bundle(
     semantic_issues: list[str] = []
     try:
         _bundle, normalized_yaml = context.load_validated_bundle_text(session, bundle_yaml, semantic_issues)
-        bundle_path.write_text(normalized_yaml, encoding="utf-8")
+        write_bundle_text_atomically(bundle_path, normalized_yaml)
+    except OSError:
+        return _record_alignment_bundle_save_failure(context, session_id, bundle_path)
     except (BundleError, LooporaError) as exc:
         error = str(exc)
         validation = alignment_bundle_validation_failure(
@@ -121,3 +130,23 @@ def write_and_validate_alignment_bundle(
         validation=validation,
     )
     return True, ""
+
+
+def _record_alignment_bundle_save_failure(
+    context: AlignmentBundleCandidateContext,
+    session_id: str,
+    bundle_path: Path,
+) -> tuple[bool, str]:
+    validation = alignment_bundle_validation_failure(
+        bundle_path,
+        error=ALIGNMENT_BUNDLE_SAVE_FAILED_ERROR,
+        semantic_issues=[ALIGNMENT_BUNDLE_SAVE_FAILED_ERROR],
+        checked_at=context.now(),
+    )
+    apply_alignment_validation_failure(
+        context.bundle_lifecycle_context(),
+        session_id,
+        validation=validation,
+        error=ALIGNMENT_BUNDLE_SAVE_FAILED_ERROR,
+    )
+    return False, ALIGNMENT_BUNDLE_SAVE_FAILED_ERROR

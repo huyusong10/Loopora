@@ -5,12 +5,15 @@ from urllib.parse import urlsplit
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
+from loopora.executor_runtime_readiness import executor_runtime_readiness
+from loopora.service_types import LooporaError
 from loopora.web_route_context import WebRouteContext
 
 
 def register_system_api_routes(app: FastAPI, ctx: WebRouteContext) -> None:
     _register_system_picker_api_routes(app, ctx)
     _register_system_reveal_api_route(app, ctx)
+    _register_executor_readiness_api_route(app, ctx)
 
 
 def _register_system_picker_api_routes(app: FastAPI, ctx: WebRouteContext) -> None:
@@ -68,11 +71,31 @@ def _register_system_reveal_api_route(app: FastAPI, ctx: WebRouteContext) -> Non
         return JSONResponse({"path": ctx.reveal_path_callback(target), "ok": True})
 
 
+def _register_executor_readiness_api_route(app: FastAPI, ctx: WebRouteContext) -> None:
+    @app.post("/api/system/executor-readiness")
+    async def api_executor_readiness(request: Request) -> JSONResponse:
+        guard = _guard_same_origin_request(request, ctx)
+        if guard is not None:
+            return guard
+        payload = await ctx.read_json_mapping(request)
+        try:
+            readiness = executor_runtime_readiness(ctx.svc().executor_factory, payload)
+        except LooporaError:
+            return ctx.json_error("executor settings are invalid")
+        return JSONResponse(readiness)
+
+
 def _guard_system_api_request(request: Request, ctx: WebRouteContext) -> JSONResponse | None:
-    if not _system_request_is_same_origin(request):
-        return ctx.json_error("system API requests must come from the same origin", status_code=403)
+    if guard := _guard_same_origin_request(request, ctx):
+        return guard
     if not ctx.access_state["native_dialogs_enabled"]:
         return ctx.json_error("native dialogs are disabled in network mode; paste a server-side absolute path instead")
+    return None
+
+
+def _guard_same_origin_request(request: Request, ctx: WebRouteContext) -> JSONResponse | None:
+    if not _system_request_is_same_origin(request):
+        return ctx.json_error("system API requests must come from the same origin", status_code=403)
     return None
 
 

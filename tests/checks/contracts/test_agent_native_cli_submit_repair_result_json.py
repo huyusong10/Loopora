@@ -13,6 +13,11 @@ from agent_native_cli_test_support import (
     cli,
     json,
 )
+from loopora.cli_agent_result_files import (
+    RESULT_FILE_INVALID_JSON_ERROR,
+    RESULT_FILE_MISSING_ERROR,
+    RESULT_FILE_UNREADABLE_ERROR,
+)
 
 
 def test_cli_agent_submit_invalid_json_prints_result_file_repair_guidance(monkeypatch, tmp_path: Path) -> None:
@@ -34,11 +39,15 @@ def test_cli_agent_submit_invalid_json_prints_result_file_repair_guidance(monkey
     assert f"--workdir {fixture['workdir'].resolve()}" in schema_lookup
     assert "--run-id run_bad_json" in schema_lookup
     assert "Traceback" not in output
+    assert "Expecting" not in output
 
     json_result = invoke_result_json_repair_submit(runner, fixture, fixture["bad_result_file"], json_output=True)
     summary = assert_result_json_repair_summary(json_result, fixture["bad_result_file"])
     assert any("fix JSON syntax" in item for item in summary["repair_focus"])
     assert summary["schema_lookup"].endswith("--run-id run_bad_json --json --compact-json --entry-source codex_project_skill")
+    payload = json.loads(json_result.stdout)
+    assert payload["raw"]["legacy"]["error"] == RESULT_FILE_INVALID_JSON_ERROR
+    assert "Expecting" not in json.dumps(payload, ensure_ascii=False)
 
     missing_file = tmp_path / "missing-filled.result.json"
     missing = invoke_result_json_repair_submit(runner, fixture, missing_file, json_output=True)
@@ -46,6 +55,58 @@ def test_cli_agent_submit_invalid_json_prints_result_file_repair_guidance(monkey
     assert any("create the filled result JSON file at result_file_to_repair" in item for item in missing_summary["repair_focus"])
     assert "create the missing filled result file" in missing_summary["next_repair_step"]
     assert "run_bad_json__builder_step.result.template.json" in missing_summary["next_repair_step"]
+    missing_payload = json.loads(missing.stdout)
+    assert missing_payload["raw"]["legacy"]["error"] == RESULT_FILE_MISSING_ERROR
+    assert "No such file or directory" not in json.dumps(missing_payload, ensure_ascii=False)
+
+
+def test_cli_agent_submit_unreadable_result_file_uses_stable_repair_guidance(monkeypatch, tmp_path: Path) -> None:
+    fixture = write_result_json_repair_fixture(tmp_path)
+    install_result_json_repair_service(monkeypatch, fixture)
+    unreadable_result_file = tmp_path / "unreadable.result.json"
+    unreadable_result_file.write_text("{}", encoding="utf-8")
+    original_read_text = Path.read_text
+
+    def unreadable_result_file_only(path: Path, *args, **kwargs):
+        if Path(path) == unreadable_result_file:
+            raise OSError(f"permission denied: {unreadable_result_file}")
+        return original_read_text(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_text", unreadable_result_file_only)
+    runner = CliRunner()
+
+    result = invoke_result_json_repair_submit(runner, fixture, unreadable_result_file, json_output=True)
+
+    summary = assert_result_json_repair_summary(result, unreadable_result_file)
+    assert any("make result_file_to_repair readable" in item for item in summary["repair_focus"])
+    assert summary["next_repair_step"].startswith("make result_file_to_repair readable")
+    payload = json.loads(result.stdout)
+    assert payload["raw"]["legacy"]["error"] == RESULT_FILE_UNREADABLE_ERROR
+    encoded = json.dumps(payload, ensure_ascii=False)
+    assert "permission denied" not in encoded
+
+
+def test_cli_agent_submit_result_directory_uses_result_file_repair_guidance(monkeypatch, tmp_path: Path) -> None:
+    fixture = write_result_json_repair_fixture(tmp_path)
+    install_result_json_repair_service(monkeypatch, fixture)
+    result_dir = tmp_path / "result-as-directory"
+    result_dir.mkdir()
+    runner = CliRunner()
+
+    json_result = invoke_result_json_repair_submit(runner, fixture, result_dir, json_output=True)
+    plain = invoke_result_json_repair_submit(runner, fixture, result_dir, json_output=False)
+
+    summary = assert_result_json_repair_summary(json_result, result_dir)
+    assert any("make result_file_to_repair readable" in item for item in summary["repair_focus"])
+    assert summary["next_repair_step"].startswith("make result_file_to_repair readable")
+    payload = json.loads(json_result.stdout)
+    assert payload["raw"]["legacy"]["error"] == RESULT_FILE_UNREADABLE_ERROR
+    encoded = json.dumps(payload, ensure_ascii=False)
+    assert "is a directory" not in encoded
+    assert "Invalid value for '--result-file'" not in plain.stdout
+    output = error_text(plain)
+    assert "submit_repair: result JSON needs repair before this Loopora step can advance" in output
+    assert "is a directory" not in output
 
 
 def write_result_json_repair_fixture(tmp_path: Path) -> dict:

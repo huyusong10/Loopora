@@ -1,10 +1,12 @@
 from __future__ import annotations
 
-import json
 import re
 from dataclasses import dataclass
+from functools import lru_cache
 
+from loopora.alignment_guidance import load_alignment_guidance_assets
 from loopora.alignment_traceability_terms import agent_candidate_task_anchor_terms
+from loopora.executor_alignment_task_anchors import alignment_task_anchor_from_user_message, alignment_task_text_from_prompt
 from loopora.executor_alignment_bundle_fixtures import (
     alignment_bundle_yaml,
     alignment_bundle_yaml_with_governance_markers_listed_as_facts,
@@ -36,17 +38,12 @@ from loopora.executor_alignment_readiness_payloads import (
     alignment_readiness_issue_for_scenario,
 )
 from loopora.executor_fake_errors import FakePayloadError
-from loopora.service_alignment_language import alignment_message_is_language_neutral_confirmation
+from loopora.service_types import LooporaError
 
+BUNDLE_SCENARIO_FIXTURES_ASSET_NAME = "bundle-scenario-fixtures.json"
 
-ALIGNMENT_SESSION_TRANSCRIPT_BLOCK_RE = re.compile(
-    r"## Session Transcript\s*```json\s*(.*?)\s*```",
-    re.DOTALL,
-)
-ALIGNMENT_PROMPT_USER_CONTENT_RE = re.compile(
-    r'"role"\s*:\s*"user"\s*,\s*"content"\s*:\s*("(?:\\.|[^"\\])*")',
-    re.DOTALL,
-)
+_alignment_task_anchor_from_user_message = alignment_task_anchor_from_user_message
+_alignment_task_text_from_prompt = alignment_task_text_from_prompt
 
 
 @dataclass(frozen=True)
@@ -57,6 +54,17 @@ class AlignmentPayloadState:
     prefers_chinese: bool
     display_language: str
     is_improvement: bool
+
+
+@dataclass(frozen=True)
+class AlignmentBundleScenarioFixture:
+    assistant_message: str
+    bundle_yaml: str
+    agreement_summary: str
+    agreement_response: str
+    readiness_evidence: str
+    complete_readiness_checklist: bool
+    skip_modes: frozenset[str]
 
 
 def build_alignment_payload(scenario: str, request) -> dict:
@@ -228,138 +236,6 @@ def _alignment_refactor_improvement_requested(feedback_text: str) -> bool:
     return has_refactor and has_search_phases >= 3
 
 
-def _alignment_task_text_from_prompt(prompt: str) -> str:
-    messages = _alignment_user_messages_from_prompt(prompt)
-    task_messages: list[str] = []
-    for message in messages:
-        task_message = _alignment_task_anchor_from_user_message(message)
-        if not task_message or _alignment_message_is_confirmation(task_message):
-            continue
-        if task_message not in task_messages:
-            task_messages.append(task_message)
-        if len(task_messages) >= 3:
-            break
-    return _alignment_join_task_messages(task_messages)
-
-
-def _alignment_user_messages_from_prompt(prompt: str) -> list[str]:
-    transcript = _alignment_prompt_transcript(prompt)
-    if transcript:
-        return [
-            str(entry.get("content") or "").strip()
-            for entry in transcript
-            if isinstance(entry, dict) and entry.get("role") == "user" and str(entry.get("content") or "").strip()
-        ]
-    messages: list[str] = []
-    for match in ALIGNMENT_PROMPT_USER_CONTENT_RE.finditer(str(prompt or "")):
-        try:
-            content = json.loads(match.group(1))
-        except json.JSONDecodeError:
-            continue
-        if str(content or "").strip():
-            messages.append(str(content).strip())
-    return messages
-
-
-def _alignment_prompt_transcript(prompt: str) -> list[dict]:
-    match = ALIGNMENT_SESSION_TRANSCRIPT_BLOCK_RE.search(str(prompt or ""))
-    if not match:
-        return []
-    try:
-        transcript = json.loads(match.group(1))
-    except json.JSONDecodeError:
-        return []
-    if not isinstance(transcript, list):
-        return []
-    return [entry for entry in transcript if isinstance(entry, dict)]
-
-
-def _alignment_task_anchor_from_user_message(message: str) -> str:
-    text = " ".join(str(message or "").split())
-    if not text:
-        return ""
-    text = _alignment_strip_mixed_confirmation_adjustment_prefix(text)
-    for marker in (
-        "Continue Web review from this /loopora-plan task anchor:",
-        "First re-check whether this /loopora-plan task anchor fits Loopora:",
-        "Task anchor:",
-        "请基于这次 /loopora-plan 的任务锚点继续 Web review：",
-        "请先按这次 /loopora-plan 的任务锚点重新判断是否适合 Loopora：",
-        "任务锚点：",
-        "Continuar Web review desde este ancla de tarea de /loopora-plan:",
-        "Primero vuelve a comprobar si este ancla de tarea de /loopora-plan encaja con Loopora:",
-        "Ancla de tarea:",
-    ):
-        if marker in text:
-            text = text.split(marker, 1)[1].strip()
-            break
-    for trailer in (
-        "Use the evidence-first path:",
-        "If we should continue,",
-        "推荐采用证据优先路径：",
-        "如果仍要继续，",
-        "Usa el camino de evidencia primero:",
-        "Si debemos continuar,",
-    ):
-        if trailer in text:
-            text = text.split(trailer, 1)[0].strip()
-    return text.strip(" \t\r\n:：,，.。")
-
-
-def _alignment_strip_mixed_confirmation_adjustment_prefix(text: str) -> str:
-    value = str(text or "").strip()
-    value = re.sub(
-        r"^(?:确认|同意|可以|好的?|行|没问题)[\s,，;；.。]*(?:但|但是|不过|只是|同时|并且)?[\s,，;；.。]*",
-        "",
-        value,
-        flags=re.IGNORECASE,
-    ).strip()
-    value = re.sub(
-        r"^(?:要)?(?:调整|修改|更改|补充|改一下|再改)(?:这份|这个|当前)?(?:工作协议|协议|方案|方向)?[\s:：,，;；]*",
-        "",
-        value,
-        flags=re.IGNORECASE,
-    ).strip()
-    value = re.sub(
-        r"^(?:confirm(?:ed)?|approve(?:d)?|ok(?:ay)?|looks good|go ahead|proceed)[\s,;:.]*(?:but|however|and)[\s,;:.]*(?:please\s+)?",
-        "",
-        value,
-        flags=re.IGNORECASE,
-    ).strip()
-    value = re.sub(
-        r"^(?:confirmo|confirmado|de acuerdo|ok)[\s,;:.]*(?:pero|y|aunque)[\s,;:.]*(?:por favor\s+)?",
-        "",
-        value,
-        flags=re.IGNORECASE,
-    ).strip()
-    return value or str(text or "").strip()
-
-
-def _alignment_message_is_confirmation(message: str) -> bool:
-    if alignment_message_is_language_neutral_confirmation(message):
-        return True
-    normalized = " ".join(str(message or "").strip().lower().split())
-    if not normalized:
-        return False
-    if re.fullmatch(
-        r"(?:confirm|confirmed|approve|approved|go ahead|proceed)(?:\s+(?:this|the)\s+(?:working\s+)?agreement)?[\s.!?]*",
-        normalized,
-    ):
-        return True
-    compact = re.sub(r"[\s.!?。！？,，;；:：\"'“”‘’]+", "", normalized)
-    return bool(
-        re.fullmatch(r"(?:确认|同意|采用|可以|好的?)(?:采用)?(?:这份|这个|当前)?(?:工作协议|协议|方案|方向)?", compact)
-        and len(compact) <= 24
-    )
-
-
-def _alignment_join_task_messages(messages: list[str]) -> str:
-    text = "\n".join(message for message in messages if message.strip()).strip()
-    if len(text) <= 1200:
-        return text
-    return text[:1199].rstrip() + "…"
-
-
 def _alignment_preconfirmation_payload(
     scenario: str,
     *,
@@ -377,194 +253,121 @@ def _alignment_preconfirmation_payload(
     )
 
 
-def _alignment_workdir_fact_bundle_payload(scenario: str, *, workdir: str) -> dict | None:
-    if scenario == "alignment_bundle_unsupported_observed_workdir_claim":
-        return alignment_response(
-            status="bundle",
-            assistant_message="I prepared a bundle with an unsupported observed workdir claim.",
-            needs_user_input=False,
-            bundle_yaml=alignment_bundle_yaml_with_unsupported_observed_workdir_claim(workdir),
-            phase="bundle",
-        )
-    if scenario == "alignment_governance_markers_listed_without_responsibilities":
-        return alignment_response(
-            status="bundle",
-            assistant_message="I prepared a bundle that lists governance markers but does not route responsibilities.",
-            needs_user_input=False,
-            bundle_yaml=alignment_bundle_yaml_with_governance_markers_listed_as_facts(workdir),
-            phase="bundle",
-        )
-    return None
-
-
 def _alignment_bundle_payload_for_scenario(
     scenario: str,
     *,
     mode: str,
     workdir: str,
 ) -> dict | None:
-    payload = _alignment_workdir_fact_bundle_payload(scenario, workdir=workdir)
-    if payload is not None:
-        return payload
-    payload = _alignment_invalid_bundle_payload(scenario, mode=mode, workdir=workdir)
-    if payload is not None:
-        return payload
-    payload = _alignment_language_bundle_payload(scenario, workdir=workdir)
-    if payload is not None:
-        return payload
-    payload = _alignment_refund_bundle_payload(scenario, workdir=workdir)
+    payload = _alignment_bundle_fixture_payload_for_scenario(scenario, mode=mode, workdir=workdir)
     if payload is not None:
         return payload
     return _alignment_readiness_issue_payload_for_scenario(scenario, workdir=workdir)
 
 
-def _alignment_invalid_bundle_payload(
-    scenario: str,
-    *,
-    mode: str,
-    workdir: str,
-) -> dict | None:
-    if scenario == "alignment_invalid":
-        return alignment_response(
-            status="bundle",
-            assistant_message="我先给出一个故意不完整的 bundle。",
-            needs_user_input=False,
-            bundle_yaml="version: 1\nmetadata:\n  name: Broken Alignment Bundle\n",
-            phase="bundle",
-        )
-    if scenario == "alignment_invalid_then_valid" and mode != "repair":
-        return alignment_response(
-            status="bundle",
-            assistant_message="我先给出一个需要修复的 bundle。",
-            needs_user_input=False,
-            bundle_yaml="version: 1\nmetadata:\n  name: Broken Alignment Bundle\n",
-            phase="bundle",
-        )
-    if scenario == "alignment_semantic_invalid_then_valid" and mode != "repair":
-        return alignment_response(
-            status="bundle",
-            assistant_message="我先给出一个语义不完整的 bundle。",
-            needs_user_input=False,
-            bundle_yaml=alignment_bundle_yaml_without_semantics(workdir),
-            phase="bundle",
-        )
-    return None
-
-
-def _alignment_language_bundle_payload(scenario: str, *, workdir: str) -> dict | None:
-    if scenario == "alignment_chinese_readiness_evidence":
-        payload = alignment_response(
-            status="bundle",
-            assistant_message="我已用中文整理成一个可导入的 Loopora bundle。",
-            needs_user_input=False,
-            bundle_yaml=alignment_chinese_bundle_yaml(workdir),
-            phase="bundle",
-        )
-        payload["agreement_summary"] = "使用聚焦 Builder、证据 Inspector 和严格 GateKeeper 来推进这个 Loop。"
-        payload["readiness_evidence"] = alignment_chinese_readiness_evidence()
-        return payload
-    if scenario == "alignment_english_bundle_prose_for_chinese_user":
-        payload = alignment_response(
-            status="bundle",
-            assistant_message="我准备了一个 bundle，但正文仍然是英文。",
-            needs_user_input=False,
-            bundle_yaml=alignment_bundle_yaml(workdir),
-            phase="bundle",
-        )
-        payload["agreement_summary"] = "使用聚焦 Builder、证据 Inspector 和严格 GateKeeper 来推进这个 Loop。"
-        payload["readiness_evidence"] = alignment_chinese_readiness_evidence()
-        return payload
-    if scenario == "alignment_english_visible_bundle_names_for_chinese_user":
-        payload = alignment_response(
-            status="bundle",
-            assistant_message="我准备了一个中文 bundle，但可见名称仍然是英文。",
-            needs_user_input=False,
-            bundle_yaml=alignment_chinese_bundle_yaml_with_english_visible_names(workdir),
-            phase="bundle",
-        )
-        payload["agreement_summary"] = "使用聚焦 Builder、证据 Inspector 和严格 GateKeeper 来推进这个 Loop。"
-        payload["readiness_evidence"] = alignment_chinese_readiness_evidence()
-        return payload
-    if scenario == "alignment_english_assistant_message_for_chinese_bundle":
-        payload = alignment_response(
-            status="bundle",
-            assistant_message="I prepared an importable Loopora bundle.",
-            needs_user_input=False,
-            bundle_yaml=alignment_chinese_bundle_yaml(workdir),
-            phase="bundle",
-        )
-        payload["agreement_summary"] = "使用聚焦 Builder、证据 Inspector 和严格 GateKeeper 来推进这个 Loop。"
-        payload["readiness_evidence"] = alignment_chinese_readiness_evidence()
-        return payload
-    if scenario == "alignment_english_bundle_for_chinese_user":
-        return alignment_response(
-            status="bundle",
-            assistant_message="I prepared an importable Loopora bundle.",
-            needs_user_input=False,
-            bundle_yaml=alignment_bundle_yaml(workdir),
-            phase="bundle",
-        )
-    return None
-
-
-def _alignment_refund_bundle_payload(scenario: str, *, workdir: str) -> dict | None:
-    if scenario == "alignment_refund_agreement_repair_bundle":
-        return _alignment_refund_repair_bundle_payload(workdir, prefers_chinese=False)
-    if scenario == "alignment_chinese_refund_agreement_repair_bundle":
-        return _alignment_refund_repair_bundle_payload(workdir, prefers_chinese=True)
-    return None
-
-
-def _alignment_refund_repair_bundle_payload(workdir: str, *, prefers_chinese: bool) -> dict:
+def _alignment_bundle_fixture_payload_for_scenario(scenario: str, *, mode: str, workdir: str) -> dict | None:
+    fixture = _alignment_bundle_scenario_fixtures().get(str(scenario or ""))
+    if fixture is None or mode in fixture.skip_modes:
+        return None
     payload = alignment_response(
         status="bundle",
-        assistant_message=(
-            "已整理成一个包含 Guide 修复轮次的退款治理 Loopora bundle。"
-            if prefers_chinese
-            else "I prepared a refund governance Loopora bundle with a Guide repair pass."
-        ),
+        assistant_message=fixture.assistant_message,
         needs_user_input=False,
-        bundle_yaml=(
-            alignment_chinese_refund_repair_bundle_yaml(workdir)
-            if prefers_chinese
-            else alignment_refund_repair_bundle_yaml(workdir)
-        ),
+        bundle_yaml=_alignment_bundle_yaml_from_fixture(fixture.bundle_yaml, workdir=workdir),
         phase="bundle",
     )
-    agreement_payload = alignment_chinese_refund_agreement_response() if prefers_chinese else alignment_refund_agreement_response()
-    payload["agreement_summary"] = agreement_payload["agreement_summary"]
-    payload["readiness_evidence"] = agreement_payload["readiness_evidence"]
-    payload["readiness_checklist"] = dict.fromkeys(payload["readiness_checklist"], True)
+    agreement_payload = _alignment_bundle_agreement_payload_from_fixture(fixture.agreement_response)
+    if agreement_payload is not None:
+        payload["agreement_summary"] = agreement_payload["agreement_summary"]
+        payload["readiness_evidence"] = agreement_payload["readiness_evidence"]
+    elif fixture.agreement_summary:
+        payload["agreement_summary"] = fixture.agreement_summary
+    if fixture.readiness_evidence == "chinese":
+        payload["readiness_evidence"] = alignment_chinese_readiness_evidence()
+    elif fixture.readiness_evidence == "missing":
+        payload["readiness_evidence"] = alignment_missing_readiness_evidence()
+    if fixture.complete_readiness_checklist:
+        payload["readiness_checklist"] = dict.fromkeys(payload["readiness_checklist"], True)
     return payload
 
 
+def _alignment_bundle_agreement_payload_from_fixture(agreement_response: str) -> dict | None:
+    if not agreement_response:
+        return None
+    factories = {
+        "refund": alignment_refund_agreement_response,
+        "chinese_refund": alignment_chinese_refund_agreement_response,
+    }
+    factory = factories.get(agreement_response)
+    if factory is None:
+        raise LooporaError(f"unknown bundle scenario fixture agreement response ref: {agreement_response}")
+    return factory()
+
+
+def _alignment_bundle_yaml_from_fixture(bundle_yaml: str, *, workdir: str) -> str:
+    generators = {
+        "default": alignment_bundle_yaml,
+        "governance_markers_listed_as_facts": alignment_bundle_yaml_with_governance_markers_listed_as_facts,
+        "unsupported_observed_workdir_claim": alignment_bundle_yaml_with_unsupported_observed_workdir_claim,
+        "without_semantics": alignment_bundle_yaml_without_semantics,
+        "chinese": alignment_chinese_bundle_yaml,
+        "chinese_with_english_visible_names": alignment_chinese_bundle_yaml_with_english_visible_names,
+        "refund_repair": alignment_refund_repair_bundle_yaml,
+        "chinese_refund_repair": alignment_chinese_refund_repair_bundle_yaml,
+        "lineage_metadata": alignment_bundle_yaml_with_lineage_metadata,
+    }
+    if bundle_yaml == "invalid_minimal":
+        return "version: 1\nmetadata:\n  name: Broken Alignment Bundle\n"
+    if bundle_yaml == "markdown_fenced_default":
+        return f"```yaml\n{alignment_bundle_yaml(workdir)}```"
+    generator = generators.get(bundle_yaml)
+    if generator is None:
+        raise LooporaError(f"unknown bundle scenario fixture YAML ref: {bundle_yaml}")
+    return generator(workdir)
+
+
+@lru_cache(maxsize=1)
+def _alignment_bundle_scenario_fixtures() -> dict[str, AlignmentBundleScenarioFixture]:
+    asset = load_alignment_guidance_assets().bundle_scenario_fixtures
+    scenario_payloads = asset.get("scenario_payloads")
+    if not isinstance(scenario_payloads, dict):
+        raise LooporaError(f"{BUNDLE_SCENARIO_FIXTURES_ASSET_NAME} must define scenario_payloads")
+    return {str(scenario): _alignment_bundle_scenario_fixture(str(scenario), fixture) for scenario, fixture in scenario_payloads.items()}
+
+
+def _alignment_bundle_scenario_fixture(scenario: str, fixture: object) -> AlignmentBundleScenarioFixture:
+    if not isinstance(fixture, dict):
+        raise LooporaError(f"invalid bundle scenario fixture: {scenario}")
+    assistant_message = fixture.get("assistant_message")
+    bundle_yaml = fixture.get("bundle_yaml")
+    agreement_summary = fixture.get("agreement_summary", "")
+    agreement_response = fixture.get("agreement_response", "")
+    readiness_evidence = fixture.get("readiness_evidence", "")
+    complete_readiness_checklist = fixture.get("complete_readiness_checklist", False)
+    skip_modes = fixture.get("skip_modes", [])
+    if not isinstance(assistant_message, str) or not assistant_message.strip() or not isinstance(bundle_yaml, str):
+        raise LooporaError(f"invalid bundle scenario fixture fields: {scenario}")
+    if (
+        not isinstance(agreement_summary, str)
+        or not isinstance(agreement_response, str)
+        or readiness_evidence not in {"", "chinese", "missing"}
+        or not isinstance(complete_readiness_checklist, bool)
+    ):
+        raise LooporaError(f"invalid bundle scenario fixture extras: {scenario}")
+    if not isinstance(skip_modes, list) or not all(isinstance(mode, str) and mode.strip() for mode in skip_modes):
+        raise LooporaError(f"invalid bundle scenario fixture skip modes: {scenario}")
+    return AlignmentBundleScenarioFixture(
+        assistant_message=assistant_message,
+        bundle_yaml=bundle_yaml,
+        agreement_summary=agreement_summary,
+        agreement_response=agreement_response,
+        readiness_evidence=str(readiness_evidence),
+        complete_readiness_checklist=complete_readiness_checklist,
+        skip_modes=frozenset(skip_modes),
+    )
+
+
 def _alignment_readiness_issue_payload_for_scenario(scenario: str, *, workdir: str) -> dict | None:
-    if scenario == "alignment_generated_lineage_metadata":
-        return alignment_response(
-            status="bundle",
-            assistant_message="I prepared a bundle but encoded source lineage metadata.",
-            needs_user_input=False,
-            bundle_yaml=alignment_bundle_yaml_with_lineage_metadata(workdir),
-            phase="bundle",
-        )
-    if scenario == "alignment_markdown_fenced_bundle":
-        return alignment_response(
-            status="bundle",
-            assistant_message="I prepared a fenced bundle.",
-            needs_user_input=False,
-            bundle_yaml=f"```yaml\n{alignment_bundle_yaml(workdir)}```",
-            phase="bundle",
-        )
-    if scenario == "alignment_missing_readiness_evidence":
-        payload = alignment_response(
-            status="bundle",
-            assistant_message="我勾选了 checklist 但没有给出具体证据。",
-            needs_user_input=False,
-            bundle_yaml=alignment_bundle_yaml(workdir),
-            phase="bundle",
-        )
-        payload["readiness_evidence"] = alignment_missing_readiness_evidence()
-        return payload
     issue = alignment_readiness_issue_for_scenario(scenario)
     if issue is None:
         return None

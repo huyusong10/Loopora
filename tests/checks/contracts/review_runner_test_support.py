@@ -65,3 +65,9 @@ def write_text_index_report(case_name: str, target_id: str, tmp_path: Path) -> s
     _case, targets = case_targets(case_name)
     artifact = review_runner._write_text_index(targets[target_id], tmp_path)
     return artifact.path.read_text(encoding="utf-8")
+
+
+def write_artifact_paths_report(case_name: str, target_id: str, tmp_path: Path) -> tuple[str, list[str]]:
+    _case, targets = case_targets(case_name)
+    artifact = review_runner._write_artifact_paths(targets[target_id], tmp_path, cli_artifacts=[])
+    return artifact.path.read_text(encoding="utf-8"), artifact.hints

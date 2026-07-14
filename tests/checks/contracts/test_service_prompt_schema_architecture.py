@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from strategy_source_architecture_test_support import design_boundary_source
+
 from loopora import service_prompt_builder_schemas
 from loopora import service_prompt_checks
 from loopora import service_prompt_guidance_schemas
@@ -57,7 +59,7 @@ def test_service_prompt_helpers_stay_out_of_prompt_mixin_source() -> None:
     )
     request_source = (repo_root / "src" / "loopora" / "service_prompt_requests.py").read_text(encoding="utf-8")
     checks_source = (repo_root / "src" / "loopora" / "service_prompt_checks.py").read_text(encoding="utf-8")
-    contracts_source = (repo_root / "design" / "contracts.md").read_text(encoding="utf-8")
+    contracts_source = design_boundary_source()
 
     assert "from loopora.service_prompt_builder_schemas import" in schemas_source
     assert "from loopora.service_prompt_review_schemas import" in schemas_source

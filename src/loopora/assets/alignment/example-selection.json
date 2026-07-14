@@ -16,6 +16,50 @@
     "Parallel inspection example",
     "Long-chain multi-Builder example"
   ],
+  "profiles": {
+    "clarifying": {
+      "core_headings": [
+        "Good creation example: English learning website",
+        "Bad premature generation example",
+        "Overbroad scope with auditable deferral example",
+        "Not-fit gate example",
+        "Not-fit gate example: benchmark-only acceptance",
+        "Anti-pattern example: role zoo / prompt pack",
+        "Anti-pattern example: personality memory",
+        "User asks to generate after partial alignment",
+        "Workdir governance marker example",
+        "Mixed confirmation with correction"
+      ],
+      "include_topic_matches": true
+    },
+    "agreement": {
+      "core_headings": [
+        "User asks to generate after partial alignment",
+        "Mixed confirmation with correction"
+      ],
+      "include_topic_matches": false
+    },
+    "bundle": {
+      "core_headings": [
+        "Good creation example: English learning website",
+        "Bad premature generation example",
+        "Overbroad scope with auditable deferral example",
+        "Not-fit gate example",
+        "Not-fit gate example: benchmark-only acceptance",
+        "Anti-pattern example: role zoo / prompt pack",
+        "Anti-pattern example: personality memory",
+        "User asks to generate after partial alignment",
+        "Private failed-round pressure test example",
+        "Private complete-run rehearsal example",
+        "Private traceability checklist example",
+        "Workdir governance marker example",
+        "Mixed confirmation with correction",
+        "Parallel inspection example",
+        "Long-chain multi-Builder example"
+      ],
+      "include_topic_matches": true
+    }
+  },
   "topic_keywords": {
     "Improvement from run evidence example": [
       "improvement from run",

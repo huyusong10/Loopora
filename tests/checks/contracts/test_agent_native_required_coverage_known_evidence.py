@@ -23,7 +23,7 @@ def test_agent_native_required_coverage_refs_stay_known_when_evidence_query_filt
         AgentBundleCandidateRequest(
             adapter="codex",
             workdir=sample_workdir,
-            message="Keep blocked coverage evidence citable by the next Agent Runner role.",
+            message="Keep blocked coverage evidence citable by the next Agent Native role.",
             bundle_file=bundle_file,
             entry_source="codex_project_skill",
         )

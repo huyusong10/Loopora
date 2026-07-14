@@ -37,6 +37,8 @@ def test_agent_native_submit_refreshes_latest_state_for_mid_run_monitoring(
         "codex", workdir=sample_workdir, entry_source="codex_project_skill", execute_async=False
     )
     step = started["next_step"]
+    host_dispatch = _agent_native_host_dispatch("codex", step)
+    host_dispatch["attestation_source"] = "explicit_submit_flag"
 
     result = service.submit_agent_native_step(
         AgentNativeStepSubmitRequest(
@@ -45,7 +47,7 @@ def test_agent_native_submit_refreshes_latest_state_for_mid_run_monitoring(
             run_id=str(step["run_id"]),
             step_id=str(step["step_id"]),
             output=_agent_native_step_output(step),
-            host_dispatch=_agent_native_host_dispatch("codex", step),
+            host_dispatch=host_dispatch,
             entry_source="codex_project_skill",
         )
     )
@@ -60,6 +62,14 @@ def test_agent_native_submit_refreshes_latest_state_for_mid_run_monitoring(
     assert latest_state["latest_by_role"] == {"builder": "iterations/iter_000/steps/00__builder_step/handoff.json"}
     assert latest_state["latest_by_archetype"] == {"builder": "iterations/iter_000/steps/00__builder_step/handoff.json"}
     assert latest_state["latest_gatekeeper"] is None
+    state = json.loads((layout.run_dir / "agent_native" / "state.json").read_text(encoding="utf-8"))
+    assert state["host_dispatches"][0]["attestation_source"] == "explicit_submit_flag"
+    submitted_event = next(
+        event
+        for event in service.stream_events(str(result["run"]["id"]), limit=100)
+        if event["event_type"] == "agent_native_step_submitted"
+    )
+    assert submitted_event["payload"]["host_dispatch"]["attestation_source"] == "explicit_submit_flag"
 
 
 def test_agent_native_submit_requires_matching_host_dispatch_proof(
@@ -181,6 +191,22 @@ def test_agent_native_submit_requires_matching_host_dispatch_proof(
                 step_id=str(step["step_id"]),
                 output=_agent_native_step_output(step),
                 host_dispatch=unavailable_output_dispatch,
+                entry_source="codex_project_skill",
+            )
+        )
+    assert not raw_output_path.exists()
+
+    unsupported_source_dispatch = _agent_native_host_dispatch("codex", step)
+    unsupported_source_dispatch["attestation_source"] = "caller_claimed_magic"
+    with pytest.raises(LooporaConflictError, match="attestation_source must be one of"):
+        service.submit_agent_native_step(
+            AgentNativeStepSubmitRequest(
+                adapter="codex",
+                workdir=sample_workdir,
+                run_id=str(step["run_id"]),
+                step_id=str(step["step_id"]),
+                output=_agent_native_step_output(step),
+                host_dispatch=unsupported_source_dispatch,
                 entry_source="codex_project_skill",
             )
         )

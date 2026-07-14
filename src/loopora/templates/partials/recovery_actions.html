@@ -1,0 +1,187 @@
+{% macro recovery_action_label(kind) -%}
+{% if kind == "create_workdir" %}
+<span data-lang="zh">创建项目目录</span><span data-lang="en">Create project directory</span>
+{% elif kind == "choose_workdir" %}
+<span data-lang="zh">选择项目目录</span><span data-lang="en">Choose project directory</span>
+{% elif kind == "confirm_readiness" %}
+<span data-lang="zh">确认就绪状态</span><span data-lang="en">Confirm readiness</span>
+{% elif kind == "retry_web_compose" %}
+<span data-lang="zh">重试当前表单</span><span data-lang="en">Retry this form</span>
+{% elif kind == "retry_web_run_start" %}
+<span data-lang="zh">重试启动运行</span><span data-lang="en">Retry run start</span>
+{% elif kind == "create_spec" %}
+<span data-lang="zh">创建 Spec 文件</span><span data-lang="en">Create spec file</span>
+{% elif kind == "choose_spec" %}
+<span data-lang="zh">选择 Spec 文件</span><span data-lang="en">Choose spec file</span>
+{% elif kind == "review_source_bundle" %}
+<span data-lang="zh">查看来源 Plan File</span><span data-lang="en">Review source Plan File</span>
+{% elif kind == "review_source_run" %}
+<span data-lang="zh">查看来源运行</span><span data-lang="en">Review source run</span>
+{% elif kind == "retry_revision_session" %}
+<span data-lang="zh">重试改进会话</span><span data-lang="en">Retry revision session</span>
+{% elif kind == "review_alignment_source_context" %}
+<span data-lang="zh">重新检查来源上下文</span><span data-lang="en">Review source context</span>
+{% elif kind == "retry_alignment_session_create" %}
+<span data-lang="zh">重试创建对话</span><span data-lang="en">Retry conversation start</span>
+{% elif kind == "review_alignment_bundle" %}
+<span data-lang="zh">查看候选 Plan File</span><span data-lang="en">Review candidate Plan File</span>
+{% elif kind == "sync_alignment_bundle" %}
+<span data-lang="zh">同步候选 Plan File</span><span data-lang="en">Sync candidate Plan File</span>
+{% elif kind == "retry_alignment_bundle_preview" %}
+<span data-lang="zh">重试预览</span><span data-lang="en">Retry preview</span>
+{% elif kind == "retry_alignment_import" %}
+<span data-lang="zh">重试创建 Loop</span><span data-lang="en">Retry Loop creation</span>
+{% elif kind == "open_support" %}
+<span data-lang="zh">打开支持与诊断</span><span data-lang="en">Open support and diagnostics</span>
+{% elif kind == "review_plan_file" %}
+<span data-lang="zh">查看 Plan File</span><span data-lang="en">Review Plan File</span>
+{% elif kind == "retry_plan_file_export" %}
+<span data-lang="zh">重试导出</span><span data-lang="en">Retry export</span>
+{% elif kind == "open_plan_file_library" %}
+<span data-lang="zh">打开 Plan File 列表</span><span data-lang="en">Open Plan File library</span>
+{% else %}
+{{ kind|replace("_", " ") }}
+{% endif %}
+{%- endmacro %}
+
+{% macro recovery_action_hint(kind, note="") -%}
+{% if note %}
+{{ note }}
+{% elif kind == "create_workdir" %}
+<span data-lang="zh">先在服务端创建目标项目目录。</span><span data-lang="en">Create the target project directory on the server first.</span>
+{% elif kind == "choose_workdir" %}
+<span data-lang="zh">换成一个可读取的项目目录。</span><span data-lang="en">Choose a readable project directory.</span>
+{% elif kind == "confirm_readiness" %}
+<span data-lang="zh">目录修复后运行只读检查确认状态。</span><span data-lang="en">After fixing the directory, run the read-only readiness check.</span>
+{% elif kind == "retry_web_compose" %}
+<span data-lang="zh">修复后重新提交当前表单。</span><span data-lang="en">Submit this form again after fixing the setup.</span>
+{% elif kind == "retry_web_run_start" %}
+<span data-lang="zh">修复后再次启动这次运行。</span><span data-lang="en">Start this run again after fixing the setup.</span>
+{% elif kind == "create_spec" %}
+<span data-lang="zh">先生成一个可编辑的 Spec 草稿。</span><span data-lang="en">Create an editable spec draft first.</span>
+{% elif kind == "choose_spec" %}
+<span data-lang="zh">换成一个可读取的 Markdown Spec 文件。</span><span data-lang="en">Choose a readable Markdown spec file.</span>
+{% elif kind == "review_source_bundle" %}
+<span data-lang="zh">回到来源 Plan File，确认它仍是要改进的对象。</span><span data-lang="en">Return to the source Plan File and confirm it is still the revision target.</span>
+{% elif kind == "review_source_run" %}
+<span data-lang="zh">回到来源运行，确认要基于这次证据继续改进。</span><span data-lang="en">Return to the source run and confirm this evidence is still the revision target.</span>
+{% elif kind == "retry_revision_session" %}
+<span data-lang="zh">确认来源后重新发起改进会话。</span><span data-lang="en">After reviewing the source, start the revision session again.</span>
+{% elif kind == "review_alignment_source_context" %}
+<span data-lang="zh">重新检查当前项目里可继续、可改进或可重新生成的来源。</span><span data-lang="en">Review the current project's continue, improve, or regenerate source choices.</span>
+{% elif kind == "retry_alignment_session_create" %}
+<span data-lang="zh">确认来源后重新创建 Web 对话。</span><span data-lang="en">After reviewing the source, start the Web conversation again.</span>
+{% elif kind == "review_alignment_bundle" %}
+<span data-lang="zh">回到 READY 候选方案，确认源文件仍是要创建的 Loop。</span><span data-lang="en">Return to the READY candidate and confirm the source file is still the Loop to create.</span>
+{% elif kind == "sync_alignment_bundle" %}
+<span data-lang="zh">修复候选源文件后重新读取并校验它。</span><span data-lang="en">After repairing the candidate source file, reload and validate it.</span>
+{% elif kind == "retry_alignment_bundle_preview" %}
+<span data-lang="zh">同步通过后重新打开候选方案预览。</span><span data-lang="en">After the sync passes, reopen the candidate preview.</span>
+{% elif kind == "retry_alignment_import" %}
+<span data-lang="zh">确认候选方案后再次创建 Loop。</span><span data-lang="en">After reviewing the candidate, create the Loop again.</span>
+{% elif kind == "open_support" %}
+<span data-lang="zh">查看本地诊断和公开求助边界。</span><span data-lang="en">Review local diagnostics and public support boundaries.</span>
+{% elif kind == "review_plan_file" %}
+<span data-lang="zh">检查这个 Plan File 是否仍可作为导出来源。</span><span data-lang="en">Check whether this Plan File is still a usable export source.</span>
+{% elif kind == "retry_plan_file_export" %}
+<span data-lang="zh">确认来源后重新请求导出。</span><span data-lang="en">After reviewing the source, request the export again.</span>
+{% elif kind == "open_plan_file_library" %}
+<span data-lang="zh">回到 Plan File 列表选择其他可用方案。</span><span data-lang="en">Return to the Plan File library and choose another usable plan.</span>
+{% else %}
+<span data-lang="zh">在页面上完成这一步后再重试。</span><span data-lang="en">Complete this step in the page, then retry.</span>
+{% endif %}
+{%- endmacro %}
+
+{% macro recovery_action_link_label(kind) -%}
+{% if kind == "refresh_run_detail" %}
+<span data-lang="zh">刷新页面</span><span data-lang="en">Refresh page</span>
+{% else %}
+<span data-lang="zh">打开</span><span data-lang="en">Open</span>
+{% endif %}
+{%- endmacro %}
+
+{% macro recovery_panel(recovery, testid="recovery-actions", panel_id="", summary_id="", actions_id="", status_id="", actions_testid="", title_zh="修复后再重试", title_en="Fix this, then retry", render_empty=false, workdir_context="", return_to="") -%}
+{% set actions = recovery.next_actions if recovery and recovery.next_actions else [] %}
+{% set summary = (recovery.summary or recovery.error) if recovery else "" %}
+{% if actions or render_empty %}
+<div
+  class="manual-recovery-panel"
+  {% if panel_id %}id="{{ panel_id }}"{% endif %}
+  data-recovery-panel
+  data-testid="{{ testid }}"
+  {% if not actions %}hidden{% endif %}
+>
+  <div class="manual-recovery-copy">
+    <strong>
+      <span data-lang="zh">{{ title_zh }}</span>
+      <span data-lang="en">{{ title_en }}</span>
+    </strong>
+    <p{% if summary_id %} id="{{ summary_id }}"{% endif %}>{{ summary }}</p>
+  </div>
+  <div
+    class="manual-recovery-actions"
+    {% if actions_id %}id="{{ actions_id }}"{% endif %}
+    data-testid="{{ actions_testid or (testid ~ '-items') }}"
+  >
+    {% for action in actions %}
+    <div class="manual-recovery-action" data-recovery-action-kind="{{ action.kind }}">
+      <strong>{{ recovery_action_label(action.kind) }}</strong>
+      <span>{{ recovery_action_hint(action.kind, action.note) }}</span>
+      {% if action.command %}
+      <code>{{ action.command }}</code>
+      <button class="ghost-button" type="button" data-recovery-command-copy data-copy-value="{{ action.command }}">
+        <span data-lang="zh">复制命令</span>
+        <span data-lang="en">Copy command</span>
+      </button>
+      {% elif action.form_id %}
+      {% set form_action = safe_local_return_path(action.form_action) if action.form_action else "" %}
+      {% set form_action = workdir_context_preserving_href(form_action, workdir_context) if form_action else "" %}
+      {% set form_method = (action.form_method or action.method or "POST")|upper %}
+      {% if form_method == "POST" %}
+      <button
+        class="ghost-button"
+        type="submit"
+        form="{{ action.form_id }}"
+        {% if form_action %}formaction="{{ form_action }}"{% endif %}
+        formmethod="post"
+        data-recovery-action-form
+        data-workdir-context-formaction="workdir"
+      >
+        {{ recovery_action_label(action.kind) }}
+      </button>
+      {% endif %}
+      {% elif action.form_action %}
+      {% set form_action = safe_local_return_path(action.form_action) %}
+      {% set form_action = workdir_context_preserving_href(form_action, workdir_context) if form_action else "" %}
+      {% set form_method = (action.form_method or action.method or "")|upper %}
+      {% if form_action and form_method == "POST" %}
+      <form class="inline-form" method="post" action="{{ form_action }}" data-recovery-action-form data-workdir-context-form="workdir">
+        <button class="ghost-button" type="submit">
+          {{ recovery_action_label(action.kind) }}
+        </button>
+      </form>
+      {% endif %}
+      {% elif action.redirect_url %}
+      {% set redirect_url = safe_local_return_path(action.redirect_url) %}
+      {% set support_return_to = safe_local_return_path(return_to) if return_to else "" %}
+      {% if action.kind == "open_support" and redirect_url and support_return_to %}
+      {% set redirect_url = with_query_params(redirect_url, return_to=support_return_to) %}
+      {% endif %}
+      {% set redirect_url = workdir_context_preserving_href(redirect_url, workdir_context) if redirect_url else "" %}
+      {% if redirect_url %}
+      <a
+        class="ghost-button"
+        href="{{ redirect_url }}"
+        data-recovery-action-link
+        {% if action.kind == "refresh_run_detail" %}data-run-action-recovery-link{% endif %}
+      >{{ recovery_action_link_label(action.kind) }}</a>
+      {% endif %}
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  <div class="field-status manual-recovery-status" {% if status_id %}id="{{ status_id }}"{% endif %} data-recovery-copy-status aria-live="polite" hidden></div>
+  <div class="manual-recovery-command-copy" data-recovery-command-manual-copy data-testid="{{ testid }}-command-manual-copy" hidden></div>
+</div>
+{% endif %}
+{%- endmacro %}

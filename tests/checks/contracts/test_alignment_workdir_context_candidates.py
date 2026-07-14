@@ -42,6 +42,53 @@ def test_alignment_workdir_spec_candidates_caps_source_budget(tmp_path: Path) ->
     assert candidates[-1] == state_dir / "loops" / "loop_19" / "spec.md"
 
 
+def test_alignment_workdir_spec_candidates_preserve_root_spec_when_loop_scan_fails(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    state_dir = tmp_path / ".loopora"
+    loops_dir = state_dir / "loops"
+    root_spec = state_dir / "spec.md"
+    root_spec.parent.mkdir(parents=True)
+    loops_dir.mkdir()
+    root_spec.write_text("# Root spec\n", encoding="utf-8")
+    private_path = tmp_path / "private" / "loops"
+    original_glob = Path.glob
+
+    def fail_glob(path: Path, pattern: str):
+        if path == loops_dir:
+            raise OSError(f"permission denied: {private_path}")
+        return original_glob(path, pattern)
+
+    monkeypatch.setattr(Path, "glob", fail_glob)
+
+    assert alignment_workdir_spec_candidates(state_dir) == [root_spec]
+
+
+def test_alignment_workdir_spec_candidates_skip_unavailable_spec_paths(tmp_path: Path, monkeypatch) -> None:
+    state_dir = tmp_path / ".loopora"
+    root_spec = state_dir / "spec.md"
+    good_spec = state_dir / "loops" / "loop_01" / "spec.md"
+    unavailable_spec = state_dir / "loops" / "loop_02" / "spec.md"
+    root_spec.parent.mkdir(parents=True)
+    good_spec.parent.mkdir(parents=True)
+    unavailable_spec.parent.mkdir(parents=True)
+    root_spec.write_text("# Root spec\n", encoding="utf-8")
+    good_spec.write_text("# Good spec\n", encoding="utf-8")
+    unavailable_spec.write_text("# Unavailable spec\n", encoding="utf-8")
+    private_path = tmp_path / "private" / "spec.md"
+    original_is_file = Path.is_file
+
+    def fail_is_file(path: Path) -> bool:
+        if path == unavailable_spec:
+            raise OSError(f"permission denied: {private_path}")
+        return original_is_file(path)
+
+    monkeypatch.setattr(Path, "is_file", fail_is_file)
+
+    assert alignment_workdir_spec_candidates(state_dir) == [root_spec, good_spec]
+
+
 def test_alignment_same_workdir_resolves_path_identity(tmp_path: Path) -> None:
     root = tmp_path / "project"
     root.mkdir()

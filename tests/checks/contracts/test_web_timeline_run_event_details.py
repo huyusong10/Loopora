@@ -25,6 +25,10 @@ def test_timeline_run_event_formatter_keeps_stable_observation_details() -> None
         "run_result_accepted",
         {"status": "succeeded", "task_verdict_status": "passed"},
     )
+    reopened = formatted_timeline_event(
+        "run_result_acceptance_reopened",
+        {"status": "succeeded", "task_verdict_status": "insufficient_evidence"},
+    )
     overflow_iter_finished = formatted_timeline_event(
         "run_finished",
         {"status": "succeeded", "iter": float("inf")},
@@ -45,6 +49,8 @@ def test_timeline_run_event_formatter_keeps_stable_observation_details() -> None
     )
     assert accepted["title"] == "Passing evidence verdict recorded"
     assert accepted["detail"] == "status=succeeded, task_verdict_status=passed"
+    assert reopened["title"] == "Recorded evidence verdict reopened"
+    assert reopened["detail"] == "status=succeeded, task_verdict_status=insufficient_evidence"
     assert overflow_iter_finished["title"] == "Run finished"
     assert overflow_iter_finished["detail"] == "task_verdict_status=not_evaluated"
     assert legacy_missing_verdict_finished["title"] == "Run finished"

@@ -66,5 +66,7 @@ def test_real_executor_provider_flows_have_dedicated_boundary() -> None:
     assert "ensure_resume_session_ref" in provider_flows_source
     assert "write_executor_json_output" in provider_flows_source
     assert "read_executor_json_object_output" in provider_flows_source
+    assert provider_flows_source.count("self._raise_for_unsuccessful_process(") == 4
+    assert "raise ExecutionStopped" in provider_flows_source
     assert "def read_executor_json_object_output" in result_files_source
     assert "executor_provider_flows.py" in contracts_source

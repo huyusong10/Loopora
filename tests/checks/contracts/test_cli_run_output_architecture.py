@@ -19,7 +19,8 @@ def test_cli_run_output_has_dedicated_boundary() -> None:
     design_source = (root / "design" / "contracts.md").read_text(encoding="utf-8")
 
     assert "from loopora.cli_run_output import" in support_source
-    assert "from loopora.cli_run_output import print_run_contract_summary, print_task_verdict" in step_presenters_source
+    assert "from loopora.cli_run_output import print_run_contract_anchor, print_task_verdict" in step_presenters_source
+    assert "from loopora.cli_run_contract_output import print_run_contract_anchor" in output_source
     assert "from loopora.cli_run_contract_output import print_run_contract_summary" in output_source
     assert "from loopora.cli_task_verdict_output import print_task_verdict" in output_source
     assert "def print_run_result" in output_source
@@ -27,6 +28,7 @@ def test_cli_run_output_has_dedicated_boundary() -> None:
     assert "def print_run_contract_summary" not in output_source
     assert "def print_task_verdict" not in output_source
     for marker in (
+        "def print_run_contract_anchor",
         "def print_run_contract_summary",
         "def _cli_judgment_summary",
     ):

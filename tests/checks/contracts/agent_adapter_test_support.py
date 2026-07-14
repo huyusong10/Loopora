@@ -27,6 +27,7 @@ from loopora.run_artifacts import RunArtifactLayout, read_jsonl
 from loopora.utils import append_jsonl
 from loopora.web import build_app
 from loopora.workflows import WorkflowError
+from agent_native_v3_helpers import assert_agent_v3_envelope
 from agent_adapter_expected import (
     EXPECTED_NATIVE_CONTEXT_LOADING,
     EXPECTED_NATIVE_OBSERVABILITY,
@@ -42,6 +43,46 @@ class CliRunner(_TyperCliRunner):
             kwargs.setdefault("mix_stderr", False)
         super().__init__(*args, **kwargs)
 
+
+def assert_adapter_group_previews_keep_peer_adapter_choices(
+    *,
+    uninstall_stdout: str,
+    agent_stdout: str,
+) -> None:
+    assert "Choose the managed same-Agent project entry to uninstall:" in uninstall_stdout
+    assert "Uninstall Codex:" not in uninstall_stdout
+    assert "Or uninstall" not in uninstall_stdout
+    assert "Choose the same-Agent project entry matching your current host, then check it:" in agent_stdout
+    assert "Check Codex entry:" not in agent_stdout
+    assert "Or check" not in agent_stdout
+
+
+def assert_init_group_workdir_preview(result, *, normalized_workdir: str) -> None:
+    assert result.exit_code == 0, result.output
+    assert result.stdout.startswith("Target project preview:")
+    assert "Usage:" not in result.stdout
+    assert "preview state: ready for adapter choice" in result.stdout
+    assert "project directory state: ready" in result.stdout
+    assert "supported Agent adapters: codex, claude, opencode" in result.stdout
+    assert "No such option: --workdir" not in result.output
+    assert "Missing command" not in result.output
+    assert "Installing" not in result.stdout
+    assert "Explicit adapter fallback when current-host detection is unavailable or ambiguous:" in result.stdout
+    assert "Install Codex:" not in result.stdout
+    assert "Or install" not in result.stdout
+    assert f"loopora fit --workdir {normalized_workdir}" in result.stdout
+    assert f"loopora init codex --workdir {normalized_workdir}" in result.stdout
+    assert f"loopora init claude --workdir {normalized_workdir}" in result.stdout
+    assert f"loopora init opencode --workdir {normalized_workdir}" in result.stdout
+    assert f"loopora doctor --workdir {normalized_workdir}" in result.stdout
+    assert "Fit Guide/Web choices after readiness:" in result.stdout
+    assert f"loopora serve --open --workdir {normalized_workdir} --host 127.0.0.1 --port 8742" in result.stdout
+    assert f"loopora support --workdir {normalized_workdir}" in result.stdout
+
+
+def assert_agent_check_payload(payload: dict, *, status: str) -> tuple[dict, dict]:
+    return assert_agent_v3_envelope(payload, kind="agent_check", summary_key="agent_check_summary", status=status)
+
 from agent_adapter_test_common import (
     _assert_expected_mapping_values,
     _error_text,
@@ -49,6 +90,7 @@ from agent_adapter_test_common import (
     _assert_loopora_agent_command,
     _assert_labeled_loopora_agent_command,
     _assert_loopora_cli_command,
+    _assert_loopora_serve_command as _assert_loopora_serve_command,
     _assert_recovery_choice_has_copyable_commands,
     _assert_not_ready_recovery_choice_routes_to_plan,
     _assert_non_runnable_recovery_choice_routes_to_plan,

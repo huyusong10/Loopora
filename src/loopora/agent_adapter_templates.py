@@ -21,6 +21,7 @@ from loopora.agent_adapter_host_config import (
     claude_session_additional_context as _claude_session_additional_context,
     claude_session_hook_script as _claude_session_hook_script,
 )
+from loopora.agent_adapter_check_utils import adapter_unavailable_summary as _adapter_unavailable_summary
 from loopora.agent_adapter_role_contracts import (
     role_agent_body,
     role_agent_description,
@@ -59,7 +60,7 @@ def managed_templates(kind: str) -> dict[str, str]:
         return _claude_managed_templates()
     if kind == "opencode":
         return _opencode_managed_templates()
-    raise LooporaError(f"{_adapter_label(kind)} adapter is not implemented yet")
+    raise LooporaError(_adapter_unavailable_summary(kind))
 
 
 def _codex_managed_templates() -> dict[str, str]:

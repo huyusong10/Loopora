@@ -132,3 +132,12 @@ jobs:
           else
             uv run python tests/probes/real_environment/run_real_probes.py "${args[@]}"
           fi
+
+      - name: Upload real probe reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: loopora-real-probe-reports
+          path: .loopora/real-probes/**
+          if-no-files-found: ignore
+          retention-days: 14

@@ -2,7 +2,8 @@ from __future__ import annotations
 
 """Claude Code session-context hook assets."""
 
-from loopora.system_prompt_assets import load_system_prompt_asset
+from loopora import agent_adapter_command_prefix
+from loopora.system_prompt_assets import render_system_prompt_asset
 
 CLAUDE_SETTINGS_RELATIVE_PATH = ".claude/settings.json"
 CLAUDE_SESSION_HOOK_RELATIVE_PATH = ".claude/hooks/loopora-session-context.py"
@@ -22,10 +23,19 @@ CLAUDE_SESSION_HOOK_GROUP = {
 
 
 def claude_session_additional_context() -> str:
-    return load_system_prompt_asset("agent_native/claude-session-additional-context.md").strip() + "\n"
+    return (
+        render_system_prompt_asset(
+            "agent_native/claude-session-additional-context.md",
+            {"loopora_cli_entry": agent_adapter_command_prefix.current_project_file_loopora_cli_entry()},
+        ).strip()
+        + "\n"
+    )
 
 
 def claude_session_hook_script(*, marker: str, version: int) -> str:
+    repair_command = agent_adapter_command_prefix.copyable_loopora_command(
+        'loopora init claude --check --workdir "$CLAUDE_PROJECT_DIR"'
+    )
     return f"""#!/usr/bin/env python3
 # {marker} version={version} file=loopora-session-context
 from __future__ import annotations
@@ -34,6 +44,8 @@ import json
 import os
 import shlex
 import sys
+
+REPAIR_COMMAND = {repair_command!r}
 
 
 def _read_additional_context() -> str:
@@ -44,7 +56,7 @@ def _read_additional_context() -> str:
     except OSError:
         return (
             f"Loopora Claude session context asset is missing at {{context_path}}; "
-            "run `loopora init claude --check` to restore managed files."
+            f"run `{{REPAIR_COMMAND}}` to restore managed files."
         )
 
 

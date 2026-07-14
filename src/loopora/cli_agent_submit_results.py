@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from loopora.agent_native_guidance import actionable_blocking_item as _actionable_blocking_item
 from loopora.agent_native_guidance import actionable_next_action as _actionable_next_action
+from loopora.agent_native_compact_handoff import compact_agent_next_step, compact_agent_work_panel
 from loopora.agent_native_coverage_summary import (
     coverage_gap_summaries as _coverage_gap_summaries,
     required_coverage_summary as _required_coverage_summary,
@@ -52,7 +53,7 @@ def _agent_submit_summary(result: dict, *, compact: bool = False) -> dict:
     run = result.get("run") if isinstance(result.get("run"), dict) else {}
     next_step = result.get("next_step") if isinstance(result.get("next_step"), dict) else {}
     adapter = str(result.get("adapter") or next_step.get("adapter") or "").strip() or "codex"
-    workdir = str(result.get("workdir") or run.get("workdir") or "").strip() or "$PWD"
+    workdir = str(result.get("workdir") or run.get("workdir") or "").strip()
     task_verdict = task_verdict_from_run(run)
     summary: dict[str, object] = {
         "schema_version": AGENT_NATIVE_V3_SCHEMA_VERSION,
@@ -66,7 +67,7 @@ def _agent_submit_summary(result: dict, *, compact: bool = False) -> dict:
     next_summary = _agent_next_step_summary(next_step, adapter=adapter, workdir=workdir, compact=compact)
     if next_summary:
         role_dispatch_message = next_summary.get("role_dispatch_message")
-        displayed_next_summary = _compact_next_step_summary(next_summary) if compact else next_summary
+        displayed_next_summary = compact_agent_next_step(next_summary) if compact else next_summary
         summary["next_step"] = displayed_next_summary
         _set_summary_text(summary, "next_step_id", next_summary.get("step_id"))
         _set_summary_text(summary, "next_target_agent", next_summary.get("target_agent"))
@@ -74,6 +75,7 @@ def _agent_submit_summary(result: dict, *, compact: bool = False) -> dict:
         _set_summary_text(summary, "next_context_path", next_summary.get("context_path"))
         _set_summary_text(summary, "next_step_contract_path", next_summary.get("step_contract_path"))
         _set_summary_text(summary, "next_result_template", next_summary.get("result_template"))
+        _set_summary_text(summary, "next_result_file", next_summary.get("result_file_to_write"))
         _set_summary_text(summary, "next_submit_command", next_summary.get("submit_command"))
         _set_summary_text(summary, "next_role_dispatch_message", role_dispatch_message)
     coverage_after_submit = _coverage_after_submit_summary(
@@ -84,7 +86,7 @@ def _agent_submit_summary(result: dict, *, compact: bool = False) -> dict:
     if coverage_after_submit:
         summary["coverage_after_submit"] = coverage_after_submit
     attach_native_run_surface(summary, adapter=adapter, compact=compact)
-    _set_summary_text(summary, "run_url", result.get("run_url") or result.get("run_path"))
+    _attach_run_url_summary(summary, result)
     verdict_status = _task_verdict_status(task_verdict)
     _set_summary_text(summary, "task_verdict_status", verdict_status)
     verdict_summary = ""
@@ -94,6 +96,7 @@ def _agent_submit_summary(result: dict, *, compact: bool = False) -> dict:
     task_next_action = result.get("task_next_action") if isinstance(result.get("task_next_action"), dict) else {}
     if task_next_action:
         summary["task_next_action"] = task_next_action
+    _set_summary_text(summary, "host_dispatch_attestation_source", result.get("host_dispatch_attestation_source"))
     if result.get("auto_repair_applied") is True:
         summary["auto_repair_applied"] = True
         actions = [str(item).strip() for item in list(result.get("auto_repair_actions") or []) if str(item).strip()]
@@ -108,7 +111,13 @@ def _agent_submit_summary(result: dict, *, compact: bool = False) -> dict:
             normalize_next_evidence_focus=_agent_task_proof_focus,
         )
     )
-    _set_summary_before(summary, "agent_work_panel", _agent_work_panel(result, summary=summary), "agent_surface")
+    panel = _agent_work_panel(result, summary=summary)
+    _set_summary_before(
+        summary,
+        "agent_work_panel",
+        compact_agent_work_panel(panel) if compact else panel,
+        "agent_surface",
+    )
     return {key: value for key, value in summary.items() if value not in ("", [], {})}
 
 
@@ -151,14 +160,14 @@ def _task_verdict_status(task_verdict: object) -> str:
     return ""
 
 
+def _attach_run_url_summary(summary: dict[str, object], result: dict) -> None:
+    _set_summary_text(summary, "run_url", result.get("run_url") or result.get("run_path"))
+    _set_summary_text(summary, "run_url_status", result.get("run_url_status"))
+    _set_summary_text(summary, "run_url_web_start_command", result.get("run_url_web_start_command"))
+
+
 def _agent_task_proof_focus(value: str) -> str:
     return _clip_inline(value, 220)
-
-
-def _compact_next_step_summary(summary: dict) -> dict:
-    compact_summary = dict(summary)
-    compact_summary.pop("role_dispatch_message", None)
-    return compact_summary
 
 
 def _submitted_coverage_result_items(value: object) -> list[dict]:

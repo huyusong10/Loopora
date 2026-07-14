@@ -37,19 +37,31 @@ For ordinary code work, run:
 uv run loopora dev check
 ```
 
-`loopora dev check --list` prints the expanded default-fast steps without running them. The gate runs:
+`loopora dev check --list` prints the expanded default-fast steps, changed-file detection status, focused selector choices, the focused check guide, recommended focused checks, and changed files that do not match any focused guide for the current Git changes, including non-ignored untracked files, without running them. Add `--pr-evidence` to print a template-ready `### Loopora PR Evidence` Markdown block instead of the full plain guide; JSON callers receive the same block under `pr_evidence_summary.template_markdown` with an explicit `evidence_stage` and changed-file detection line. Use `--focused-ran recommended` or explicit guide IDs on remaining focused or final evidence commands to record focused checks that already passed; decision-stage `--list --pr-evidence` notes those values but still does not count them as run evidence. When Git detection is unavailable or a script already knows the changed paths, pass repeated `--changed-file <path>` options or trailing changed-path arguments to drive the same recommendations from explicit paths instead of Git; values may be workdir-relative paths or absolute paths under `--workdir`, and reports normalize them to project-relative paths. Paths outside `--workdir` or parent-relative paths are ignored changed files and are reported separately instead of driving recommendations. When changed files exist and no provided inputs were ignored, plain output says `ignored changed files: none`; when all changed files match focused guides, it says `unmatched changed files: none`, so PR evidence can record both states directly. Plain output also prints a `PR evidence:` reminder before the command list. `loopora dev check --help` and `--list` expose the current selectors: `recommended`, `all`, and guide IDs. When recommendations exist, run them directly with:
 
 ```bash
-uv sync --locked --dry-run
-uv pip check
-find src/loopora/static -name '*.js' -print0 | xargs -0 -n1 node --check
-uv run ruff check src/loopora tests
-git diff --check
-rm -rf tmp/package-check
-mkdir -p tmp/package-check
-uv build --out-dir tmp/package-check
-uv run pytest -q tests/checks/contracts
+uv run loopora dev check --focused recommended
 ```
+
+Use `uv run loopora dev check --list` as the authoritative source for the current executable default-fast commands. The gate covers dependency lock dry-run, dependency compatibility, static JavaScript syntax, Ruff, whitespace-safe diff, package build, and contract checks.
+
+Run package-build through `loopora dev check` instead of copying a hand-rolled build sequence. The package-build step removes stale `tmp/package-check` output and generated `src/loopora.egg-info` metadata before build, opens the generated wheel and sdist to verify Web templates/static assets, Agent/Alignment prompt assets, logo assets, source package manifest, public README documents, public design documents, public diagram assets, the `loopora` console script entry point, the `python -m loopora` module entry, public project URLs, contributor/maintainer identity metadata, public discovery keywords/classifiers, Python requirement metadata, runtime dependency metadata, and the current no-license-declared boundary, then removes package output and generated metadata after pass or fail.
+
+## Focused Check Guide
+
+Use the focused guide when a pull request touches a stable boundary and needs local evidence before the full default-fast gate. `loopora dev check --list` recommends focused checks from the current changed paths, separately lists changed files that did not match a focused guide or reports `none` when every changed path matched, reports ignored changed files separately, and prints the current expanded pytest commands. Use repeated `--changed-file <path>` options or trailing changed-path arguments with `--list` or `--focused recommended` when the relevant changed paths come from a script, patch, or non-Git workspace. `loopora dev check --focused recommended` runs the recommended guides and, after they pass, points to the final `--pr-evidence --focused-ran ...` command for the same evidence scope. Partial explicit focused passes point to remaining recommended guide IDs and carry already-passed guide IDs forward with `--focused-ran`. Use `--focused <guide-id>` or comma-separated guide IDs when the stable boundary is broader than the changed-file match:
+
+| Guide ID | Boundary | Typical command |
+| --- | --- | --- |
+| `first_use_readiness` | First-use readiness and local recovery | `uv run loopora dev check --focused first_use_readiness` |
+| `web_surfaces` | Web routes, templates, and static assets | `uv run loopora dev check --focused web_surfaces` |
+| `agent_native` | Agent Native plan/run surfaces | `uv run loopora dev check --focused agent_native` |
+| `alignment_bundle` | Alignment and bundle compiler behavior | `uv run loopora dev check --focused alignment_bundle` |
+| `core_execution` | Core execution, context, and provider boundaries | `uv run loopora dev check --focused core_execution` |
+| `runtime_state` | Run lifecycle and local runtime state | `uv run loopora dev check --focused runtime_state` |
+| `open_source_collaboration` | Open-source collaboration, review/scenario evidence workflows, and distribution | `uv run loopora dev check --focused open_source_collaboration` |
+
+For pull request evidence, paste the final `### Loopora PR Evidence` block from `loopora dev check --pr-evidence`; it is the main local evidence block for decision scope, public-safe evidence command source, focused guide recommendations, unmatched/ignored changed files, guide IDs run, skipped guide IDs, final default-fast result, and package-build cleanup. Add separate notes only for unmatched stable-boundary files that needed additional focused, journey, review, or probe evidence, and for any boundary-relevant guide IDs you skipped with a reason.
 
 Use narrower pytest paths when the touched behavior has a clear local boundary. Journey checks move out of the local default-fast gate: run them when the touched change affects rendered pages, browser state, navigation, forms, or the CI/release profile asks for them. Contract and journey checks should assert user-observable behavior, public return values, stable IDs, status semantics, structured errors, persisted artifacts, and accessible controls. They should not assert private variables, CSS classes, DOM nesting, transient implementation order, or exact copy unless the copy is itself the contract.
 
@@ -72,7 +84,7 @@ python tests/probes/real_environment/run_real_probes.py --suite release-web
 
 The GitHub manual Real Probe workflow is only a wrapper around this runner. Its `release` suite selects `real-agent`, `real-cli`, and `release-web`; real workflow experiments remain opt-in through the experiment gate below and are not mixed into the release probe by default.
 
-Real probes may skip on ordinary developer machines, but the skip reason must name the missing environment switch or command template. Phase reports are written under `.loopora/real-probes/` so a failing run exposes process, model, artifact, state, and command evidence without forcing the operator to infer progress from quiet stdout.
+Real probes may skip on ordinary developer machines, but the skip reason must name the missing environment switch or command template. Phase reports are written under `.loopora/real-probes/` so a failing run exposes process, model, artifact, state, and command evidence without forcing the operator to infer progress from quiet stdout. The GitHub workflow uploads those reports as `loopora-real-probe-reports` even when the probe job fails or skips.
 
 Real probes use the current model and reasoning configuration in the real host CLI by default. They should not pass `--model`, `--effort`, `--variant`, or provider model env vars on the ordinary release path. Set `LOOPORA_REAL_PROBE_ALLOW_MODEL_OVERRIDE=1` only when the release deliberately validates an explicit external configuration override.
 

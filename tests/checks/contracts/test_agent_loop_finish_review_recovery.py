@@ -58,6 +58,10 @@ def test_cli_agent_loop_json_after_web_review_fallback_returns_structured_recove
     )
     assert summary["loop_recovery"] == "finish_web_review"
     assert summary["preview_url"].startswith("/loops/new/bundle?alignment_session_id=")
+    assert summary["preview_url_status"] == "relative_path_web_not_started"
+    assert summary["preview_url_web_start_command"].endswith(
+        f"loopora serve --open --workdir {sample_workdir.resolve()} --host 127.0.0.1 --port 8742"
+    )
     assert summary["task_anchor_preview"].startswith("Prepare a governed implementation loop")
     assert summary["after_review_slash_command"] == "/loopora-run"
     _assert_loopora_agent_command(summary["after_review_cli_command"], "run")
@@ -119,6 +123,10 @@ def test_cli_agent_loop_selected_not_ready_option_returns_current_context_comman
         payload, kind="agent_recovery", summary_key="agent_loop_recovery_summary", status="blocked"
     )
     assert summary["loop_recovery"] == "finish_web_review"
+    assert summary["preview_url_status"] == "relative_path_web_not_started"
+    assert summary["preview_url_web_start_command"].endswith(
+        f"loopora serve --open --workdir {sample_workdir.resolve()} --host 127.0.0.1 --port 8742"
+    )
     assert summary["after_review_slash_command"] == "/loopora-run"
     assert "--context-id thread-selected-review" in summary["after_review_cli_command"]
     assert "--context-id thread-original-review" not in summary["after_review_cli_command"]

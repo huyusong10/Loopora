@@ -7,6 +7,7 @@ from loopora.evidence_coverage_gatekeeper import (
     gatekeeper_has_self_measured_evidence as _gatekeeper_has_self_measured_evidence,
 )
 from loopora.evidence_support import evidence_item_is_supporting_gatekeeper_ref
+from loopora.runtime_task_language import runtime_task_text
 
 POSITIVE_COVERAGE_STATUSES = {
     "passed",
@@ -41,7 +42,12 @@ def apply_target_evidence(
         evidence_items_by_id=evidence_items_by_id,
         target_evidence_refs=target_evidence_refs,
     )
-    _apply_target_status(row, normalized=normalized, supporting_refs=supporting_refs)
+    _apply_target_status(
+        row,
+        normalized=normalized,
+        supporting_refs=supporting_refs,
+        language=str(row.get("_display_language") or "en"),
+    )
     evidence_refs = _target_row_evidence_refs(normalized=normalized, evidence_id=evidence_id, supporting_refs=supporting_refs)
     if evidence_refs:
         row["evidence_refs"] = list(dict.fromkeys([*list(row.get("evidence_refs") or []), *evidence_refs]))
@@ -70,27 +76,47 @@ def coverage_result_rows(value: object) -> list[dict]:
     return rows
 
 
-def _apply_target_status(row: dict, *, normalized: str, supporting_refs: list[str]) -> None:
+def _apply_target_status(row: dict, *, normalized: str, supporting_refs: list[str], language: str) -> None:
     if normalized in NEGATIVE_COVERAGE_STATUSES:
         row["status"] = "blocked"
-        row["reason"] = "Evidence reported this coverage target as blocked or failed."
+        row["reason"] = runtime_task_text(
+            language,
+            "Evidence reported this coverage target as blocked or failed.",
+            "证据报告这个覆盖目标已阻断或失败。",
+        )
     elif normalized in MISSING_COVERAGE_STATUSES:
         if row.get("status") not in {"blocked", "covered", "weak"}:
             row["status"] = "missing"
-            row["reason"] = "Evidence reported this coverage target is still missing."
+            row["reason"] = runtime_task_text(
+                language,
+                "Evidence reported this coverage target is still missing.",
+                "证据报告这个覆盖目标仍然缺失。",
+            )
     elif normalized in POSITIVE_COVERAGE_STATUSES:
         if supporting_refs:
             if row.get("status") != "covered":
                 row["evidence_refs"] = []
                 row["artifact_refs"] = []
             row["status"] = "covered"
-            row["reason"] = "Supporting evidence verified this coverage target."
+            row["reason"] = runtime_task_text(
+                language,
+                "Supporting evidence verified this coverage target.",
+                "支持结论的证据已经验证这个覆盖目标。",
+            )
         elif row.get("status") not in {"blocked", "covered"}:
             row["status"] = "weak"
-            row["reason"] = "Coverage was reported as positive without supporting evidence."
+            row["reason"] = runtime_task_text(
+                language,
+                "Coverage was reported as positive without supporting evidence.",
+                "覆盖结果被报告为正向，但没有支持结论的证据。",
+            )
     elif normalized in WEAK_COVERAGE_STATUSES and row.get("status") not in {"blocked", "covered"}:
         row["status"] = "weak"
-        row["reason"] = "Evidence for this coverage target is present but weak or inconclusive."
+        row["reason"] = runtime_task_text(
+            language,
+            "Evidence for this coverage target is present but weak or inconclusive.",
+            "这个覆盖目标已有证据，但证据偏弱或结论不明确。",
+        )
 
 
 def _target_row_evidence_refs(*, normalized: str, evidence_id: str, supporting_refs: list[str]) -> list[str]:

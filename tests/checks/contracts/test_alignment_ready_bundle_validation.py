@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from strategy_source_architecture_test_support import design_boundary_source
+
 import pytest
 
 from loopora.bundles import load_bundle_text
@@ -26,7 +28,7 @@ def test_alignment_ready_bundle_validation_has_dedicated_boundary() -> None:
     ready_validation_source = _loopora_source("service_alignment_ready_bundle_validation.py")
     workdir_context_source = _loopora_source("service_alignment_workdir_context.py")
     validation_source = _loopora_source("service_alignment_validation.py")
-    contracts_source = (REPO_ROOT / "design" / "contracts.md").read_text(encoding="utf-8")
+    contracts_source = design_boundary_source()
 
     assert "from loopora.service_alignment_ready_bundle_validation import" in context_source
     for marker in (

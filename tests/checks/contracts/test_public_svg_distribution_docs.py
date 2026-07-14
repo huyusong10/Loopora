@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import xml.etree.ElementTree as ET
 
-from public_svg_asset_test_support import ROOT, PUBLIC_MARKDOWN_DOCS, public_markdown_svg_refs
+from public_svg_asset_test_support import ROOT, PUBLIC_MARKDOWN_DOCS, public_markdown_svg_refs, public_svg_files
 
 
 def test_public_markdown_svg_refs_are_manifested_distribution_assets() -> None:
@@ -11,7 +11,11 @@ def test_public_markdown_svg_refs_are_manifested_distribution_assets() -> None:
     assert "include README.md README.zh-CN.md" in manifest
     assert "include HUMAN-SHAPED-LOOP.md HUMAN-SHAPED-LOOP.zh-CN.md" in manifest
     assert "include CONTRIBUTING.md" in manifest
+    assert "include CODE_OF_CONDUCT.md" in manifest
+    assert "include CHANGELOG.md" in manifest
+    assert "include GOVERNANCE.md" in manifest
     assert "include SECURITY.md" in manifest
+    assert "include SUPPORT.md" in manifest
     assert "recursive-include assets/diagrams *.svg *.md" in manifest
     assert "recursive-include src/loopora/assets/logo *.svg" in manifest
 
@@ -25,6 +29,17 @@ def test_public_markdown_svg_refs_are_manifested_distribution_assets() -> None:
     logo_ref = "./src/loopora/assets/logo/logo-with-text-horizontal.svg"
     assert logo_ref in public_markdown_svg_refs(ROOT / "README.md")
     assert logo_ref in public_markdown_svg_refs(ROOT / "README.zh-CN.md")
+
+
+def test_public_svg_distribution_omits_provisional_asset_names() -> None:
+    provisional_tokens = ("_new", "-new", "draft", "tmp", "temp", "candidate")
+    offenders = [
+        path.relative_to(ROOT).as_posix()
+        for path in public_svg_files()
+        if any(token in path.stem.lower() for token in provisional_tokens)
+    ]
+
+    assert offenders == []
 
 
 def test_readme_first_use_docs_describe_plan_files_without_bundle_internals() -> None:

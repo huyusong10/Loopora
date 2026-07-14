@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+from contextlib import suppress
 import json
 import logging
 import math
 from dataclasses import asdict
 from pathlib import Path
+from uuid import uuid4
 
 from loopora.diagnostics import get_logger, log_event
 from loopora.settings_paths import app_home
@@ -15,7 +17,7 @@ logger = get_logger(__name__)
 
 def persist_settings_best_effort(settings: AppSettings, *, path: Path) -> None:
     try:
-        path.write_text(json.dumps(asdict(settings), ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        write_settings_text_atomically(path, json.dumps(asdict(settings), ensure_ascii=False, indent=2) + "\n")
     except OSError:
         log_event(
             logger,
@@ -25,6 +27,18 @@ def persist_settings_best_effort(settings: AppSettings, *, path: Path) -> None:
             app_home=app_home(),
             path=path,
         )
+
+
+def write_settings_text_atomically(path: Path, content: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(f".{path.name}.tmp.{uuid4().hex}")
+    try:
+        tmp.write_text(content, encoding="utf-8")
+        tmp.replace(path)
+    except OSError:
+        with suppress(OSError):
+            tmp.unlink()
+        raise
 
 
 def normalize_settings_payload(payload: object, *, defaults: AppSettings) -> tuple[AppSettings, bool]:

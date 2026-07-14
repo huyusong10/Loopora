@@ -7,21 +7,69 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thanks for reporting a Loopora bug. If this might expose credentials, tokens, private workspace paths, run artifacts, evidence records, or Web access tokens, stop here and follow SECURITY.md instead of posting details publicly.
+        Thanks for reporting a Loopora bug.
+        If this might expose credentials, tokens, private workspace paths, run artifacts, evidence records, or Web access tokens,
+        stop here and follow SECURITY.md instead of posting details publicly.
+        When unsure what is safe to paste, run `loopora support` first; it is the safe public reporting router and
+        tells you which public issue bundle or doctor/version outputs are pasteable and which command/support metadata stays local.
+        Public diagnostic material allowlist: paste the public issue support bundle first when readiness or environment
+        evidence matters. Paste doctor --public-json or version output only when this template or a maintainer asks for
+        the underlying report or identity; use loopora version --json only when structured identity is requested.
+        Keep `loopora support --json`, printed command lines, JSON command fields, and local Web Support URLs local-only.
   - type: textarea
     id: summary
     attributes:
       label: Summary
-      description: What went wrong, and what user-visible behavior did you expect instead?
+      description: One or two sentences naming the affected workflow.
+    validations:
+      required: true
+  - type: textarea
+    id: actual_behavior
+    attributes:
+      label: Actual Behavior
+      description: What did Loopora do? Include the stable error, status, or visible result when possible.
+    validations:
+      required: true
+  - type: textarea
+    id: expected_behavior
+    attributes:
+      label: Expected Behavior
+      description: What user-visible behavior, public contract, or recovery path did you expect instead?
+    validations:
+      required: true
+  - type: dropdown
+    id: report_scope
+    attributes:
+      label: Report Scope
+      description: Why is this a Loopora bug rather than usage support, a feature request, or a private security report?
+      options:
+        - Reproducible Loopora behavior regression
+        - Setup/readiness blocker after following SUPPORT.md
+        - Loopora makes an upstream Agent, OS, or tool issue worse
+        - Unsure; explained in Evidence
+    validations:
+      required: true
+  - type: textarea
+    id: impact
+    attributes:
+      label: Impact And Workaround
+      description: Who or what workflow is blocked, how often it happens, and whether there is a safe workaround. Keep private project names, paths, logs, and data out of public text.
+      placeholder: |
+        - Impact:
+        - Frequency:
+        - Workaround:
     validations:
       required: true
   - type: textarea
     id: reproduction
     attributes:
       label: Reproduction
-      description: Minimal steps, commands, or Web actions that reproduce the issue without private data.
+      description: >-
+        Minimal safe steps, public command shapes, or Web actions that reproduce the issue without private data.
+        Use placeholders such as `<project-dir>`, `<Loopora checkout>`, and `<redacted>` instead of real local paths,
+        private project names, tokens, or logs. Do not paste command lines with real local paths.
       placeholder: |
-        1. Run ...
+        1. Run `loopora ... --workdir <project-dir>` or describe the Web action.
         2. Open ...
         3. Observe ...
     validations:
@@ -30,9 +78,43 @@ body:
     id: evidence
     attributes:
       label: Evidence
-      description: Paste relevant command output, error text, screenshots, or logs after removing secrets and private paths.
+      description: >-
+        Paste short redacted stable error text, visible status, screenshot descriptions, or minimal safe log excerpts.
+        Put readiness diagnostics in the Public Issue Support Bundle Or Readiness Report field below. Do not paste support JSON,
+        command lines, JSON command fields, local Web Support URLs, raw private logs, local paths, tokens, or full run artifacts.
     validations:
       required: false
+  - type: textarea
+    id: public_doctor
+    attributes:
+      label: Public Issue Support Bundle Or Readiness Report
+      description: >-
+        Optional. Prefer running `loopora support --workdir "$PWD" --public-issue-bundle` first, then paste
+        that public issue support bundle here, not the command line, support JSON, or local Web Support URL.
+        From a source checkout before install, `uv run loopora support --workdir <project-dir> --public-issue-bundle`
+        works while your shell is in the Loopora checkout; after changing into the target project, use
+        `uv --directory <Loopora checkout> run loopora support --workdir "$PWD" --public-issue-bundle`.
+        If the support bundle is unavailable or a maintainer asks for the underlying report, paste
+        `loopora doctor --public-json --workdir "$PWD" || true` output instead.
+        If the bug involves a custom Web host or port, include the same `--web-host` / `--web-port` flags
+        in the local support or doctor command. These reports include package/source identity,
+        a human-readable readiness summary, Python, OS, coarse project-directory status, redacted Web readiness blockers,
+        recovery actions, and action summaries, but omit local paths, ports, and commands by design.
+        If project-directory status is missing or not_directory, still paste the public bundle or report as evidence
+        and note that setup target remains not ready.
+      render: text
+    validations:
+      required: false
+  - type: dropdown
+    id: public_doctor_status
+    attributes:
+      label: Public Readiness Report Status
+      options:
+        - Included above
+        - Not relevant to this defect
+        - Could not run; explained in Evidence
+    validations:
+      required: true
   - type: dropdown
     id: surface
     attributes:
@@ -41,34 +123,53 @@ body:
       options:
         - CLI
         - Web
-        - Agent adapter
+        - Same-Agent setup or Agent adapter
         - Loop/run runtime
-        - Bundle import/export
+        - Plan File import/export
+        - Support or diagnostics
+        - Local .loopora state
+        - Run artifacts or evidence records
         - Packaging or install
-        - Documentation
+        - Public docs or repository collaboration
     validations:
       required: true
   - type: input
     id: version
     attributes:
       label: Version Or Commit
-      description: Loopora version, commit SHA, or branch.
+      description: >-
+        Optional when the public issue support bundle or readiness report above already includes package/source identity.
+        If not, paste `loopora --version` output, or `loopora version --json` when structured identity is requested.
+        Paste the output, not the command line; a commit SHA or branch is also useful.
+      placeholder: Included in public issue support bundle above
     validations:
-      required: true
+      required: false
   - type: input
     id: environment
     attributes:
       label: Environment
-      description: Operating system, Python version, and relevant Agent host if any.
-      placeholder: "macOS 14, Python 3.12, Codex"
+      description: >-
+        Optional when the public issue support bundle or readiness report above already includes OS and Python details.
+        If not, add operating system, Python version, and relevant Agent host if any.
+      placeholder: "Included in public issue support bundle above, or macOS 14, Python 3.12, Codex"
     validations:
-      required: true
+      required: false
   - type: checkboxes
     id: checks
     attributes:
       label: Public Report Checklist
       options:
+        - label: >-
+            I pasted the public issue support bundle first when readiness or
+            environment evidence mattered, used public doctor/version output only
+            when requested, and did not paste support JSON, command lines, JSON
+            command fields, or local Web Support URLs.
+          required: true
+        - label: When unsure which diagnostic material was public, I used `loopora support` or SUPPORT.md first and followed the public allowlist.
+          required: true
         - label: I removed secrets, tokens, private logs, private workspace paths, and sensitive run artifacts.
+          required: true
+        - label: I used placeholders such as <project-dir>, <Loopora checkout>, or <redacted> instead of real local paths in reproduction steps.
           required: true
         - label: This is not a private security report; SECURITY.md is the right path for vulnerabilities.
           required: true

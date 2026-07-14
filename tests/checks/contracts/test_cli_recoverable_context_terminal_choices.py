@@ -52,6 +52,30 @@ def test_cli_recoverable_context_list_keeps_runnable_choices_visible(capsys) -> 
     assert "Unfinished preview 4" not in output
 
 
+def test_cli_recoverable_context_prints_lifecycle_retry_choice(capsys) -> None:
+    retry_choice = _lifecycle_retry_choice()
+
+    cli_agent_adapter_commands._print_recoverable_context_choices({"confidence": "exact", "choices": [retry_choice]})
+
+    output = capsys.readouterr().out
+
+    for term in (
+        "- retry_lifecycle_failure: Retry failed run start: Ship the focused starter experience.",
+        "choice_status: terminal_retry",
+        "failed before evidence work could start",
+        "linked_run_status: failed",
+        "linked_run_lifecycle_failure: true",
+        "recording_blocked_reason: cannot accept lifecycle failure as a run result",
+        "task_verdict: not_evaluated",
+        "next_loop_command: /loopora-run option:agent_run:align_retry",
+    ):
+        assert term in output
+    summary = cli_agent_adapter_commands._recoverable_context_choice_summary(retry_choice)
+    assert summary["action"] == "retry_lifecycle_failure"
+    assert summary["linked_run_lifecycle_failure"] is True
+    assert summary["recording_blocked_reason"] == "cannot accept lifecycle failure as a run result"
+
+
 def test_cli_terminal_passed_task_next_action_explains_no_next_pass(capsys) -> None:
     cli_agent_adapter_commands._print_terminal_task_next_action(
         {"status": "passed", "summary": "Required coverage has direct evidence."}
@@ -82,6 +106,30 @@ def _terminal_pass_choice(*, updated_at: str = "2026-05-19T20:28:10Z") -> dict:
         "updated_at": updated_at,
         "next_slash_command": "/loopora-run option:agent_run:align_passed",
         "next_cli_command": "loopora agent codex run --source-option-id agent_run:align_passed",
+    }
+
+
+def _lifecycle_retry_choice() -> dict:
+    return {
+        "action": "retry_lifecycle_failure",
+        "label_en": "Retry failed run start: Ship the focused starter experience.",
+        "option_id": "agent_run:align_retry",
+        "alignment_session_id": "align_retry",
+        "linked_run_id": "run_failed_start",
+        "linked_run_status": "failed",
+        "linked_run_lifecycle_failure": True,
+        "recording_blocked_reason": "cannot accept lifecycle failure as a run result",
+        "choice_status": "terminal_retry",
+        "choice_hint_en": (
+            "Retry a terminal run that failed before evidence work could start; selecting this starts a fresh run from the reviewed Loop."
+        ),
+        "task_verdict_status": "not_evaluated",
+        "task_verdict_summary": "No evidence ledger entries are available yet.",
+        "runnable": True,
+        "alignment_status": "running_loop",
+        "updated_at": "2026-05-19T20:28:10Z",
+        "next_slash_command": "/loopora-run option:agent_run:align_retry",
+        "next_cli_command": "loopora agent codex run --source-option-id agent_run:align_retry",
     }
 
 

@@ -54,14 +54,18 @@ class LooporaServiceRuntime(
         repository: LooporaRepository,
         settings: AppSettings,
         executor_factory: Callable[[], CodexExecutor] | None = None,
+        *,
+        apply_startup_repairs: bool = True,
     ) -> None:
         self.repository = repository
         self.asset_catalog = StrategyTemplateAssetCatalog(repository)
         self.settings = settings
         self.executor_factory = executor_factory or executor_from_environment
         self._threads: dict[str, threading.Thread] = {}
-        self._reconcile_stale_runs()
-        self._backfill_missing_run_takeaway_projections()
+        if apply_startup_repairs:
+            self._reconcile_stale_runs()
+            self.reconcile_orphaned_alignment_sessions()
+            self._backfill_missing_run_takeaway_projections()
 
     def _loop_log_context(self, loop: dict | None, **context) -> dict[str, object]:
         payload = dict(context)
@@ -139,6 +143,9 @@ class RunService(_RuntimeComponent):
     def start_run(self, loop_id: str) -> dict:
         return self.runtime.start_run(loop_id)
 
+    def start_next_run(self, loop_id: str) -> dict:
+        return self.runtime.start_next_run(loop_id)
+
     def start_run_async(self, run_id: str) -> None:
         self.runtime.start_run_async(run_id)
 
@@ -150,6 +157,9 @@ class RunService(_RuntimeComponent):
 
     def observation_snapshot(self, run_id: str) -> dict:
         return self.runtime.run_observation_snapshot(run_id)
+
+    def build_evidence_package(self, run_id: str):
+        return self.runtime.build_run_evidence_package(run_id)
 
     def runtime_activity(self) -> dict:
         return self.runtime.get_runtime_activity()
@@ -205,11 +215,13 @@ class LooporaAppServices:
         repository: LooporaRepository,
         settings: AppSettings,
         executor_factory: Callable[[], CodexExecutor] | None = None,
+        apply_startup_repairs: bool = True,
     ) -> LooporaAppServices:
         runtime = LooporaServiceRuntime(
             repository=repository,
             settings=settings,
             executor_factory=executor_factory,
+            apply_startup_repairs=apply_startup_repairs,
         )
         return cls(
             runtime=runtime,

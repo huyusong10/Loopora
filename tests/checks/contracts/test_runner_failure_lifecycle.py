@@ -6,6 +6,7 @@ from runner_helpers import (
     _create_loop,
     _force_run_missing_strategy_snapshot,
 )
+from loopora.service_runner_failure_handling import RUN_LOCAL_RUNTIME_ERROR
 
 
 def test_unexpected_run_error_marks_run_failed(service_factory, sample_spec_file: Path, sample_workdir: Path) -> None:
@@ -34,6 +35,33 @@ def test_unexpected_run_error_marks_run_failed(service_factory, sample_spec_file
         and event["payload"].get("task_verdict_summary")
         for event in events
     )
+
+
+def test_unexpected_run_os_error_uses_stable_local_runtime_failure(
+    service_factory,
+    sample_spec_file: Path,
+    sample_workdir: Path,
+    tmp_path: Path,
+) -> None:
+    service = service_factory(scenario="success")
+    loop = _create_loop(service, sample_spec_file, sample_workdir, name="Crash Loop")
+    run = service.start_run(loop["id"])
+    private_path = tmp_path / "private" / "runner-context.json"
+
+    def explode(*_args, **_kwargs):
+        raise OSError(f"permission denied: {private_path}")
+
+    service._resolve_run_checks = explode  # type: ignore[method-assign]
+
+    failed = service.execute_run(run["id"])
+
+    assert failed["status"] == "failed"
+    assert failed["error_message"] == RUN_LOCAL_RUNTIME_ERROR
+    assert "permission denied" not in failed["error_message"]
+    assert str(private_path) not in failed["error_message"]
+    events = service.repository.list_events(run["id"], after_id=0, limit=1000)
+    aborted = next(event for event in events if event["event_type"] == "run_aborted")
+    assert aborted["payload"]["error"] == RUN_LOCAL_RUNTIME_ERROR
 
 
 def test_empty_strategy_snapshot_fails_closed_without_legacy_runtime(

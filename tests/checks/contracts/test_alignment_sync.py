@@ -3,6 +3,7 @@ from pathlib import Path
 import pytest
 
 from loopora.service_alignment_bundle_lifecycle import AlignmentBundleLifecycleContext
+from loopora.service_alignment_bundle_validation_payloads import ALIGNMENT_BUNDLE_SAVE_FAILED_ERROR
 from loopora.service_alignment_sync import AlignmentSyncContext, sync_alignment_bundle_from_file
 from loopora.service_types import LooporaConflictError, LooporaError
 
@@ -105,7 +106,11 @@ def test_alignment_sync_command_records_missing_file_failure(tmp_path: Path) -> 
     assert result["bundle"] is None
     assert repo.session["status"] == "failed"
     assert repo.session["validation"]["ok"] is False
-    assert "alignment bundle does not exist" in repo.session["error_message"]
+    assert repo.session["error_message"] == "alignment bundle does not exist"
+    assert repo.session["validation"]["semantic_lint"]["issues"] == ["alignment bundle does not exist"]
+    assert str(tmp_path) not in repo.session["error_message"]
+    assert str(tmp_path) not in repo.session["validation"]["error"]
+    assert str(tmp_path) not in repo.session["validation"]["semantic_lint"]["issues"][0]
     assert repo.session["transcript"][-1]["content"].startswith("Failed to reload bundle.yml:")
     assert validation_logs[0]["validation"]["semantic_lint"]["ok"] is False
     assert_event_types(repo, "alignment_message", "alignment_bundle_sync_failed")
@@ -130,6 +135,37 @@ def test_alignment_sync_command_records_validation_failure(tmp_path: Path) -> No
     assert repo.session["status"] == "failed"
     assert repo.session["error_message"] == "bundle semantic lint failed"
     assert validation_logs[0]["validation"]["semantic_lint"] == {"ok": False, "issues": ["semantic gap"]}
+    assert_event_types(repo, "alignment_message", "alignment_bundle_sync_failed")
+
+
+def test_alignment_sync_command_records_save_failure_without_local_details(tmp_path: Path, monkeypatch) -> None:
+    repo, context, validation_logs, _preview_requests = sync_case(tmp_path)
+    bundle_path = Path(repo.session["bundle_path"])
+    original_yaml = bundle_path.read_text(encoding="utf-8")
+    original_replace = Path.replace
+
+    def fail_bundle_save_only(path: Path, target: Path):
+        if Path(target) == bundle_path and Path(path).name.startswith(f".{bundle_path.name}.tmp."):
+            raise OSError(f"permission denied: {bundle_path}")
+        return original_replace(path, target)
+
+    monkeypatch.setattr(Path, "replace", fail_bundle_save_only)
+
+    result = sync_bundle(context)
+
+    assert result["ok"] is False
+    assert repo.session["status"] == "failed"
+    assert repo.session["error_message"] == ALIGNMENT_BUNDLE_SAVE_FAILED_ERROR
+    assert repo.session["validation"]["error"] == ALIGNMENT_BUNDLE_SAVE_FAILED_ERROR
+    assert repo.session["validation"]["semantic_lint"]["issues"] == [ALIGNMENT_BUNDLE_SAVE_FAILED_ERROR]
+    assert validation_logs[0]["validation"]["error"] == ALIGNMENT_BUNDLE_SAVE_FAILED_ERROR
+    encoded_session = str(repo.session)
+    assert "permission denied" not in encoded_session
+    assert str(bundle_path) not in repo.session["error_message"]
+    assert str(bundle_path) not in repo.session["validation"]["error"]
+    assert str(bundle_path) not in repo.session["transcript"][-1]["content"]
+    assert bundle_path.read_text(encoding="utf-8") == original_yaml
+    assert not list(bundle_path.parent.glob(f".{bundle_path.name}.tmp.*"))
     assert_event_types(repo, "alignment_message", "alignment_bundle_sync_failed")
 
 

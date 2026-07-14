@@ -87,7 +87,12 @@ def test_api_orchestration_rejects_invalid_prompt_file_payloads(service_factory,
     response = client.post("/api/orchestrations", json=payload)
 
     assert response.status_code == HTTPStatus.BAD_REQUEST
-    assert error_message in response.json()["error"]
+    response_payload = response.json()
+    assert error_message in response_payload["error"]
+    assert response_payload["error_code"] == "asset_validation_failed"
+    fields = [item["field"] for item in response_payload["field_errors"]]
+    assert "prompt_files_json" in fields
+    assert response_payload["next_actions"][0]["fields"] == fields
 
 
 def test_api_get_orchestration_sanitizes_invalid_persisted_prompt_file_keys(service_factory) -> None:

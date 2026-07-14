@@ -10,6 +10,7 @@ from loopora.service_alignment_session_lifecycle import (
     start_alignment_session_sync,
 )
 from loopora.service_types import LooporaConflictError
+from loopora.service_alignment_failure_recovery import ALIGNMENT_WORKER_START_ERROR
 
 
 class FakeAlignmentLifecycleRepository:
@@ -137,6 +138,26 @@ def test_start_alignment_session_lifecycle_rejects_active_session_or_live_thread
 
     with pytest.raises(LooporaConflictError, match="already running"):
         start_alignment_session_async(idle_context, "align_idle", active_statuses={"running"})
+
+
+def test_start_alignment_session_lifecycle_persists_recoverable_thread_start_failure() -> None:
+    repo = lifecycle_repo("align_start_failed", "idle")
+    context, threads, thread, _diagnostics = lifecycle_context(repo)
+
+    def fail_start() -> None:
+        raise RuntimeError("private thread startup detail")
+
+    thread.start = fail_start  # type: ignore[method-assign]
+    start_alignment_session_async(context, "align_start_failed", active_statuses={"running"})
+
+    assert threads == {}
+    assert repo.session["status"] == "failed"
+    assert repo.session["error_message"] == ALIGNMENT_WORKER_START_ERROR
+    assert repo.events[-1] == {
+        "event_type": "alignment_failed",
+        "payload": {"status": "failed", "error": ALIGNMENT_WORKER_START_ERROR, "reason": "worker_start_failed"},
+    }
+    assert "private thread startup detail" not in str(repo.events)
 
 
 def test_cancel_alignment_session_lifecycle_requests_stop_and_records_signal_diagnostic() -> None:

@@ -1,5 +1,9 @@
 {% extends "base.html" %}
+{% from "partials/recovery_actions.html" import recovery_panel %}
 {% block title %}{{ 'Plan Files' if page_locale == 'en' else '方案文件' }}{% endblock %}
+{% block styles %}
+<link rel="stylesheet" href="{{ static_asset_url('pages/alignment.css') }}" />
+{% endblock %}
 {% block content %}
 <div class="page-stack page-stack--catalog" data-testid="bundles-page">
   <section class="hero hero-tight">
@@ -14,15 +18,182 @@
       </p>
     </div>
     <div class="card-actions">
-      <a class="primary-button" href="/loops/new/manual#bundle-import-form" data-testid="bundles-create-loop-link">
+      <a class="primary-button" href="#bundle-import-panel" data-testid="bundles-import-plan-link">
         <span data-lang="zh">导入方案文件</span>
         <span data-lang="en">Import Plan File</span>
       </a>
-      <a class="ghost-button" href="/loops/new/bundle">
-        <span data-lang="zh">Web 编排</span>
-        <span data-lang="en">Web Composer</span>
+      <a class="secondary-button" href="{{ nav_bundle_import_href }}" data-testid="bundles-create-loop-import-link" data-workdir-context-link="workdir">
+        <span data-lang="zh">导入并创建 Loop</span>
+        <span data-lang="en">Import and Create Loop</span>
+      </a>
+      <a class="ghost-button" href="{{ nav_compose_href }}" data-testid="bundles-compose-loop-link" data-workdir-context-link="workdir">
+        <span data-lang="zh">选择创建方式</span>
+        <span data-lang="en">Choose Creation Path</span>
       </a>
     </div>
+  </section>
+
+  <section class="panel" id="bundle-import-panel" data-testid="bundle-import-panel">
+    <header class="panel-header">
+      <h2>
+        {% if import_values.replace_bundle_id %}
+        <span data-lang="zh">替换方案文件</span><span data-lang="en">Replace a Plan File</span>
+        {% else %}
+        <span data-lang="zh">导入方案文件</span><span data-lang="en">Import a Plan File</span>
+        {% endif %}
+      </h2>
+    </header>
+    <p class="panel-note">
+      {% if import_values.replace_bundle_id %}
+      <span data-lang="zh">先预览新的 YAML 方案文件，再明确覆盖当前这份 Plan file。需要导入后立刻创建或运行 Loop 时，可以继续使用创建页面的导入路径。</span>
+      <span data-lang="en">Preview the new YAML before explicitly replacing this plan file. Use the create-page import path when you want to create or run a Loop immediately after import.</span>
+      {% else %}
+      <span data-lang="zh">把已有 YAML 方案文件导入为可管理的 Plan file。需要导入后立刻创建或运行 Loop 时，可以继续使用创建页面的导入路径。</span>
+      <span data-lang="en">Import existing YAML as a manageable plan file. Use the create-page import path when you want to create or run a Loop immediately after import.</span>
+      {% endif %}
+    </p>
+    {% if import_values.replace_bundle_id %}
+    <div class="field-status is-success" data-testid="bundle-replace-target-note">
+      <span data-lang="zh">当前导入会显式替换已有方案文件 <code>{{ import_values.replace_bundle_id }}</code>。预览只检查新 YAML 的 Loop 语义，提交后才会覆盖。</span>
+      <span data-lang="en">This import will explicitly replace plan <code>{{ import_values.replace_bundle_id }}</code>. Preview checks the new YAML semantics only; the plan is replaced on submit.</span>
+    </div>
+    {% endif %}
+    <form
+      class="form-panel"
+      id="bundle-import-form-fields"
+      method="post"
+      action="{{ bundle_import_form_action }}"
+      data-import-intent="{{ 'replace' if import_values.replace_bundle_id else 'import' }}"
+      data-testid="bundle-import-form"
+      data-workdir-context-form="workdir"
+    >
+      <div class="field-status is-error" id="bundle-import-error" data-testid="bundle-import-error" aria-live="polite" {% if not import_error %}hidden{% endif %}>{{ import_error or "" }}</div>
+      {{ recovery_panel(import_recovery, "bundle-import-recovery", render_empty=true, workdir_context=workdir_context, return_to=current_return_to) }}
+      <input type="hidden" name="import_intent" value="{{ 'replace' if import_values.replace_bundle_id else 'import' }}" />
+      {% if import_values.replace_bundle_id %}
+      <input type="hidden" id="bundle-import-replace-id" name="replace_bundle_id" value="{{ import_values.replace_bundle_id }}" />
+      {% endif %}
+      <div class="form-grid">
+        <label>
+          <span><span data-lang="zh">方案文件路径</span><span data-lang="en">Plan file path</span></span>
+          <div class="field-inline-row">
+            <input id="bundle-import-path" name="bundle_path" value="{{ import_values.bundle_path }}" placeholder="/absolute/path/to/plan.yml" />
+            {% if access_state.native_dialogs_enabled %}
+            <button
+              class="ghost-button"
+              type="button"
+              data-pick-file
+              data-pick-endpoint="/api/system/pick-bundle-file"
+              data-target-input="bundle-import-path"
+            >
+              <span data-lang="zh">浏览</span>
+              <span data-lang="en">Browse</span>
+            </button>
+            {% endif %}
+          </div>
+        </label>
+        <label class="wide">
+          <span><span data-lang="zh">方案文件内容</span><span data-lang="en">Plan file content</span></span>
+          <textarea id="bundle-import-yaml" name="bundle_yaml" rows="8">{{- import_values.bundle_yaml -}}</textarea>
+        </label>
+      </div>
+      <div class="card-actions">
+        <button class="secondary-button" type="button" id="bundle-preview-button" data-testid="bundle-preview-button">
+          {% if import_values.replace_bundle_id %}
+          <span data-lang="zh">预览替换方案</span>
+          <span data-lang="en">Preview Replacement</span>
+          {% else %}
+          <span data-lang="zh">预览方案</span>
+          <span data-lang="en">Preview Plan</span>
+          {% endif %}
+        </button>
+        <button class="primary-button" type="submit" data-testid="bundle-import-submit-button">
+          {% if import_values.replace_bundle_id %}
+          <span data-lang="zh">替换方案文件</span>
+          <span data-lang="en">Replace Plan File</span>
+          {% else %}
+          <span data-lang="zh">导入方案文件</span>
+          <span data-lang="en">Import Plan File</span>
+          {% endif %}
+        </button>
+      </div>
+    </form>
+    <section class="alignment-ready-preview alignment-artifact-card manual-bundle-preview" id="alignment-ready-preview" data-testid="alignment-ready-preview" hidden>
+      <header class="alignment-artifact-head">
+        <div>
+          <span class="alignment-artifact-kicker" id="bundle-preview-title">
+            <span data-lang="zh">方案预览已准备好</span>
+            <span data-lang="en">Plan preview is ready</span>
+          </span>
+          <h2 id="alignment-artifact-name">-</h2>
+          <p class="panel-note" id="alignment-ready-note"></p>
+        </div>
+        <div class="card-actions card-actions-compact">
+          <button class="primary-button" type="button" id="bundle-preview-import-button" data-testid="bundle-preview-import-button" hidden>
+            {% if import_values.replace_bundle_id %}
+            <span data-lang="zh">替换为此预览</span>
+            <span data-lang="en">Replace With Preview</span>
+            {% else %}
+            <span data-lang="zh">按预览导入</span>
+            <span data-lang="en">Import Preview</span>
+            {% endif %}
+          </button>
+        </div>
+      </header>
+      <section class="alignment-repair-guide" id="alignment-repair-guide" data-testid="alignment-repair-guide" hidden></section>
+      <div class="alignment-artifact-stage" data-testid="alignment-artifact-stage">
+        <div class="workflow-loop-card alignment-workflow-card alignment-workflow-card--hero" id="alignment-workflow-diagram" data-testid="alignment-workflow-diagram"></div>
+      </div>
+      <div class="alignment-decision-strip" data-testid="alignment-artifact-summary">
+        <p class="alignment-decision-risk" id="alignment-artifact-roles">-</p>
+        <div class="alignment-decision-facts">
+          <span id="alignment-artifact-verdict">-</span>
+          <span id="alignment-artifact-judgment">-</span>
+          <span id="alignment-artifact-workdir">
+            <span data-lang="zh">运行目录：-</span>
+            <span data-lang="en">Run directory: -</span>
+          </span>
+          <div class="alignment-artifact-source" id="alignment-artifact-source" data-testid="alignment-artifact-source" hidden>
+            <span class="alignment-artifact-source-path" id="alignment-source-path" hidden></span>
+            <button
+              class="ghost-button"
+              type="button"
+              id="alignment-source-open-button"
+              data-testid="alignment-source-open-button"
+              data-path-action-mode="{{ 'open' if access_state.native_dialogs_enabled else 'copy' }}"
+              hidden
+            >
+              {% if access_state.native_dialogs_enabled %}
+              <span data-lang="zh">打开源文件</span>
+              <span data-lang="en">Open source file</span>
+              {% else %}
+              <span data-lang="zh">复制源文件路径</span>
+              <span data-lang="en">Copy source path</span>
+              {% endif %}
+            </button>
+          </div>
+        </div>
+      </div>
+      <section class="alignment-control-summary" id="alignment-control-summary" data-testid="alignment-control-summary"></section>
+      <section class="alignment-judgment-map" id="alignment-judgment-map" data-testid="alignment-judgment-map" hidden></section>
+      <section class="alignment-diagnostics-strip" id="alignment-diagnostics-strip" data-testid="alignment-diagnostics-strip" hidden></section>
+      <div class="alignment-preview-tabs" data-testid="alignment-preview-tabs" role="tablist" aria-label="{{ 'Loop 预览' if page_locale == 'zh' else 'Loop plan preview' }}">
+        <button type="button" class="alignment-preview-tab is-active" data-preview-tab="spec" data-testid="alignment-preview-tab-spec" role="tab" aria-selected="true">
+          <span data-lang="zh">Loop 契约</span><span data-lang="en">spec</span>
+        </button>
+        <button type="button" class="alignment-preview-tab" data-preview-tab="roles" data-testid="alignment-preview-tab-roles" role="tab" aria-selected="false">
+          <span data-lang="zh">角色</span><span data-lang="en">roles</span>
+        </button>
+      </div>
+      <div class="alignment-preview-panels">
+        <section class="alignment-preview-section" data-preview-panel="spec">
+          <article class="preview-box markdown-preview" id="alignment-spec-preview" data-testid="alignment-spec-preview"></article>
+        </section>
+        <section class="alignment-preview-section" data-preview-panel="roles" hidden>
+          <div class="alignment-role-list" id="alignment-role-list" data-testid="alignment-role-list"></div>
+        </section>
+      </div>
+    </section>
   </section>
 
   <section class="panel">
@@ -33,38 +204,84 @@
       <span data-lang="zh">这条路径适合把现有 Loop 导出成可交换 YAML，再交给外部智能体、团队成员或其他工具使用。</span>
       <span data-lang="en">Use this path to export an existing Loop into exchangeable YAML for an external agent, teammate, or another tool.</span>
     </p>
-    <form class="form-panel" method="post" action="/bundles/derive" data-testid="bundle-derive-form">
-      <div class="field-status is-error" aria-live="polite" {% if not derive_error %}hidden{% endif %}>{{ derive_error or "" }}</div>
-      <div class="form-grid">
-        <label>
-          <span><span data-lang="zh">Loop</span><span data-lang="en">Loop</span></span>
-          <select name="loop_id">
-            <option value="">{{ '请选择' if page_locale == 'zh' else 'Choose one' }}</option>
-            {% for loop_item in loops %}
-            <option value="{{ loop_item.id }}" {% if derive_values.loop_id == loop_item.id %}selected{% endif %}>{{ loop_item.name }} · {{ loop_item.id }}</option>
-            {% endfor %}
-          </select>
-        </label>
-        <label>
-          <span><span data-lang="zh">方案名称</span><span data-lang="en">Plan name</span></span>
-          <input name="name" value="{{ derive_values.name }}" />
-        </label>
-        <label class="wide">
-          <span><span data-lang="zh">描述</span><span data-lang="en">Description</span></span>
-          <textarea name="description" rows="3">{{- derive_values.description -}}</textarea>
-        </label>
-        <label class="wide">
-          <span><span data-lang="zh">协作摘要</span><span data-lang="en">Collaboration summary</span></span>
-          <textarea name="collaboration_summary" rows="3">{{- derive_values.collaboration_summary -}}</textarea>
-        </label>
+    <div class="field-status is-error" data-testid="bundle-derive-error" aria-live="polite" {% if not derive_error %}hidden{% endif %}>{{ derive_error or "" }}</div>
+    {{ recovery_panel(derive_recovery, "bundle-derive-recovery", workdir_context=workdir_context, return_to=current_return_to) }}
+    {% if loops %}
+      <form
+        class="form-panel"
+        id="bundle-derive-form-fields"
+        method="post"
+        action="{{ bundle_derive_form_action }}"
+        data-testid="bundle-derive-form"
+        data-workdir-context-form="workdir"
+      >
+        <div class="form-grid">
+          <label>
+            <span><span data-lang="zh">Loop</span><span data-lang="en">Loop</span></span>
+            <select name="loop_id" data-testid="bundle-derive-loop-select">
+              <option value="">{{ '请选择' if page_locale == 'zh' else 'Choose one' }}</option>
+              {% for loop_item in loops %}
+              <option value="{{ loop_item.id }}" {% if derive_values.loop_id == loop_item.id %}selected{% endif %}>{{ loop_item.name }} · {{ loop_item.id }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <label>
+            <span><span data-lang="zh">方案名称</span><span data-lang="en">Plan name</span></span>
+            <input name="name" value="{{ derive_values.name }}" />
+          </label>
+          <label class="wide">
+            <span><span data-lang="zh">描述</span><span data-lang="en">Description</span></span>
+            <textarea name="description" rows="3">{{- derive_values.description -}}</textarea>
+          </label>
+          <label class="wide">
+            <span><span data-lang="zh">协作摘要</span><span data-lang="en">Collaboration summary</span></span>
+            <textarea name="collaboration_summary" rows="3">{{- derive_values.collaboration_summary -}}</textarea>
+          </label>
+        </div>
+        <div class="card-actions">
+          <button class="primary-button" type="submit" name="derive_action" value="save" data-testid="bundle-derive-save-button">
+            <span data-lang="zh">保存到 Plan files</span>
+            <span data-lang="en">Save to Plan Files</span>
+          </button>
+          <button class="secondary-button" type="submit" name="derive_action" value="download" data-testid="bundle-derive-download-button">
+            <span data-lang="zh">下载 YAML</span>
+            <span data-lang="en">Download YAML</span>
+          </button>
+        </div>
+      </form>
+    {% else %}
+      <div class="empty-state empty-state--compact" data-testid="bundle-derive-empty-state">
+        <img class="empty-state-logo" src="{{ logo_asset_url('logo.svg') }}" alt="" aria-hidden="true" />
+        <h3>
+          {% if workdir_context and hidden_loop_count > 0 %}
+          <span data-lang="zh">当前目标项目还没有可导出的 Loop</span><span data-lang="en">No Loop is ready to export for this target project</span>
+          {% else %}
+          <span data-lang="zh">还没有可导出的 Loop</span><span data-lang="en">No Loop is ready to export</span>
+          {% endif %}
+        </h3>
+        <p>
+          {% if workdir_context and hidden_loop_count > 0 %}
+          <span data-lang="zh">其它目标项目里已有可导出的 Loop。你可以查看全部，或继续为当前目标项目创建新的 Loop。</span>
+          <span data-lang="en">Other target projects already have exportable Loops. View all, or create a new Loop for the current target project.</span>
+          {% else %}
+          <span data-lang="zh">先创建或编排一个 Loop，再回来把它导出成可交换的 YAML 方案文件。</span>
+          <span data-lang="en">Create or compose a Loop first, then return here to export it as exchangeable YAML.</span>
+          {% endif %}
+        </p>
+        <div class="card-actions">
+          {% if workdir_context and hidden_loop_count > 0 %}
+          <a class="secondary-button" href="{{ bundles_all_href }}" data-testid="bundle-derive-show-all-link">
+            <span data-lang="zh">查看全部可导出 Loop</span>
+            <span data-lang="en">View all exportable Loops</span>
+          </a>
+          {% endif %}
+          <a class="primary-button" href="{{ nav_compose_href }}" data-testid="bundle-derive-create-loop-link" data-workdir-context-link="workdir">
+            <span data-lang="zh">创建 Loop</span>
+            <span data-lang="en">Create Loop</span>
+          </a>
+        </div>
       </div>
-      <div class="card-actions">
-        <button class="secondary-button" type="submit">
-          <span data-lang="zh">导出方案文件</span>
-          <span data-lang="en">Export Plan File</span>
-        </button>
-      </div>
-    </form>
+    {% endif %}
   </section>
 
   <section class="panel" data-testid="bundle-list">
@@ -75,13 +292,16 @@
     {% if bundles %}
       <div class="loop-grid loop-grid--created" id="bundle-grid">
         {% for bundle in bundles %}
+        {% set bundle_detail_href = workdir_context_href(bundle.detail_href|default('/bundles/' ~ bundle.id, true), workdir_context) %}
+        {% set bundle_export_href = workdir_context_href(bundle.export_href|default('/bundles/' ~ bundle.id ~ '/export', true), workdir_context) %}
         <article
           class="loop-card is-clickable"
-          data-open-card="/bundles/{{ bundle.id }}"
+          data-open-card="{{ bundle_detail_href }}"
+          data-workdir-context-open-card="workdir"
           data-testid="bundle-exchange-item-{{ bundle.id }}"
           tabindex="0"
         >
-          <a class="loop-card-link" href="/bundles/{{ bundle.id }}" tabindex="-1" aria-hidden="true"></a>
+          <a class="loop-card-link" href="{{ bundle_detail_href }}" tabindex="-1" aria-hidden="true" data-workdir-context-link="workdir"></a>
           <div class="loop-card-head">
             <div class="loop-card-copy">
               <h3>{{ bundle.name }}</h3>
@@ -107,11 +327,26 @@
             </div>
           </dl>
           <div class="card-actions card-actions--loop">
-            <a class="secondary-button" href="/bundles/{{ bundle.id }}">
+            {% if bundle.agent_entry_start %}
+            {% set bundle_loop_href = workdir_context_href(bundle.loop_detail_href|default('/loops/' ~ bundle.loop_id, true), workdir_context) %}
+            <a class="primary-button" href="{{ bundle_loop_href }}" data-testid="bundle-list-open-agent-run-guide-{{ bundle.id }}" data-workdir-context-link="workdir">
+              <span data-lang="zh">打开同一 Agent 运行指引</span>
+              <span data-lang="en">Open same-Agent run guide</span>
+            </a>
+            {% elif bundle.can_start_web_run %}
+            {% set bundle_start_run_action = workdir_context_href(bundle.start_run_action|default('/bundles/' ~ bundle.id ~ '/runs', true), workdir_context) %}
+            <form method="post" action="{{ bundle_start_run_action }}" class="inline-form" data-testid="bundle-list-start-run-form-{{ bundle.id }}" data-workdir-context-form="workdir">
+              <button class="primary-button" type="submit" data-testid="bundle-list-start-run-button-{{ bundle.id }}">
+                <span data-lang="zh">运行方案</span>
+                <span data-lang="en">Run Plan</span>
+              </button>
+            </form>
+            {% endif %}
+            <a class="secondary-button" href="{{ bundle_detail_href }}" data-workdir-context-link="workdir">
               <span data-lang="zh">查看方案文件</span>
               <span data-lang="en">View Plan</span>
             </a>
-            <a class="ghost-button" href="/api/bundles/{{ bundle.id }}/export">
+            <a class="ghost-button" href="{{ bundle_export_href }}" data-workdir-context-link="workdir">
               <span data-lang="zh">导出 YAML</span>
               <span data-lang="en">Export YAML</span>
             </a>
@@ -133,12 +368,43 @@
         <span data-lang="en">Deleting a plan also removes its imported loop, flow, and role definitions, without touching unrelated manual assets.</span>
       </p>
       <div class="empty-state" id="bundles-empty-state" hidden>
-        <img class="empty-state-logo" src="/logo/logo.svg" alt="" aria-hidden="true" />
-        <h3><span data-lang="zh">还没有方案文件</span><span data-lang="en">No plan files yet</span></h3>
+        <img class="empty-state-logo" src="{{ logo_asset_url('logo.svg') }}" alt="" aria-hidden="true" />
+        <h3>
+          {% if workdir_context and hidden_bundle_count > 0 %}
+          <span data-lang="zh">当前目标项目还没有方案文件</span><span data-lang="en">No plan files for this target project</span>
+          {% else %}
+          <span data-lang="zh">还没有方案文件</span><span data-lang="en">No plan files yet</span>
+          {% endif %}
+        </h3>
         <p>
-          <span data-lang="zh">可以先在 Loop 工作台对话编排 Loop，或从已有 Loop 导出一份 YAML 再导入。</span>
-          <span data-lang="en">Compose a Loop from the workspace, or export YAML from an existing Loop and import it here.</span>
+          {% if workdir_context and hidden_bundle_count > 0 %}
+          <span data-lang="zh">其它目标项目里已有方案文件。你可以查看全部，或继续为当前目标项目导入/创建新的方案。</span>
+          <span data-lang="en">Other target projects already have plan files. View all, or import/create a new plan for the current target project.</span>
+          {% else %}
+          <span data-lang="zh">已有 YAML 时直接导入；新任务先打开适用性判断/Web 选择，已经在 Codex、Claude Code 或 OpenCode 里工作时走同一 Agent 设置。</span>
+          <span data-lang="en">Import YAML when you already have it. For a new task, open Fit Guide/Web choices; when you are already in Codex, Claude Code, or OpenCode, use Same-Agent Setup.</span>
+          {% endif %}
         </p>
+        <div class="card-actions">
+          <a class="primary-button" href="#bundle-import-panel" data-testid="bundles-empty-import-plan-link">
+            <span data-lang="zh">导入方案文件</span>
+            <span data-lang="en">Import Plan File</span>
+          </a>
+          {% if workdir_context and hidden_bundle_count > 0 %}
+          <a class="secondary-button" href="{{ bundles_all_href }}" data-testid="bundles-empty-show-all-link">
+            <span data-lang="zh">查看全部方案文件</span>
+            <span data-lang="en">View All Plan Files</span>
+          </a>
+          {% endif %}
+          <a class="secondary-button" href="{{ nav_compose_href }}" data-testid="bundles-empty-create-choice-link" data-workdir-context-link="workdir">
+            <span data-lang="zh">适用性判断/Web 选择</span>
+            <span data-lang="en">Fit Guide/Web Choices</span>
+          </a>
+          <a class="ghost-button" href="{{ nav_tools_href }}" data-testid="bundles-empty-agent-setup-link" data-workdir-context-link="workdir">
+            <span data-lang="zh">同一 Agent 设置</span>
+            <span data-lang="en">Same-Agent Setup</span>
+          </a>
+        </div>
       </div>
     {% else %}
       <div class="loop-grid loop-grid--created" id="bundle-grid" hidden></div>
@@ -147,14 +413,47 @@
         <span data-lang="en">Deleting a plan also removes its imported loop, flow, and role definitions, without touching unrelated manual assets.</span>
       </p>
       <div class="empty-state" id="bundles-empty-state">
-        <img class="empty-state-logo" src="/logo/logo.svg" alt="" aria-hidden="true" />
-        <h3><span data-lang="zh">还没有方案文件</span><span data-lang="en">No plan files yet</span></h3>
+        <img class="empty-state-logo" src="{{ logo_asset_url('logo.svg') }}" alt="" aria-hidden="true" />
+        <h3>
+          {% if workdir_context and hidden_bundle_count > 0 %}
+          <span data-lang="zh">当前目标项目还没有方案文件</span><span data-lang="en">No plan files for this target project</span>
+          {% else %}
+          <span data-lang="zh">还没有方案文件</span><span data-lang="en">No plan files yet</span>
+          {% endif %}
+        </h3>
         <p>
-          <span data-lang="zh">可以先在 Loop 工作台对话编排 Loop，或者从已有 Loop 导出一份 YAML。</span>
-          <span data-lang="en">Compose a Loop from the workspace, or export YAML from an existing Loop.</span>
+          {% if workdir_context and hidden_bundle_count > 0 %}
+          <span data-lang="zh">其它目标项目里已有方案文件。你可以查看全部，或继续为当前目标项目导入/创建新的方案。</span>
+          <span data-lang="en">Other target projects already have plan files. View all, or import/create a new plan for the current target project.</span>
+          {% else %}
+          <span data-lang="zh">已有 YAML 时直接导入；新任务先打开适用性判断/Web 选择，已经在 Codex、Claude Code 或 OpenCode 里工作时走同一 Agent 设置。</span>
+          <span data-lang="en">Import YAML when you already have it. For a new task, open Fit Guide/Web choices; when you are already in Codex, Claude Code, or OpenCode, use Same-Agent Setup.</span>
+          {% endif %}
         </p>
+        <div class="card-actions">
+          <a class="primary-button" href="#bundle-import-panel" data-testid="bundles-empty-import-plan-link">
+            <span data-lang="zh">导入方案文件</span>
+            <span data-lang="en">Import Plan File</span>
+          </a>
+          {% if workdir_context and hidden_bundle_count > 0 %}
+          <a class="secondary-button" href="{{ bundles_all_href }}" data-testid="bundles-empty-show-all-link">
+            <span data-lang="zh">查看全部方案文件</span>
+            <span data-lang="en">View All Plan Files</span>
+          </a>
+          {% endif %}
+          <a class="secondary-button" href="{{ nav_compose_href }}" data-testid="bundles-empty-create-choice-link" data-workdir-context-link="workdir">
+            <span data-lang="zh">适用性判断/Web 选择</span>
+            <span data-lang="en">Fit Guide/Web Choices</span>
+          </a>
+          <a class="ghost-button" href="{{ nav_tools_href }}" data-testid="bundles-empty-agent-setup-link" data-workdir-context-link="workdir">
+            <span data-lang="zh">同一 Agent 设置</span>
+            <span data-lang="en">Same-Agent Setup</span>
+          </a>
+        </div>
       </div>
     {% endif %}
   </section>
 </div>
+<script src="{{ static_asset_url('pages/workflow_diagram.js') }}" defer></script>
+<script src="{{ static_asset_url('pages/bundle_import.js') }}" defer></script>
 {% endblock %}

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 # Merged from test_alignment_bundle_import_run_payloads.py
+from loopora.run_worker_start import BACKGROUND_WORKER_START_ERROR
 from loopora.service_alignment_bundle_lifecycle import (
     alignment_import_failed_event_payload,
     alignment_imported_event_payload,
@@ -29,13 +30,45 @@ def test_alignment_bundle_import_and_run_event_payloads() -> None:
         "semantic_lint": {"ok": False},
     }
     assert alignment_imported_event_payload(bundle) == {"bundle_id": "bundle_1", "loop_id": "loop_1"}
-    assert alignment_run_start_failed_event_payload(bundle, "boom") == {"bundle_id": "bundle_1", "loop_id": "loop_1", "error": "boom"}
-    assert alignment_run_started_event_payload(bundle, run) == {"bundle_id": "bundle_1", "loop_id": "loop_1", "run_id": "run_1"}
+    assert alignment_run_start_failed_event_payload(bundle, "boom") == {
+        "bundle_id": "bundle_1",
+        "loop_id": "loop_1",
+        "error": "boom",
+    }
+    assert alignment_run_start_failed_event_payload(bundle, BACKGROUND_WORKER_START_ERROR, run) == {
+        "bundle_id": "bundle_1",
+        "loop_id": "loop_1",
+        "error": BACKGROUND_WORKER_START_ERROR,
+        "run_id": "run_1",
+        "run_start_error": BACKGROUND_WORKER_START_ERROR,
+        "run_recovery": "retry_run_start",
+        "next_action_kinds": ["retry_web_run_start"],
+        "next_action_ready_kinds": ["retry_web_run_start"],
+        "next_action_ready_now_kinds": ["retry_web_run_start"],
+        "next_action_ready_after_actions": {},
+        "next_action_blocked_kinds": [],
+        "next_action_command_blockers": {},
+        "next_actions": [
+            {
+                "kind": "retry_web_run_start",
+                "target": "web_loop_start",
+                "action": "start_run",
+                "loop_id": "loop_1",
+            }
+        ],
+    }
+    assert alignment_run_started_event_payload(bundle, run) == {
+        "bundle_id": "bundle_1",
+        "loop_id": "loop_1",
+        "run_id": "run_1",
+    }
+
 
 # Merged from test_alignment_bundle_lifecycle_events.py
 from pathlib import Path
 
 from loopora.service_alignment_bundle_lifecycle import (
+    AlignmentBundleLifecycleContext,
     apply_alignment_bundle_sync_failure,
     apply_alignment_bundle_sync_success,
     apply_alignment_bundle_write_started,
@@ -104,6 +137,52 @@ def test_alignment_bundle_lifecycle_applies_repository_events_and_logs(tmp_path:
     ]
     assert [item[0] for item in validation_logs] == ["align_1", "align_1", "align_1", "align_1"]
 
+
+def test_alignment_bundle_lifecycle_treats_validation_artifact_failure_as_diagnostic(tmp_path: Path) -> None:
+    bundle_path = tmp_path / "align_1" / "artifacts" / "bundle.yml"
+    repo = FakeAlignmentLifecycleRepository(
+        {
+            "id": "align_1",
+            "status": "ready",
+            "bundle_path": str(bundle_path),
+            "transcript": [],
+        }
+    )
+
+    def get_session(session_id: str) -> dict:
+        assert session_id == repo.session["id"]
+        return dict(repo.session)
+
+    def fail_validation_log(_session: dict, _validation: dict) -> None:
+        raise OSError(f"permission denied: {tmp_path / 'private' / 'validation.json'}")
+
+    context = AlignmentBundleLifecycleContext(
+        repository=repo,
+        get_session=get_session,
+        write_validation_log=fail_validation_log,
+    )
+
+    synced = apply_alignment_bundle_sync_success(
+        context,
+        "align_1",
+        validation={"ok": True, "semantic_lint": {"ok": True, "issues": []}},
+    )
+    failed = apply_alignment_bundle_sync_failure(
+        context,
+        "align_1",
+        validation={"ok": False, "error": "bad bundle"},
+        finished_at="later",
+    )
+
+    assert synced["status"] == "ready"
+    assert failed["ok"] is False
+    assert repo.session["status"] == "failed"
+    assert [event["event_type"] for event in repo.events] == [
+        "alignment_bundle_synced",
+        "alignment_bundle_sync_failed",
+    ]
+
+
 # Merged from test_alignment_bundle_preview_draft_paths.py
 
 from alignment_bundle_preview_test_support import (
@@ -128,7 +207,13 @@ def test_alignment_bundle_preview_reports_missing_bundle_without_building_previe
         "session": session,
         "yaml": "",
         "bundle": None,
-        "validation": {"ok": False, "error": "previous validation error"},
+        "validation": {
+            "ok": False,
+            "error": "alignment bundle does not exist",
+            "bundle_path": str(tmp_path / "missing.yml"),
+            "checked_at": "2026-05-29T00:00:00Z",
+            "semantic_lint": {"ok": False, "issues": ["alignment bundle does not exist"]},
+        },
     }
 
 
@@ -158,6 +243,7 @@ def test_alignment_bundle_preview_returns_failure_validation_with_raw_yaml(tmp_p
     assert result["yaml"] == raw_yaml
     assert result["validation"]["ok"] is False
     assert result["validation"]["checked_at"] == "2026-05-29T00:02:00Z"
+
 
 # Merged from test_alignment_bundle_preview_ready_validation.py
 
@@ -205,6 +291,7 @@ def test_alignment_bundle_preview_preserves_semantic_issues_from_ready_validatio
     assert result["ok"] is False
     assert result["validation"]["semantic_lint"] == {"ok": False, "issues": ["spec.markdown"]}
 
+
 # Merged from test_alignment_bundle_stage_error.py
 from loopora.service_alignment_stage import AlignmentBundleStageGate, alignment_bundle_stage_error
 
@@ -223,15 +310,11 @@ def test_alignment_bundle_stage_error_prioritizes_stage_and_readiness_gates() ->
     }
 
     assert "explicit confirmation" in alignment_bundle_stage_error(AlignmentBundleStageGate(stage="clarifying", **kwargs))
-    assert "finish alignment before generating" in alignment_bundle_stage_error(
-        AlignmentBundleStageGate(stage="confirmed", **{**kwargs, "phase": "agreement"})
-    )
+    assert "finish alignment before generating" in alignment_bundle_stage_error(AlignmentBundleStageGate(stage="confirmed", **{**kwargs, "phase": "agreement"}))
     assert "confirmed working agreement summary" in alignment_bundle_stage_error(
         AlignmentBundleStageGate(stage="confirmed", **{**kwargs, "agreement_summary": ""})
     )
-    assert "readiness checklist" in alignment_bundle_stage_error(
-        AlignmentBundleStageGate(stage="confirmed", **{**kwargs, "checklist": []})
-    )
+    assert "readiness checklist" in alignment_bundle_stage_error(AlignmentBundleStageGate(stage="confirmed", **{**kwargs, "checklist": []}))
     assert "readiness checks are incomplete: Loopora fit" in alignment_bundle_stage_error(
         AlignmentBundleStageGate(stage="confirmed", **{**kwargs, "checklist": {"loop_fit": False}}),
     )
@@ -267,6 +350,7 @@ def test_alignment_bundle_stage_error_reports_evidence_improvement_and_language_
         ),
     )
 
+
 # Merged from test_alignment_bundle_stage_progression.py
 
 from alignment_test_support import _assert_alignment_stage_blocked, _wait_for_status
@@ -289,6 +373,7 @@ def test_alignment_service_blocks_premature_bundle_output(
     assert "Loop plan" in session["transcript"][-1]["content"]
     _assert_alignment_stage_blocked(service, created["id"])
 
+
 # Merged from test_alignment_bundle_sync_payloads.py
 
 from loopora.service_alignment_bundle_lifecycle import (
@@ -305,7 +390,7 @@ def test_alignment_bundle_sync_payloads_keep_status_and_result_shape(tmp_path: P
     update_fields = alignment_bundle_sync_failure_update_fields(validation, finished_at="later")
     result = alignment_bundle_sync_failure_result({"id": "align_1"}, validation)
 
-    assert validation["semantic_lint"]["issues"] == [f"alignment bundle does not exist: {bundle_path}"]
+    assert validation["semantic_lint"]["issues"] == ["alignment bundle does not exist"]
     assert update_fields == {
         "status": "failed",
         "validation": validation,
@@ -326,6 +411,7 @@ def test_alignment_bundle_sync_success_updates_ready_stage() -> None:
         "error_message": "",
         "finished_at": None,
     }
+
 
 # Merged from test_alignment_bundle_validation_payloads.py
 from hashlib import sha256
@@ -355,6 +441,7 @@ def test_alignment_bundle_validation_payloads_preserve_semantic_lint(tmp_path: P
     assert success["semantic_lint"] == {"ok": True, "issues": []}
     assert failure["ok"] is False
     assert failure["semantic_lint"] == {"ok": False, "issues": ["spec.markdown"]}
+
 
 # Merged from test_alignment_bundle_written_payload.py
 

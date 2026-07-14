@@ -5,7 +5,7 @@ from pathlib import Path
 import re
 
 from compacted_contract_support import assert_contains_all
-from loopora.agent_adapter_entry_contracts import agent_plan_contract
+from loopora.agent_adapter_entry_contracts import agent_plan_contract, agent_recovery_matrix
 from loopora.agent_adapter_claude_hook import claude_session_additional_context
 from loopora.agent_adapter_run_contract import agent_native_loop_body
 from loopora.agent_adapter_role_contracts import role_agent_body
@@ -46,7 +46,7 @@ def test_system_prompt_bodies_live_in_assets_not_python_modules() -> None:
             "Do not launch `codex`, `claude`, or `opencode` from inside this entry.",
         ),
         "agent_adapter_entry_templates.py": (
-            "Manual /loopora-plan entry",
+            "Manual host-native /loopora-plan entry",
             "Do not inspect `$HOME/.claude`",
         ),
         "agent_adapter_role_contracts.py": (
@@ -97,10 +97,10 @@ def test_system_prompt_bodies_live_in_assets_not_python_modules() -> None:
         ),
         "agent_adapter_claude_hook.py": (
             "Loopora managed Agent entries are already project-local",
-            "Do not treat a detailed first prompt as confirmation",
+            "Do not invoke `Agent`/`Task`, a nested provider CLI, or Loopora CLI before confirmation",
         ),
         "cli_agent_plan_recovery.py": (
-            "If the current host user prompt already contains the goal, fake-done risks, required evidence",
+            "If the current host user prompt already contains the Loopora fit reason, goal, fake-done risks, required evidence",
             "Use the host's official user-question or follow-up capability",
             "Do not ask user questions from a role subagent",
             "Ask the user the ask_user question, then rerun /loopora-plan",
@@ -114,11 +114,11 @@ def test_system_prompt_bodies_live_in_assets_not_python_modules() -> None:
             "repair the candidate plan file directly and do not inspect alignment session artifacts",
             "Do not answer this alignment question from host inference",
             "ask the user alignment_assistant_message in this Agent session and stop",
-            "return to this Agent session and run /loopora-run; do not start the Agent Runner run from Web",
+            "return to this Agent session and run /loopora-run; do not start this same-Agent run from Web",
         ),
         "cli_agent_plan_guidance_output.py": (
             "repair the candidate plan file so it preserves repair_task_message and repair_focus",
-            "return to this Agent session and run /loopora-run; do not start the Agent Runner run from Web",
+            "return to this Agent session and run /loopora-run; do not start this same-Agent run from Web",
         ),
         "service_alignment_run_context_recovery_fields.py": (
             "repair the candidate plan file, rerun /loopora-plan, then use /loopora-run only after the preview is ready",
@@ -147,6 +147,10 @@ def test_system_prompt_bodies_live_in_assets_not_python_modules() -> None:
         _system_prompt_assets_text(),
         tuple(snippet for snippets in prompt_source_by_file.values() for snippet in snippets),
     )
+
+
+def test_agent_native_system_prompt_assets_do_not_reintroduce_agent_runner_branding() -> None:
+    assert "Agent Runner" not in _system_prompt_assets_text()
 
 
 def test_system_prompt_asset_long_lines_do_not_reappear_in_python_source() -> None:
@@ -295,7 +299,7 @@ def test_asset_rendered_system_prompts_keep_public_contract_snippets() -> None:
     assert "You are the Loopora GateKeeper role agent." in role_agent_body("gatekeeper")
     assert "System safety rules:" in system_prompt_prefix("builder")
     assert "Output contract: return JSON" in output_contract_prompt("gatekeeper")
-    assert "message-only plan call" in claude_session_additional_context()
+    assert "Do not invoke `Agent`/`Task`, a nested provider CLI, or Loopora CLI before confirmation" in claude_session_additional_context()
 
     gatekeeper_rules = agent_native_evidence_rules("gatekeeper")
     assert any("Every evidence_refs value" in rule["rule"] for rule in gatekeeper_rules)
@@ -321,6 +325,47 @@ def test_asset_rendered_system_prompts_keep_public_contract_snippets() -> None:
         }
     )
     assert "same Agent session" in continue_action["guidance"]
+    retry_action = agent_native_task_next_action(
+        {
+            "complete": True,
+            "run": {
+                "status": "failed",
+                "error_message": "background worker could not be started",
+                "task_verdict": {"status": "not_evaluated"},
+            },
+        }
+    )
+    assert "do not treat this as an evidence pass" in retry_action["guidance"]
+
+
+def test_agent_native_run_prompt_assets_preserve_lifecycle_retry_recovery_contract() -> None:
+    run_contract = agent_native_loop_body(
+        adapter="codex",
+        marker_source="codex_project_skill",
+    )
+    recovery_matrix = agent_recovery_matrix()
+
+    for rendered in (run_contract, recovery_matrix):
+        assert_contains_all(
+            rendered,
+            [
+                "retry_lifecycle_failure",
+                "linked_run_lifecycle_failure",
+                "recording_blocked_reason",
+                "lifecycle failure",
+                "do not describe it as evidence continuation or task progress",
+            ],
+        )
+
+    assert_contains_all(
+        run_contract,
+        [
+            "summary.continuation.previous_run_lifecycle_failure",
+            "do not present an empty or lifecycle-only `next_focus` as an evidence gap",
+            "task_next_action.kind",
+            "not report the task as complete or as evidence continuation",
+        ],
+    )
 
 
 def test_system_prompt_asset_renderer_rejects_unresolved_placeholders() -> None:

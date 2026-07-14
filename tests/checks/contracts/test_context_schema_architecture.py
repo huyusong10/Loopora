@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from strategy_source_architecture_test_support import design_boundary_source
+
 from loopora import context_schema_evidence
 from loopora import context_schema_shared
 from loopora import context_schemas
@@ -14,7 +16,7 @@ def test_context_evidence_schemas_have_dedicated_boundary() -> None:
     step_source = (repo_root / "src" / "loopora" / "context_schema_step_instruction.py").read_text(encoding="utf-8")
     iteration_source = (repo_root / "src" / "loopora" / "context_schema_iteration_state.py").read_text(encoding="utf-8")
     schemas_source = (repo_root / "src" / "loopora" / "context_schemas.py").read_text(encoding="utf-8")
-    contracts_source = (repo_root / "design" / "contracts.md").read_text(encoding="utf-8")
+    contracts_source = design_boundary_source()
 
     for marker in (
         "ARTIFACT_REF_SCHEMA = {",

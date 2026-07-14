@@ -20,7 +20,7 @@ def alignment_agent_candidate_tradeoff_issues(task_text: str, *, normalized_bund
     return _category_projection_issues(
         categories,
         normalized_bundle_text=normalized_bundle_text,
-        message_prefix="agent-first candidate must project explicit host Agent judgment tradeoffs into runnable surfaces: ",
+        message_prefix="Agent-native candidate must project explicit host Agent judgment tradeoffs into runnable surfaces: ",
     )
 
 
@@ -33,7 +33,7 @@ def alignment_agent_candidate_execution_strategy_issues(task_text: str, *, norma
     return _category_projection_issues(
         categories,
         normalized_bundle_text=normalized_bundle_text,
-        message_prefix="agent-first candidate must project explicit host Agent execution strategy into runnable surfaces: ",
+        message_prefix="Agent-native candidate must project explicit host Agent execution strategy into runnable surfaces: ",
     )
 
 
@@ -44,7 +44,7 @@ def alignment_agent_candidate_residual_risk_policy_issues(task_text: str, *, nor
     return _category_projection_issues(
         categories,
         normalized_bundle_text=normalized_bundle_text,
-        message_prefix="agent-first candidate must project explicit host Agent residual-risk policy into runnable surfaces: ",
+        message_prefix="Agent-native candidate must project explicit host Agent residual-risk policy into runnable surfaces: ",
     )
 
 
@@ -55,7 +55,7 @@ def alignment_agent_candidate_success_surface_issues(task_text: str, *, normaliz
     return _category_projection_issues(
         categories,
         normalized_bundle_text=_without_residual_demotion_text(normalized_bundle_text),
-        message_prefix="agent-first candidate must project explicit host Agent success criteria into runnable surfaces: ",
+        message_prefix="Agent-native candidate must project explicit host Agent success criteria into runnable surfaces: ",
     )
 
 
@@ -66,7 +66,7 @@ def alignment_agent_candidate_fake_done_issues(task_text: str, *, normalized_bun
     return _category_projection_issues(
         categories,
         normalized_bundle_text=_without_fake_done_demotion_text(normalized_bundle_text),
-        message_prefix="agent-first candidate must project explicit host Agent fake-done risks into runnable surfaces: ",
+        message_prefix="Agent-native candidate must project explicit host Agent fake-done risks into runnable surfaces: ",
     )
 
 
@@ -77,7 +77,7 @@ def alignment_agent_candidate_evidence_preference_issues(task_text: str, *, norm
     return _category_projection_issues(
         categories,
         normalized_bundle_text=_without_residual_demotion_text(normalized_bundle_text),
-        message_prefix="agent-first candidate must project explicit host Agent evidence preferences into runnable surfaces: ",
+        message_prefix="Agent-native candidate must project explicit host Agent evidence preferences into runnable surfaces: ",
     )
 
 

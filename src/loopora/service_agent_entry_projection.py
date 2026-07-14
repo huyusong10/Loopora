@@ -8,6 +8,7 @@ from loopora.agent_entry_run_projection import (
     agent_entry_loop_json_command,
     agent_entry_loop_projection_messages,
 )
+from loopora.run_result_recording import run_result_is_lifecycle_failure
 from loopora.service_alignment_run_recovery import agent_recovery_agent_entry_candidate_event
 from loopora.service_types import LooporaError, LooporaNotFoundError, TERMINAL_RUN_STATUSES
 
@@ -81,7 +82,11 @@ class ServiceAgentEntryProjectionMixin:
         state["linked_run_status"] = str(linked_run.get("status") or "")
         state["linked_task_verdict_status"] = self._task_verdict_status_for_run(linked_run)
         if self._terminal_agent_run_needs_next_pass(linked_run):
-            state["next_loop_action"] = "start_next_run_for_unproven_verdict"
+            state["next_loop_action"] = (
+                "retry_lifecycle_failure"
+                if run_result_is_lifecycle_failure(linked_run)
+                else "start_next_run_for_unproven_verdict"
+            )
             state["continuation_summary"] = self._agent_entry_continuation_summary(linked_run)
         elif state["linked_run_status"] in TERMINAL_RUN_STATUSES:
             state["next_loop_action"] = "replay_terminal_pass"

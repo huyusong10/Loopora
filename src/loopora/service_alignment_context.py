@@ -56,6 +56,7 @@ from loopora.service_alignment_run_source_projection import (
 
 
 ALIGNMENT_CONTEXT_TITLE_PREVIEW_LIMIT = 80
+ALIGNMENT_CONTEXT_PATH_ERRORS = (OSError, RuntimeError, ValueError)
 
 
 def alignment_source_option_id(source_type: str, identifier: object) -> str:
@@ -106,8 +107,8 @@ def alignment_session_context_options(session: dict) -> list[dict]:
                 "description_en": "Return to this chat and append the next message to the same session.",
             }
         )
-    bundle_path = Path(str(session.get("bundle_path") or ""))
-    if status == "ready" and bundle_path.exists() and alignment_session_has_current_ready_bundle(session, bundle_path):
+    bundle_path = _existing_alignment_context_path(session.get("bundle_path"))
+    if status == "ready" and bundle_path is not None and alignment_session_has_current_ready_bundle(session, bundle_path):
         options.append(
             {
                 "option_id": alignment_source_option_id("alignment_session", session_id),
@@ -124,6 +125,17 @@ def alignment_session_context_options(session: dict) -> list[dict]:
             }
         )
     return options
+
+
+def _existing_alignment_context_path(path: object) -> Path | None:
+    path_text = str(path or "").strip()
+    if not path_text:
+        return None
+    try:
+        candidate = Path(path_text)
+        return candidate if candidate.exists() else None
+    except ALIGNMENT_CONTEXT_PATH_ERRORS:
+        return None
 
 
 def add_alignment_context_option(option: dict, options: list[dict], seen_option_ids: set[str]) -> None:

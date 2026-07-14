@@ -14,33 +14,11 @@ from loopora.agent_entry_continuation import (
     string_list,
     task_verdict_context_for_run,
 )
-from loopora.utils import write_json
 
 
 class ServiceAgentContinuationMixin:
     def _seed_agent_native_continuation_context(self, run: dict, previous_run: dict) -> None:
-        layout = self._run_artifact_layout(Path(run["runs_dir"]))
-        continuation = self._agent_native_continuation_context_for_terminal_run(previous_run)
-        continuation_path = layout.context_dir / "continuation_context.json"
-        write_json(continuation_path, continuation)
-
-        run_contract = self._read_json_object(layout.run_contract_path)
-        if run_contract:
-            run_contract["continuation_context"] = continuation
-            write_json(layout.run_contract_path, run_contract)
-
-        self.append_run_event(
-            run["id"],
-            "run_continuation_context_seeded",
-            {
-                "previous_run_id": continuation["previous_run_id"],
-                "previous_run_status": continuation["previous_run_status"],
-                "previous_task_verdict_status": continuation["previous_task_verdict"]["status"],
-                "missing_check_count": continuation["coverage"]["missing_check_count"],
-                "top_gap_count": len(continuation["coverage"]["top_gaps"]),
-                "continuation_context_path": layout.relative(continuation_path),
-            },
-        )
+        self._seed_run_continuation_context(run, previous_run)
 
     def _agent_native_continuation_context_for_terminal_run(self, previous_run: dict) -> dict[str, Any]:
         previous_layout = self._run_artifact_layout(Path(previous_run["runs_dir"]))

@@ -5,6 +5,11 @@ from pathlib import Path
 
 from loopora.agent_native_evidence_refs import agent_known_evidence_ref_summaries as _agent_known_evidence_ref_summaries
 from loopora.agent_native_projection_state import agent_native_active_step_view as _agent_native_active_step_view
+from loopora.cli_agent_result_files import (
+    RESULT_FILE_INVALID_JSON_ERROR,
+    RESULT_FILE_OBJECT_ERROR,
+    RESULT_FILE_UNREADABLE_ERROR,
+)
 from loopora.cli_agent_runtime_support import agent_next_command_hint as _agent_next_command_hint
 from loopora.cli_agent_submit_repair_guidance import (
     _agent_submit_core_blocker_kind as _agent_submit_core_blocker_kind,
@@ -131,7 +136,7 @@ def _same_path(candidate: Path, reference: str) -> bool:
 
 
 def _active_agent_native_step_view(service, *, run_id: str) -> dict:
-    if not run_id:
+    if service is None or not run_id:
         return {}
     try:
         run = service.get_run(run_id)
@@ -152,9 +157,11 @@ def _agent_submit_repair_focus(error: str, active_step_view: dict) -> list[str]:
     focus: list[str] = []
     if _result_file_missing(error):
         focus.append("create the filled result JSON file at result_file_to_repair before submitting")
-    elif "result file is not valid JSON" in error:
+    elif RESULT_FILE_UNREADABLE_ERROR in error:
+        focus.append("make result_file_to_repair readable as UTF-8 JSON or recreate it from the active result template")
+    elif RESULT_FILE_INVALID_JSON_ERROR in error or "result file is not valid JSON" in error:
         focus.append("fix JSON syntax; the file must be one wrapper object with loopora_host_dispatch and result")
-    if "result file must contain one JSON object" in error:
+    if RESULT_FILE_OBJECT_ERROR in error:
         focus.append("replace the file with one JSON object; do not submit an array, string, or multiple documents")
     schema = active_step_view.get("output_schema") if isinstance(active_step_view.get("output_schema"), dict) else {}
     focus.extend(_output_schema_error_hints(error, schema))

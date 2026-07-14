@@ -1,9 +1,13 @@
 from __future__ import annotations
 
 import json
+import sqlite3
 from pathlib import Path
 
+from typer.testing import CliRunner
+
 from loopora import cli
+from loopora.branding import APP_HOME_ENV
 
 from cli_diagnose_redaction_test_support import (
     create_redaction_run_fixture,
@@ -17,6 +21,27 @@ MIN_ALIGNMENT_EVENT_FILE_SUSPECT_COUNT = 1
 MIN_ALIGNMENT_EVENT_SUSPECT_COUNT = 1
 MIN_DRY_RUN_SUSPECT_COUNT = 2
 MIN_FIXED_REDACTION_COUNT = 4
+
+
+def test_cli_diagnose_event_redaction_reports_development_reset_without_traceback(monkeypatch, tmp_path: Path) -> None:
+    app_home = tmp_path / "home"
+    app_home.mkdir()
+    _create_legacy_app_db(app_home / "app.db")
+    monkeypatch.setenv(APP_HOME_ENV, str(app_home))
+
+    result = CliRunner().invoke(cli.app, ["diagnose", "event-redaction"])
+
+    assert result.exit_code == 1
+    assert result.stderr == ""
+    assert "Traceback" not in result.output
+    payload = json.loads(result.stdout)
+    assert payload["loop_recovery"] == "development_reset_required"
+    assert "loopora dev reset --scope app --workdir" in payload["reset_command"]
+    assert "<project>" not in payload["reset_command"]
+    assert payload["preview_is_destructive"] is False
+    assert payload["destructive_apply_requires_yes"] is True
+    assert "local App database files" in payload["scope_description"]
+    assert "managed Agent entries are left alone" in payload["scope_description"]
 
 
 def test_cli_diagnose_event_redaction_dry_run_and_fix(monkeypatch, tmp_path: Path) -> None:
@@ -51,3 +76,9 @@ def test_cli_diagnose_event_redaction_dry_run_and_fix(monkeypatch, tmp_path: Pat
     fixed_alignment_payload = service.list_alignment_events(alignment["id"])[-1]["payload"]
     assert alignment_marker not in json.dumps(fixed_alignment_payload, ensure_ascii=False)
     assert fixed_alignment_payload["message"] == "codex exec --token <secret omitted>"
+
+
+def _create_legacy_app_db(path: Path) -> None:
+    with sqlite3.connect(path) as connection:
+        connection.execute("CREATE TABLE loop_definitions (id TEXT PRIMARY KEY, name TEXT NOT NULL)")
+        connection.execute("PRAGMA user_version = 1")

@@ -19,7 +19,16 @@ def test_component_services_expose_explicit_boundary_methods() -> None:
     component_methods = {
         AlignmentService: {"get_workdir_context", "resolve_context", "list_sessions"},
         BundleService: {"list_exchange_items", "import_text", "preview_text"},
-        RunService: {"get_run", "start_run", "start_run_async", "stop_run", "stream_events", "observation_snapshot"},
+        RunService: {
+            "get_run",
+            "start_run",
+            "start_next_run",
+            "start_run_async",
+            "stop_run",
+            "stream_events",
+            "observation_snapshot",
+            "build_evidence_package",
+        },
         AgentNativeService: {"start_loop", "prepare_run", "claim_step", "submit_step", "entry_loop_start_projection"},
         AssetRegistryService: {"local_diagnostics"},
         ProjectionService: {"web_run_detail"},

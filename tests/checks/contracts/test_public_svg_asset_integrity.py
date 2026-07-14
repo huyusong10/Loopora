@@ -67,6 +67,31 @@ def test_judgment_surfaces_diagrams_use_execution_strategy_language() -> None:
     assert "执行姿态" not in diagram_zh
 
 
+def test_first_run_diagrams_route_by_current_context() -> None:
+    diagram_en = read_svg(ROOT / "assets" / "diagrams" / "first-run-path.en.svg")
+    diagram_zh = read_svg(ROOT / "assets" / "diagrams" / "first-run-path.zh.svg")
+    diagram_docs = (ROOT / "assets" / "diagrams" / "README.md").read_text(encoding="utf-8")
+
+    assert "README-first route model" in diagram_docs
+    assert "README-first entry model" not in diagram_docs
+    assert "Fit Guide/Web choices come first" in diagram_docs
+    assert "Web conversation is first" not in diagram_docs
+    assert "Fit Guide/Web choices" in diagram_en
+    assert "Web conversation" in diagram_en
+    assert "Default outside an Agent session" in diagram_en
+    assert "Same-Agent setup" in diagram_en
+    assert "Manual expert paths" in diagram_en
+    assert "Codex, Claude Code, or OpenCode" in diagram_en
+    assert "same local record" in diagram_en.lower()
+    assert "适用性判断/Web 选择" in diagram_zh
+    assert "Web 对话" in diagram_zh
+    assert "不在 Agent 会话中时的默认入口" in diagram_zh
+    assert "同一 Agent 设置" in diagram_zh
+    assert "手动专家路径" in diagram_zh
+    assert "Codex、Claude Code 或 OpenCode" in diagram_zh
+    assert "同一份本地记录" in diagram_zh
+
+
 def test_plan_judgment_diagrams_keep_table_rows_inside_panel() -> None:
     for locale in ("en", "zh"):
         root = ET.fromstring((ROOT / "assets" / "diagrams" / f"plan-judgment-structure.{locale}.svg").read_text(encoding="utf-8"))

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import shlex
+
 from agent_adapter_test_support import (
     AgentBundleCandidateRequest,
     AgentNativeStepClaimRequest,
@@ -47,6 +49,8 @@ def test_agent_native_role_dispatch_projects_target_agent_config_availability(
     state["active_step"]["agent_step_view"]["submit_hint"]["command"] = (
         "loopora agent codex submit --run-id stale --step-id builder_step"
     )
+    for key in ("result_file_absolute_path", "result_template_absolute_path", "result_outbox_absolute_dir"):
+        state["active_step"]["agent_step_view"]["submit_hint"].pop(key, None)
     stale_coverage = {
         "status": "weak",
         "covered_check_count": 1,
@@ -93,7 +97,16 @@ def test_agent_native_role_dispatch_projects_target_agent_config_availability(
     snapshot = service.run_observation_snapshot(started["run"]["id"])
 
     assert refreshed["next_step"]["role_dispatch"]["target_agent_config_exists"] is True
-    assert "--json" in refreshed["next_step"]["submit_hint"]["command"]
+    submit_hint = refreshed["next_step"]["submit_hint"]
+    submit_command = submit_hint["command"]
+    submit_tokens = shlex.split(submit_command)
+    assert "--json" in submit_command
+    assert '"$PWD"' not in submit_command
+    assert submit_tokens[submit_tokens.index("--workdir") + 1] == str(sample_workdir.resolve())
+    assert Path(submit_tokens[submit_tokens.index("--result-file") + 1]).is_absolute()
+    assert Path(submit_tokens[submit_tokens.index("--result-file") + 1]).resolve() == Path(
+        submit_hint["result_file_absolute_path"]
+    ).resolve()
     assert refreshed["next_step"]["required_coverage"]["covered_check_count"] == 0
     assert refreshed["next_step"]["required_coverage"]["missing_check_count"] == EXPECTED_MISSING_REQUIRED_CHECK_COUNT
     assert refreshed["next_step"]["required_coverage"]["missing_check_ids"] == ["check_001", "check_002"]

@@ -156,7 +156,7 @@ def _missing_spec_section(issue: str) -> str:
 
 def _task_projection_repair_hints(error: str) -> list[str]:
     pattern = re.compile(
-        r"agent-first candidate must project (?:the )?(?:explicit )?host Agent "
+        r"(?:Agent-native|agent-first) candidate must project (?:the )?(?:explicit )?host Agent "
         r"(?P<area>[^:\n]+?) into runnable surfaces:\s*missing\s+(?P<terms>[^;.\n]+)"
     )
     hints: list[str] = []
@@ -200,6 +200,26 @@ def _task_projection_area_repair_hint(area: str) -> str:
 
 _VALIDATION_REPAIR_HINT_RULES: tuple[tuple[tuple[str, ...], str], ...] = (
     (
+        ("agent context card could not be saved",),
+        "fix write access to the target project's .loopora agent state or rerun /loopora-plan from a writable project workdir",
+    ),
+    (
+        ("candidate plan file could not be saved",),
+        "fix write access to the target project's .loopora state or rerun /loopora-plan from a writable project workdir",
+    ),
+    (
+        ("bundle file could not be read",),
+        "make the candidate plan file readable or rerun /loopora-plan with a readable --bundle-file",
+    ),
+    (
+        ("bundle file does not exist",),
+        "create the candidate plan file at plan_file_to_repair or rerun /loopora-plan with an existing --bundle-file",
+    ),
+    (
+        ("bundle file must be UTF-8 encoded YAML",),
+        "resave the candidate plan file as UTF-8 YAML before rerunning repair_cli_command",
+    ),
+    (
         ("invalid bundle YAML", "unacceptable character"),
         "remove hidden YAML control characters such as NUL bytes from the plan file, especially inside quoted ids",
     ),
@@ -209,6 +229,10 @@ _VALIDATION_REPAIR_HINT_RULES: tuple[tuple[tuple[str, ...], str], ...] = (
     ),
     (
         ("invalid bundle YAML", "special characters are not allowed"),
+        "remove hidden YAML control characters such as NUL bytes from the plan file, especially inside quoted ids",
+    ),
+    (
+        ("invalid bundle YAML", "unsupported control characters"),
         "remove hidden YAML control characters such as NUL bytes from the plan file, especially inside quoted ids",
     ),
     (("metadata.name is required",), "add metadata.name so the plan has a stable reviewable identity"),

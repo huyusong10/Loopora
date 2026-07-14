@@ -5,15 +5,19 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from loopora.branding import state_dir_for_workdir
 from loopora.diagnostics import log_event
 from loopora.evidence_coverage_targets import with_coverage_targets
 from loopora.run_artifacts import write_json_with_mirrors
+from loopora.service_cleanup_diagnostics import best_effort_rmtree
 from loopora.service_asset_common import logger, normalize_role_models
 from loopora.service_loop_create_inputs import LoopCreateRequest, coerce_loop_create_request, normalize_loop_create_request
 from loopora.service_run_start import ServiceRunStartMixin
 from loopora.service_types import LooporaError
 from loopora.strategy_source import strategy_source_has_finish_gatekeeper_step
 from loopora.utils import make_id, write_json
+
+LOOP_ARTIFACT_PREPARE_ERROR = "loop artifacts could not be prepared"
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -85,29 +89,39 @@ class ServiceRunRegistrationMixin(ServiceRunStartMixin):
             completion_mode=normalized_request.completion_mode,
         )
         loop_id = make_id("loop")
-        self._persist_loop_definition_files(
-            LoopDefinitionFiles(
-                workdir=normalized_request.workdir,
-                loop_id=loop_id,
-                spec_markdown=spec_markdown,
-                compiled_spec=compiled_spec,
-                prompt_files=resolved_orchestration["prompt_files"],
-                strategy_source=strategy_source,
-            )
+        loop_definition_files = LoopDefinitionFiles(
+            workdir=normalized_request.workdir,
+            loop_id=loop_id,
+            spec_markdown=spec_markdown,
+            compiled_spec=compiled_spec,
+            prompt_files=resolved_orchestration["prompt_files"],
+            strategy_source=strategy_source,
         )
+        try:
+            self._persist_loop_definition_files(loop_definition_files)
+        except OSError as exc:
+            self._cleanup_failed_loop_definition_files(loop_definition_files)
+            raise LooporaError(LOOP_ARTIFACT_PREPARE_ERROR) from exc
+        except Exception:
+            self._cleanup_failed_loop_definition_files(loop_definition_files)
+            raise
 
-        loop = self.repository.create_loop(
-            _loop_create_payload(
-                ResolvedLoopCreate(
-                    request=normalized_request,
-                    loop_id=loop_id,
-                    spec_markdown=spec_markdown,
-                    compiled_spec=compiled_spec,
-                    resolved_orchestration=resolved_orchestration,
-                    strategy_source=strategy_source,
+        try:
+            loop = self.repository.create_loop(
+                _loop_create_payload(
+                    ResolvedLoopCreate(
+                        request=normalized_request,
+                        loop_id=loop_id,
+                        spec_markdown=spec_markdown,
+                        compiled_spec=compiled_spec,
+                        resolved_orchestration=resolved_orchestration,
+                        strategy_source=strategy_source,
+                    )
                 )
             )
-        )
+        except Exception:
+            self._cleanup_failed_loop_definition_files(loop_definition_files)
+            raise
         self._write_recent_workdirs()
         log_event(
             logger,
@@ -141,11 +155,17 @@ class ServiceRunRegistrationMixin(ServiceRunStartMixin):
     def _resolve_loop_orchestration(self, request: LoopCreateRequest) -> dict:
         return self._asset_call(
             self.asset_catalog.resolve_orchestration_input,
-            orchestration_id=request.orchestration_id,
+            orchestration_id=self._orchestration_id_for_loop_source(request),
             workflow=request.workflow,
             prompt_files=request.prompt_files,
             role_models=request.role_models,
         )
+
+    @staticmethod
+    def _orchestration_id_for_loop_source(request: LoopCreateRequest) -> str | None:
+        if request.workflow is not None:
+            return None
+        return request.orchestration_id
 
     @staticmethod
     def _validate_loop_completion_strategy_source(*, completion_mode: str, strategy_source: dict) -> None:
@@ -162,6 +182,17 @@ class ServiceRunRegistrationMixin(ServiceRunStartMixin):
         write_json(loop_dir / "compiled_spec.json", snapshot.compiled_spec)
         self._persist_prompt_files(loop_dir, snapshot.prompt_files)
         write_json_with_mirrors(loop_dir / "strategy_source.json", snapshot.strategy_source, mirror_paths=[loop_dir / "workflow.json"])
+
+    @staticmethod
+    def _cleanup_failed_loop_definition_files(snapshot: LoopDefinitionFiles) -> None:
+        loop_dir = state_dir_for_workdir(snapshot.workdir) / "loops" / snapshot.loop_id
+        best_effort_rmtree(
+            loop_dir,
+            logger,
+            operation="loop_artifact_prepare_failed_cleanup",
+            owner_id=snapshot.loop_id,
+            workdir=str(snapshot.workdir),
+        )
 
     @staticmethod
     def _read_and_compile_spec(spec_path: Path) -> tuple[str, dict]:

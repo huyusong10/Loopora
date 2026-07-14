@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from loopora.agent_adapters import agent_loop_json_command
-from loopora.service_alignment_agreement_stage import alignment_agreement_text_snippet
+from loopora.service_alignment_agreement_projection import alignment_agreement_text_snippet
 from loopora.service_alignment_language import alignment_prefers_chinese, alignment_prefers_spanish
 from loopora.structured_numbers import structured_non_negative_int
 
@@ -107,10 +107,7 @@ def agent_entry_review_decision_options(session: dict, *, review_mode: str, task
                 "label": "先重新判断是否需要 Loop",
                 "description": "如果这其实是一轮任务或已有检查足够，先阻止编排。",
                 "recommended": False,
-                "user_reply": (
-                    "请先重新判断这个任务是否适合 Loopora，而不是直接生成 Loop。"
-                    f"任务锚点：{task_anchor}"
-                ),
+                "user_reply": (f"请先重新判断这个任务是否适合 Loopora，而不是直接生成 Loop。任务锚点：{task_anchor}"),
             },
         ]
     if language == "es":
@@ -144,10 +141,7 @@ def agent_entry_review_decision_options(session: dict, *, review_mode: str, task
                 "label": "Revisar primero el encaje con Loopora",
                 "description": "Si basta una sola pasada o las comprobaciones duras ya deciden, bloquea la composición primero.",
                 "recommended": False,
-                "user_reply": (
-                    "Primero revisa si esta tarea realmente encaja con Loopora antes de generar un Loop. "
-                    f"Ancla de tarea: {task_anchor}"
-                ),
+                "user_reply": (f"Primero revisa si esta tarea realmente encaja con Loopora antes de generar un Loop. Ancla de tarea: {task_anchor}"),
             },
         ]
     if review_mode == "not_fit":
@@ -180,10 +174,7 @@ def agent_entry_review_decision_options(session: dict, *, review_mode: str, task
             "label": "Re-check Loop fit",
             "description": "If this is only one pass or hard checks already decide it, block composition first.",
             "recommended": False,
-            "user_reply": (
-                "Please re-check whether this task actually fits Loopora before generating a Loop. "
-                f"Task anchor: {task_anchor}"
-            ),
+            "user_reply": (f"Please re-check whether this task actually fits Loopora before generating a Loop. Task anchor: {task_anchor}"),
         },
     ]
 

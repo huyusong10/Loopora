@@ -10,6 +10,11 @@ from pathlib import Path
 class SystemDialogError(RuntimeError):
     """Raised when the host cannot open a native file dialog."""
 
+    def __init__(self, message: str, *, code: str = "system_dialog_failed", detail: str = "") -> None:
+        self.code = code
+        self.detail = detail
+        super().__init__(message)
+
 
 def pick_directory(start_path: str | None = None) -> str | None:
     return _run_dialog("directory", start_path=start_path)
@@ -26,7 +31,7 @@ def pick_save_file(start_path: str | None = None, *, default_name: str = "spec.m
 def reveal_path(path: str) -> str:
     resolved = Path(path).expanduser().resolve()
     if not resolved.exists():
-        raise SystemDialogError(f"path does not exist: {resolved}")
+        raise SystemDialogError("path does not exist", code="path_not_found")
 
     if sys.platform == "darwin":
         target = _escape_applescript(str(resolved))
@@ -51,10 +56,9 @@ def reveal_path(path: str) -> str:
             )
             if fallback.returncode != 0:
                 raise SystemDialogError(
-                    result.stderr.strip()
-                    or fallback.stderr.strip()
-                    or fallback.stdout.strip()
-                    or "failed to reveal path"
+                    "path could not be opened",
+                    code="path_reveal_failed",
+                    detail=_completed_process_detail(result, fallback),
                 )
         return str(resolved)
 
@@ -62,7 +66,7 @@ def reveal_path(path: str) -> str:
         try:
             os.startfile(str(resolved))  # type: ignore[attr-defined]
         except OSError as exc:
-            raise SystemDialogError(str(exc)) from exc
+            raise SystemDialogError("path could not be opened", code="path_reveal_failed", detail=str(exc)) from exc
         return str(resolved)
 
     result = subprocess.run(
@@ -72,7 +76,7 @@ def reveal_path(path: str) -> str:
         check=False,
     )
     if result.returncode != 0:
-        raise SystemDialogError(result.stderr.strip() or result.stdout.strip() or "failed to reveal path")
+        raise SystemDialogError("path could not be opened", code="path_reveal_failed", detail=_completed_process_detail(result))
     return str(resolved)
 
 
@@ -116,7 +120,7 @@ def _run_osascript(script: str) -> str | None:
     stderr = f"{result.stderr}\n{result.stdout}".lower()
     if "-128" in stderr or "user canceled" in stderr or "cancelled" in stderr:
         return None
-    raise SystemDialogError(result.stderr.strip() or "native dialog failed")
+    raise SystemDialogError("native dialog failed", code="native_dialog_failed", detail=result.stderr.strip())
 
 
 def _run_tk_dialog(kind: str, *, start_path: str | None, default_name: str) -> str | None:
@@ -124,7 +128,11 @@ def _run_tk_dialog(kind: str, *, start_path: str | None, default_name: str) -> s
         import tkinter as tk
         from tkinter import filedialog
     except Exception as exc:  # pragma: no cover - platform dependent
-        raise SystemDialogError("native dialogs are unavailable in this environment") from exc
+        raise SystemDialogError(
+            "native dialogs are unavailable in this environment",
+            code="native_dialog_unavailable",
+            detail=str(exc),
+        ) from exc
 
     initial = _dialog_location(start_path)
     root = None
@@ -147,7 +155,7 @@ def _run_tk_dialog(kind: str, *, start_path: str | None, default_name: str) -> s
                 filetypes=[("Markdown", "*.md"), ("All files", "*.*")],
             )
     except Exception as exc:  # pragma: no cover - platform dependent
-        raise SystemDialogError("failed to open a native dialog") from exc
+        raise SystemDialogError("failed to open a native dialog", code="native_dialog_failed", detail=str(exc)) from exc
     finally:  # pragma: no branch - best effort cleanup
         with suppress(Exception):
             root.destroy()
@@ -170,3 +178,13 @@ def _dialog_location(start_path: str | None) -> Path | None:
 
 def _escape_applescript(value: str) -> str:
     return value.replace("\\", "\\\\").replace('"', '\\"')
+
+
+def _completed_process_detail(*results: subprocess.CompletedProcess) -> str:
+    parts: list[str] = []
+    for result in results:
+        for value in (getattr(result, "stderr", ""), getattr(result, "stdout", "")):
+            text = str(value or "").strip()
+            if text:
+                parts.append(text)
+    return " | ".join(parts)

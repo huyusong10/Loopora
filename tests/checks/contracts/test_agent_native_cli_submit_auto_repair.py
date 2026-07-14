@@ -32,7 +32,7 @@ def test_cli_agent_submit_auto_repairs_missing_wrapper_from_active_template(monk
     monkeypatch.setattr(cli, "create_service", FakeService)
     runner = CliRunner()
 
-    result = _invoke_codex_submit(
+    legacy_result = _invoke_codex_submit(
         runner,
         fixture["workdir"],
         run_id="run_auto_repair",
@@ -40,19 +40,38 @@ def test_cli_agent_submit_auto_repairs_missing_wrapper_from_active_template(monk
         result_file=direct_result_file,
         json_output=True,
     )
+    explicit_result = _invoke_codex_submit(
+        runner,
+        fixture["workdir"],
+        run_id="run_auto_repair",
+        step_id="builder_step",
+        result_file=direct_result_file,
+        json_output=True,
+        attest_role_dispatch=True,
+    )
 
-    assert result.exit_code == 0, result.stdout
+    assert legacy_result.exit_code == 0, legacy_result.stdout
+    assert explicit_result.exit_code == 0, explicit_result.stdout
     assert captured_requests[0].output == {"summary": "Builder produced direct proof."}
     assert captured_requests[0].host_dispatch["run_id"] == "run_auto_repair"
     assert captured_requests[0].host_dispatch["actual_agent"] == "loopora-builder"
-    payload = json.loads(result.stdout)
-    summary, _legacy = assert_agent_v3_envelope(
-        payload, kind="agent_submit", summary_key="agent_submit_summary", status="active"
+    assert captured_requests[0].host_dispatch["attestation_source"] == "legacy_template_auto_repair"
+    assert captured_requests[1].host_dispatch["attestation_source"] == "explicit_submit_flag"
+    legacy_payload = json.loads(legacy_result.stdout)
+    legacy_summary, _legacy = assert_agent_v3_envelope(
+        legacy_payload, kind="agent_submit", summary_key="agent_submit_summary", status="active"
     )
-    assert summary["auto_repair_applied"] is True
-    assert summary["auto_repair_actions"] == ["wrapped_schema_result_with_active_template_dispatch"]
-    assert summary["agent_work_panel"]["state"] == "awaiting_agent"
-    assert summary["auto_repair_applied"] is True
+    explicit_payload = json.loads(explicit_result.stdout)
+    explicit_summary, _legacy = assert_agent_v3_envelope(
+        explicit_payload, kind="agent_submit", summary_key="agent_submit_summary", status="active"
+    )
+    assert legacy_summary["auto_repair_applied"] is True
+    assert legacy_summary["auto_repair_actions"] == ["wrapped_schema_result_with_active_template_dispatch"]
+    assert legacy_summary["host_dispatch_attestation_source"] == "legacy_template_auto_repair"
+    assert legacy_summary["agent_work_panel"]["state"] == "awaiting_agent"
+    assert explicit_summary["auto_repair_applied"] is True
+    assert explicit_summary["auto_repair_actions"] == ["wrapped_schema_result_with_active_template_dispatch"]
+    assert explicit_summary["host_dispatch_attestation_source"] == "explicit_submit_flag"
 
 
 def test_cli_agent_submit_auto_repairs_result_only_wrapper_and_template_path(monkeypatch, tmp_path: Path) -> None:

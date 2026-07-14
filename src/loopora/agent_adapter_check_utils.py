@@ -23,6 +23,10 @@ def adapter_label(kind: str) -> str:
     }.get(kind, kind)
 
 
+def adapter_unavailable_summary(kind: str) -> str:
+    return f"{adapter_label(kind)} adapter is not available in this Loopora build"
+
+
 def markdown_frontmatter(text: str) -> dict[str, Any]:
     if not text.startswith("---\n"):
         return {}

@@ -144,7 +144,8 @@ def test_cli_agent_loop_plain_output_discloses_resumed_existing_run(capsys) -> N
     output = capsys.readouterr().out
 
     assert "Loopora run: run_resume" in output
-    assert "run_start: resumed_existing_agent_runner_run" in output
+    assert "run_start: resumed_existing_agent_native_run" in output
+    assert "resumed_existing_agent_runner_run" not in output
 
 # Merged from test_agent_bundle_review_to_run_transition.py
 

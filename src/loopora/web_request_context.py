@@ -12,6 +12,33 @@ def _preferred_request_locale(request: Request) -> str:
     return _preferred_locale_from_accept_language(request.headers.get("accept-language"))
 
 
+def _request_wants_json(request: Request) -> bool:
+    if request.url.path.startswith("/api/"):
+        return True
+    return _accept_header_wants_json(request.headers.get("accept"))
+
+
+def _accept_header_wants_json(accept_header: str | None) -> bool:
+    for raw_item in str(accept_header or "").split(","):
+        media_type, *params = [segment.strip() for segment in raw_item.split(";")]
+        if not media_type:
+            continue
+        if _accept_q_value(params) <= 0:
+            continue
+        normalized_media_type = media_type.lower()
+        if normalized_media_type == "application/json" or normalized_media_type.endswith("+json"):
+            return True
+    return False
+
+
+def _accept_q_value(params: list[str]) -> float:
+    for param in params:
+        key, sep, value = param.partition("=")
+        if sep and key.strip().lower() == "q":
+            return _float_or_zero(value)
+    return 1.0
+
+
 def _preferred_locale_from_accept_language(accept_language: str | None) -> str:
     header = str(accept_language or "").strip()
     if not header:

@@ -14,7 +14,6 @@ from agent_adapter_test_support import (
     _assert_bad_ref_submit_repair_payload,
     _assert_cli_handoff_contract_paths,
     _assert_cli_list,
-    _assert_codex_native_surface_plain,
     _assert_codex_native_surface_summary,
     _assert_labeled_loopora_agent_command,
     _assert_plain_bad_ref_submit_repair,
@@ -30,7 +29,7 @@ from loopora.cli_agent_work_panel import agent_work_panel
 
 
 def _assert_cli_native_dispatch_contract(output: str, target_agent: str) -> None:
-    _assert_codex_native_surface_plain(output)
+    _assert_agent_native_handoff_surface_plain(output)
     assert (
         f"dispatch_next: invoke {target_agent} with the next context and step contract paths below; "
         "do not perform this role inline"
@@ -39,6 +38,19 @@ def _assert_cli_native_dispatch_contract(output: str, target_agent: str) -> None
     assert "submit_contract=loopora_host_dispatch + schema-shaped result template" in output
     assert "native_dispatch_mechanism: Codex spawn_agent with agent_type=<role_dispatch.target_agent>" in output
     assert "native_proof_boundary: native todo/trace may guide host work; Loopora evidence refs" in output
+
+
+def _assert_agent_native_handoff_surface_plain(output: str) -> None:
+    assert "agent surface:" in output
+    assert "- capabilities: role_dispatch=host_native" in output
+    assert "workspace=current_host_agent_workdir" in output
+    assert "proof=loopora_evidence_refs_and_task_verdict" in output
+    assert "- activation: explicit_loopora_command_or_cli_only" in output
+    assert "- host dispatch: Codex spawn_agent with agent_type=<role_dispatch.target_agent>" in output
+    assert "- accepted native tools: spawn_agent" in output
+    assert "- execution: nested provider CLI=not_used" in output
+    assert "- submit contract: loopora_host_dispatch + schema-shaped result template" in output
+    assert "- packaging:" not in output
 
 
 def _write_terminal_unproven_run_contract(layout: RunArtifactLayout) -> None:
@@ -89,7 +101,7 @@ def _terminal_unproven_loop_payload(layout: RunArtifactLayout) -> dict:
         "task_next_action": {
             "kind": "continue_evidence",
             "next_loop_command": "/loopora-run",
-            "guidance": "Run lifecycle is complete, but the task is not proven.",
+            "guidance": "Run lifecycle is complete, but the task is not proven. Run /loopora-run again in the same Agent session to start the next evidence pass from this verdict.",
             "task_verdict_summary": "Audit proof is still missing.",
         },
     }
@@ -97,10 +109,14 @@ def _terminal_unproven_loop_payload(layout: RunArtifactLayout) -> dict:
 
 def _assert_agent_next_plain_work_panel(output: str) -> None:
     assert output.index("agent_work_panel:") < output.index("Loopora run:")
-    assert "todo_items:" in output
-    assert "- Invoke loopora-inspector through the host-native role agent mechanism." in output
-    assert "native_todo: Create or update the host's official todo/progress list when available" in output
-    assert "do not cite todo completion as Loopora evidence" in output
+    assert output.index("run_url_status: relative_path_web_not_started") < output.index("Loopora run:")
+    assert output.index("run_url_web_start_command:") < output.index("Loopora run:")
+    assert "target_agent: loopora-inspector" in output
+    assert "role_handoff_status: ready_for_host_dispatch" in output
+    assert "role_handoff_owner: current_host_agent" in output
+    assert "evidence_focus:" in output
+    assert "todo_items:" not in output
+    assert "native_todo:" not in output
     assert output.index("technical_handoff:") < output.index("result_template_path:")
 
 
@@ -214,13 +230,13 @@ __all__ = [
     'RunArtifactLayout',
     'WorkflowError',
     '_agent_submit_auto_repair_success_payload',
+    '_assert_agent_native_handoff_surface_plain',
     '_assert_agent_next_json_summary',
     '_assert_agent_next_plain_work_panel',
     '_assert_bad_ref_submit_repair_payload',
     '_assert_cli_handoff_contract_paths',
     '_assert_cli_list',
     '_assert_cli_native_dispatch_contract',
-    '_assert_codex_native_surface_plain',
     '_assert_codex_native_surface_summary',
     '_assert_labeled_loopora_agent_command',
     '_assert_plain_bad_ref_submit_repair',

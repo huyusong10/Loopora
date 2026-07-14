@@ -90,6 +90,24 @@ def test_asset_catalog_sanitizes_invalid_persisted_prompt_file_keys(tmp_path: Pa
     assert list(resolved["prompt_files"].keys()) == ["builder.md"]
 
 
+def test_asset_catalog_resolves_saved_orchestration_before_prompt_file_overrides(tmp_path: Path) -> None:
+    catalog = asset_catalog(tmp_path)
+    orchestration = create_custom_builder_orchestration(catalog)
+    override_prompt = prompt_markdown("builder", "Use the per-loop override prompt.")
+
+    resolved = catalog.resolve_orchestration_input(
+        orchestration_id=orchestration["id"],
+        workflow=None,
+        prompt_files={"custom-builder.md": override_prompt},
+        role_models=None,
+    )
+
+    assert resolved["id"] == orchestration["id"]
+    assert resolved["workflow"]["steps"][0]["id"] == "builder_step"
+    assert resolved["workflow"]["roles"][0]["prompt_ref"] == "custom-builder.md"
+    assert resolved["prompt_files"] == {"custom-builder.md": override_prompt}
+
+
 def create_custom_builder_orchestration(catalog) -> dict:
     return catalog.create_orchestration(
         name="Custom Builder Flow",

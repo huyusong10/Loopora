@@ -2,13 +2,15 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from compacted_contract_support import FakeAlignmentWorkdirContextRepository
 from loopora.service_alignment_workdir_context import (
     AlignmentWorkdirContextResolverContext,
     alignment_workdir_context_payload,
     resolve_plan_context_from_workdir_context,
 )
-from loopora.service_types import LooporaError
+from loopora.service_types import LooporaError, LooporaWorkdirUnavailableError
 
 
 def test_alignment_workdir_context_payload_collects_sessions_loops_files_and_fresh_choice(tmp_path: Path) -> None:
@@ -106,3 +108,85 @@ def test_alignment_workdir_context_payload_keeps_loop_option_when_latest_run_is_
     payload = alignment_workdir_context_payload(context, tmp_path)
 
     assert [option["source_type"] for option in payload["options"]] == ["loop", "none"]
+
+
+def test_alignment_workdir_context_payload_skips_broken_historical_source_paths(tmp_path: Path) -> None:
+    repo = FakeAlignmentWorkdirContextRepository(
+        [
+            {
+                "id": "align_bad",
+                "status": "ready",
+                "workdir": str(tmp_path),
+                "transcript": [{"role": "user", "content": "Existing alignment with bad bundle path"}],
+                "bundle_path": "bad\0bundle.yml",
+            }
+        ]
+    )
+    context = AlignmentWorkdirContextResolverContext(
+        repository=repo,
+        list_loops=lambda: [
+            {
+                "id": "loop_bad_spec",
+                "name": "Loop with bad spec path",
+                "workdir": str(tmp_path),
+                "spec_path": "bad\0spec.md",
+            }
+        ],
+        get_run=lambda _run_id: {},
+    )
+
+    payload = alignment_workdir_context_payload(context, tmp_path)
+
+    option_types = [option["source_type"] for option in payload["options"]]
+    assert option_types == ["alignment_session", "loop", "none"]
+    assert payload["requires_choice"] is True
+    encoded = str(payload)
+    assert "embedded null" not in encoded
+    assert str(Path.cwd()) not in encoded
+
+
+def test_alignment_workdir_context_payload_rejects_unusable_workdir_without_local_path(tmp_path: Path) -> None:
+    repo = FakeAlignmentWorkdirContextRepository([])
+    context = AlignmentWorkdirContextResolverContext(
+        repository=repo,
+        list_loops=list,
+        get_run=lambda _run_id: {},
+    )
+    missing_workdir = tmp_path / "missing-workdir"
+
+    with pytest.raises(LooporaWorkdirUnavailableError) as exc_info:
+        alignment_workdir_context_payload(context, missing_workdir)
+    assert exc_info.value.action == "alignment"
+    assert exc_info.value.workdir_state == "missing"
+    assert str(exc_info.value) == f"target project is not ready for Alignment: {exc_info.value.summary}"
+    assert str(missing_workdir.resolve(strict=False)) not in str(exc_info.value)
+
+
+def test_alignment_workdir_context_payload_rejects_uninspectable_workdir_without_os_error(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    repo = FakeAlignmentWorkdirContextRepository([])
+    context = AlignmentWorkdirContextResolverContext(
+        repository=repo,
+        list_loops=list,
+        get_run=lambda _run_id: {},
+    )
+    blocked_workdir = tmp_path / "blocked-workdir"
+    blocked_resolved = blocked_workdir.resolve(strict=False)
+    private_path = tmp_path / "private" / "blocked"
+    original_exists = Path.exists
+
+    def fail_exists(path: Path) -> bool:
+        if path == blocked_resolved:
+            raise OSError(f"permission denied: {private_path}")
+        return original_exists(path)
+
+    monkeypatch.setattr(Path, "exists", fail_exists)
+
+    with pytest.raises(LooporaWorkdirUnavailableError) as exc_info:
+        alignment_workdir_context_payload(context, blocked_workdir)
+    assert exc_info.value.action == "alignment"
+    assert exc_info.value.workdir_state == "unavailable"
+    assert "permission denied" not in str(exc_info.value)
+    assert str(private_path) not in str(exc_info.value)

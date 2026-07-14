@@ -49,10 +49,15 @@ def recoverable_context_choice_summary(choice: dict) -> dict:
     _set_summary_text(summary, "alignment_status", choice.get("alignment_status"))
     _set_summary_text(summary, "linked_run_id", choice.get("linked_run_id"))
     _set_summary_text(summary, "linked_run_status", choice.get("linked_run_status"))
+    if choice.get("linked_run_lifecycle_failure") is True:
+        summary["linked_run_lifecycle_failure"] = True
+    _set_summary_text(summary, "recording_blocked_reason", choice.get("recording_blocked_reason"))
     _set_summary_text(summary, "task_verdict_status", choice.get("task_verdict_status"))
     _set_summary_text(summary, "task_verdict_summary", _clip_inline(str(choice.get("task_verdict_summary") or ""), 220))
     _set_summary_text(summary, "updated_at", choice.get("updated_at"))
     _set_summary_text(summary, "preview_url", choice.get("preview_url"))
+    _set_summary_text(summary, "preview_url_status", choice.get("preview_url_status"))
+    _set_summary_text(summary, "preview_url_web_start_command", choice.get("preview_url_web_start_command"))
     _set_summary_text(summary, "preview_path", choice.get("preview_path"))
     if runnable:
         _set_summary_text(summary, "next_loop_command", choice.get("next_slash_command") or choice.get("next_command") or fallback_slash)
@@ -166,12 +171,19 @@ def _print_recoverable_context_choice(choice: dict) -> None:
     typer.echo(f"  runnable: {str(runnable).lower()}")
     _echo_context_choice_field("alignment_status", str(choice.get("alignment_status") or "").strip())
     _echo_context_choice_field("linked_run_status", str(choice.get("linked_run_status") or "").strip())
+    if choice.get("linked_run_lifecycle_failure") is True:
+        _echo_context_choice_field("linked_run_lifecycle_failure", "true")
+    _echo_context_choice_field("recording_blocked_reason", str(choice.get("recording_blocked_reason") or "").strip())
     _echo_context_choice_field("task_verdict", str(choice.get("task_verdict_status") or "").strip())
     task_verdict_summary = str(choice.get("task_verdict_summary") or "").strip()
     if task_verdict_summary:
         _echo_context_choice_field("task_verdict_summary", _clip_inline(task_verdict_summary, 220))
     _echo_context_choice_field("updated_at", str(choice.get("updated_at") or "").strip())
     _echo_context_choice_field("preview_url", str(choice.get("preview_url") or "").strip())
+    _echo_context_choice_field("preview_url_status", str(choice.get("preview_url_status") or "").strip())
+    _echo_context_choice_field(
+        "preview_url_web_start_command", str(choice.get("preview_url_web_start_command") or "").strip()
+    )
     _echo_context_choice_field("preview_path", str(choice.get("preview_path") or "").strip())
     _echo_context_choice_field("option_id", option_id)
     _echo_context_choice_field("session_id", str(choice.get("alignment_session_id") or "").strip())

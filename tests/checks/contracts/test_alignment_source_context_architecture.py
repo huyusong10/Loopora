@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from strategy_source_architecture_test_support import design_boundary_source
+
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
@@ -16,7 +18,7 @@ def test_alignment_source_context_helpers_have_dedicated_boundary() -> None:
     source_context = _loopora_source("service_alignment_source_context.py")
     context_factory_source = _loopora_source("service_alignment_context_factory.py")
     artifacts_source = _loopora_source("service_alignment_artifacts.py")
-    contracts_source = (REPO_ROOT / "design" / "contracts.md").read_text(encoding="utf-8")
+    contracts_source = design_boundary_source()
 
     assert "from loopora.service_alignment_source_context import" in seed_source
     assert "from loopora.service_alignment_source_context import" in context_source

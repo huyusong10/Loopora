@@ -33,6 +33,7 @@
     "run_aborted",
     "run_finished",
   ]);
+  const TERMINAL_RUN_STATUSES = new Set(["succeeded", "failed", "stopped"]);
   const TIMELINE_STREAM_EVENT_TYPES = [
     "run_started",
     "checks_resolved",
@@ -53,6 +54,7 @@
     "challenger_done",
     "stop_requested",
     "run_result_accepted",
+    "run_result_acceptance_reopened",
     "run_aborted",
     "workspace_guard_triggered",
   ];
@@ -71,6 +73,8 @@
   const streamRetryDelays = window.LOOPORA_RUN_DETAIL_RETRY_DELAYS
     || runDetailData.streamRetryDelays
     || observation.DEFAULT_RETRY_DELAYS_MS;
+  const initialRunWasTerminal = TERMINAL_RUN_STATUSES.has(String(initialRun?.status || "").toLowerCase());
+  let runActionRefreshNoticeShown = false;
   const streamController = window.LooporaRunDetailStream.createStreamController({
     observation,
     retryDelays: streamRetryDelays,
@@ -190,6 +194,7 @@
       loading: localeText("正在连接观察数据", "Loading observation data"),
       ready: localeText("观察数据已连接", "Observation connected"),
       degraded: localeText("首屏观察数据降级，正在等待增量事件", "Snapshot degraded; waiting for live events"),
+      "snapshot-failed": localeText("证据视图加载失败，请重新加载", "Evidence view failed to load; retry"),
       "stream-error": localeText("事件流短暂中断，正在重连", "Event stream interrupted; reconnecting"),
       "stream-stale": localeText("事件流多次中断，当前观察可能滞后", "Event stream is stale after repeated reconnects"),
       finished: localeText("运行已结束，观察数据已冻结", "Run finished; observation is frozen"),
@@ -197,14 +202,21 @@
     return labels[state] || labels.ready;
   }
 
+  function observationStateShowsRetry(state) {
+    return ["degraded", "snapshot-failed", "stream-stale"].includes(state);
+  }
+
   function setObservationState(state) {
     observationState = state || "ready";
     const node = document.getElementById("run-observation-status");
-    if (!node) {
-      return;
+    if (node) {
+      node.dataset.observationState = observationState;
+      node.textContent = observationStateLabel(observationState);
     }
-    node.dataset.observationState = observationState;
-    node.textContent = observationStateLabel(observationState);
+    const retryButton = document.getElementById("run-observation-refresh-button");
+    if (retryButton) {
+      retryButton.hidden = !observationStateShowsRetry(observationState);
+    }
   }
 
   function eventAlreadyRecorded(records, event) {
@@ -377,6 +389,51 @@
     }
   }
 
+  function runHasTerminalStatus(run) {
+    return TERMINAL_RUN_STATUSES.has(String(run?.status || "").toLowerCase());
+  }
+
+  function syncRunActionHandoff(run) {
+    if (!runHasTerminalStatus(run)) {
+      return;
+    }
+    document.querySelectorAll('[data-run-action-availability="active"]').forEach((control) => {
+      control.hidden = true;
+      control.disabled = true;
+      control.setAttribute("aria-disabled", "true");
+    });
+    if (runActionRefreshNoticeShown || initialRunWasTerminal) {
+      return;
+    }
+    const node = document.getElementById("run-action-refresh-notice");
+    if (!node) {
+      return;
+    }
+    runActionRefreshNoticeShown = true;
+    node.hidden = false;
+  }
+
+  document.getElementById("run-action-refresh-button")?.addEventListener("click", () => {
+    window.location.reload();
+  });
+
+  async function copyTracePath(path) {
+    if (!path) {
+      return;
+    }
+    window.LooporaUI?.renderGlobalManualCopy?.("");
+    try {
+      await window.LooporaUI.writeTextToClipboard(path);
+      setTakeawayFeedback(localeText("路径已复制。", "Path copied."));
+    } catch (error) {
+      window.LooporaUI?.renderGlobalManualCopy?.(path, {
+        label: localeText("手动复制证据路径", "Manual evidence path copy"),
+        textareaId: "run-trace-path-manual-copy-textarea",
+      });
+      setTakeawayFeedback(localeText("浏览器未允许自动复制；请手动复制页面底部的路径。", "The browser blocked automatic copy; copy the path at the bottom of the page manually."));
+    }
+  }
+
   async function revealPath(path) {
     if (!path) {
       return;
@@ -387,18 +444,41 @@
       return;
     } catch (error) {
       try {
-        await navigator.clipboard.writeText(path);
+        await window.LooporaUI.writeTextToClipboard(path);
+        window.LooporaUI?.renderGlobalManualCopy?.("");
         setTakeawayFeedback(localeText("无法自动打开，路径已复制。", "Could not open automatically. The path was copied."));
         return;
       } catch (copyError) {
-        setTakeawayFeedback(localeText("无法自动打开目录。", "Unable to open the folder automatically."));
+        window.LooporaUI?.renderGlobalManualCopy?.(path, {
+          label: localeText("手动复制证据路径", "Manual evidence path copy"),
+          textareaId: "run-trace-path-manual-copy-textarea",
+        });
+        setTakeawayFeedback(localeText("无法自动打开或复制目录；请手动复制页面底部的路径。", "Unable to open or copy the folder automatically; copy the path at the bottom of the page manually."));
       }
     }
   }
 
+  function handleTracePathAction(button, path) {
+    if (button?.dataset?.pathActionMode === "copy") {
+      copyTracePath(path);
+      return;
+    }
+    revealPath(path);
+  }
+
+  function renderAgentHandoffManualCopy(value, label = "") {
+    const container = document.querySelector("[data-agent-handoff-manual-copy]");
+    window.LooporaUI?.renderManualCopy?.(container, value, {
+      label: label || localeText("手动复制交接内容", "Manual handoff copy"),
+      textareaId: "agent-handoff-manual-copy-textarea",
+    });
+  }
+
   function bindTakeawayActions() {
-    document.getElementById("takeaway-open-build")?.addEventListener("click", () => revealPath(takeawaySnapshot?.build_dir));
-    document.getElementById("takeaway-open-logs")?.addEventListener("click", () => revealPath(takeawaySnapshot?.log_dir));
+    const buildPathButton = document.getElementById("takeaway-open-build");
+    const logPathButton = document.getElementById("takeaway-open-logs");
+    buildPathButton?.addEventListener("click", () => handleTracePathAction(buildPathButton, takeawaySnapshot?.build_dir));
+    logPathButton?.addEventListener("click", () => handleTracePathAction(logPathButton, takeawaySnapshot?.log_dir));
     document.getElementById("takeaway-iteration-select")?.addEventListener("change", (event) => {
       domRenderer.setSelectedTakeawayIter(event?.target?.value || "");
       renderTakeaways();
@@ -413,13 +493,15 @@
         setTakeawayFeedback(localeText("没有可复制的交接内容。", "No handoff value is available to copy."));
         return;
       }
+      renderAgentHandoffManualCopy("");
       try {
-        await navigator.clipboard.writeText(value);
+        await window.LooporaUI.writeTextToClipboard(value);
         button.classList.add("is-copied");
         setTakeawayFeedback(localeText("交接内容已复制。", "Handoff value copied."));
         window.setTimeout(() => button.classList.remove("is-copied"), 1400);
       } catch (error) {
-        setTakeawayFeedback(localeText("无法复制交接内容。", "Unable to copy the handoff value."));
+        renderAgentHandoffManualCopy(value, button.getAttribute("aria-label") || "");
+        setTakeawayFeedback(localeText("无法自动复制交接内容；请手动复制下方内容。", "Unable to copy automatically. Copy the handoff value below manually."));
       }
     });
   }
@@ -459,6 +541,7 @@
   async function fetchRun({shouldRefreshTakeaways = false} = {}) {
     const payload = await api.fetchRun(runId);
     currentRun = payload;
+    syncRunPhaseLayout(payload);
     if (observation.isTerminalRun(currentRun)) {
       setObservationState("finished");
       clearStreamReconnect();
@@ -503,12 +586,77 @@
 
   domRenderer.bindConsoleScroll();
 
-  document.getElementById("stop-run")?.addEventListener("click", async () => {
+  function setStopRunStatus(message, kind = "") {
+    const node = document.getElementById("run-stop-status");
+    if (!node) {
+      return;
+    }
+    const text = String(message || "");
+    node.textContent = text;
+    node.hidden = !text;
+    node.className = `field-status run-stop-status${kind ? ` is-${kind}` : ""}`;
+  }
+
+  const stopRunRecoveryPanel = document.getElementById("run-stop-recovery");
+  let lastStopRunRecoveryPayload = null;
+
+  function clearRunActionRecovery() {
+    lastStopRunRecoveryPayload = null;
+    if (!stopRunRecoveryPanel) {
+      return;
+    }
+    stopRunRecoveryPanel.hidden = true;
+    stopRunRecoveryPanel.innerHTML = "";
+    stopRunRecoveryPanel.setAttribute("data-testid", "run-stop-recovery");
+  }
+
+  function renderRunActionRecovery(payload, {testid = "run-stop-recovery"} = {}) {
+    const actions = Array.isArray(payload?.next_actions) ? payload.next_actions : [];
+    if (!stopRunRecoveryPanel || !actions.length) {
+      clearRunActionRecovery();
+      return false;
+    }
+    lastStopRunRecoveryPayload = payload;
+    stopRunRecoveryPanel.setAttribute("data-testid", testid);
+    stopRunRecoveryPanel.innerHTML = window.LooporaUI.recoveryPanelHtml(payload, {
+      testid,
+      title: localeText("运行动作需要先恢复", "Recover the run action first"),
+      emptyControlText: localeText("在页面上完成这一步后继续。", "Complete this step on the page before continuing."),
+      runActionRecoveryLink: true,
+    });
+    stopRunRecoveryPanel.hidden = false;
+    window.LooporaUI?.bindRecoveryCommandCopy?.();
+    return true;
+  }
+
+  function renderRunActionRecoveryFromError(error, options = {}) {
+    const payload = error?.payload || {};
+    if (Array.isArray(payload?.next_actions) && payload.next_actions.length) {
+      return renderRunActionRecovery(payload, options);
+    }
+    clearRunActionRecovery();
+    return false;
+  }
+
+  const stopRunButton = document.getElementById("stop-run");
+  stopRunButton?.addEventListener("click", async () => {
+    if (stopRunButton.disabled) {
+      return;
+    }
+    stopRunButton.disabled = true;
+    stopRunButton.setAttribute("aria-disabled", "true");
+    clearRunActionRecovery();
+    setStopRunStatus(localeText("正在请求停止运行...", "Requesting stop..."), "warning");
     try {
       await api.stopRun(runId);
+      clearRunActionRecovery();
+      setStopRunStatus(localeText("已请求停止运行，正在刷新状态。", "Stop requested; refreshing status."), "success");
       await fetchRun();
     } catch (error) {
-      alert(error?.message || localeText("无法停止运行。", "Unable to stop the run."));
+      stopRunButton.disabled = false;
+      stopRunButton.removeAttribute("aria-disabled");
+      renderRunActionRecoveryFromError(error, {testid: "run-stop-recovery"});
+      setStopRunStatus(error?.message || localeText("无法停止运行。", "Unable to stop the run."), "error");
     }
   });
 
@@ -526,7 +674,64 @@
     scheduler?.syncLiveRefreshers();
   }
 
+  function syncRunPhaseLayout(run) {
+    syncRunActionHandoff(run);
+    const grid = document.querySelector(".run-judgment-grid");
+    const progress = document.getElementById("run-progress-panel");
+    const takeaways = document.querySelector('[data-testid="run-takeaway-panel"]');
+    if (!grid || !progress || !takeaways) {
+      return;
+    }
+    const active = runIsActive(run);
+    grid.dataset.runPhase = active ? "active" : "terminal";
+    progress.classList.toggle("is-primary", active);
+    progress.classList.toggle("trace-material-panel", !active);
+    const phaseCopy = active
+      ? {
+        intro: localeText(
+          "先看当前步骤正在做什么、已经留下哪些证据，以及接下来会进入哪个阶段。",
+          "Start with the current step, the evidence collected so far, and which stage comes next."
+        ),
+        title: localeText("证据收集中", "Evidence underway"),
+        detail: localeText(
+          "这里显示已经落账的证据，但运行结束前不会把暂缺证据当成最终裁决。",
+          "This shows evidence already recorded, without treating missing evidence as a final verdict before the run ends."
+        ),
+        outcome: localeText("证据状态", "Evidence status"),
+      }
+      : {
+        intro: localeText(
+          "先看这轮证明了什么、哪里没过线，以及证据能否支撑裁决。",
+          "Start with what this run proved, what missed the bar, and whether the evidence supports the verdict."
+        ),
+        title: localeText("关键结论", "Key takeaways"),
+        detail: localeText(
+          "先看证据覆盖和守门裁决；原始提示词、上下文和输出继续沉到追查材料里。",
+          "Start with evidence coverage and the GateKeeper verdict; raw prompts, context, and outputs stay in trace material."
+        ),
+        outcome: localeText("证据结论", "Evidence outcome"),
+      };
+    [
+      ["run-phase-intro", phaseCopy.intro],
+      ["takeaway-phase-title", phaseCopy.title],
+      ["takeaway-phase-copy", phaseCopy.detail],
+      ["takeaway-outcome-label", phaseCopy.outcome],
+    ].forEach(([id, value]) => {
+      const node = document.getElementById(id);
+      if (node && node.textContent !== value) {
+        node.textContent = value;
+      }
+    });
+    if (active) {
+      progress.open = true;
+      grid.insertBefore(progress, takeaways);
+    } else {
+      grid.insertBefore(takeaways, progress);
+    }
+  }
+
   function renderRunDetailPanels() {
+    syncRunPhaseLayout(currentRun);
     domRenderer.renderRunDetailPanels();
   }
 
@@ -538,6 +743,40 @@
     resetStreamFailures();
     setObservationState(merged.observationState);
     renderRunDetailPanels();
+  }
+
+  async function loadInitialObservation() {
+    try {
+      await loadObservationSnapshot();
+      return;
+    } catch (error) {
+      setObservationState("degraded");
+    }
+    try {
+      await fetchRun({shouldRefreshTakeaways: true});
+    } catch (error) {
+      setObservationState("snapshot-failed");
+    }
+  }
+
+  async function retryObservationLoad() {
+    const retryButton = document.getElementById("run-observation-refresh-button");
+    if (retryButton?.disabled) {
+      return;
+    }
+    if (retryButton) {
+      retryButton.disabled = true;
+      retryButton.setAttribute("aria-disabled", "true");
+    }
+    setObservationState("loading");
+    try {
+      await loadInitialObservation();
+    } finally {
+      if (retryButton) {
+        retryButton.disabled = false;
+        retryButton.removeAttribute("aria-disabled");
+      }
+    }
   }
 
   function handleStreamEvent(message, options = {}) {
@@ -611,7 +850,7 @@
       resetStreamFailures();
       if (observation.isTerminalRun(currentRun)) {
         setObservationState("finished");
-      } else if (observationState !== "degraded") {
+      } else if (!["degraded", "snapshot-failed"].includes(observationState)) {
         setObservationState("ready");
       }
     };
@@ -663,6 +902,7 @@
 
   document.addEventListener("loopora:localechange", () => {
     window.LooporaUI.applyLocalizedAttributes(document);
+    syncRunPhaseLayout(currentRun);
     buildConsoleControls();
     renderTakeaways();
     if (currentRun) {
@@ -672,15 +912,16 @@
     renderTimeline();
     renderConsole();
     setObservationState(observationState);
+    if (lastStopRunRecoveryPayload) {
+      renderRunActionRecovery(lastStopRunRecoveryPayload, {testid: stopRunRecoveryPanel?.dataset.testid || "run-stop-recovery"});
+    }
   });
 
   buildConsoleControls();
   bindTakeawayActions();
+  document.getElementById("run-observation-refresh-button")?.addEventListener("click", () => {
+    retryObservationLoad();
+  });
   setObservationState("loading");
   renderRunDetailPanels();
-  loadObservationSnapshot()
-    .catch(() => {
-      setObservationState("degraded");
-      return fetchRun({shouldRefreshTakeaways: true}).catch(() => {});
-    })
-    .finally(() => connectRunStream());
+  loadInitialObservation().finally(() => connectRunStream());

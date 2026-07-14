@@ -50,6 +50,18 @@ def _assert_plan_entry_avoids_yaml_authoring(plan_entry: str) -> None:
     for forbidden in ("authoring YAML", "fix the YAML", "YAML"):
         assert forbidden not in plan_entry
 
+def _assert_plan_entry_preserves_host_native_handoff(plan_entry: str) -> None:
+    assert "host-native interactive planning dispatcher" in plan_entry
+    assert "Preserve the user's complete task judgment" in plan_entry
+    assert "draft working agreement" in plan_entry
+    assert "wait for explicit confirmation" in plan_entry
+    assert "message-only CLI call as the first planning action" in plan_entry
+    assert "Confirmed candidate or repair" in plan_entry
+    assert "--bundle-file <candidate-plan-file>" in plan_entry
+    assert "Non-interactive or Web fallback" in plan_entry
+    assert '--message "<non-empty task context>"' in plan_entry
+    assert "That fallback may start a separate alignment executor" in plan_entry
+
 def _assert_snippets(text: str, snippets: tuple[str, ...]) -> None:
     for snippet in snippets:
         assert snippet in text
@@ -64,7 +76,7 @@ def _assert_run_contract_compact_commands(
     )
     submit_command = (
         f'loopora agent {adapter} submit --workdir "$PWD"{context_bits} --run-id <run-id> '
-        f"--step-id <step-id> --result-file RESULT_JSON_PATH --entry-source {marker_source} "
+        f"--step-id <step-id> --result-file RESULT_JSON_PATH --attest-role-dispatch --entry-source {marker_source} "
         "--json --compact-json"
     )
     assert run_command in run_contract
@@ -115,21 +127,19 @@ def _assert_claude_session_hook_executes(session_hook: Path, workdir: Path) -> N
     assert "write them under the workdir, not `/tmp`" in additional_context
     assert '--workdir "$PWD"' in additional_context
     assert '--context-id "$CLAUDE_SESSION_ID"' in additional_context
-    assert "message-only plan call" in additional_context
-    assert "Create/check a candidate file only after explicit confirmation" in additional_context
-    assert "Do not treat a detailed first prompt as confirmation" in additional_context
+    assert "keep fit review, missing-judgment questions, the draft working agreement" in additional_context
+    assert "Do not invoke `Agent`/`Task`, a nested provider CLI, or Loopora CLI before confirmation" in additional_context
     assert '--message "<non-empty task context>"' in additional_context
     assert "Preserve concrete fake-done risks, required evidence, judgment tradeoffs" in additional_context
     assert "--bundle-file <candidate-plan-file>" in additional_context
-    assert "author the candidate file under .loopora/agent_inbox/claude/ first" not in additional_context
+    assert "create the candidate under `.loopora/agent_inbox/claude/`" in additional_context
     assert "LOOPORA_AGENT_SESSION_ID=session_123" in env_file.read_text(encoding="utf-8")
 
 def _assert_claude_gen_entry(gen_skill: str, plan_contract: str) -> None:
+    _assert_plan_entry_preserves_host_native_handoff(gen_skill)
     assert "disable-model-invocation: true" in gen_skill
-    assert "Manual /loopora-plan entry" in gen_skill
-    assert "Skill tool reports disable-model-invocation" in gen_skill
-    assert "do not invoke `Agent` or `Task` to simulate `/loopora-plan`" in gen_skill
-    assert "stay in the main session" in gen_skill
+    assert "Manual host-native /loopora-plan entry" in gen_skill
+    assert "Keep planning in the current main session" in gen_skill
     assert "allowed-tools:" in gen_skill
     assert "Bash(LOOPORA_HOME=* loopora agent claude plan *)" in gen_skill
     assert "Bash(LOOPORA_HOME=* LOOPORA_AGENT_ENTRY_SOURCE=claude_project_skill loopora agent claude plan *)" in gen_skill
@@ -139,15 +149,13 @@ def _assert_claude_gen_entry(gen_skill: str, plan_contract: str) -> None:
     assert "--entry-source claude_project_skill" in gen_skill
     assert "--json --compact-json" in gen_skill
     assert "Create, revise, repair, or tighten the current Claude Code Loop preview" in gen_skill
-    assert "interactive planning dispatcher" in gen_skill
-    assert "For initial message-only alignment or Web review, this entry is enough" in gen_skill
-    assert "do not open the long reference before that first message-only call" in gen_skill
-    assert "message-only plan call" in gen_skill
-    assert "use `--bundle-file` only after explicit confirmation" in gen_skill
-    assert "If the plan result returns `loop_recovery=continue_alignment_dialogue`" in gen_skill
-    assert "Do not answer it from host inference, workdir probes, Web scraping" in gen_skill
+    assert "host-native interactive planning dispatcher" in gen_skill
+    assert "do not invoke `Agent` or `Task`, start a nested provider CLI" in gen_skill
+    assert "Only after explicit confirmation" in gen_skill
+    assert "author a complete candidate under `.loopora/agent_inbox/claude/`" in gen_skill
+    assert "only when Claude Code cannot continue the main-session dialogue" in gen_skill
+    assert 'plan --workdir "$PWD" --context-id "${CLAUDE_SESSION_ID}" --message "<confirmed task context>" --bundle-file <candidate-plan-file> --entry-source claude_project_skill --json --compact-json' in gen_skill
     assert 'plan --workdir "$PWD" --context-id "${CLAUDE_SESSION_ID}" --message "<non-empty task context>" --entry-source claude_project_skill --json --compact-json' in gen_skill
-    assert "Do not shrink a detailed `/loopora-plan` request into a title-only summary" in gen_skill
     assert "references/loopora-plan-contract.md" in gen_skill
     assert "Do not inspect `$HOME/.claude`, global skill directories, Loopora manifests" in gen_skill
     assert "binary/PATH probes such as `which loopora`, `command -v loopora`, `type loopora`, `echo $PATH`" in gen_skill
@@ -157,9 +165,9 @@ def _assert_claude_gen_entry(gen_skill: str, plan_contract: str) -> None:
     _assert_snippets(
         gen_skill,
         (
-            "Do not run project tests, proof commands, or baseline checks before `loopora agent claude plan`",
-            "conduct interactive alignment from the current task context and managed reference",
-            "Author or submit a candidate plan only after explicit confirmation or repair recovery",
+            "Do not run project tests, proof commands, baseline checks, or Loopora CLI commands before main-session alignment and explicit confirmation",
+            "Keep planning in the current main session",
+            "Author or submit a candidate plan only after that confirmation or repair recovery",
             "Read this managed skill/reference with Claude Code's file read capability at exact known paths when needed",
             "partial/range-limited reads, or line/byte-count wrappers as entry validation",
             "Do not invoke other Loopora or alignment skills such as `loopora-task-alignment`",
@@ -167,7 +175,7 @@ def _assert_claude_gen_entry(gen_skill: str, plan_contract: str) -> None:
             "`loopora init claude`, `loopora agent claude check`, parent-directory probes",
             "Do not run the combined preflight `which loopora && loopora --version`",
             "directory-listing preflights such as `ls`",
-            "the next Bash action should run the primary plan command",
+            "the next Bash action should run the candidate plan command",
             "Create/check a candidate file only after explicit confirmation",
             "After writing a candidate file, verify only existence/readability",
             "do not inspect snippets with `head`, `cat`, `sed`, `grep`, `jq`, `wc`",
@@ -181,7 +189,7 @@ def _assert_claude_gen_entry(gen_skill: str, plan_contract: str) -> None:
     assert "global skill directories" in plan_contract
     assert "parent directories, or broad project/file discovery to verify the entry" in plan_contract
     assert "`command -v loopora`, `type loopora`, `echo $PATH`" in plan_contract
-    assert "read the project-local managed entry/reference file if needed with the host file-read capability" in plan_contract
+    assert "read the project-local managed entry/reference file with the host file-read capability when needed" in plan_contract
     _assert_snippets(
         plan_contract,
         (
@@ -191,13 +199,13 @@ def _assert_claude_gen_entry(gen_skill: str, plan_contract: str) -> None:
             "Partial or filtered reference output is not stable entry validation",
             "Do not run the combined preflight `which loopora && loopora --version`",
             "directory-listing preflights such as `ls`",
-            "the next Bash action should run the primary plan command",
+            "the next Bash action should run candidate validation",
             "Create/check a candidate file only after explicit confirmation",
             "After writing a candidate plan file, verify only existence/readability",
             "do not inspect candidate snippets with `head`, `head -1`, `cat`, `sed`, `grep`, `jq`, `wc`",
             "Do not run project tests, proof commands, smoke checks, or baseline checks before planning",
             "planning should conduct interactive alignment from current task context and managed references",
-            "Do not wrap it in `tee`, `wc`, `head`, `tail`, `sed`, `jq`, `grep`, `python -c`, line/byte-count commands, or shell pipelines",
+            "Do not wrap either command in `tee`, `wc`, `head`, `tail`, `sed`, `jq`, `grep`, `python -c`, line/byte-count commands, or shell pipelines",
             "do not redirect managed JSON to `/tmp`",
         ),
     )
@@ -386,10 +394,9 @@ def _assert_claude_session_context_asset(session_context_text: str) -> None:
     assert ".claude/skills/loopora-plan/SKILL.md" in session_context_text
     assert "do not inspect `$HOME/.claude`" in session_context_text
     assert "run `find /`" in session_context_text
-    assert "message-only plan call" in session_context_text
-    assert "Create/check a candidate file only after explicit confirmation" in session_context_text
-    assert "Do not treat a detailed first prompt as confirmation" in session_context_text
-    assert "author the candidate file under .loopora/agent_inbox/claude/ first" not in session_context_text
+    assert "keep fit review, missing-judgment questions, the draft working agreement" in session_context_text
+    assert "Do not invoke `Agent`/`Task`, a nested provider CLI, or Loopora CLI before confirmation" in session_context_text
+    assert "create the candidate under `.loopora/agent_inbox/claude/`" in session_context_text
     assert "--bundle-file <candidate-plan-file>" in session_context_text
 
 def _assert_claude_managed_install(workdir: Path, skill_paths: dict[str, Path]) -> tuple[Path, str]:
@@ -431,6 +438,7 @@ def _assert_claude_managed_install(workdir: Path, skill_paths: dict[str, Path]) 
     return manifest_path, _assert_claude_manifest(manifest_path)
 
 def _assert_opencode_plan_entry(gen_command: str, plan_contract: str) -> None:
+    _assert_plan_entry_preserves_host_native_handoff(gen_command)
     assert "description:" in gen_command
     assert "agent: build" not in gen_command
     assert "$ARGUMENTS" in gen_command
@@ -440,15 +448,13 @@ def _assert_opencode_plan_entry(gen_command: str, plan_contract: str) -> None:
     assert "--entry-source opencode_project_command" in gen_command
     assert "--json --compact-json" in gen_command
     assert "Create, revise, repair, or tighten the current OpenCode Loop preview" in gen_command
-    assert "interactive planning dispatcher" in gen_command
-    assert "For initial message-only alignment or Web review, this entry is enough" in gen_command
-    assert "do not open the long reference before that first message-only call" in gen_command
-    assert "message-only plan call" in gen_command
-    assert "use `--bundle-file` only after explicit confirmation" in gen_command
-    assert "If the plan result returns `loop_recovery=continue_alignment_dialogue`" in gen_command
-    assert "Do not answer it from host inference, workdir probes, Web scraping" in gen_command
+    assert "host-native interactive planning dispatcher" in gen_command
+    assert "do not start a nested provider CLI" in gen_command
+    assert "Only after explicit confirmation" in gen_command
+    assert "author a complete candidate under `.loopora/agent_inbox/opencode/`" in gen_command
+    assert "only when this host cannot continue the main-session dialogue" in gen_command
+    assert 'plan --workdir "$PWD" --context-id "${OPENCODE_SESSION_ID:-}" --message "<confirmed task context>" --bundle-file <candidate-plan-file> --entry-source opencode_project_command --json --compact-json' in gen_command
     assert 'plan --workdir "$PWD" --context-id "${OPENCODE_SESSION_ID:-}" --message "<non-empty task context>" --entry-source opencode_project_command --json --compact-json' in gen_command
-    assert "Do not shrink a detailed `/loopora-plan` request into a title-only summary" in gen_command
     assert ".opencode/loopora/references/loopora-plan-contract.md" in gen_command
     _assert_entry_line_budget(gen_command)
     for snippet in AGENT_ENTRY_GEN_CONTRACT_SNIPPETS:
@@ -590,6 +596,7 @@ def _assert_codex_managed_install(workdir: Path, skill_paths: dict[str, Path]) -
     return _assert_codex_manifest(workdir)
 
 def _assert_codex_plan_entry(gen_skill: str, plan_contract: str) -> None:
+    _assert_plan_entry_preserves_host_native_handoff(gen_skill)
     assert "name: loopora-plan" in gen_skill
     assert "LOOPORA_AGENT_ENTRY_SOURCE=codex_project_skill" in gen_skill
     assert 'loopora agent codex plan --workdir "$PWD"' in gen_skill
@@ -597,15 +604,13 @@ def _assert_codex_plan_entry(gen_skill: str, plan_contract: str) -> None:
     assert "--entry-source codex_project_skill" in gen_skill
     assert "--json --compact-json" in gen_skill
     assert "create, revise, repair, or tighten the reviewed Loop preview" in gen_skill
-    assert "interactive planning dispatcher" in gen_skill
-    assert "For initial message-only alignment or Web review, this entry is enough" in gen_skill
-    assert "do not open the long reference before that first message-only call" in gen_skill
-    assert "message-only plan call" in gen_skill
-    assert "use `--bundle-file` only after explicit confirmation" in gen_skill
-    assert "If the plan result returns `loop_recovery=continue_alignment_dialogue`" in gen_skill
-    assert "Do not answer it from host inference, workdir probes, Web scraping" in gen_skill
+    assert "host-native interactive planning dispatcher" in gen_skill
+    assert "do not invoke another Agent, start a nested provider CLI" in gen_skill
+    assert "Only after explicit confirmation" in gen_skill
+    assert "author a complete candidate under `.loopora/agent_inbox/codex/`" in gen_skill
+    assert "only when this host cannot continue the main-session dialogue" in gen_skill
+    assert 'plan --workdir "$PWD" --message "<confirmed task context>" --bundle-file <candidate-plan-file> --entry-source codex_project_skill --json --compact-json' in gen_skill
     assert 'plan --workdir "$PWD" --message "<non-empty task context>" --entry-source codex_project_skill --json --compact-json' in gen_skill
-    assert "Do not shrink a detailed `/loopora-plan` request into a title-only summary" in gen_skill
     assert "references/loopora-plan-contract.md" in gen_skill
     _assert_entry_line_budget(gen_skill)
     for snippet in AGENT_ENTRY_GEN_CONTRACT_SNIPPETS:

@@ -198,6 +198,7 @@ def test_agent_native_submit_hints_have_dedicated_boundary() -> None:
         "def agent_native_submit_command",
         "def agent_native_result_artifact_stem",
         "def agent_native_submit_hint_with_scoped_result_paths",
+        "def agent_native_workdir_from_loopora_path",
         "def _agent_native_command_workdir_arg",
     )
     assert_design_mentions(design_contracts_source(), "agent_native_submit_hints.py")
@@ -388,7 +389,7 @@ def test_web_import_cannot_headless_start_agent_first_preview(
         )
     )
 
-    with pytest.raises(LooporaConflictError, match="agent-first Loop previews must be started from /loopora-run"):
+    with pytest.raises(LooporaConflictError, match="Agent-native Loop previews must be started from /loopora-run"):
         service.import_alignment_bundle(generated["session"]["id"], start_immediately=True, execute_async=True)
 
     blocked_session = service.get_alignment_session(generated["session"]["id"])

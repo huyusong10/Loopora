@@ -70,6 +70,20 @@ def format_run_result_accepted(payload: Mapping[str, object], _role: object, _ev
     return recorded_verdict_title(task_status), detail
 
 
+def format_run_result_acceptance_reopened(payload: Mapping[str, object], _role: object, _event_type: str) -> tuple[str, str]:
+    status = str(payload.get("status") or "").strip()
+    task_status = str(payload.get("task_verdict_status") or "").strip()
+    detail = ", ".join(
+        part
+        for part in (
+            f"status={status}" if status else "",
+            f"task_verdict_status={task_status}" if task_status else "",
+        )
+        if part
+    )
+    return "Recorded evidence verdict reopened", detail
+
+
 def recorded_verdict_title(task_status: str) -> str:
     return {
         "passed": "Passing evidence verdict recorded",

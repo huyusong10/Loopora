@@ -1,9 +1,12 @@
 from pathlib import Path
+from dataclasses import replace
 from types import SimpleNamespace
 
 import pytest
 
+from loopora.run_worker_start import BACKGROUND_WORKER_START_ERROR
 from loopora.service_alignment_bundle_lifecycle import AlignmentBundleLifecycleContext
+from loopora.service_alignment_bundle_validation_payloads import ALIGNMENT_BUNDLE_SAVE_FAILED_ERROR
 from loopora.service_alignment_import import AlignmentImportContext, import_alignment_bundle
 from loopora.service_types import LooporaConflictError, LooporaError, LooporaNotFoundError
 
@@ -25,7 +28,14 @@ class FakeAlignmentImportRepository:
         return event
 
 
-def import_case(tmp_path: Path, *, session: dict | None = None, agent_candidate: bool = False, import_error: Exception | None = None):
+def import_case(
+    tmp_path: Path,
+    *,
+    session: dict | None = None,
+    agent_candidate: bool = False,
+    import_error: Exception | None = None,
+    async_error: Exception | None = None,
+):
     repo = FakeAlignmentImportRepository(session if session is not None else ready_session(tmp_path))
     yamls: list[str] = []
     runs: list[str] = []
@@ -51,6 +61,11 @@ def import_case(tmp_path: Path, *, session: dict | None = None, agent_candidate:
         runs.append(loop_id)
         return {"id": "run_1", "loop_id": loop_id}
 
+    def start_run_async(run_id: str) -> None:
+        async_runs.append(run_id)
+        if async_error is not None:
+            raise async_error
+
     def lifecycle_context() -> AlignmentBundleLifecycleContext:
         return AlignmentBundleLifecycleContext(
             repository=repo,
@@ -65,7 +80,7 @@ def import_case(tmp_path: Path, *, session: dict | None = None, agent_candidate:
         load_validated_bundle_text=load_validated_bundle_text,
         import_bundle_text=import_bundle_text,
         start_run=start_run,
-        start_run_async=async_runs.append,
+        start_run_async=start_run_async,
         bundle_lifecycle_context=lifecycle_context,
         now=lambda: "2026-05-30T00:00:00Z",
     )
@@ -119,6 +134,37 @@ def test_alignment_import_command_starts_run_and_records_run_event(tmp_path: Pat
     assert case.event_types() == ["alignment_imported", "alignment_run_started"]
 
 
+def test_alignment_import_command_returns_failed_run_when_async_dispatch_fails(tmp_path: Path) -> None:
+    case = import_case(tmp_path, async_error=LooporaError(BACKGROUND_WORKER_START_ERROR))
+
+    result = import_alignment_bundle(case.context, "align_import", start_immediately=True, execute_async=True)
+
+    assert result["run"] == {"id": "run_1", "loop_id": "loop_1"}
+    assert result["redirect_url"] == "/runs/run_1"
+    assert result["run_start_error"] == BACKGROUND_WORKER_START_ERROR
+    assert result["run_recovery"] == "retry_run_start"
+    assert case.runs == ["loop_1"]
+    assert case.async_runs == ["run_1"]
+    assert case.repo.session["status"] == "imported"
+    assert case.repo.session["linked_run_id"] == "run_1"
+    assert case.repo.session["error_message"] == BACKGROUND_WORKER_START_ERROR
+    assert case.event_types() == ["alignment_imported", "alignment_run_start_failed"]
+    failed_event = case.repo.events[-1]["payload"]
+    assert failed_event["run_id"] == "run_1"
+    assert failed_event["run_start_error"] == BACKGROUND_WORKER_START_ERROR
+    assert failed_event["run_recovery"] == "retry_run_start"
+    assert failed_event["next_action_ready_now_kinds"] == ["retry_web_run_start"]
+    assert failed_event["next_action_ready_after_actions"] == {}
+    assert failed_event["next_actions"] == [
+        {
+            "kind": "retry_web_run_start",
+            "target": "web_loop_start",
+            "action": "start_run",
+            "loop_id": "loop_1",
+        }
+    ]
+
+
 def test_alignment_import_command_rejects_non_ready_missing_file_and_agent_first(tmp_path: Path) -> None:
     inactive = import_case(tmp_path, session=ready_session(tmp_path, status="idle"))
     with pytest.raises(LooporaConflictError, match="not READY"):
@@ -126,11 +172,13 @@ def test_alignment_import_command_rejects_non_ready_missing_file_and_agent_first
 
     missing_bundle = tmp_path / "missing.yml"
     missing = import_case(tmp_path, session={"id": "align_import", "status": "ready", "bundle_path": str(missing_bundle)})
-    with pytest.raises(LooporaNotFoundError, match="alignment bundle does not exist"):
+    with pytest.raises(LooporaNotFoundError) as exc_info:
         import_alignment_bundle(missing.context, "align_import", start_immediately=False)
+    assert str(exc_info.value) == "alignment bundle does not exist"
+    assert str(tmp_path) not in str(exc_info.value)
 
     agent = import_case(tmp_path, agent_candidate=True)
-    with pytest.raises(LooporaConflictError, match="agent-first Loop previews"):
+    with pytest.raises(LooporaConflictError, match="Agent-native Loop previews"):
         import_alignment_bundle(agent.context, "align_import", start_immediately=True, execute_async=True)
     assert agent.repo.events == []
 
@@ -146,4 +194,56 @@ def test_alignment_import_command_records_validation_failure_and_reraises_loopor
     assert case.repo.session["status"] == "ready"
     assert case.repo.session["error_message"] == "bundle semantic lint failed"
     assert case.validations[0]["semantic_lint"] == {"ok": False, "issues": ["semantic issue"]}
+    assert case.event_types() == ["alignment_import_failed"]
+
+
+def test_alignment_import_command_restores_candidate_when_service_import_fails(tmp_path: Path) -> None:
+    case = import_case(tmp_path)
+    bundle_path = Path(case.repo.session["bundle_path"])
+    original_yaml = bundle_path.read_text(encoding="utf-8")
+
+    def fail_import_bundle_text(normalized_yaml: str) -> dict:
+        case.yamls.append(normalized_yaml)
+        raise LooporaError("plan file could not be imported")
+
+    context = replace(case.context, import_bundle_text=fail_import_bundle_text)
+
+    with pytest.raises(LooporaError, match="plan file could not be imported"):
+        import_alignment_bundle(context, "align_import", start_immediately=False)
+
+    assert case.yamls == ["version: 1\n# normalized\n"]
+    assert case.runs == []
+    assert bundle_path.read_text(encoding="utf-8") == original_yaml
+    assert case.repo.session["status"] == "ready"
+    assert case.repo.session["error_message"] == "plan file could not be imported"
+    assert case.validations[0]["ok"] is False
+    assert case.event_types() == ["alignment_import_failed"]
+
+
+def test_alignment_import_command_preserves_candidate_when_normalized_write_fails(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    case = import_case(tmp_path)
+    bundle_path = Path(case.repo.session["bundle_path"])
+    original_yaml = bundle_path.read_text(encoding="utf-8")
+    original_replace = Path.replace
+
+    def fail_bundle_replace(path: Path, target: Path) -> Path:
+        if Path(target) == bundle_path and Path(path).name.startswith(f".{bundle_path.name}.tmp."):
+            raise OSError(f"permission denied: {bundle_path}")
+        return original_replace(path, target)
+
+    monkeypatch.setattr(Path, "replace", fail_bundle_replace)
+
+    with pytest.raises(LooporaError, match=ALIGNMENT_BUNDLE_SAVE_FAILED_ERROR):
+        import_alignment_bundle(case.context, "align_import", start_immediately=False)
+
+    assert case.yamls == []
+    assert case.runs == []
+    assert bundle_path.read_text(encoding="utf-8") == original_yaml
+    assert not list(bundle_path.parent.glob(f".{bundle_path.name}.tmp.*"))
+    assert case.repo.session["status"] == "ready"
+    assert case.repo.session["error_message"] == ALIGNMENT_BUNDLE_SAVE_FAILED_ERROR
+    assert case.validations[0]["error"] == ALIGNMENT_BUNDLE_SAVE_FAILED_ERROR
     assert case.event_types() == ["alignment_import_failed"]

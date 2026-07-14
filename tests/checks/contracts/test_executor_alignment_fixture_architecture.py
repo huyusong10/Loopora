@@ -1,9 +1,33 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
-from executor_architecture_test_support import design_contracts_source, loopora_source
+from alignment_test_support import (
+    _agreement_response_boundary_sources,
+    _assert_agreement_evidence_design_inventory,
+    _assert_agreement_evidence_import_boundary,
+    _assert_agreement_readiness_asset_boundary,
+    _assert_agreement_task_dispatch_boundary,
+    _assert_agreement_task_response_design_inventory,
+    _assert_agreement_task_response_domain_boundaries,
+)
+from executor_architecture_test_support import (
+    _assert_bundle_task_routing_appender_boundary,
+    _assert_bundle_task_routing_dispatch_boundary,
+    _assert_bundle_task_spec_scaffold_domain_boundaries,
+    _assert_task_workflow_design_inventory,
+    _assert_task_workflow_dispatch_boundary,
+    _assert_task_workflow_prose_boundaries,
+    _assert_task_workflow_shape_boundaries,
+    _bundle_task_routing_boundary_sources,
+    _task_workflow_boundary_sources,
+    design_contracts_source,
+    loopora_source,
+)
+from executor_bundle_routing_inventory_checks import _assert_bundle_task_routing_design_inventory
 from loopora.alignment_semantics import text_mentions_loop_fit_contradiction
+from loopora.executor_alignment_agreement_task_dispatch import alignment_task_anchored_agreement_response
 from loopora.executor_alignment_bundle_fixtures import alignment_chinese_bundle_yaml, alignment_task_anchored_repair_bundle_yaml
 from loopora.executor_alignment_task_projection import alignment_task_domain_projection
 from loopora.executor_fake_payloads import alignment_bundle_yaml
@@ -25,8 +49,7 @@ SPECIALIZED_WORKFLOW_TASKS = {
         "events, DLQ, ledger reconciliation, refunds, disputes, payout updates, audit, and monitoring."
     ),
     "identity_sso": (
-        "Plan enterprise SAML/OIDC SSO with SCIM provisioning, tenant binding, forged assertion negatives, "
-        "deprovisioning, role mapping, audit, and monitoring."
+        "Plan enterprise SAML/OIDC SSO with SCIM provisioning, tenant binding, forged assertion negatives, deprovisioning, role mapping, audit, and monitoring."
     ),
     "authorization_policy": (
         "Plan authorization policy consistency across UI, API, background jobs, exports, cache, audit log, "
@@ -106,25 +129,51 @@ SPECIALIZED_WORKFLOW_SPEC_MARKERS = {
 
 
 def test_fake_alignment_fixtures_keep_payload_data_and_bundle_base_dedicated() -> None:
-    payloads_source = loopora_source("executor_alignment_payloads.py")
-    preconfirmation_source = loopora_source("executor_alignment_preconfirmation_payloads.py")
-    responses_source = loopora_source("executor_alignment_responses.py")
-    agreement_responses_source = loopora_source("executor_alignment_agreement_responses.py")
-    readiness_responses_source = loopora_source("executor_alignment_readiness_responses.py")
-    base_bundle_source = loopora_source("executor_alignment_bundle_base_fixture.py")
-    governance_bundle_source = loopora_source("executor_alignment_bundle_governance_fixture.py")
-    bundle_variants_source = loopora_source("executor_alignment_bundle_fixtures.py")
-    task_projection_source = loopora_source("executor_alignment_task_projection.py")
-    readiness_source = loopora_source("executor_alignment_readiness_payloads.py")
-    contracts_source = design_contracts_source()
+    (
+        payloads_source,
+        preconfirmation_source,
+        responses_source,
+        readiness_responses_source,
+        base_bundle_source,
+        bundle_variants_source,
+        task_anchor_source,
+        task_anchors_source,
+        task_projection_source,
+        task_projection_scope_source,
+        readiness_source,
+        contracts_source,
+        service_boundaries_source,
+    ) = (
+        loopora_source("executor_alignment_payloads.py"),
+        loopora_source("executor_alignment_preconfirmation_payloads.py"),
+        loopora_source("executor_alignment_responses.py"),
+        loopora_source("executor_alignment_readiness_responses.py"),
+        loopora_source("executor_alignment_bundle_base_fixture.py"),
+        loopora_source("executor_alignment_bundle_fixtures.py"),
+        loopora_source("executor_alignment_bundle_task_anchor.py"),
+        loopora_source("executor_alignment_task_anchors.py"),
+        loopora_source("executor_alignment_task_projection.py"),
+        loopora_source("executor_alignment_task_projection_scope.py"),
+        loopora_source("executor_alignment_readiness_payloads.py"),
+        design_contracts_source(),
+        (Path(__file__).resolve().parents[3] / "design" / "service-boundaries.md").read_text(encoding="utf-8"),
+    )
 
+    _assert_bundle_scenario_fixture_asset_boundary(payloads_source)
+    assert "from loopora.executor_alignment_task_anchors import" in payloads_source
+    assert "def alignment_task_text_from_prompt" in task_anchors_source
+    assert "def alignment_task_anchor_from_user_message" in task_anchors_source
+    assert "ALIGNMENT_SESSION_TRANSCRIPT_BLOCK_RE" in task_anchors_source
+    assert "ALIGNMENT_PROMPT_USER_CONTENT_RE" in task_anchors_source
+    assert "def _alignment_user_messages_from_prompt" not in payloads_source
+    assert "def _alignment_prompt_transcript" not in payloads_source
+    assert "def _alignment_strip_mixed_confirmation_adjustment_prefix" not in payloads_source
     assert "from loopora.executor_alignment_readiness_payloads import" in payloads_source
-    assert "def alignment_readiness_issue_for_scenario" in readiness_source
-    assert "alignment_vague_loop_fit_readiness_evidence" in readiness_source
-    assert "alignment_vague_loop_fit_readiness_evidence" not in payloads_source
+    _assert_readiness_issue_fixture_asset_boundary(payloads_source, readiness_source)
     assert "from loopora.executor_alignment_preconfirmation_payloads import" in payloads_source
     assert "def alignment_preconfirmation_payload_for_scenario" in preconfirmation_source
     assert "def _alignment_preconfirmation_scenario_payload" in preconfirmation_source
+    _assert_preconfirmation_fixture_asset_boundary(preconfirmation_source)
     assert "def _alignment_preconfirmation_scenario_payload" not in payloads_source
     assert "from loopora.executor_alignment_readiness_responses import" in responses_source
     assert "def alignment_readiness_evidence" in readiness_responses_source
@@ -132,6 +181,85 @@ def test_fake_alignment_fixtures_keep_payload_data_and_bundle_base_dedicated() -
     assert "def alignment_readiness_evidence" not in responses_source
     assert "from loopora.executor_alignment_agreement_responses import" in responses_source
     assert "from loopora.executor_alignment_agreement_responses import" in preconfirmation_source
+    _assert_static_bundle_base_boundaries()
+    _assert_task_projection_scope_boundary(
+        task_projection_source,
+        task_projection_scope_source,
+        service_boundaries_source,
+    )
+    assert "from loopora.executor_alignment_task_projection import" in task_anchor_source
+    _assert_static_bundle_variant_asset_boundary(contracts_source, service_boundaries_source)
+    for module_name in (
+        "executor_alignment_bundle_localized_variants.py",
+        "executor_alignment_bundle_improvement_variants.py",
+        "executor_alignment_bundle_refund_variants.py",
+        "executor_alignment_bundle_task_anchor.py",
+        "executor_alignment_bundle_invalid_variants.py",
+    ):
+        import_name = module_name.removesuffix(".py")
+        assert f"from loopora.{import_name} import" in bundle_variants_source
+    for module_name in (
+        "executor_alignment_bundle_localized_variants.py",
+        "executor_alignment_bundle_localized_assets.py",
+        "executor_alignment_bundle_variant_assets.py",
+        "executor_alignment_bundle_improvement_assets.py",
+        "executor_alignment_bundle_improvement_variants.py",
+        "executor_alignment_bundle_refund_assets.py",
+        "executor_alignment_bundle_refund_variants.py",
+        "executor_alignment_bundle_task_anchor.py",
+        "executor_alignment_bundle_specialized_shell.py",
+        "executor_alignment_bundle_invalid_variants.py",
+    ):
+        assert module_name in contracts_source
+        assert module_name in service_boundaries_source
+    assert "from loopora.executor_alignment_bundle_specialized_shell import" in task_anchor_source
+    assert "base-bundle.yml" in base_bundle_source
+    assert "executor_alignment_agreement_responses.py" in contracts_source
+    assert "executor_alignment_agreement_refund_responses.py" in contracts_source
+    assert "executor_alignment_agreement_predicates.py" in contracts_source
+    assert "executor_alignment_agreement_task_responses.py" in contracts_source
+    assert "improvement-bundle-fixtures.yml" in contracts_source
+    assert "improvement-bundle-fixtures.yml" in service_boundaries_source
+    assert "refund-bundle-fixtures.yml" in contracts_source
+    assert "refund-bundle-fixtures.yml" in service_boundaries_source
+    assert "executor_alignment_preconfirmation_payloads.py" in contracts_source
+    assert "executor_alignment_bundle_governance_fixture.py" in contracts_source
+    assert "executor_alignment_task_projection.py" in contracts_source
+    assert "workflow `inputs.evidence_query.verifies`" in contracts_source
+    assert "independent evidence phases" in contracts_source
+
+
+def _assert_task_projection_scope_boundary(
+    task_projection_source: str,
+    task_projection_scope_source: str,
+    service_boundaries_source: str,
+) -> None:
+    assert "def alignment_task_domain_projection" in task_projection_source
+    assert "from loopora.executor_alignment_task_projection_scope import" in task_projection_source
+    assert "def projection_scoped_labels" in task_projection_scope_source
+    assert "PROJECTION_LABEL_ANCHOR_PATTERNS" in task_projection_scope_source
+    assert "executor_alignment_task_projection_scope.py" in service_boundaries_source
+    for marker in (
+        "PROJECTION_LABEL_ANCHOR_PATTERNS",
+        "def _projection_scoped_labels",
+        "def _projection_filter_primary_domain_noise",
+        "def _projection_is_dsar_data_export_task",
+        "def _projection_is_subscription_entitlement_billing_task",
+        "def _projection_is_prompt_asset_ownership_task",
+    ):
+        assert marker not in task_projection_source
+
+
+def _assert_static_bundle_base_boundaries() -> None:
+    agreement_responses_source = loopora_source("executor_alignment_agreement_responses.py")
+    base_bundle_source = loopora_source("executor_alignment_bundle_base_fixture.py")
+    bundle_variants_source = loopora_source("executor_alignment_bundle_fixtures.py")
+    governance_bundle_source = loopora_source("executor_alignment_bundle_governance_fixture.py")
+    localized_variants_source = loopora_source("executor_alignment_bundle_localized_variants.py")
+    responses_source = loopora_source("executor_alignment_responses.py")
+    contracts_source = design_contracts_source()
+    service_boundaries_source = (Path(__file__).resolve().parents[3] / "design" / "service-boundaries.md").read_text(encoding="utf-8")
+
     for marker in (
         "def alignment_agreement_response",
         "def alignment_improvement_agreement_response",
@@ -141,26 +269,318 @@ def test_fake_alignment_fixtures_keep_payload_data_and_bundle_base_dedicated() -
         assert marker not in responses_source
     assert "from loopora.executor_alignment_bundle_base_fixture import" in bundle_variants_source
     assert "from loopora.executor_alignment_bundle_governance_fixture import" in base_bundle_source
-    assert "from loopora.executor_alignment_bundle_governance_fixture import" in bundle_variants_source
+    assert "from loopora.executor_alignment_bundle_governance_fixture import" in localized_variants_source
+    assert "from loopora.executor_alignment_bundle_localized_assets import" in localized_variants_source
     assert "def alignment_bundle_yaml" in base_bundle_source
     assert "def alignment_bundle_governance_sentence" in governance_bundle_source
     assert "def alignment_bundle_governance_role_snippet" in governance_bundle_source
     assert "def _governance_markers_for_workdir" in governance_bundle_source
-    assert "def alignment_task_domain_projection" in task_projection_source
-    assert "from loopora.executor_alignment_task_projection import" in bundle_variants_source
-    assert "def _replace_rag_long_chain_task_workflow" in bundle_variants_source
-    assert "rag-grounding-long-chain" in bundle_variants_source
     assert "def alignment_bundle_governance_sentence" not in base_bundle_source
     assert "def alignment_bundle_governance_role_snippet" not in base_bundle_source
     assert "def alignment_chinese_bundle_yaml" not in base_bundle_source
-    assert "def alignment_chinese_bundle_yaml" in bundle_variants_source
-    assert "base-bundle.yml" in base_bundle_source
-    assert "executor_alignment_agreement_responses.py" in contracts_source
-    assert "executor_alignment_preconfirmation_payloads.py" in contracts_source
-    assert "executor_alignment_bundle_governance_fixture.py" in contracts_source
-    assert "executor_alignment_task_projection.py" in contracts_source
-    assert "workflow `inputs.evidence_query.verifies`" in contracts_source
-    assert "independent evidence phases" in contracts_source
+    assert "def alignment_chinese_bundle_yaml" in localized_variants_source
+    for snippet in (
+        "将工作协议投影到 spec",
+        "谨慎构建聚焦 starter slice",
+    ):
+        assert snippet not in localized_variants_source
+    for artifact_name in (
+        "executor_alignment_bundle_localized_assets.py",
+        "localized-base-bundle-overrides.yml",
+    ):
+        assert artifact_name in contracts_source
+        assert artifact_name in service_boundaries_source
+
+
+def _assert_static_bundle_variant_asset_boundary(contracts_source: str, service_boundaries_source: str) -> None:
+    improvement_variants_source = loopora_source("executor_alignment_bundle_improvement_variants.py")
+    improvement_assets_source = loopora_source("executor_alignment_bundle_improvement_assets.py")
+    refund_variants_source = loopora_source("executor_alignment_bundle_refund_variants.py")
+    refund_assets_source = loopora_source("executor_alignment_bundle_refund_assets.py")
+    variant_assets_source = loopora_source("executor_alignment_bundle_variant_assets.py")
+
+    assert "from loopora.executor_alignment_bundle_improvement_assets import" in improvement_variants_source
+    assert "from loopora.executor_alignment_bundle_refund_assets import" in refund_variants_source
+    assert "from loopora.executor_alignment_bundle_variant_assets import" in improvement_assets_source
+    assert "from loopora.executor_alignment_bundle_variant_assets import" in refund_assets_source
+    assert "improvement-bundle-fixtures.yml" in improvement_assets_source
+    assert "refund-bundle-fixtures.yml" in refund_assets_source
+    assert "def apply_alignment_bundle_variant_fixture" in variant_assets_source
+    for snippet in (
+        "修订来源 Search Loop",
+        "复杂度只是移动到另一个阶段",
+        "search-refactor-improvement-long-chain",
+    ):
+        assert snippet not in improvement_variants_source
+    for snippet in (
+        "Ship a governed refund self-service path",
+        "为退款用户、授权客户管理员、客服和财务交付受治理的退款自助路径",
+        "refund_repair_review",
+    ):
+        assert snippet not in refund_variants_source
+    for artifact_name in (
+        "executor_alignment_bundle_variant_assets.py",
+        "executor_alignment_bundle_improvement_assets.py",
+        "executor_alignment_bundle_refund_assets.py",
+        "improvement-bundle-fixtures.yml",
+        "refund-bundle-fixtures.yml",
+    ):
+        assert artifact_name in contracts_source
+        assert artifact_name in service_boundaries_source
+
+
+def _assert_bundle_scenario_fixture_asset_boundary(payloads_source: str) -> None:
+    bundle_scenario_fixtures_asset = (
+        Path(__file__).resolve().parents[3] / "src" / "loopora" / "assets" / "alignment" / "bundle-scenario-fixtures.json"
+    ).read_text(encoding="utf-8")
+    assert "bundle-scenario-fixtures.json" in payloads_source
+    assert "alignment_invalid" in bundle_scenario_fixtures_asset
+    assert "alignment_refund_agreement_repair_bundle" in bundle_scenario_fixtures_asset
+    assert "我先给出一个故意不完整的 bundle。" in bundle_scenario_fixtures_asset
+    assert "I prepared a refund governance Loopora bundle with a Guide repair pass." in bundle_scenario_fixtures_asset
+    assert "我先给出一个故意不完整的 bundle。" not in payloads_source
+    assert "I prepared a refund governance Loopora bundle with a Guide repair pass." not in payloads_source
+    assert "alignment_invalid" not in payloads_source
+    assert "alignment_refund_agreement_repair_bundle" not in payloads_source
+
+
+def _assert_readiness_issue_fixture_asset_boundary(payloads_source: str, readiness_source: str) -> None:
+    readiness_issue_fixtures_asset = (
+        Path(__file__).resolve().parents[3] / "src" / "loopora" / "assets" / "alignment" / "readiness-issue-fixtures.json"
+    ).read_text(encoding="utf-8")
+    assert "def alignment_readiness_issue_for_scenario" in readiness_source
+    assert "readiness-issue-fixtures.json" in readiness_source
+    assert "alignment_vague_loop_fit_readiness_evidence" in readiness_issue_fixtures_asset
+    assert "alignment_vague_loop_fit_readiness_evidence" not in readiness_source
+    assert "This is a complex and important task with many parts to handle well." in readiness_issue_fixtures_asset
+    assert "This is a complex and important task with many parts to handle well." not in readiness_source
+    assert "alignment_vague_loop_fit_readiness_evidence" not in payloads_source
+
+
+def _assert_preconfirmation_fixture_asset_boundary(preconfirmation_source: str) -> None:
+    preconfirmation_fixtures_asset = (
+        Path(__file__).resolve().parents[3] / "src" / "loopora" / "assets" / "alignment" / "preconfirmation-scenario-fixtures.json"
+    ).read_text(encoding="utf-8")
+    assert "preconfirmation-scenario-fixtures.json" in preconfirmation_source
+    assert "alignment_question" in preconfirmation_fixtures_asset
+    assert "我建议先按" in preconfirmation_fixtures_asset
+    assert "我建议先按" not in preconfirmation_source
+    assert "alignment_question" not in preconfirmation_source
+
+
+def test_fake_alignment_agreement_predicates_have_dedicated_boundary() -> None:
+    agreement_responses_source = loopora_source("executor_alignment_agreement_responses.py")
+    agreement_task_dispatch_source = loopora_source("executor_alignment_agreement_task_dispatch.py")
+    agreement_task_dispatch_commercial_source = loopora_source("executor_alignment_agreement_task_dispatch_commercial.py")
+    agreement_task_dispatch_data_source = loopora_source("executor_alignment_agreement_task_dispatch_data.py")
+    agreement_task_dispatch_operations_source = loopora_source("executor_alignment_agreement_task_dispatch_operations.py")
+    agreement_task_dispatch_product_source = loopora_source("executor_alignment_agreement_task_dispatch_product.py")
+    agreement_task_dispatch_trust_source = loopora_source("executor_alignment_agreement_task_dispatch_trust.py")
+    agreement_task_responses_source = loopora_source("executor_alignment_agreement_task_responses.py")
+    agreement_predicates_source = loopora_source("executor_alignment_agreement_predicates.py")
+    task_predicates_source = loopora_source("executor_alignment_task_predicates.py")
+    product_task_predicates_source = loopora_source("executor_alignment_task_predicates_product.py")
+    product_search_ai_task_predicates_source = loopora_source("executor_alignment_task_predicates_product_search_ai.py")
+    commercial_task_predicates_source = loopora_source("executor_alignment_task_predicates_commercial.py")
+    commercial_payments_task_predicates_source = loopora_source("executor_alignment_task_predicates_commercial_payments.py")
+    contracts_source = design_contracts_source()
+    service_boundaries_source = (Path(__file__).resolve().parents[3] / "design" / "service-boundaries.md").read_text(encoding="utf-8")
+
+    assert "from loopora.executor_alignment_agreement_predicates import" not in agreement_task_dispatch_source
+    for dispatch_body_source in (
+        agreement_task_dispatch_commercial_source,
+        agreement_task_dispatch_data_source,
+        agreement_task_dispatch_operations_source,
+        agreement_task_dispatch_product_source,
+        agreement_task_dispatch_trust_source,
+    ):
+        assert "from loopora.executor_alignment_agreement_predicates import" in dispatch_body_source
+    assert "from loopora import executor_alignment_task_predicates as _task_predicates" in agreement_predicates_source
+    assert "from loopora.executor_alignment_agreement_predicates import" not in agreement_responses_source
+    assert "from loopora.executor_alignment_agreement_predicates import" not in agreement_task_responses_source
+    for marker in (
+        "def is_search_index_consistency_task",
+        "def is_rag_long_chain_task",
+    ):
+        assert marker in product_search_ai_task_predicates_source
+        assert marker not in product_task_predicates_source
+        assert marker not in task_predicates_source
+        assert marker not in agreement_task_dispatch_source
+        assert marker not in agreement_task_responses_source
+        assert marker not in agreement_responses_source
+    assert "def is_payment_webhook_ledger_task" in commercial_payments_task_predicates_source
+    assert "def is_payment_webhook_ledger_task" not in commercial_task_predicates_source
+    assert "def is_payment_webhook_ledger_task" not in task_predicates_source
+    for marker in (
+        "_agreement_is_search_index_consistency_task = _task_predicates.is_search_index_consistency_task",
+        "_agreement_is_rag_long_chain_task = _task_predicates.is_rag_long_chain_task",
+        "_agreement_is_payment_webhook_ledger_task = _task_predicates.is_payment_webhook_ledger_task",
+    ):
+        assert marker in agreement_predicates_source
+    assert "executor_alignment_agreement_predicates.py" in contracts_source
+    assert "executor_alignment_agreement_task_dispatch_commercial.py" in contracts_source
+    assert "executor_alignment_agreement_task_dispatch_product.py" in contracts_source
+    assert "executor_alignment_task_predicates.py" in contracts_source
+    assert "executor_alignment_task_predicates_product.py" in contracts_source
+    assert "executor_alignment_task_predicates_product_search_ai.py" in contracts_source
+    assert "executor_alignment_task_predicates_commercial.py" in contracts_source
+    assert "executor_alignment_task_predicates_commercial_payments.py" in contracts_source
+    assert "executor_alignment_agreement_predicates.py" in service_boundaries_source
+    assert "executor_alignment_agreement_task_dispatch_commercial.py" in service_boundaries_source
+    assert "executor_alignment_agreement_task_dispatch_product.py" in service_boundaries_source
+    assert "executor_alignment_task_predicates.py" in service_boundaries_source
+    assert "executor_alignment_task_predicates_product.py" in service_boundaries_source
+    assert "executor_alignment_task_predicates_product_search_ai.py" in service_boundaries_source
+    assert "executor_alignment_task_predicates_commercial.py" in service_boundaries_source
+    assert "executor_alignment_task_predicates_commercial_payments.py" in service_boundaries_source
+
+
+def test_fake_alignment_task_predicates_are_shared_across_bundle_and_agreement() -> None:
+    from loopora import executor_alignment_agreement_predicates as agreement_predicates
+    from loopora import executor_alignment_bundle_task_predicates as bundle_predicates
+
+    shared_pairs = (
+        ("_is_rag_long_chain_task", "_agreement_is_rag_long_chain_task"),
+        ("_is_search_index_consistency_task", "_agreement_is_search_index_consistency_task"),
+        ("_is_payment_webhook_ledger_task", "_agreement_is_payment_webhook_ledger_task"),
+        ("_is_payout_settlement_reconciliation_task", "_agreement_is_payout_settlement_reconciliation_task"),
+    )
+    for bundle_name, agreement_name in shared_pairs:
+        assert getattr(bundle_predicates, bundle_name) is getattr(agreement_predicates, agreement_name)
+
+    rag_task = (
+        "Plan RAG multiple evidence rounds with document ingestion, retrieval ACL, answer/tool gating, "
+        "eval review, monitoring, source citations, prompt injection negatives, PII redaction, and fallback proof."
+    )
+    kyc_task = "Plan KYC/KYB sanctions screening with provider webhook replay, payout hold, privacy, and monitoring."
+    inventory_task = "Plan inventory reservation consistency with SKU checkout oversell negatives and reservation expiry."
+
+    assert bundle_predicates._is_rag_long_chain_task(rag_task)
+    assert not bundle_predicates._is_search_index_consistency_task(rag_task)
+    assert not agreement_predicates._agreement_is_search_index_consistency_task(rag_task)
+    assert not bundle_predicates._is_payment_webhook_ledger_task(kyc_task)
+    assert not agreement_predicates._agreement_is_payment_webhook_ledger_task(kyc_task)
+    assert not bundle_predicates._is_payout_settlement_reconciliation_task(inventory_task)
+    assert not agreement_predicates._agreement_is_payout_settlement_reconciliation_task(inventory_task)
+
+
+def test_fake_alignment_agreement_task_dispatch_has_dedicated_boundary() -> None:
+    sources = _agreement_response_boundary_sources()
+
+    _assert_agreement_task_dispatch_boundary(sources)
+    _assert_agreement_task_response_domain_boundaries(sources)
+    _assert_agreement_task_response_design_inventory(sources)
+
+
+def test_fake_alignment_bundle_task_routing_has_dedicated_boundary() -> None:
+    sources = _bundle_task_routing_boundary_sources()
+
+    _assert_bundle_task_routing_dispatch_boundary(sources)
+    _assert_bundle_task_routing_appender_boundary(sources)
+    _assert_bundle_task_spec_scaffold_domain_boundaries(sources)
+    _assert_bundle_task_routing_design_inventory(sources)
+
+
+def test_fake_alignment_bundle_task_workflows_have_dedicated_boundary() -> None:
+    sources = _task_workflow_boundary_sources()
+
+    _assert_task_workflow_dispatch_boundary(sources)
+    _assert_task_workflow_shape_boundaries(sources)
+    _assert_task_workflow_prose_boundaries(sources)
+    _assert_task_workflow_design_inventory(sources)
+
+
+def test_short_data_governance_tasks_keep_primary_domain_routing() -> None:
+    cases = (
+        (
+            "Plan database schema migration with expand-contract rollout, backfill, rollback, data consistency checks, audit, and monitoring.",
+            "database-schema-migration-contract-parallel-backfill",
+            "database schema migration / backfill",
+            "feature-flag-rollout-contract-parallel-release",
+        ),
+        (
+            "Plan CDC replication consistency with schema evolution, snapshot backfill, checkpoints, out-of-order events, reconciliation, lag alerts, replay, idempotency, and monitoring.",
+            "cdc-replication-contract-parallel-consistency",
+            "CDC replication consistency",
+            "task-evidence-repair",
+        ),
+    )
+
+    for task, expected_preset, agreement_marker, wrong_preset in cases:
+        bundle = yaml.safe_load(
+            alignment_task_anchored_repair_bundle_yaml(
+                "/tmp/loopora-data-governance-routing",
+                task,
+                prefers_chinese=False,
+            )
+        )
+        agreement = alignment_task_anchored_agreement_response(task, prefers_chinese=False)
+
+        assert bundle["workflow"]["preset"] == expected_preset
+        assert bundle["workflow"]["preset"] != wrong_preset
+        assert agreement_marker in agreement["assistant_message"]
+        assert agreement["readiness_evidence"]["task_scope"]
+
+
+def test_fake_alignment_bundle_task_roles_have_dedicated_boundary() -> None:
+    bundle_variants_source = loopora_source("executor_alignment_bundle_fixtures.py")
+    improvement_variants_source = loopora_source("executor_alignment_bundle_improvement_variants.py")
+    refund_variants_source = loopora_source("executor_alignment_bundle_refund_variants.py")
+    task_anchor_source = loopora_source("executor_alignment_bundle_task_anchor.py")
+    bundle_task_roles_source = loopora_source("executor_alignment_bundle_task_roles.py")
+    bundle_task_workflows_source = loopora_source("executor_alignment_bundle_task_workflows.py")
+    contracts_source = design_contracts_source()
+    service_boundaries_source = (Path(__file__).resolve().parents[3] / "design" / "service-boundaries.md").read_text(encoding="utf-8")
+
+    assert "from loopora.executor_alignment_bundle_task_roles import" not in bundle_variants_source
+    for caller_source in (improvement_variants_source, refund_variants_source, task_anchor_source):
+        assert "from loopora.executor_alignment_bundle_task_roles import" in caller_source
+    assert "from loopora.executor_alignment_bundle_task_predicates import" in bundle_task_roles_source
+    assert "from loopora.executor_alignment_bundle_task_routing import" not in bundle_task_roles_source
+    for marker in (
+        "def _replace_task_anchored_roles",
+        "class TaskRoleFixtureReplacement",
+        "TASK_ROLE_FIXTURE_REPLACERS",
+        "def _apply_search_refactor_improvement_roles",
+        "def _apply_refund_repair_roles",
+        "def _replace_task_role_definitions_from_asset",
+        "def _task_role_prompt_markdown",
+        "def _rag_long_chain_governance_prompt",
+        "def _task_role_governance_prompts",
+    ):
+        assert marker in bundle_task_roles_source
+        assert marker not in bundle_variants_source
+    for obsolete_bridge_marker in (
+        "def _task_anchored_role_replacers",
+        "def _replace_data_residency_task_roles",
+        "def _replace_payment_webhook_ledger_task_roles",
+        "def _replace_rag_long_chain_task_roles",
+    ):
+        assert obsolete_bridge_marker not in bundle_task_roles_source
+    for route_marker in (
+        'TaskRoleFixtureReplacement(_is_data_residency_task, "data_residency")',
+        'TaskRoleFixtureReplacement(_is_payment_webhook_ledger_task, "payment_webhook_ledger")',
+        'TaskRoleFixtureReplacement(_is_rag_long_chain_task, "rag_long_chain")',
+    ):
+        assert route_marker in bundle_task_roles_source
+    assert "def _rag_long_chain_governance_prompt" not in bundle_task_workflows_source
+    assert "TASK_ROLE_FIXTURE_REPLACERS" in contracts_source
+    assert "module-level predicate-to-fixture role routing" in service_boundaries_source
+    assert "executor_alignment_bundle_task_roles.py" in contracts_source
+    assert "executor_alignment_bundle_task_roles.py" in service_boundaries_source
+
+
+def test_fake_alignment_agreement_evidence_has_dedicated_boundary() -> None:
+    sources = _agreement_response_boundary_sources()
+    sources["evidence"] = loopora_source("executor_alignment_agreement_evidence.py")
+    agreement_readiness_asset_text = (
+        Path(__file__).resolve().parents[3] / "src" / "loopora" / "assets" / "alignment" / "agreement-readiness-evidence.json"
+    ).read_text(encoding="utf-8")
+    agreement_readiness_asset = json.loads(agreement_readiness_asset_text)
+
+    _assert_agreement_evidence_import_boundary(sources)
+    _assert_agreement_readiness_asset_boundary(sources, agreement_readiness_asset_text, agreement_readiness_asset)
+    _assert_agreement_evidence_design_inventory(sources)
 
 
 def test_base_alignment_bundle_role_prompt_bodies_live_in_asset() -> None:
@@ -182,15 +602,18 @@ def test_base_alignment_bundle_role_prompt_bodies_live_in_asset() -> None:
 
 def test_task_specific_role_fixture_prompt_bodies_live_in_asset() -> None:
     bundle_variants_source = loopora_source("executor_alignment_bundle_fixtures.py")
+    bundle_task_roles_source = loopora_source("executor_alignment_bundle_task_roles.py")
     contracts_source = design_contracts_source()
     task_role_fixture_asset = (Path(__file__).resolve().parents[3] / "src" / "loopora" / "assets" / "alignment" / "task-role-fixtures.json").read_text(
         encoding="utf-8"
     )
 
-    assert "task-role-fixtures.json" in bundle_variants_source
+    assert "task-role-fixtures.json" in bundle_task_roles_source
     assert "task-role-fixtures.json" in contracts_source
     assert "role_specs = (" not in bundle_variants_source
+    assert "role_specs = (" not in bundle_task_roles_source
     assert "def _replace_spanish_task_anchored_roles" not in bundle_variants_source
+    assert "def _replace_spanish_task_anchored_roles" not in bundle_task_roles_source
     for snippet in (
         "Build the smallest real loop for the task anchor.",
         "Build the narrow refund self-service path carefully.",
@@ -229,6 +652,7 @@ def test_task_specific_role_fixture_prompt_bodies_live_in_asset() -> None:
     ):
         assert snippet in task_role_fixture_asset
         assert snippet not in bundle_variants_source
+        assert snippet not in bundle_task_roles_source
 
 
 def test_generic_task_anchor_role_fixtures_match_workflow_role_refs(sample_workdir: Path) -> None:

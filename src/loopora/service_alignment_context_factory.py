@@ -33,6 +33,10 @@ from loopora.service_alignment_output_stage import (
 from loopora.service_alignment_requests import (
     ALIGNMENT_AGENT_ENTRY_REVIEW_ITEM_IDS,
 )
+from loopora.service_alignment_recovery import (
+    AlignmentRecoveryContext,
+    alignment_process_exists,
+)
 from loopora.service_alignment_revision import AlignmentRevisionContext
 from loopora.service_alignment_run_context import AlignmentRunContextResolverContext
 from loopora.service_alignment_run_recovery import (
@@ -46,7 +50,11 @@ from loopora.service_alignment_session_layout_context import (
     append_alignment_service_local_diagnostic_event,
     ensure_alignment_session_layout_from_service,
 )
-from loopora.service_alignment_session_projection import AlignmentSessionAccessContext, decorate_alignment_session
+from loopora.service_alignment_session_projection import (
+    AlignmentSessionAccessContext,
+    decorate_alignment_session,
+    get_alignment_session as get_alignment_session_command,
+)
 from loopora.service_alignment_session_state import AlignmentSessionStateContext, alignment_session_state_callbacks
 from loopora.service_alignment_source_lookup import alignment_run_source_bundle, resolve_alignment_source_option_seed
 from loopora.service_alignment_status import ALIGNMENT_ACTIVE_STATUSES
@@ -242,12 +250,29 @@ class AlignmentServiceContextFactory:
 
         return AlignmentSessionLifecycleContext(
             repository=service.repository,
-            get_session=service.get_alignment_session,
+            get_session=lambda session_id: get_alignment_session_command(self.session_access_context(), session_id),
             execute_session=execute_session,
             threads=service._threads,
             thread_key=alignment_thread_key,
             append_diagnostic_event=self.append_diagnostic_event,
             signal_process=os.kill,
+        )
+
+    def recovery_context(self) -> AlignmentRecoveryContext:
+        service = self.service
+        settings = service.settings
+        grace_seconds = max(
+            float(settings.stop_grace_period_seconds or 0.0),
+            float(settings.polling_interval_seconds or 0.0) * 4,
+            30.0,
+        )
+        return AlignmentRecoveryContext(
+            repository=service.repository,
+            threads=service._threads,
+            thread_key=alignment_thread_key,
+            active_statuses=ALIGNMENT_ACTIVE_STATUSES,
+            orphan_grace_seconds=grace_seconds,
+            pid_exists=alignment_process_exists,
         )
 
     def session_orchestration_context(self) -> AlignmentSessionOrchestrationContext:

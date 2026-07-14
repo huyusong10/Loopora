@@ -12,6 +12,7 @@ from loopora.agent_native_required_coverage import agent_native_required_coverag
 from loopora.agent_native_submit_hints import (
     agent_native_submit_command,
     agent_native_submit_hint_with_scoped_result_paths,
+    agent_native_workdir_from_loopora_path,
 )
 from loopora.agent_native_known_evidence_refs import _agent_native_compact_known_evidence_refs
 from loopora.service_types import LooporaError
@@ -54,6 +55,7 @@ def refresh_agent_native_step_view_with_judgment_contract(
     )
     return normalized
 
+
 def _refresh_agent_native_submit_hint(step_view: dict[str, Any]) -> None:
     submit_hint = dict(step_view.get("submit_hint") or {}) if isinstance(step_view.get("submit_hint"), dict) else {}
     if not submit_hint:
@@ -63,12 +65,18 @@ def _refresh_agent_native_submit_hint(step_view: dict[str, Any]) -> None:
     step_id = str(step_view.get("step_id") or "").strip()
     if not adapter or not run_id or not step_id:
         return
+    workdir = _agent_native_step_view_workdir(step_view, submit_hint)
+    _restore_agent_native_absolute_submit_hint_paths(submit_hint, workdir=workdir)
     submit_hint = agent_native_submit_hint_with_scoped_result_paths(submit_hint, step_view, run_id=run_id, step_id=step_id)
+    workdir = _agent_native_step_view_workdir(step_view, submit_hint) or workdir
     result_file = str(submit_hint.get("result_file_absolute_path") or submit_hint.get("result_file_path") or "").strip()
     if not result_file:
         template_path = str(submit_hint.get("result_template_absolute_path") or submit_hint.get("result_template_path") or "").strip()
         if template_path.endswith(".result.template.json"):
             result_file = template_path[: -len(".result.template.json")] + ".result.json"
+    absolute_result_file = _agent_native_absolute_artifact_path(result_file, workdir=workdir)
+    if absolute_result_file:
+        result_file = absolute_result_file
     if result_file and result_file != "RESULT_JSON_PATH":
         if Path(result_file).is_absolute():
             submit_hint["result_file_absolute_path"] = result_file
@@ -82,6 +90,54 @@ def _refresh_agent_native_submit_hint(step_view: dict[str, Any]) -> None:
         result_file=result_file or "RESULT_JSON_PATH",
     )
     step_view["submit_hint"] = submit_hint
+
+
+def _agent_native_step_view_workdir(step_view: dict[str, Any], submit_hint: dict[str, Any]) -> str:
+    for value in (
+        submit_hint.get("result_file_absolute_path"),
+        submit_hint.get("result_template_absolute_path"),
+        submit_hint.get("result_outbox_absolute_dir"),
+        step_view.get("context_absolute_path"),
+        step_view.get("agent_step_view_absolute_path"),
+        step_view.get("step_contract_absolute_path"),
+    ):
+        workdir = agent_native_workdir_from_loopora_path(value)
+        if workdir:
+            return workdir
+    return ""
+
+
+def _restore_agent_native_absolute_submit_hint_paths(submit_hint: dict[str, Any], *, workdir: str) -> None:
+    if not workdir:
+        return
+    for relative_key, absolute_key in (
+        ("result_outbox_dir", "result_outbox_absolute_dir"),
+        ("result_template_path", "result_template_absolute_path"),
+        ("result_file_path", "result_file_absolute_path"),
+    ):
+        if str(submit_hint.get(absolute_key) or "").strip():
+            continue
+        absolute_path = _agent_native_absolute_artifact_path(submit_hint.get(relative_key), workdir=workdir)
+        if absolute_path:
+            submit_hint[absolute_key] = absolute_path
+
+
+def _agent_native_absolute_artifact_path(value: object, *, workdir: str) -> str:
+    text = str(value or "").strip()
+    if not text or text == "RESULT_JSON_PATH":
+        return ""
+    try:
+        path = Path(text).expanduser()
+    except (OSError, ValueError):
+        return ""
+    if path.is_absolute():
+        return str(path)
+    if not workdir or any(part == ".." for part in path.parts):
+        return ""
+    try:
+        return str((Path(workdir) / path).resolve())
+    except OSError:
+        return str(Path(workdir) / path)
 
 
 def _refresh_agent_native_role_dispatch_availability(step_view: dict[str, Any]) -> None:

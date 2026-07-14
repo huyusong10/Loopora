@@ -104,5 +104,39 @@ Ship the requested behavior.
     ]
 
 
+def test_compile_markdown_spec_keeps_generated_runtime_semantics_in_task_language() -> None:
+    compiled = compile_markdown_spec(
+        """# Task
+
+证明发布路径可以安全回滚。
+
+# Done When
+
+- 构建、迁移和回滚都有可复现证据。
+
+# Success Surface
+
+- 评审者可以检查最终证据链。
+
+# Fake Done
+
+- 只有构建通过不能算完成。
+
+# Evidence Preferences
+
+- 优先使用持久化的检查产物。
+"""
+    )
+
+    check = compiled["checks"][0]
+    assert all(_contains_cjk(check[field]) for field in ("when", "expect", "fail_if"))
+    assert all(_contains_cjk(target["label"]) for target in compiled["coverage_targets"])
+    assert all(_contains_cjk(target["text"]) for target in compiled["coverage_targets"])
+
+
 def _coverage_target_ids(compiled: dict) -> list[str]:
     return [item["id"] for item in compiled["coverage_targets"]]
+
+
+def _contains_cjk(value: object) -> bool:
+    return any("\u4e00" <= char <= "\u9fff" for char in str(value or ""))

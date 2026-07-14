@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from review_runner_test_support import write_text_index_report
+from review_runner_test_support import write_artifact_paths_report, write_text_index_report
 
 
 def test_concept_coherence_anchor_text_reaches_agent_first_execution_contract(tmp_path: Path) -> None:
@@ -40,3 +40,13 @@ def test_agent_native_handbook_reaches_real_probe_boundaries(tmp_path: Path) -> 
     assert "Use these requirements to author, not copy, the candidate" in report
     assert "canonical candidate bundle draft" not in report
     assert '--show-playbook", action="store_true"' in report
+
+
+def test_agent_native_missing_phase_report_hint_is_actionable(tmp_path: Path) -> None:
+    report, hints = write_artifact_paths_report("agent-native-behavior.md", "real-probe-phase-reports", tmp_path)
+
+    assert "Next evidence step:" in report
+    assert "tests/probes/real_environment/README.md" in report
+    assert "--suite real-agent" in report
+    assert "--artifact phase=.loopora/real-probes/real-agent-phase-report.json" in report
+    assert any("--suite real-agent" in hint for hint in hints)

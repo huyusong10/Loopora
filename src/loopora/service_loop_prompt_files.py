@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from loopora.branding import state_dir_for_workdir
+from loopora.local_workdir_artifacts import loop_artifact_dir_for_ready_workdir
 from loopora.run_artifacts import RunArtifactLayout
 from loopora.strategy_source import (
     StrategySourceError,
@@ -46,8 +46,13 @@ class ServiceLoopPromptFileMixin:
                 raise StrategySourceError(f"prompt artifact {prompt_ref} could not be read") from exc
         return resolve_strategy_prompt_files(strategy_source, prompt_files)
 
+    def _loop_prompt_artifact_dir(self, workdir: str, loop_id: str) -> Path | None:
+        return loop_artifact_dir_for_ready_workdir(workdir, loop_id)
+
     def _read_prompt_files_for_loop(self, workdir: str, loop_id: str, strategy_source: dict) -> dict[str, str]:
-        loop_dir = state_dir_for_workdir(workdir) / "loops" / loop_id
+        loop_dir = self._loop_prompt_artifact_dir(workdir, loop_id)
+        if loop_dir is None:
+            return resolve_strategy_prompt_files(strategy_source, {})
         return self._read_prompt_files(loop_dir, strategy_source)
 
     def _read_prompt_files_for_run(self, run: dict) -> dict[str, str]:

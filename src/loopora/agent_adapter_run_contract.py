@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from loopora import agent_adapter_command_prefix
 from loopora.agent_adapter_role_contracts import agent_native_dispatch_guidance
 from loopora.system_prompt_assets import load_system_prompt_asset, render_system_prompt_asset
 
@@ -9,6 +10,7 @@ def _run_contract_values(*, adapter: str, marker_source: str, context_arg: str =
     return {
         "adapter": adapter,
         "marker_source": marker_source,
+        "loopora_cli_entry": agent_adapter_command_prefix.current_project_file_loopora_cli_entry(),
         "context_bits": resolved_context_bits,
         "dispatch_guidance": agent_native_dispatch_guidance(adapter).rstrip(),
     }

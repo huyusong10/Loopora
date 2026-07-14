@@ -6,6 +6,7 @@ from compacted_contract_support import (
     candidate_session,
 )
 from loopora.service_alignment_bundle_candidate import handle_alignment_bundle_candidate
+from loopora.service_alignment_bundle_validation_payloads import ALIGNMENT_BUNDLE_SAVE_FAILED_ERROR
 from loopora.service_alignment_execution import AlignmentExecutionState
 from loopora.service_types import LooporaError
 
@@ -83,3 +84,32 @@ def test_alignment_bundle_candidate_second_validation_failure_marks_session_fail
         "alignment_validation_failed",
         "alignment_failed",
     ]
+
+
+def test_alignment_bundle_candidate_save_failure_marks_session_failed_without_repair_loop(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    repo = FakeAlignmentBundleCandidateRepository(candidate_session(tmp_path, repair_attempts=0))
+    context, validation_logs, transition_plans, failures = bundle_candidate_context(repo)
+    bundle_path = Path(repo.session["bundle_path"])
+    original_replace = Path.replace
+
+    def fail_bundle_replace(path: Path, target: Path) -> Path:
+        if Path(target) == bundle_path and Path(path).name.startswith(f".{bundle_path.name}.tmp."):
+            raise OSError(f"permission denied: {bundle_path}")
+        return original_replace(path, target)
+
+    monkeypatch.setattr(Path, "replace", fail_bundle_replace)
+
+    next_state = handle_alignment_bundle_candidate(context, "align_candidate", "version: 1\n")
+
+    assert next_state is None
+    assert repo.session["status"] == "failed"
+    assert repo.session["error_message"] == ALIGNMENT_BUNDLE_SAVE_FAILED_ERROR
+    assert validation_logs[0]["validation"]["error"] == ALIGNMENT_BUNDLE_SAVE_FAILED_ERROR
+    assert transition_plans == []
+    assert failures == [{"session_id": "align_candidate", "error": ALIGNMENT_BUNDLE_SAVE_FAILED_ERROR}]
+    assert not bundle_path.exists()
+    assert not list(bundle_path.parent.glob(f".{bundle_path.name}.tmp.*"))
+    assert [event["event_type"] for event in repo.events] == ["alignment_validation_failed", "alignment_failed"]

@@ -4,7 +4,12 @@ import json
 from pathlib import Path
 from typing import Any
 
+from loopora.cli_agent_result_files import read_result_file_object
 from loopora.cli_agent_submit_repair_results import _active_agent_native_step_view
+from loopora.agent_native_host_dispatch_validation import (
+    EXPLICIT_HOST_DISPATCH_ATTESTATION_SOURCE,
+    LEGACY_HOST_DISPATCH_ATTESTATION_SOURCE,
+)
 from loopora.service import LooporaError
 
 
@@ -14,7 +19,8 @@ def read_result_json_with_auto_repair(
     service,
     run_id: str = "",
     workdir: Path | None = None,
-) -> tuple[dict, dict, list[str]]:
+    attest_role_dispatch: bool = False,
+) -> tuple[dict, dict, list[str], str]:
     payload = _read_json_object(path)
     result, host_dispatch = _strict_result_parts(payload)
     if result is not None and host_dispatch is not None:
@@ -24,7 +30,8 @@ def read_result_json_with_auto_repair(
             workdir=workdir,
         )
         actions = _template_path_actions(path, active_template)
-        return result, host_dispatch, actions
+        attestation_source = EXPLICIT_HOST_DISPATCH_ATTESTATION_SOURCE if attest_role_dispatch else ""
+        return result, _with_attestation_source(host_dispatch, attestation_source), actions, attestation_source
 
     active_template = _active_template_context(
         service,
@@ -35,19 +42,24 @@ def read_result_json_with_auto_repair(
     if repaired:
         result, host_dispatch, actions = repaired
         actions.extend(_template_path_actions(path, active_template))
-        return result, host_dispatch, _dedupe(actions)
+        attestation_source = (
+            EXPLICIT_HOST_DISPATCH_ATTESTATION_SOURCE
+            if attest_role_dispatch
+            else LEGACY_HOST_DISPATCH_ATTESTATION_SOURCE
+        )
+        return (
+            result,
+            _with_attestation_source(host_dispatch, attestation_source),
+            _dedupe(actions),
+            attestation_source,
+        )
 
-    return _strict_result_json(payload)
+    result, host_dispatch, actions = _strict_result_json(payload)
+    return result, host_dispatch, actions, ""
 
 
 def _read_json_object(path: Path) -> dict:
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
-        raise LooporaError(f"result file is not valid JSON: {path}: {exc}") from exc
-    if not isinstance(payload, dict):
-        raise LooporaError("result file must contain one JSON object")
-    return payload
+    return read_result_file_object(path)
 
 
 def _strict_result_json(payload: dict) -> tuple[dict, dict, list[str]]:
@@ -84,6 +96,16 @@ def _repair_with_active_template(payload: dict, active_template: dict) -> tuple[
             return None
         return result, dict(template_dispatch), ["restored_loopora_host_dispatch_from_active_template"]
     return dict(payload), dict(template_dispatch), ["wrapped_schema_result_with_active_template_dispatch"]
+
+
+def _with_attestation_source(dispatch: dict, source: str) -> dict:
+    normalized = dict(dispatch)
+    if not source:
+        return normalized
+    normalized["attestation_source"] = source
+    if source == EXPLICIT_HOST_DISPATCH_ATTESTATION_SOURCE and not str(normalized.get("attestation") or "").strip():
+        normalized["attestation"] = "The host explicitly attested that it invoked the named Loopora role agent for this step."
+    return normalized
 
 
 def _active_template_context(service, *, run_id: str, workdir: Path | None) -> dict[str, Any]:

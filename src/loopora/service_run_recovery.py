@@ -8,17 +8,44 @@ from pathlib import Path
 
 from loopora.diagnostics import get_logger, log_event, log_exception
 from loopora.service_run_finalization import TerminalRunFinalizationRequest
+from loopora.workdir_inputs import same_workdir_identity
 
 logger = get_logger(__name__)
 
 
 class ServiceRunRecoveryMixin:
-    def _reconcile_stale_runs(self) -> None:
-        for run in self.repository.list_active_runs():
-            if self._run_process_may_still_be_alive(run):
-                continue
-            if not self._startup_stale_run_is_recoverable(run):
-                continue
+    def stale_runs_requiring_reconciliation(self, *, workdir: str = "") -> list[dict]:
+        return [
+            run
+            for run in self.repository.list_active_runs()
+            if (not workdir or same_workdir_identity(run.get("workdir"), workdir))
+            and not self._run_process_may_still_be_alive(run)
+            and self._startup_stale_run_is_recoverable(run)
+        ]
+
+    def runtime_reconciliation_preview(self, *, workdir: str = "") -> dict[str, object]:
+        stale_runs = self.stale_runs_requiring_reconciliation(workdir=workdir)
+        orphaned_sessions = self.orphaned_alignment_sessions(workdir=workdir)
+        return {
+            "required": bool(stale_runs or orphaned_sessions),
+            "stale_runs": [_runtime_reconciliation_item(run) for run in stale_runs],
+            "orphaned_planning_sessions": [
+                _runtime_reconciliation_item(session) for session in orphaned_sessions
+            ],
+        }
+
+    def reconcile_orphaned_runtime_state(self, *, workdir: str = "") -> dict[str, object]:
+        run_ids = self._reconcile_stale_runs(workdir=workdir)
+        session_ids = self.reconcile_orphaned_alignment_sessions(workdir=workdir)
+        return {
+            "changed": bool(run_ids or session_ids),
+            "reconciled_run_ids": run_ids,
+            "reconciled_planning_session_ids": session_ids,
+        }
+
+    def _reconcile_stale_runs(self, *, workdir: str = "") -> list[str]:
+        recovered: list[str] = []
+        for run in self.stale_runs_requiring_reconciliation(workdir=workdir):
             log_event(
                 logger,
                 logging.WARNING,
@@ -47,6 +74,8 @@ class ServiceRunRecoveryMixin:
                     reason="Recovered stale run after service startup.",
                 ),
             )
+            recovered.append(str(run["id"]))
+        return recovered
 
     def _run_process_may_still_be_alive(self, run: dict) -> bool:
         pid = run.get("runner_pid")
@@ -191,3 +220,12 @@ class ServiceRunRecoveryMixin:
         except PermissionError:
             return True
         return True
+
+
+def _runtime_reconciliation_item(record: dict) -> dict[str, str]:
+    return {
+        "id": str(record.get("id") or ""),
+        "workdir": str(record.get("workdir") or ""),
+        "status": str(record.get("status") or ""),
+        "updated_at": str(record.get("updated_at") or ""),
+    }

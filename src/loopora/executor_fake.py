@@ -18,9 +18,15 @@ from loopora.utils import utc_now
 
 
 class FakeCodexExecutor(CodexExecutor):
-    def __init__(self, scenario: str = "success", role_delay: float = 0.0) -> None:
+    def __init__(
+        self,
+        scenario: str = "success",
+        role_delay: float = 0.0,
+        display_language: str = "en",
+    ) -> None:
         self.scenario = scenario
         self.role_delay = role_delay
+        self.display_language = "zh" if str(display_language or "").strip().lower() == "zh" else "en"
 
     def execute(
         self,
@@ -33,8 +39,8 @@ class FakeCodexExecutor(CodexExecutor):
         try:
             emit_event("codex_event", {"type": "fake_start", "role": request.role, "scenario": self.scenario})
             if self.role_delay:
-                deadline = time.time() + self.role_delay
-                while time.time() < deadline:
+                deadline = time.monotonic() + self.role_delay
+                while time.monotonic() < deadline:
                     if should_stop():
                         raise ExecutionStopped(f"run {request.run_id} stopped while {request.role} was running")
                     time.sleep(0.05)
@@ -52,7 +58,7 @@ class FakeCodexExecutor(CodexExecutor):
 
     def _build_payload(self, request: RoleRequest) -> dict:
         try:
-            return build_fake_payload(self.scenario, request)
+            return build_fake_payload(self.scenario, request, display_language=self.display_language)
         except FakePayloadError as exc:
             raise ExecutorError(str(exc)) from exc
 

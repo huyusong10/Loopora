@@ -5,12 +5,64 @@ from pathlib import Path
 from loopora.diagnostics import get_logger
 from loopora.service_bundle_graph_preflight import BundleGraphLinks, bundle_graph_links, preflight_bundle_graph_delete
 from loopora.service_cleanup_diagnostics import best_effort_rmtree, cleanup_diagnostic_payload, log_cleanup_diagnostic
-from loopora.service_types import LooporaError
+from loopora.service_types import ACTIVE_RUN_STATUSES, LooporaError
 
 logger = get_logger("loopora.service_bundle_assets")
 
 
 class ServiceBundleDeleteMixin:
+    def preview_bundle_delete(self, bundle_id: str) -> dict:
+        bundle = self.get_bundle(bundle_id)
+        links = bundle_graph_links(bundle)
+        runs = self.repository.list_runs_for_loop(links.loop_id, limit=5000) if links.loop_id else []
+        active_run_ids = [
+            str(run.get("id") or "").strip()
+            for run in runs
+            if isinstance(run, dict)
+            and str(run.get("status") or "").strip() in ACTIVE_RUN_STATUSES
+            and str(run.get("id") or "").strip()
+        ]
+        preflight_error = ""
+        try:
+            self._preflight_bundle_graph_delete(bundle, links=links)
+        except LooporaError as exc:
+            preflight_error = str(exc)
+        blockers = []
+        if active_run_ids:
+            blockers.append({"kind": "active_runs", "run_ids": active_run_ids})
+        if preflight_error and (not active_run_ids or "active loop runs" not in preflight_error):
+            blockers.append({"kind": "preflight", "message": preflight_error})
+        run_ids = [
+            str(run.get("id") or "").strip()
+            for run in runs
+            if isinstance(run, dict) and str(run.get("id") or "").strip()
+        ]
+        return {
+            "status": "dry_run",
+            "dry_run": True,
+            "delete_allowed": not preflight_error and not active_run_ids,
+            "id": bundle["id"],
+            "name": bundle.get("name", ""),
+            "workdir": bundle.get("workdir", ""),
+            "would_delete": {
+                "bundle": bundle["id"],
+                "linked_loop": links.loop_id,
+                "linked_orchestration": links.orchestration_id,
+                "linked_role_definition_count": len(links.role_definition_ids),
+                "linked_role_definition_ids": links.role_definition_ids,
+                "linked_run_count": len(run_ids),
+                "linked_run_ids": run_ids,
+            },
+            "blocked_by_active_runs": active_run_ids,
+            "blockers": blockers,
+            "does_not_delete": [
+                "original_exported_yaml_file",
+                "source_project_workdir",
+                "non_bundle_owned_assets",
+                "external_provider_history",
+            ],
+        }
+
     def delete_bundle(self, bundle_id: str) -> dict:
         bundle = self.get_bundle(bundle_id)
         cleanup_warnings: list[dict] = []

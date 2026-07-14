@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from loopora.agent_adapter_check_utils import adapter_unavailable_summary as _adapter_unavailable_summary
 from loopora.agent_adapters import (
     normalize_agent_adapter_kind,
     resolve_adapter_project_root,
@@ -12,6 +13,7 @@ from loopora.agent_entry_run_projection import (
     adapter_label_for_error,
     agent_loop_unready_error,
 )
+from loopora.run_result_recording import run_result_is_lifecycle_failure
 from loopora.service_agent_loop_start_bindings import (
     AgentLoopStartContext,
     agent_loop_result_from_native,
@@ -40,7 +42,7 @@ class ServiceAgentLoopStartMixin:
         execute_async = bool(execute_async)
         adapter = normalize_agent_adapter_kind(adapter)
         if adapter not in {"codex", "claude", "opencode"}:
-            raise LooporaError(f"{adapter} adapter is not implemented yet")
+            raise LooporaError(_adapter_unavailable_summary(adapter))
         root = resolve_adapter_project_root(workdir)
         binding = selected_agent_run_binding(
             AgentRunContextBindingContext(
@@ -115,7 +117,7 @@ class ServiceAgentLoopStartMixin:
                 linked_run_id=run["id"],
                 error_message="",
             )
-        binding = write_agent_loop_running_binding(start_context, binding, session, native)
+        binding = self._write_agent_loop_running_binding(start_context, binding, session, native)
         return agent_loop_result_from_native(start_context, session, binding, native, started_new_run=started_new_run)
 
     def _start_agent_loop_from_ready_session(
@@ -137,7 +139,7 @@ class ServiceAgentLoopStartMixin:
             entry_source=start_context.entry_source,
             binding_extra={"linked_bundle_id": imported["bundle"]["id"], "linked_loop_id": imported["bundle"].get("loop_id", "")},
         )
-        binding = write_agent_loop_running_binding(ready_context, binding, session, native)
+        binding = self._write_agent_loop_running_binding(ready_context, binding, session, native)
         return agent_loop_result_from_native(start_context, session, binding, native, started_new_run=True)
 
     def _start_agent_loop_from_imported_session(
@@ -156,8 +158,29 @@ class ServiceAgentLoopStartMixin:
         )
         self.repository.append_alignment_event(start_context.session_id, "alignment_run_started", {"loop_id": session.get("linked_loop_id", ""), "run_id": run["id"]})
         session = self.get_alignment_session(start_context.session_id)
-        binding = write_agent_loop_running_binding(start_context, binding, session, native)
+        binding = self._write_agent_loop_running_binding(start_context, binding, session, native)
         return agent_loop_result_from_native(start_context, session, binding, native, started_new_run=True)
+
+    def _write_agent_loop_running_binding(
+        self,
+        start_context: AgentLoopStartContext,
+        binding: dict[str, Any],
+        session: dict[str, Any],
+        native: dict[str, Any],
+    ) -> dict[str, Any]:
+        updated_binding = write_agent_loop_running_binding(start_context, binding, session, native)
+        context_binding_error = str(updated_binding.get("context_binding_error") or "").strip()
+        if context_binding_error:
+            self.repository.append_alignment_event(
+                start_context.session_id,
+                "agent_context_card_save_failed",
+                {
+                    "status": "warning",
+                    "error": context_binding_error,
+                    "run_id": native["run"]["id"],
+                },
+            )
+        return updated_binding
 
     def _start_next_agent_native_run(
         self,
@@ -171,6 +194,11 @@ class ServiceAgentLoopStartMixin:
         run = self.start_run(loop_id)
         self._seed_agent_native_continuation_context(run, previous_run)
         native = self.prepare_agent_native_run(start_context.adapter, run["id"], entry_source=start_context.entry_source)
+        continuation_reason = (
+            "previous_lifecycle_failure_retry"
+            if run_result_is_lifecycle_failure(previous_run)
+            else "terminal_task_verdict_requires_next_run"
+        )
         self.repository.update_alignment_session(
             start_context.session_id,
             status="running_loop",
@@ -183,7 +211,7 @@ class ServiceAgentLoopStartMixin:
             {
                 "loop_id": loop_id,
                 "run_id": native["run"]["id"],
-                "reason": "terminal_task_verdict_requires_next_run",
+                "reason": continuation_reason,
                 "previous_run_id": previous_run["id"],
                 "previous_task_verdict_status": self._task_verdict_status_for_run(previous_run),
             },

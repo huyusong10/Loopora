@@ -2,8 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from runner_helpers import _create_loop
-from runner_workflow_preset_test_support import complete_strategy_archetypes
+from runner_helpers import _create_loop, complete_strategy_archetypes
 
 
 def test_inspect_first_workflow_runs_inspector_before_builder(

@@ -23,6 +23,8 @@ def test_takeaway_projection_normalization_does_not_promote_boolean_counts() -> 
                 "missing_check_count": NORMALIZED_MISSING_CHECK_COUNT,
                 "covered_check_ids": "check_001",
                 "missing_check_ids": ["check_002", True],
+                "required_target_count": True,
+                "advisory_target_count": "4",
                 "risk_signals": [False, "manual review"],
             },
             "evidence_manifest": {
@@ -77,6 +79,8 @@ def test_takeaway_projection_normalization_does_not_promote_boolean_counts() -> 
     assert projection["evidence_coverage"]["covered_check_ids"] == []
     assert projection["evidence_coverage"]["missing_check_ids"] == ["check_002"]
     assert projection["evidence_coverage"]["risk_signals"] == ["manual review"]
+    assert projection["evidence_coverage"]["required_target_count"] == 0
+    assert projection["evidence_coverage"]["advisory_target_count"] == 0
     assert projection["evidence_manifest"]["claim_count"] == 0
     assert projection["evidence_manifest"]["artifact_backed_claim_count"] == 0
     assert projection["evidence_manifest"]["direct_proof_claim_count"] == NORMALIZED_DIRECT_PROOF_CLAIM_COUNT

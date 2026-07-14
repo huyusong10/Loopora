@@ -7,10 +7,12 @@ from agent_adapter_test_support import (
     LooporaError,
     Path,
     RunArtifactLayout,
+    _assert_loopora_serve_command,
     alignment_bundle_yaml,
     json,
     pytest,
 )
+from loopora.agent_native_state import AGENT_NATIVE_STATE_INVALID_ERROR, AGENT_NATIVE_STATE_UNREADABLE_ERROR
 
 RESULT_TEMPLATE_CONTRACT_PREFIX = "result_template_contract: Result file must contain one wrapper JSON object with loopora_host_dispatch"
 RESULT_TEMPLATE_FILL_PREFIX = "result_template_fill: in the main Agent session, open the template, replace null placeholders in result"
@@ -43,6 +45,57 @@ def test_agent_native_claim_rejects_corrupted_active_step_view(
         service.claim_agent_native_step(
             AgentNativeStepClaimRequest(adapter="codex", workdir=sample_workdir, run_id=started["run"]["id"])
         )
+
+
+def test_agent_native_state_read_errors_are_stable_recovery_boundaries(
+    service_factory,
+    tmp_path: Path,
+    sample_workdir: Path,
+    monkeypatch,
+) -> None:
+    service = service_factory(scenario="success")
+    bundle_file = tmp_path / "bundle.yml"
+    bundle_file.write_text(alignment_bundle_yaml(str(sample_workdir.resolve())), encoding="utf-8")
+    service.create_agent_bundle_candidate(
+        AgentBundleCandidateRequest(
+            adapter="codex",
+            workdir=sample_workdir,
+            message="Do not turn corrupted Agent Native state files into partial execution contracts.",
+            bundle_file=bundle_file,
+            entry_source="codex_project_skill",
+        )
+    )
+    started = service.start_agent_loop("codex", workdir=sample_workdir, entry_source="codex_project_skill", execute_async=False)
+    state_path = RunArtifactLayout(Path(started["run"]["runs_dir"])).run_dir / "agent_native" / "state.json"
+    valid_state_text = state_path.read_text(encoding="utf-8")
+
+    state_path.write_text('{"active_step": ', encoding="utf-8")
+    with pytest.raises(LooporaError) as invalid_error:
+        service.claim_agent_native_step(
+            AgentNativeStepClaimRequest(adapter="codex", workdir=sample_workdir, run_id=started["run"]["id"])
+        )
+    invalid_message = str(invalid_error.value)
+    assert invalid_message == AGENT_NATIVE_STATE_INVALID_ERROR
+    assert str(state_path) not in invalid_message
+    assert "Expecting" not in invalid_message
+
+    state_path.write_text(valid_state_text, encoding="utf-8")
+    original_read_text = Path.read_text
+
+    def unreadable_state_only(path: Path, *args, **kwargs):
+        if Path(path) == state_path:
+            raise OSError(f"permission denied: {state_path}")
+        return original_read_text(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_text", unreadable_state_only)
+    with pytest.raises(LooporaError) as unreadable_error:
+        service.claim_agent_native_step(
+            AgentNativeStepClaimRequest(adapter="codex", workdir=sample_workdir, run_id=started["run"]["id"])
+        )
+    unreadable_message = str(unreadable_error.value)
+    assert unreadable_message == AGENT_NATIVE_STATE_UNREADABLE_ERROR
+    assert str(state_path) not in unreadable_message
+    assert "permission denied" not in unreadable_message
 
 # Merged from test_agent_native_adapter_policy_architecture.py
 from agent_adapter_architecture_test_support import (
@@ -174,6 +227,7 @@ def test_claude_native_surface_marks_only_loopora_session_context_hook_as_owned(
     assert surface["health_check"]["host_reload"] == "restart_or_new_host_session_may_be_required_for_entry_discovery"
 
 # Merged from test_agent_native_cli_damaged_binding_recovery.py
+from loopora import agent_adapter_command_prefix
 from agent_native_v3_helpers import assert_agent_v3_compact_envelope, assert_agent_v3_envelope
 from agent_adapter_test_support import (
     CliRunner,
@@ -187,6 +241,8 @@ def test_cli_agent_run_reports_damaged_binding_recovery(service_factory, sample_
     binding_path = agent_adapters.agent_context_binding_path("codex", sample_workdir, context_id="thread-broken")
     binding_path.parent.mkdir(parents=True)
     binding_path.write_text("{not-json", encoding="utf-8")
+    monkeypatch.setattr(agent_adapter_command_prefix, "current_loopora_cli_entry", lambda: "uv run loopora")
+    source_entry = agent_adapter_command_prefix.current_project_file_loopora_cli_entry()
     monkeypatch.setattr(cli, "create_service", lambda: service)
     runner = CliRunner()
 
@@ -211,6 +267,33 @@ def test_cli_agent_run_reports_damaged_binding_recovery(service_factory, sample_
         payload, kind="agent_recovery", summary_key="agent_loop_recovery_summary", status="blocked"
     )
     assert summary["loop_recovery"] == "repair_context_card"
+    assert summary["context_card_error"] == (
+        "agent context card is unreadable; rerun /loopora-plan or choose a recoverable context"
+    )
+    assert f"{source_entry} init codex --check --workdir" in summary["check_command"]
+    assert str(binding_path) not in result.stdout
+    assert "Expecting property name" not in result.stdout
+
+    plain = runner.invoke(
+        cli.app,
+        [
+            "agent",
+            "codex",
+            "run",
+            "--workdir",
+            str(sample_workdir),
+            "--context-id",
+            "thread-broken",
+            "--no-web",
+        ],
+    )
+
+    assert plain.exit_code == 1
+    assert "context_card_error: agent context card is unreadable" in plain.stdout
+    assert "check_command: " in plain.stdout
+    assert f"{source_entry} init codex --check --workdir" in plain.stdout
+    assert str(binding_path) not in plain.stdout
+    assert "Expecting property name" not in plain.stdout
 
 # Merged from test_agent_native_cli_next_json_summary.py
 from agent_native_cli_next_step_view_test_support import (
@@ -224,7 +307,7 @@ def test_cli_agent_next_json_summary_reports_compact_step_contract(monkeypatch, 
     result, _layout = invoke_agent_next_step_view(monkeypatch, tmp_path, json_output=True)
 
     assert result.exit_code == 0, result.stdout
-    assert_agent_next_json_summary(result.stdout)
+    assert_agent_next_json_summary(result.stdout, workdir=tmp_path / "project")
 
 
 def test_cli_agent_next_compact_json_omits_raw_but_keeps_handoff(monkeypatch, tmp_path: Path) -> None:
@@ -238,16 +321,22 @@ def test_cli_agent_next_compact_json_omits_raw_but_keeps_handoff(monkeypatch, tm
         summary_key="agent_next_summary",
         status="active",
     )
+    assert summary["run_url"] == "/runs/run_next"
+    assert summary["run_url_status"] == "relative_path_web_not_started"
+    _assert_loopora_serve_command(
+        summary["run_url_web_start_command"],
+        workdir=tmp_path / "project",
+    )
     assert summary["next_step"]["coverage_target_ids"] == ["done_when.check_001", "gatekeeper.finish"]
-    assert summary["next_step"]["submit_command"] == "loopora agent codex submit --run-id run_next"
+    assert summary["next_submit_command"] == "loopora agent codex submit --run-id run_next"
     assert payload["technical_handoff"]["next_step_contract_path"].endswith("step_contract.json")
+    assert payload["technical_handoff"]["run_url_status"] == "relative_path_web_not_started"
     assert "next_role_dispatch_message" not in payload["technical_handoff"]
 
 # Merged from test_agent_native_cli_next_run_contract_view.py
 from agent_native_cli_next_step_view_test_support import (
     assert_agent_contract_strategy_output,
     assert_agent_next_plain_work_panel,
-    assert_cli_list,
 )
 
 
@@ -258,21 +347,13 @@ def test_cli_agent_next_prints_run_contract_for_intermediate_step_view(monkeypat
     assert_agent_next_plain_work_panel(result.stdout)
     assert "run_status: awaiting_agent" in result.stdout
     assert_agent_contract_strategy_output(result.stdout, layout)
-    assert "check_count: 1" in result.stdout
-    assert_cli_list(result.stdout, "coverage_targets", "done_when.check_001 (required)", "gatekeeper.finish (required)")
-    assert_cli_list(result.stdout, "loop_fit_reasons", "The next role needs the same proof bar as the first role.")
-    assert_cli_list(result.stdout, "judgment_tradeoffs", "Do not trade evidence coverage for fast handoff.")
-    assert_cli_list(result.stdout, "execution_strategy", "Claim the next proof gap before expanding scope.")
-    assert_cli_list(result.stdout, "local_governance", "Next role checks design and tests before submitting.")
-    assert_cli_list(result.stdout, "role_postures", "Inspector: Reject handoffs without evidence refs.")
-    assert_cli_list(result.stdout, "success_surface", "Support can trace the refund authorization path.")
-    assert_cli_list(result.stdout, "fake_done_states", "A handoff without evidence refs is fake done.")
-    assert_cli_list(result.stdout, "evidence_preferences", "Use command output and audit artifacts.")
-    assert "residual_risk: Only documented support handoff risk may remain." in result.stdout
+    assert "check_count:" not in result.stdout
+    assert "loop_fit_reasons:" not in result.stdout
+    assert "evidence_preferences:" not in result.stdout
+    assert len(result.stdout.splitlines()) < 75
 
 # Merged from test_agent_native_cli_next_step_handoff_view.py
 from agent_native_cli_next_step_view_test_support import (
-    assert_cli_handoff_contract_paths,
     assert_cli_native_dispatch_contract,
 )
 
@@ -288,9 +369,8 @@ def test_cli_agent_next_prints_next_step_handoff_view(monkeypatch, tmp_path: Pat
     assert_cli_native_dispatch_contract(result.stdout, "loopora-inspector")
     assert "next_action_policy: read_only, can_block" in result.stdout
     assert "required_coverage: weak; required checks 1 covered / 1 missing" in result.stdout
-    assert "- done_when.check_001: [weak] Authorization proof is still weak." in result.stdout
     assert "next_context_path: iterations/iter_000/steps/01__inspector_step/step_instruction_context.json" in result.stdout
-    assert "next_agent_step_view_path: iterations/iter_000/steps/01__inspector_step/agent_step_view.json" in result.stdout
+    assert "next_agent_step_view_path:" not in result.stdout
     assert "known_evidence_count: 4" in result.stdout
     assert "known_evidence_scope: filtered by evidence_query archetypes=builder limit=12" in result.stdout
     assert "iteration_repair_source: gatekeeper_step (GateKeeper)" in result.stdout
@@ -303,12 +383,9 @@ def test_cli_agent_next_prints_next_step_handoff_view(monkeypatch, tmp_path: Pat
     assert "replace null placeholders before submit" in result.stdout
     assert RESULT_TEMPLATE_FILL_PREFIX in result.stdout
     assert "keep loopora_host_dispatch, then submit the filled copy" in result.stdout
-    assert_cli_handoff_contract_paths(
-        result.stdout,
-        step_contract_fragment="iterations/iter_000/steps/01__inspector_step/step_contract.json",
-        template_fragment=".loopora/agent_outbox/codex/run_next__inspector_step.result.template.json",
-        outbox_fragment=".loopora/agent_outbox/codex",
-    )
+    assert "iterations/iter_000/steps/01__inspector_step/step_contract.json" in result.stdout
+    assert ".loopora/agent_outbox/codex/run_next__inspector_step.result.template.json" in result.stdout
+    assert "result_outbox_dir:" not in result.stdout
     assert "submit_hint: loopora agent codex submit --run-id run_next" in result.stdout
 
 # Merged from test_agent_native_cli_submit_repair_bad_refs.py

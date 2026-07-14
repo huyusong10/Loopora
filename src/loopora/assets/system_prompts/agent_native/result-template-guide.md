@@ -6,7 +6,7 @@ The template has three top-level blocks:
 
 ```json
 {
-  "loopora_host_dispatch": { "...": "pre-filled native dispatch proof" },
+  "loopora_host_dispatch": { "...": "pre-filled host dispatch attestation scaffold" },
   "loopora_result_contract": { "...": "ignored on submit; use as the local fill guide" },
   "result": { "...": null }
 }
@@ -16,4 +16,4 @@ Read `loopora_result_contract.step_id`, `.role`, `.action_policy`, `.required_co
 
 If submit exits nonzero with `submit_repair=repair_result_json`, read the top-level `summary` first, report `repair_focus`, `result_file_to_repair`, `schema_lookup`, and `next_repair_step`; repair the filled copy and resubmit rather than continuing the run.
 
-Preserve the template's `loopora_host_dispatch` except for `actual_agent` when the host-native role agent returned the same required target agent and a schema-shaped role output, and optional `native_trace` / `native_trace_ref` fields when the host exposes an official subagent/task trace. If the role call returns no wrapper or no structured output, stop before submit instead of constructing a role result from main-session observations. `target_agent` and `actual_agent` must both equal `next_step.role_dispatch.target_agent`, `inline` must be false, and `adapter` must be `{{adapter}}`.
+Preserve the template's `loopora_host_dispatch` except for `actual_agent` when the host-native role agent returned the same required target agent and a schema-shaped role output, and optional `native_trace` / `native_trace_ref` fields when the host exposes an official subagent/task trace. The generated submit command's `--attest-role-dispatch` is the host's explicit claim that this happened; it is not native trace or task proof. If the role call returns no wrapper or no structured output, stop before submit instead of constructing a role result from main-session observations. `target_agent` and `actual_agent` must both equal `next_step.role_dispatch.target_agent`, `inline` must be false, and `adapter` must be `{{adapter}}`.

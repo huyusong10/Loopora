@@ -1,8 +1,14 @@
 from __future__ import annotations
 
 # Merged from test_agent_adapter_check_claude_role_configs.py
-from agent_adapter_check_test_support import assert_agent_check_payload
-from agent_adapter_test_support import CliRunner, Path, cli, json
+from loopora.agent_adapter_check_utils import adapter_unavailable_summary
+from loopora.agent_adapter_status import not_implemented_adapter_status
+from agent_adapter_test_support import CliRunner, Path, assert_agent_check_payload, cli, json
+
+WEB_CREATION_PATH_TEXT = (
+    "open Fit Guide/Web choices in Web: Fit Guide first, then creation choices: Web conversation outside an Agent session, "
+    "Plan File import, or manual expert paths; then review evidence, gaps, and verdicts:"
+)
 
 
 def test_cli_agent_adapter_check_validates_claude_role_frontmatter_and_tools(tmp_path: Path) -> None:
@@ -64,12 +70,38 @@ def test_cli_adapter_check_before_install_reports_install_state_not_internal_mis
 
     assert text_result.exit_code == 1
     assert "Codex Loopora entry check: fail" in text_result.stdout
-    assert "install_state: not_installed" in text_result.stdout
+    assert "install state: not installed" in text_result.stdout
+    assert "install_state:" not in text_result.stdout
+    assert "note: Codex Loopora entry is not installed yet" in text_result.stdout
+    assert "summary:" not in text_result.stdout
     assert "missing managed files are expected before install" in text_result.stdout
     assert "Run:" in text_result.stdout
     assert f"loopora init codex --workdir {workdir.resolve()}" in text_result.stdout
     assert "Then verify:" in text_result.stdout
     assert f"loopora init codex --workdir {workdir.resolve()} --check" in text_result.stdout
+    assert "Then confirm readiness:" in text_result.stdout
+    assert f"loopora doctor --workdir {workdir.resolve()}" in text_result.stdout
+    assert "If /loopora-plan or /loopora-run is not visible after install, refresh or restart the Agent." in text_result.stdout
+    assert all(
+        fragment in text_result.stdout
+        for fragment in (
+            "Return to the Agent with the Loopora fit reason",
+            "task goal, fake-done risk",
+            "required evidence, judgment tradeoffs, and optional direct-path context.",
+        )
+    )
+    assert "Run /loopora-plan to prepare the Loop preview." in text_result.stdout
+    assert "After readiness passes, choose one path:" in text_result.stdout
+    assert WEB_CREATION_PATH_TEXT in text_result.stdout
+    assert "Plan-file/expert path:" in text_result.stdout
+    assert "Existing work path:" in text_result.stdout
+    assert "Review whether the READY Loop preview matches the task judgment." in text_result.stdout
+    assert "After the READY Loop preview matches the task judgment, run /loopora-run in the same Agent session." in text_result.stdout
+    assert text_result.stdout.index("Then confirm readiness:") < text_result.stdout.index("After readiness passes, choose one path:")
+    assert text_result.stdout.index("Same-Agent path: Run /loopora-plan") < text_result.stdout.index(
+        "open Fit Guide/Web choices in Web"
+    )
+    assert f"loopora serve --open --workdir {workdir.resolve()} --host 127.0.0.1 --port 8742" in text_result.stdout
     assert "supporting_file" not in text_result.stdout
     assert "role_agent" not in text_result.stdout
     assert "If a file is unmanaged" not in text_result.stdout
@@ -82,6 +114,21 @@ def test_cli_adapter_check_before_install_reports_install_state_not_internal_mis
     assert summary["check_recovery"]["state"] == "not_installed"
     assert summary["check_recovery"]["details_are_expected"] is True
     assert summary["check_recovery"]["install_command"].endswith(f"--workdir {workdir.resolve()}")
+    assert summary["check_recovery"]["doctor_command"].endswith(f"--workdir {workdir.resolve()}")
+    assert summary["check_recovery"]["web_start_command"].endswith(
+        f"loopora serve --open --workdir {workdir.resolve()} --host 127.0.0.1 --port 8742"
+    )
+    assert [item["kind"] for item in summary["check_recovery"]["next_action_items"]] == [
+        "install_agent_entry",
+        "verify_agent_entry",
+        "confirm_readiness",
+        "return_to_agent",
+        "confirm_agent_visibility",
+        "run_loopora_plan",
+        "review_ready_loop_preview",
+        "run_loopora_run",
+        "start_web",
+    ]
 
 
 def test_cli_agent_adapter_check_alias_reports_actionable_install_state(tmp_path: Path) -> None:
@@ -93,9 +140,24 @@ def test_cli_agent_adapter_check_alias_reports_actionable_install_state(tmp_path
 
     assert text_result.exit_code == 1
     assert "Codex Loopora entry check: fail" in text_result.stdout
-    assert "install_state: not_installed" in text_result.stdout
+    assert "install state: not installed" in text_result.stdout
+    assert "install_state:" not in text_result.stdout
+    assert "note: Codex Loopora entry is not installed yet" in text_result.stdout
+    assert "summary:" not in text_result.stdout
     assert "Run:" in text_result.stdout
     assert f"loopora init codex --workdir {workdir.resolve()}" in text_result.stdout
+    assert "Then confirm readiness:" in text_result.stdout
+    assert f"loopora doctor --workdir {workdir.resolve()}" in text_result.stdout
+    assert "Run /loopora-plan to prepare the Loop preview." in text_result.stdout
+    assert "After readiness passes, choose one path:" in text_result.stdout
+    assert "Review whether the READY Loop preview matches the task judgment." in text_result.stdout
+    assert "After the READY Loop preview matches the task judgment, run /loopora-run in the same Agent session." in text_result.stdout
+    assert WEB_CREATION_PATH_TEXT in text_result.stdout
+    assert "Plan-file/expert path:" in text_result.stdout
+    assert "Existing work path:" in text_result.stdout
+    assert text_result.stdout.index("Then confirm readiness:") < text_result.stdout.index(
+        "After readiness passes, choose one path:"
+    )
     assert "No such command" not in text_result.output
 
     install = runner.invoke(cli.app, ["init", "codex", "--workdir", str(workdir), "--json"])
@@ -106,6 +168,17 @@ def test_cli_agent_adapter_check_alias_reports_actionable_install_state(tmp_path
     summary, _legacy = assert_agent_check_payload(payload, status="pass")
     assert summary["check_status"] == "pass"
     assert summary["check_recovery"]["check_command"].endswith(f"--workdir {workdir.resolve()} --check")
+    assert [item["kind"] for item in summary["check_recovery"]["next_action_items"]] == [
+        "confirm_readiness",
+        "return_to_agent",
+        "confirm_agent_visibility",
+        "run_loopora_plan",
+        "review_ready_loop_preview",
+        "run_loopora_run",
+        "start_web",
+    ]
+    assert any("Run /loopora-plan" in item for item in summary["next_steps"])
+    assert any("Review the READY Loop preview" in item for item in summary["next_steps"])
     assert summary["agent_surface"]["entry_kind"] == "project_skill"
     assert summary["agent_surface"]["role_agents"]["builder"]["path"] == ".codex/agents/loopora-builder.toml"
     assert summary["agent_surface"]["native_dispatch"]["accepted_native_tools"] == ["spawn_agent"]
@@ -314,7 +387,10 @@ def test_agent_adapter_templates_delegate_shared_entry_contracts() -> None:
     )
 
 # Merged from test_agent_adapter_generated_cli_home.py
+from loopora import agent_adapter_command_prefix
+from loopora.agent_adapter_claude_hook import claude_session_hook_script
 from loopora.agent_native_submit_hints import agent_native_submit_command
+from loopora.agent_adapter_workdir_recovery import adapter_workdir_recovery_payload
 
 from agent_adapter_test_support import (
     _assert_loopora_cli_command,
@@ -324,12 +400,30 @@ from agent_adapter_test_support import (
 )
 
 
-def test_agent_native_generated_cli_commands_preserve_loopora_home(monkeypatch, tmp_path: Path) -> None:
-    home = tmp_path / "loopora home"
-    workdir = tmp_path / "project with spaces"
+def _assert_agent_native_generated_submit_command(command: str, *, expected_prefix: str, result_file: Path) -> None:
+    assert command.startswith(expected_prefix)
+    assert f"--result-file {shlex.quote(str(result_file))}" in command
+    assert command.count("--attest-role-dispatch") == 1
+
+
+def test_agent_native_generated_cli_commands_preserve_loopora_home_and_current_entry(monkeypatch, tmp_path: Path) -> None:
+    home, workdir = tmp_path / "loopora home", tmp_path / "project with spaces"
     result_file = workdir / ".loopora" / "agent_outbox" / "codex" / "run_agent__iter000__step00__builder_step.result.json"
     monkeypatch.setenv("LOOPORA_HOME", str(home))
-    expected_prefix = f"LOOPORA_HOME={shlex.quote(str(home))} LOOPORA_AGENT_ENTRY_SOURCE=codex_project_skill "
+    monkeypatch.setenv("UV_RUN_RECURSION_DEPTH", "1")
+    monkeypatch.setattr(agent_adapter_command_prefix, "current_loopora_cli_entry", lambda: "uv run loopora")
+    source_entry = agent_adapter_command_prefix.current_project_file_loopora_cli_entry()
+    expected_prefix = (
+        f"LOOPORA_HOME={shlex.quote(str(home))} "
+        f"LOOPORA_AGENT_ENTRY_SOURCE=codex_project_skill {source_entry} "
+    )
+    source_entry_tokens = shlex.split(source_entry)
+
+    def command_body_tokens(command: str) -> list[str]:
+        home_prefix = f"LOOPORA_HOME={shlex.quote(str(home))} "
+        tokens = shlex.split(command.removeprefix(home_prefix))
+        assert tokens[: len(source_entry_tokens)] == source_entry_tokens
+        return tokens[len(source_entry_tokens) :]
 
     run_command = agent_adapters.agent_loop_json_command("codex", workdir, entry_source="codex_project_skill")
     submit_command = agent_native_submit_command(
@@ -345,6 +439,41 @@ def test_agent_native_generated_cli_commands_preserve_loopora_home(monkeypatch, 
         context_id="",
         run_id="run_agent",
         entry_source="codex_project_skill",
+    )
+    context_next_command = cli_agent_adapter_commands._agent_next_command_hint(
+        adapter="codex",
+        workdir=workdir,
+        context_id="thread with spaces;rm -rf nope",
+        run_id="",
+        entry_source="codex_project_skill",
+    )
+    unsafe_adapter = "codex;rm -rf nope"
+    unsafe_plan_command = cli_agent_adapter_commands._agent_plan_cli_command(
+        adapter=unsafe_adapter,
+        workdir=str(workdir),
+        message="Repair safely.",
+    )
+    unsafe_next_command = cli_agent_adapter_commands._agent_next_command_hint(
+        adapter=unsafe_adapter,
+        workdir=workdir,
+        context_id="thread with spaces;rm -rf nope",
+        run_id="",
+    )
+    unsafe_submit_command = agent_native_submit_command(
+        adapter=unsafe_adapter,
+        run_id="run with spaces;rm -rf nope",
+        step_id="step with spaces;rm -rf nope",
+        result_file=str(result_file),
+    )
+    unsafe_recovery = adapter_workdir_recovery_payload(
+        unsafe_adapter,
+        action="plan",
+        workdir_state={
+            "status": "missing",
+            "workdir": str(workdir),
+            "summary": "missing",
+            "commands": {"create": f"mkdir -p {shlex.quote(str(workdir))}"},
+        },
     )
     repair_command = cli_agent_adapter_commands._agent_plan_cli_command(
         adapter="codex",
@@ -362,12 +491,33 @@ def test_agent_native_generated_cli_commands_preserve_loopora_home(monkeypatch, 
     )
 
     assert run_command.startswith(expected_prefix)
-    assert submit_command.startswith(expected_prefix)
+    _assert_agent_native_generated_submit_command(
+        submit_command,
+        expected_prefix=expected_prefix,
+        result_file=result_file,
+    )
     assert next_command.startswith(expected_prefix)
+    assert context_next_command.startswith(expected_prefix)
     assert repair_command.startswith(expected_prefix)
     assert f"--workdir {shlex.quote(str(workdir))}" in run_command
-    assert f"--result-file {shlex.quote(str(result_file))}" in submit_command
     assert f"--workdir {shlex.quote(str(workdir))}" in next_command
+    context_tokens = shlex.split(context_next_command.removeprefix(expected_prefix))
+    assert context_tokens[:5] == ["agent", "codex", "next", "--workdir", str(workdir)]
+    assert context_tokens[context_tokens.index("--context-id") + 1] == "thread with spaces;rm -rf nope"
+    unsafe_plan_tokens = command_body_tokens(unsafe_plan_command)
+    unsafe_next_tokens = command_body_tokens(unsafe_next_command)
+    unsafe_submit_tokens = command_body_tokens(unsafe_submit_command)
+    unsafe_retry_tokens = command_body_tokens(unsafe_recovery["next_actions"][2]["command"])
+    for tokens, command_name in (
+        (unsafe_plan_tokens, "plan"),
+        (unsafe_next_tokens, "next"),
+        (unsafe_submit_tokens, "submit"),
+        (unsafe_retry_tokens, "plan"),
+    ):
+        assert tokens[:3] == ["agent", unsafe_adapter, command_name]
+    assert unsafe_next_tokens[unsafe_next_tokens.index("--context-id") + 1] == "thread with spaces;rm -rf nope"
+    assert unsafe_submit_tokens[unsafe_submit_tokens.index("--run-id") + 1] == "run with spaces;rm -rf nope"
+    assert unsafe_submit_tokens[unsafe_submit_tokens.index("--step-id") + 1] == "step with spaces;rm -rf nope"
     assert f"--bundle-file {shlex.quote(str(workdir / 'candidate.yml'))}" in repair_command
     _assert_loopora_cli_command(
         next_commands["check"],
@@ -389,6 +539,33 @@ def test_agent_native_generated_cli_commands_preserve_loopora_home(monkeypatch, 
         f"loopora init codex --workdir {shlex.quote(str(workdir))} --check",
         loopora_home=home,
     )
+    _assert_loopora_cli_command(
+        check_recovery["doctor_command"],
+        f"loopora doctor --workdir {shlex.quote(str(workdir))}",
+        loopora_home=home,
+    )
+    _assert_loopora_cli_command(
+        check_recovery["web_start_command"],
+        f"loopora serve --open --workdir {shlex.quote(str(workdir))} --host 127.0.0.1 --port 8742",
+        loopora_home=home,
+    )
+
+
+def test_claude_hook_self_repair_command_preserves_loopora_home_and_current_entry(monkeypatch, tmp_path: Path) -> None:
+    home = tmp_path / "loopora home"
+    monkeypatch.setenv("LOOPORA_HOME", str(home))
+    monkeypatch.setenv("UV_RUN_RECURSION_DEPTH", "1")
+    monkeypatch.setattr(agent_adapter_command_prefix, "current_loopora_cli_entry", lambda: "uv run loopora")
+    source_entry = agent_adapter_command_prefix.current_project_file_loopora_cli_entry()
+
+    hook_script = claude_session_hook_script(marker="loopora-test", version=1)
+
+    namespace = {"__name__": "loopora_test"}
+    exec(compile(hook_script, "loopora-session-context.py", "exec"), namespace)
+    repair_command = str(namespace["REPAIR_COMMAND"])
+    assert "REPAIR_COMMAND =" in hook_script
+    assert repair_command.startswith(f"LOOPORA_HOME={shlex.quote(str(home))} {source_entry} ")
+    assert repair_command.endswith('init claude --check --workdir "$CLAUDE_PROJECT_DIR"')
 
 # Merged from test_agent_adapter_hook_architecture.py
 
@@ -434,11 +611,15 @@ def test_agent_adapter_lifecycle_has_dedicated_boundary() -> None:
     lifecycle_source = loopora_source("agent_adapter_lifecycle")
     status_source = loopora_source("agent_adapter_status")
     check_recovery_source = loopora_source("agent_adapter_check_recovery")
+    template_source = loopora_source("agent_adapter_templates")
+    plan_service_source = loopora_source("service_agent_bundle_candidates")
+    run_service_source = loopora_source("service_agent_loop_start")
     lifecycle_markers = (
         "def list_agent_adapter_statuses",
         "def agent_adapter_status",
         "def check_agent_adapter",
         "def install_agent_adapter",
+        "def preview_agent_adapter_uninstall",
         "def uninstall_agent_adapter",
     )
     facade_markers = (
@@ -456,6 +637,11 @@ def test_agent_adapter_lifecycle_has_dedicated_boundary() -> None:
     assert "from loopora.agent_adapter_status import" in lifecycle_source
     assert "def managed_adapter_status" in status_source
     assert "def not_implemented_adapter_status" in status_source
+    assert "Coming soon" not in status_source
+    assert "not implemented yet" not in lifecycle_source + status_source + template_source + plan_service_source + run_service_source
+    assert "adapter_unavailable_summary" in lifecycle_source + status_source + template_source + plan_service_source + run_service_source
+    assert "not available in this Loopora build" in not_implemented_adapter_status("future", Path("."))["summary"]
+    assert adapter_unavailable_summary("future") == not_implemented_adapter_status("future", Path("."))["summary"]
     assert "def managed_adapter_status" not in lifecycle_source
     assert "def _managed_adapter_status" not in lifecycle_source
     assert "def adapter_check_recovery" in check_recovery_source

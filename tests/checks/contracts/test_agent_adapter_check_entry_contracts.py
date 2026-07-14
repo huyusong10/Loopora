@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from agent_adapter_check_test_support import assert_agent_check_payload
-from agent_adapter_test_support import CliRunner, Path, agent_adapters, cli, json, pytest
+from agent_adapter_test_support import CliRunner, Path, agent_adapters, assert_agent_check_payload, cli, json, pytest
 
 
 def test_cli_adapter_check_validates_managed_supporting_files(tmp_path: Path) -> None:
