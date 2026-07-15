@@ -200,19 +200,6 @@
           detail: detailParts.join(" · "),
         };
       }
-      if (event.event_type === "run_result_acceptance_reopened") {
-        const detailParts = [];
-        if (payload.status) {
-          detailParts.push(String(payload.status));
-        }
-        if (payload.task_verdict_status) {
-          detailParts.push(`${localeText("Loop 裁决", "Task verdict")} ${payload.task_verdict_status}`);
-        }
-        return {
-          title: localeText("已重新打开记录结论", "Recorded verdict reopened"),
-          detail: detailParts.join(" · "),
-        };
-      }
       if (event.event_type === "run_aborted") {
         const attempts = displayCount(payload.attempts);
         return {
@@ -255,9 +242,6 @@
 
     function timelineTone(event) {
       const payload = event.payload || {};
-      if (event.event_type === "run_result_acceptance_reopened") {
-        return "neutral";
-      }
       if (event.event_type === "run_result_accepted") {
         if (payload.task_verdict_status === "failed") {
           return "danger";

@@ -3,9 +3,9 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from loopora.evidence_support import evidence_item_is_supporting_gatekeeper_ref
-from loopora.structured_booleans import structured_bool_is_true
-from loopora.structured_numbers import structured_non_negative_int
+from loopora.evidence_coverage import evidence_item_is_supporting_gatekeeper_ref
+from loopora.utils import structured_bool_is_true
+from loopora.utils import structured_non_negative_int
 
 
 def _agent_native_compact_known_evidence_refs(

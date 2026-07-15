@@ -20,7 +20,7 @@ This is a thin dispatcher. Read these managed references before starting role di
 Start or resume with:
 
 ```bash
-LOOPORA_AGENT_ENTRY_SOURCE=opencode_project_command {{loopora_cli_entry}} agent opencode run --workdir "$PWD" --context-id "${OPENCODE_SESSION_ID:-}" --entry-source opencode_project_command --json --compact-json
+LOOPORA_AGENT_ENTRY_SOURCE=opencode_project_command loopora agent opencode run --workdir "$PWD" --context-id "${OPENCODE_SESSION_ID:-}" --entry-source opencode_project_command --json --compact-json
 ```
 
 If `$ARGUMENTS` or the user provides `option:<id>`, pass it as `--source-option-id <id>`. If the command returns `loop_recovery`, report the recovery path and stop before dispatching any role agent.

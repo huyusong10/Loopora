@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import time
 
-from loopora.context_step_results import evidence_entry_id
+from loopora.context_flow import evidence_entry_id
 from loopora.diagnostics import get_logger, log_event
 from loopora.engine import RepositoryRunEngine
 from loopora.engine.runner_context import (
@@ -20,7 +20,7 @@ from loopora.runner_step_runtime_requests import (
     build_runner_step_runtime_request,
     runner_step_runtime_input_snapshot_from_mapping,
 )
-from loopora.runner_support_requests import StepOutputNormalizationRequest
+from loopora.runner_summary_projection import StepOutputNormalizationRequest
 from loopora.runners import headless_runner_actor
 from loopora.service_runner_parallel_execution import ServiceRunnerParallelExecutionMixin, runner_role_error_signal
 from loopora.service_types import RoleExecutionError

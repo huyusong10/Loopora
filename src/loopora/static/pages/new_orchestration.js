@@ -71,7 +71,6 @@ document.addEventListener("DOMContentLoaded", () => {
   let submitAttempted = false;
   let lastModalTrigger = null;
   let lastSpecPracticeTrigger = null;
-  let pendingStarterBundleId = null;
 
   function localeText(zh, en) {
     return window.LooporaUI.pickText({zh, en});
@@ -105,12 +104,6 @@ document.addEventListener("DOMContentLoaded", () => {
     element.className = `field-status${kind ? ` is-${kind}` : ""}`;
   }
 
-  function setButtonBusy(button, busy) {
-    if (button) {
-      button.disabled = Boolean(busy);
-    }
-  }
-
   function setSpecPracticeModalStatus(message, kind = "") {
     if (!specPracticeModalStatus) {
       return;
@@ -127,43 +120,6 @@ document.addEventListener("DOMContentLoaded", () => {
     } catch (error) {
       return {response: null, payload: {}, error};
     }
-  }
-
-  function orchestrationPayload() {
-    const formData = new FormData(form);
-    return {
-      name: String(formData.get("name") || ""),
-      description: String(formData.get("description") || ""),
-      strategy_json: workflowState,
-      prompt_files: promptFilesState || {},
-    };
-  }
-
-  function redirectAfterOrchestrationSave(payload) {
-    window.location.href = window.LooporaUI.assetSaveRedirectUrl(payload, {
-      returnTo: form.dataset.returnTo || "",
-      surfaceUpdated: "workflow",
-      fallback: "/orchestrations",
-    });
-  }
-
-  function recoveryFieldTargets() {
-    return {
-      strategy_json: () => document.querySelector(".workflow-editor-panel"),
-      workflow_json: () => document.querySelector(".workflow-editor-panel"),
-      prompt_files_json: () => document.querySelector(".workflow-editor-panel"),
-      workflow_preset: () => workflowStarterSelect,
-    };
-  }
-
-  function recoveryFieldLabels() {
-    return {
-      name: localeText("名称", "Name"),
-      strategy_json: localeText("流程结构", "Flow structure"),
-      workflow_json: localeText("流程结构", "Flow structure"),
-      prompt_files_json: localeText("提示词文件", "Prompt files"),
-      workflow_preset: localeText("起手模板", "Starter"),
-    };
   }
 
   function roleLabel(archetype) {
@@ -314,25 +270,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function workflowHasContent() {
     return Boolean(workflowState?.roles?.length || workflowState?.steps?.length);
-  }
-
-  function clearStarterReplacementConfirmation() {
-    pendingStarterBundleId = null;
-    loadWorkflowStarterButton?.removeAttribute("data-confirming-starter");
-  }
-
-  function requestStarterReplacementConfirmation(starterId) {
-    pendingStarterBundleId = String(starterId || "");
-    loadWorkflowStarterButton?.setAttribute("data-confirming-starter", "1");
-    showStatus(
-      workflowValidation,
-      localeText(
-        "载入起手模板会替换当前的步骤和角色快照。再次点击“载入模板”以确认替换。",
-        "Loading a starter template will replace the current steps and role snapshots. Click Load starter again to confirm.",
-      ),
-      "warning",
-    );
-    loadWorkflowStarterButton?.focus();
   }
 
   function makeRoleId(baseName) {
@@ -1055,22 +992,24 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  function applyStarterBundle(bundle, {confirmed = false} = {}) {
+  function applyStarterBundle(bundle) {
     if (!bundle) {
       return;
     }
-    const starterId = String(bundle.id || "");
-    if (!isReadOnly && workflowHasContent() && !confirmed) {
-      requestStarterReplacementConfirmation(starterId);
-      return;
+    if (!isReadOnly && workflowHasContent()) {
+      const confirmed = window.confirm(localeText(
+        "载入起手模板会替换当前的步骤和角色快照。确定继续吗？",
+        "Loading a starter template will replace the current steps and role snapshots. Continue?",
+      ));
+      if (!confirmed) {
+        return;
+      }
     }
-    clearStarterReplacementConfirmation();
     normalizeWorkflowState(bundle.workflow, bundle.prompt_files);
     activeRoleId = String(workflowState.steps[0]?.role_id || workflowState.roles[0]?.id || "");
     activeStepIndex = workflowState.steps.length ? 0 : -1;
     openSettingsStepIndex = -1;
     renderWorkflowEditor();
-    showStatus(workflowValidation, localeText("已载入起手模板。", "Starter template loaded."), "success");
   }
 
   function addStepFromDefinition(roleDefinitionId) {
@@ -1300,14 +1239,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (isReadOnly) {
       return;
     }
-    const starterId = String(workflowStarterSelect?.value || "").trim();
-    applyStarterBundle(starterBundleById(starterId), {
-      confirmed: pendingStarterBundleId !== null && pendingStarterBundleId === starterId,
-    });
-  });
-
-  workflowStarterSelect?.addEventListener("change", () => {
-    clearStarterReplacementConfirmation();
+    applyStarterBundle(starterBundleById(workflowStarterSelect?.value));
   });
 
   addStepButton?.addEventListener("click", () => {
@@ -1317,49 +1249,23 @@ document.addEventListener("DOMContentLoaded", () => {
     addStepFromDefinition(roleDefinitionSelect?.value);
   });
 
-  form.addEventListener("submit", async (event) => {
-    event.preventDefault();
+  form.addEventListener("submit", (event) => {
     if (isReadOnly) {
+      event.preventDefault();
       showStatus(formError, localeText("默认编排是只读的，请新建一条自定义编排。", "Built-in orchestrations are read-only. Create a custom orchestration instead."), "error");
       return;
     }
     submitAttempted = true;
     if (!renderWorkflowValidation({forceErrors: true})) {
+      event.preventDefault();
       showStatus(formError, localeText("编排结构不完整，请先修正。", "The orchestration is incomplete. Please fix it before saving."), "error");
       return;
     }
     syncStrategyJsonFields();
-    window.LooporaUI.clearAssetFieldRecovery(form, {statusElement: formError});
-    setButtonBusy(saveOrchestrationButton, true);
-    try {
-      const {response, payload, error} = await fetchJson(form.dataset.apiAction || "/api/orchestrations", {
-        method: form.dataset.apiMethod || "POST",
-        headers: {"Content-Type": "application/json", Accept: "application/json"},
-        body: JSON.stringify(orchestrationPayload()),
-      });
-      if (error || !response) {
-        showStatus(formError, localeText("无法保存流程编排。", "Unable to save the orchestration."), "error");
-        return;
-      }
-      if (!response.ok) {
-        if (window.LooporaUI.renderAssetFieldRecovery(form, payload, {
-          statusElement: formError,
-          fieldTargets: recoveryFieldTargets(),
-          fieldLabels: recoveryFieldLabels(),
-          noteIdPrefix: "orchestration-field-recovery",
-        })) {
-          return;
-        }
-        showStatus(formError, payload.error || localeText("无法保存流程编排。", "Unable to save the orchestration."), "error");
-        return;
-      }
-      redirectAfterOrchestrationSave(payload);
-    } finally {
-      setButtonBusy(saveOrchestrationButton, false);
+    if (saveOrchestrationButton) {
+      saveOrchestrationButton.disabled = true;
     }
   });
-  form.addEventListener("input", () => window.LooporaUI.clearAssetFieldRecovery(form, {statusElement: formError}));
-  form.addEventListener("change", () => window.LooporaUI.clearAssetFieldRecovery(form, {statusElement: formError}));
 
   document.addEventListener("loopora:localechange", () => {
     renderWorkflowEditor({forceValidation: submitAttempted});

@@ -4,7 +4,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from loopora.coverage_target_semantics import coverage_target_is_required
-from loopora.evidence_manifest_artifacts import dedupe_artifact_refs
+from loopora.evidence_manifest import dedupe_artifact_refs
 from loopora.residual_risk_support import (
     residual_risk_is_managed,
     residual_risk_is_meaningful,

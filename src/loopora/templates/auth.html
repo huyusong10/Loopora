@@ -8,61 +8,30 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Loopora · {{ "需要访问令牌" if page_locale == "zh" else "Auth token required" }}</title>
-  <link rel="icon" href="{{ logo_asset_url('logo.svg') }}" sizes="any" type="image/svg+xml" />
-  <link rel="shortcut icon" href="{{ logo_asset_url('logo.svg') }}" type="image/svg+xml" />
+  <link rel="icon" href="/logo/logo.svg" sizes="any" type="image/svg+xml" />
+  <link rel="shortcut icon" href="/logo/logo.svg" type="image/svg+xml" />
   {% include "_display_preferences_bootstrap.html" %}
-  {% include "_global_stylesheets.html" %}
+  <link rel="stylesheet" href="{{ static_asset_url('app.css') }}" />
 </head>
 <body>
   <div class="auth-shell">
     <div class="auth-card" data-testid="auth-card">
       <div class="auth-card-brand">
-        <span class="auth-logo" aria-hidden="true" data-testid="auth-logo">
-          <img class="brand-lockup-image brand-lockup-image--light" src="{{ logo_asset_url('logo-with-text-horizontal.svg') }}" alt="" />
-          <img class="brand-lockup-image brand-lockup-image--dark" src="{{ logo_asset_url('logo-with-text-horizontal-light.svg') }}" alt="" />
-        </span>
+        <img class="auth-logo" src="/logo/logo-with-text-horizontal.svg" alt="" aria-hidden="true" />
         <span class="auth-card-brand-line" />
       </div>
       <h1>
         <span data-lang="zh">需要访问令牌</span>
         <span data-lang="en">Auth token required</span>
       </h1>
-      <form class="auth-form" method="post" action="/auth/token" data-testid="auth-token-form">
-        <input type="hidden" name="return_to" value="{{ return_to }}" />
-        <label class="auth-field" for="auth-token-input">
-          <span data-lang="zh">访问令牌</span>
-          <span data-lang="en">Access token</span>
-        </label>
-        <div class="auth-token-row">
-          <input
-            id="auth-token-input"
-            name="token"
-            type="password"
-            autocomplete="current-password"
-            required
-            autofocus
-            data-testid="auth-token-input"
-          />
-          <button class="primary-button auth-submit-button" type="submit">
-            <span data-lang="zh">进入</span>
-            <span data-lang="en">Enter</span>
-          </button>
-        </div>
-        {% if token_invalid %}
-          <p class="auth-error" role="alert" data-testid="auth-token-error">
-            <span data-lang="zh">令牌不匹配，请重新输入。</span>
-            <span data-lang="en">The token did not match. Try again.</span>
-          </p>
-        {% endif %}
-      </form>
       <div class="auth-copy-stack" data-testid="auth-copy-stack">
         <p>
           <span data-lang="zh">这个 Loopora 实例正在网络模式下运行，所以先带上令牌再进来比较稳妥。</span>
           <span data-lang="en">This Loopora instance is exposed over the network, so it expects an auth token before letting requests through.</span>
         </p>
         <p>
-          <span data-lang="zh">在这里提交一次令牌；Loopora 会用 httpOnly cookie 记住它，并回到刚才请求的页面。</span>
-          <span data-lang="en">Submit the token here once; Loopora stores it in an httpOnly cookie and returns to the requested page.</span>
+          <span data-lang="zh">把令牌加到地址后面访问一次即可，例如：<code>{{ url_path }}?token=&lt;your-token&gt;</code></span>
+          <span data-lang="en">Add the token to the URL once, for example: <code>{{ url_path }}?token=&lt;your-token&gt;</code></span>
         </p>
         <p>
           <span data-lang="zh">你也可以通过请求头发送：<code>Authorization: Bearer &lt;your-token&gt;</code> 或 <code>X-Loopora-Token</code>。</span>

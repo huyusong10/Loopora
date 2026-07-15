@@ -6,7 +6,7 @@ from typing import Any
 
 from loopora.engine.runner_context import RunnerIterationState, RunnerRunContext
 from loopora.run_artifacts import RunArtifactLayout
-from loopora.structured_numbers import coerced_non_negative_int
+from loopora.utils import coerced_non_negative_int
 
 
 @dataclass(frozen=True)

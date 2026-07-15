@@ -5,7 +5,7 @@ import re
 from pathlib import Path
 
 from loopora.branding import strip_run_summary_title
-from loopora.structured_numbers import structured_non_negative_int
+from loopora.utils import structured_non_negative_int
 from loopora.strategy_source import (
     STRATEGY_SOURCE_ARCHETYPES,
     normalize_strategy_role_display_name,

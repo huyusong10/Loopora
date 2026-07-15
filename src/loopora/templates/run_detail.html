@@ -1,5 +1,4 @@
 {% extends "base.html" %}
-{% from "partials/recovery_actions.html" import recovery_panel %}
 {% block title %}{{ run.loop_name or run.id }}{% endblock %}
 {% block styles %}
 <link rel="stylesheet" href="{{ static_asset_url('pages/run_detail.css') }}" />
@@ -7,94 +6,14 @@
 {% block content %}
 {% set terminal_run = run.status in ["succeeded", "failed", "stopped"] %}
 {% set task_verdict_status = (run.task_verdict.status if run.task_verdict else "")|lower %}
-{% set recordable_result = terminal_run and acceptance_state.recordable %}
-{% set recording_blocked_reason = acceptance_state.recording_blocked_reason if acceptance_state.recording_blocked_reason else "" %}
-{% set lifecycle_recording_failure = recording_blocked_reason == run_result_lifecycle_failure_blocked_reason %}
 {% set unresolved_terminal_verdict = task_verdict_status in ["insufficient_evidence", "failed", "not_evaluated"] %}
-{% set recorded_result = terminal_run and acceptance_state.accepted %}
-{% set recorded_target_basis = acceptance_state.recorded_coverage_target_basis|default({}) %}
-{% set recorded_advisory_basis = recorded_target_basis.advisory|default({}) %}
-{% set recorded_advisory_open = recorded_advisory_basis.open|default(0) %}
-{% set recorded_advisory_follow_up_available = acceptance_state.recorded_advisory_follow_up_available|default(false) %}
-{% set follow_up_status = continuation_outcome.status|default("active") %}
-{% set advisory_follow_up = continuation_state.reason == "recorded_advisory_follow_up" %}
-{% set continuation_action_mode = continuation_state.action_mode|default("close_gaps") %}
-{% set continuation_progress = continuation_state.prior_run_progress|default({}) %}
-{% set continuation_warning = continuation_action_mode in ["change_approach", "repair_regression", "review_contract_change", "stabilize_mixed"] %}
-{% set continuation_success = continuation_action_mode == "continue_progress" %}
-{% set not_evaluated_without_recordable_result = terminal_run and task_verdict_status == "not_evaluated" and not recordable_result and not recorded_result and not lifecycle_recording_failure %}
-{% set unresolved_needs_evidence_action = (recordable_result or not_evaluated_without_recordable_result) and unresolved_terminal_verdict and not recorded_result %}
-{% set terminal_without_recordable_result = terminal_run and not recordable_result and not recorded_result and not not_evaluated_without_recordable_result %}
-{% set show_run_revision_action = terminal_run and not terminal_without_recordable_result and not recorded_result %}
 <div class="page-stack" data-testid="run-detail-page">
-{% if run_action_error %}
-<div class="field-status is-error" data-testid="run-action-error" data-return-feedback-param="run_action_error" aria-live="polite">{{ run_action_error }}</div>
-{% endif %}
-{{ recovery_panel(run_action_recovery, "run-action-recovery", workdir_context=workdir_context, return_to=current_return_to) }}
-{% if continuation_state.active %}
-<div class="field-status {{ 'is-warning' if continuation_warning or follow_up_status in ['blocked', 'no_progress'] else ('is-success' if continuation_success or follow_up_status in ['completed', 'progressed'] else 'is-info') }}" data-testid="run-continuation-state" data-continuation-reason="{{ continuation_state.reason }}" data-continuation-focus-kind="{{ continuation_state.focus_kind }}" data-continuation-action-mode="{{ continuation_action_mode }}" data-continuation-progress-status="{{ continuation_progress.status|default('unavailable') }}" data-continuation-outcome="{{ follow_up_status }}" aria-live="polite">
-  {% if continuation_state.reason == "recorded_advisory_follow_up" %}
-  {% if follow_up_status == "completed" %}
-  <span data-lang="zh">这次跟进已解决全部 {{ continuation_outcome.focus_target_count }} 项建议目标；原记录结论保持可追溯。</span>
-  <span data-lang="en">This follow-up resolved all {{ continuation_outcome.focus_target_count }} advisory targets; the original recorded verdict remains traceable.</span>
-  {% elif follow_up_status == "progressed" %}
-  <span data-lang="zh">这次跟进强化了 {{ continuation_outcome.improved_target_count }} 项建议目标的证据，仍有 {{ continuation_outcome.remaining_target_count }} 项待处理；原记录结论保持不变。</span>
-  <span data-lang="en">This follow-up strengthened evidence for {{ continuation_outcome.improved_target_count }} advisory targets, with {{ continuation_outcome.remaining_target_count }} remaining; the original recorded verdict is unchanged.</span>
-  {% elif follow_up_status == "blocked" %}
-  <span data-lang="zh">这次跟进没有强化建议目标，并发现 {{ continuation_outcome.blocked_target_count }} 项阻塞。不要把原任务的历史通过结论当作本轮进展。</span>
-  <span data-lang="en">This follow-up strengthened no advisory target and found {{ continuation_outcome.blocked_target_count }} blockers. Do not treat the original historical pass as progress in this run.</span>
-  {% elif follow_up_status == "no_progress" %}
-  <span data-lang="zh">这次运行已经结束，但 {{ continuation_outcome.focus_target_count }} 项建议目标均未获得更强证据。原任务的历史通过结论不代表本轮取得了进展。</span>
-  <span data-lang="en">This run ended without stronger evidence for any of its {{ continuation_outcome.focus_target_count }} advisory targets. The original historical pass does not count as progress here.</span>
-  {% else %}
-  <span data-lang="zh">这次运行正在跟进上一轮记录后保留的 {{ continuation_state.focus_target_count }} 项建议目标；{% if continuation_state.focus_targets|length == continuation_state.focus_target_count %}这些目标{% else %}优先级最高的 {{ continuation_state.focus_targets|length }} 项{% endif %}已写入每个角色的执行上下文。</span>
-  <span data-lang="en">This run follows {{ continuation_state.focus_target_count }} advisory targets retained after the recorded result; {% if continuation_state.focus_targets|length == continuation_state.focus_target_count %}all targets are{% else %}the top {{ continuation_state.focus_targets|length }} are{% endif %} in every role's execution context.</span>
-  {% endif %}
-  {% elif continuation_state.reason == "previous_lifecycle_failure_retry" %}
-  <span data-lang="zh">这次运行从上一轮生命周期失败继续，重点是恢复执行边界，而不是复用上一轮的任务裁决。</span>
-  <span data-lang="en">This run continues from a lifecycle failure and focuses on restoring execution, not reusing the previous task verdict.</span>
-  {% elif continuation_action_mode == "change_approach" %}
-  <span data-lang="zh">上一轮没有强化任何稳定证据目标。本轮不能原样重复相同做法；应先解释停滞原因，再换策略，必要时回到方案审查。</span>
-  <span data-lang="en">The previous run strengthened no stable evidence target. This run must not repeat the same approach unchanged; explain the stall, change strategy, or return to plan review.</span>
-  {% elif continuation_action_mode == "repair_regression" %}
-  <span data-lang="zh">上一轮有 {{ continuation_progress.regressed_target_count }} 项稳定证据目标退化。本轮应先修复退化，再扩大范围。</span>
-  <span data-lang="en">The previous run regressed {{ continuation_progress.regressed_target_count }} stable evidence targets. Repair those regressions before broadening scope.</span>
-  {% elif continuation_action_mode == "stabilize_mixed" %}
-  <span data-lang="zh">上一轮同时出现进展与退化。本轮应保住 {{ continuation_progress.improved_target_count }} 项增强，并先修复 {{ continuation_progress.regressed_target_count }} 项退化。</span>
-  <span data-lang="en">The previous run mixed progress with regression. Preserve {{ continuation_progress.improved_target_count }} improvements and repair {{ continuation_progress.regressed_target_count }} regressions first.</span>
-  {% elif continuation_action_mode == "continue_progress" %}
-  <span data-lang="zh">上一轮强化了 {{ continuation_progress.improved_target_count }} 项稳定证据目标。本轮保留这些成果，只聚焦剩余缺口。</span>
-  <span data-lang="en">The previous run strengthened {{ continuation_progress.improved_target_count }} stable evidence targets. Preserve those gains and focus only the remaining gaps.</span>
-  {% elif continuation_action_mode == "review_contract_change" %}
-  <span data-lang="zh">证据目标契约已变化，不能把两轮差异称为进展。本轮继续前应先确认当前判断边界。</span>
-  <span data-lang="en">The evidence target contract changed, so the difference is not a progress claim. Confirm the current judgment boundary before continuing.</span>
-  {% else %}
-  <span data-lang="zh">这次运行继承上一轮尚未证明的证据目标，并把它们作为本轮执行焦点。</span>
-  <span data-lang="en">This run inherits the previous run's unproven evidence targets as its execution focus.</span>
-  {% endif %}
-  <a class="ghost-button" href="{{ workdir_context_href('/runs/' ~ continuation_state.previous_run_id, workdir_context) }}" data-testid="run-continuation-previous-run-link" data-workdir-context-link="workdir">
-    <span data-lang="zh">查看上一轮</span>
-    <span data-lang="en">Open previous run</span>
-  </a>
-  {% if continuation_progress.prior_run_id %}
-  <a class="ghost-button" href="{{ workdir_context_href('/runs/' ~ continuation_progress.prior_run_id, workdir_context) }}" data-testid="run-continuation-prior-run-link" data-workdir-context-link="workdir">
-    <span data-lang="zh">查看对比基线</span>
-    <span data-lang="en">Open comparison baseline</span>
-  </a>
-  {% endif %}
-</div>
-{% endif %}
 <section class="hero hero-tight hero-run-detail">
   <div class="hero-copy-stack">
     <h1>{{ run.loop_name or run.id }}</h1>
-    <p id="run-phase-intro">
-      {% if terminal_run %}
+    <p>
       <span data-lang="zh">先看这轮证明了什么、哪里没过线，以及证据能否支撑裁决。</span>
       <span data-lang="en">Start with what this run proved, what missed the bar, and whether the evidence supports the verdict.</span>
-      {% else %}
-      <span data-lang="zh">先看当前步骤正在做什么、已经留下哪些证据，以及接下来会进入哪个阶段。</span>
-      <span data-lang="en">Start with the current step, the evidence collected so far, and which stage comes next.</span>
-      {% endif %}
     </p>
     <div class="hero-meta-row">
       <div class="hero-meta-pill hero-meta-pill-strong">
@@ -111,22 +30,16 @@
         </span>
         <span class="hero-meta-value">{{ run.workdir }}</span>
       </div>
-      <div class="run-observation-cluster" data-testid="run-observation-cluster">
-        <span
-          class="run-observation-status"
-          id="run-observation-status"
-          data-testid="run-observation-status"
-          data-observation-state="loading"
-          aria-live="polite"
-        >
-          <span data-lang="zh">正在连接观察数据</span>
-          <span data-lang="en">Loading observation data</span>
-        </span>
-        <button class="ghost-button run-observation-refresh-button" type="button" id="run-observation-refresh-button" data-testid="run-observation-refresh-button" hidden>
-          <span data-lang="zh">重新加载证据视图</span>
-          <span data-lang="en">Reload evidence view</span>
-        </button>
-      </div>
+      <span
+        class="run-observation-status"
+        id="run-observation-status"
+        data-testid="run-observation-status"
+        data-observation-state="loading"
+        aria-live="polite"
+      >
+        <span data-lang="zh">正在连接观察数据</span>
+        <span data-lang="en">Loading observation data</span>
+      </span>
     </div>
   </div>
   <div class="card-actions hero-actions">
@@ -137,10 +50,9 @@
       data-agent-entry-command-copy
       data-copy-value="{{ agent_entry_start.loop_command }}"
       data-testid="run-agent-entry-copy-command-hero"
-      data-agent-entry-primary-action="{{ 'next-evidence' if unresolved_needs_evidence_action else 'agent-command' }}"
     >
       <span aria-hidden="true">⧉</span>
-      {% if unresolved_needs_evidence_action %}
+      {% if agent_entry_start.next_loop_action == "start_next_run_for_unproven_verdict" %}
       <span data-lang="zh">复制续跑命令</span>
       <span data-lang="en">Copy next-run command</span>
       {% else %}
@@ -149,84 +61,116 @@
       {% endif %}
     </button>
     {% endif %}
-    <a class="secondary-button" href="{{ workdir_context_href('/loops/' ~ run.loop_id, workdir_context) }}" data-workdir-context-link="workdir">
+    <a class="secondary-button" href="/loops/{{ run.loop_id }}">
       <span data-lang="zh">返回 Loop</span>
       <span data-lang="en">Back to loop</span>
     </a>
-    <details class="run-export-menu" data-testid="run-export-menu">
-      <summary class="ghost-button">
-        <span data-lang="zh">导出</span>
-        <span data-lang="en">Export</span>
-      </summary>
-      <div class="run-export-menu-actions">
-        <a class="ghost-button" href="{{ export_bundle_url }}" data-testid="run-export-loop-button">
-          <span data-lang="zh">导出 Loop</span>
-          <span data-lang="en">Export Loop</span>
-        </a>
-        <a class="ghost-button" href="/api/runs/{{ run.id }}/evidence-package" data-testid="run-export-evidence-button">
-          <span data-lang="zh">导出私有证据包</span>
-          <span data-lang="en">Export private evidence</span>
-        </a>
-      </div>
-    </details>
+    <a class="ghost-button" href="{{ export_bundle_url }}" data-testid="run-export-loop-button">
+      <span data-lang="zh">导出 Loop</span>
+      <span data-lang="en">Export Loop</span>
+    </a>
+    {% if terminal_run and unresolved_terminal_verdict %}
+    <form method="post" action="/runs/{{ run.id }}/revise" class="inline-form">
+      <button class="primary-button" type="submit" data-testid="run-improve-chat-button">
+        <span data-lang="zh">用证据改进 Loop</span>
+        <span data-lang="en">Improve plan with evidence</span>
+      </button>
+    </form>
+    {% if not agent_entry_start %}
+    <form method="post" action="/runs/{{ run.id }}/rerun" class="inline-form">
+      <button class="secondary-button" type="submit" data-testid="run-rerun-button">
+        <span data-lang="zh">继续补证据</span>
+        <span data-lang="en">Run next evidence pass</span>
+      </button>
+    </form>
+    {% endif %}
+    {% endif %}
+    {% if terminal_run %}
+    {% if acceptance_state.accepted %}
+    <button class="secondary-button" type="button" data-testid="run-accepted-result-state" disabled aria-disabled="true">
+      {% if task_verdict_status == "insufficient_evidence" %}
+      <span data-lang="zh">未证明结论已记录</span>
+      <span data-lang="en">Unproven verdict recorded</span>
+      {% elif task_verdict_status == "failed" %}
+      <span data-lang="zh">失败结论已记录</span>
+      <span data-lang="en">Failed verdict recorded</span>
+      {% elif task_verdict_status == "not_evaluated" %}
+      <span data-lang="zh">未评估结论已记录</span>
+      <span data-lang="en">Unevaluated verdict recorded</span>
+      {% elif task_verdict_status == "passed_with_residual_risk" %}
+      <span data-lang="zh">带残余风险的通过结论已记录</span>
+      <span data-lang="en">Pass-with-risk verdict recorded</span>
+      {% elif task_verdict_status == "passed" %}
+      <span data-lang="zh">通过结论已记录</span>
+      <span data-lang="en">Passing verdict recorded</span>
+      {% else %}
+      <span data-lang="zh">证据结论已记录</span>
+      <span data-lang="en">Evidence verdict recorded</span>
+      {% endif %}
+    </button>
+    {% else %}
+    <form method="post" action="/runs/{{ run.id }}/accept" class="inline-form">
+      <button
+        class="{{ 'secondary-button' if unresolved_terminal_verdict else 'primary-button' }}"
+        type="submit"
+        data-testid="run-accept-result-button"
+        data-task-verdict-status="{{ task_verdict_status }}"
+      >
+        {% if task_verdict_status == "insufficient_evidence" %}
+        <span data-lang="zh">记录未证明结论</span>
+        <span data-lang="en">Record unproven verdict</span>
+        {% elif task_verdict_status == "failed" %}
+        <span data-lang="zh">记录失败结论</span>
+        <span data-lang="en">Record failed verdict</span>
+        {% elif task_verdict_status == "not_evaluated" %}
+        <span data-lang="zh">记录未评估结论</span>
+        <span data-lang="en">Record unevaluated verdict</span>
+        {% elif task_verdict_status == "passed_with_residual_risk" %}
+        <span data-lang="zh">记录带风险通过</span>
+        <span data-lang="en">Record pass with risk</span>
+        {% elif task_verdict_status == "passed" %}
+        <span data-lang="zh">记录通过结论</span>
+        <span data-lang="en">Record passing verdict</span>
+        {% else %}
+        <span data-lang="zh">记录证据结论</span>
+        <span data-lang="en">Record evidence verdict</span>
+        {% endif %}
+      </button>
+    </form>
+    {% endif %}
+    {% if not unresolved_terminal_verdict and not agent_entry_start %}
+    <form method="post" action="/runs/{{ run.id }}/rerun" class="inline-form">
+      <button class="secondary-button" type="submit" data-testid="run-rerun-button">
+        <span data-lang="zh">重新运行</span>
+        <span data-lang="en">Rerun</span>
+      </button>
+    </form>
+    {% endif %}
+    {% endif %}
+    {% if not (terminal_run and unresolved_terminal_verdict) %}
+    <form method="post" action="/runs/{{ run.id }}/revise" class="inline-form">
+      <button class="secondary-button" type="submit" data-testid="run-improve-chat-button">
+        <span data-lang="zh">用证据改进 Loop</span>
+        <span data-lang="en">Improve plan with evidence</span>
+      </button>
+    </form>
+    {% endif %}
     {% if run.status in ["queued", "running", "awaiting_agent"] %}
-    <button class="ghost-button" id="stop-run" type="button" data-testid="run-stop-button" data-run-action-availability="active">
+    <button class="ghost-button" id="stop-run">
       <span data-lang="zh">停止运行</span>
       <span data-lang="en">Stop run</span>
     </button>
-    <p
-      class="field-status run-stop-status"
-      id="run-stop-status"
-      data-testid="run-stop-status"
-      aria-live="polite"
-      hidden
-    ></p>
-    <div
-      class="manual-recovery-panel"
-      id="run-stop-recovery"
-      data-recovery-panel
-      data-testid="run-stop-recovery"
-      hidden
-    ></div>
     {% endif %}
-    <div
-      class="field-status run-action-refresh-notice is-success"
-      id="run-action-refresh-notice"
-      data-testid="run-action-refresh-notice"
-      data-run-action-handoff="terminal-results"
-      aria-live="polite"
-      hidden
-    >
-      <span data-lang="zh">运行已经结束。刷新页面以审查最终证据和结果操作。</span>
-      <span data-lang="en">The run has ended. Refresh to review final evidence and result actions.</span>
-      <button class="ghost-button" type="button" id="run-action-refresh-button" data-testid="run-action-refresh-button">
-        <span data-lang="zh">查看结果操作</span>
-        <span data-lang="en">Review result actions</span>
-      </button>
-    </div>
   </div>
 </section>
-
-{% if terminal_without_recordable_result %}
-<div class="field-status is-warning" data-testid="run-result-recovery-notice" aria-live="polite">
-  <span data-lang="zh">这轮运行已结束，但不是可记录的证据结果；请先重试运行或返回 Loop 修复启动条件。</span>
-  <span data-lang="en">This run ended without a recordable evidence result; retry the run or return to the Loop to fix the start condition.</span>
-</div>
-{% endif %}
-{% if not_evaluated_without_recordable_result %}
-<div class="field-status is-warning" data-testid="run-result-not-evaluated-notice" aria-live="polite">
-  <span data-lang="zh">这轮运行没有可记录的证据裁决；请继续补证据或用现有证据改进 Loop。</span>
-  <span data-lang="en">This run has no recordable evidence verdict; continue evidence or improve the Loop from current evidence.</span>
-</div>
-{% endif %}
 
 {% if agent_entry_start %}
 <details class="agent-entry-start-guide" data-testid="run-agent-entry-start-guide">
   <summary class="agent-entry-start-summary">
     <span class="agent-entry-start-summary-copy">
       <span class="agent-entry-start-kicker">
-        <span data-lang="zh">同一 Agent 执行边界</span>
-        <span data-lang="en">Same-Agent execution boundary</span>
+        <span data-lang="zh">Agent-first 执行边界</span>
+        <span data-lang="en">Agent-first execution boundary</span>
       </span>
       <strong>
         <span data-lang="zh">继续运行时回到 /loopora-run。</span>
@@ -263,9 +207,8 @@
         </button>
       </div>
       <p class="agent-entry-start-copy-status" data-agent-entry-copy-status aria-live="polite"></p>
-      <div class="agent-entry-start-manual-copy" data-agent-entry-manual-copy data-testid="run-agent-entry-manual-copy" hidden></div>
       {% if agent_entry_start.linked_run_id and agent_entry_start.linked_run_id != run.id %}
-      <a class="ghost-button" href="{{ workdir_context_href('/runs/' ~ agent_entry_start.linked_run_id, workdir_context) }}" data-workdir-context-link="workdir">
+      <a class="ghost-button" href="/runs/{{ agent_entry_start.linked_run_id }}">
         <span data-lang="zh">打开绑定运行</span>
         <span data-lang="en">Open bound run</span>
       </a>
@@ -275,45 +218,34 @@
 </details>
 {% endif %}
 
-<section class="dashboard-grid run-judgment-grid" data-run-phase="{{ 'terminal' if terminal_run else 'active' }}">
-  <article class="panel takeaway-panel{% if not terminal_run %} is-active-pending{% endif %}" data-testid="run-takeaway-panel">
+<section class="dashboard-grid run-judgment-grid">
+  <article class="panel takeaway-panel" data-testid="run-takeaway-panel">
     <header class="panel-header takeaway-panel-header">
       <div>
-        <h2 id="takeaway-phase-title">
-          {% if terminal_run %}
-          <span data-lang="zh">关键结论</span><span data-lang="en">Key takeaways</span>
-          {% else %}
-          <span data-lang="zh">证据收集中</span><span data-lang="en">Evidence underway</span>
-          {% endif %}
-        </h2>
-        <p class="takeaway-copy" id="takeaway-phase-copy">
-          {% if terminal_run %}
+        <h2><span data-lang="zh">关键结论</span><span data-lang="en">Key takeaways</span></h2>
+        <p class="takeaway-copy">
           <span data-lang="zh">先看证据覆盖和守门裁决；原始提示词、上下文和输出继续沉到追查材料里。</span>
           <span data-lang="en">Start with evidence coverage and the GateKeeper verdict; raw prompts, context, and outputs stay in trace material.</span>
-          {% else %}
-          <span data-lang="zh">这里显示已经落账的证据，但运行结束前不会把暂缺证据当成最终裁决。</span>
-          <span data-lang="en">This shows evidence already recorded, without treating missing evidence as a final verdict before the run ends.</span>
-          {% endif %}
         </p>
       </div>
       <div class="takeaway-meta" id="takeaway-meta">-</div>
     </header>
     <div class="takeaway-outcome-card" id="takeaway-outcome-card" data-testid="run-evidence-outcome">
       <div class="takeaway-outcome-copy">
-        <span class="takeaway-path-label" id="takeaway-outcome-label">
-          {% if terminal_run %}
-          <span data-lang="zh">证据结论</span><span data-lang="en">Evidence outcome</span>
-          {% else %}
-          <span data-lang="zh">证据状态</span><span data-lang="en">Evidence status</span>
-          {% endif %}
-        </span>
+        <span class="takeaway-path-label"><span data-lang="zh">证据结论</span><span data-lang="en">Evidence outcome</span></span>
         <strong id="takeaway-outcome-title">-</strong>
         <p id="takeaway-outcome-detail">-</p>
       </div>
+      <form method="post" action="/runs/{{ run.id }}/revise" class="inline-form">
+        <button class="secondary-button" type="submit" id="takeaway-improve-button" data-testid="run-evidence-improve-button">
+          <span data-lang="zh">对话改进 Loop</span>
+          <span data-lang="en">Improve in chat</span>
+        </button>
+      </form>
     </div>
     <div class="agent-handoff-card" id="agent-handoff-card" data-testid="run-agent-handoff-card" hidden>
       <div class="agent-handoff-copy">
-        <span class="takeaway-path-label"><span data-lang="zh">下一步同一 Agent 交接</span><span data-lang="en">Next same-Agent handoff</span></span>
+        <span class="takeaway-path-label"><span data-lang="zh">下一步 Agent 交接</span><span data-lang="en">Next Agent handoff</span></span>
         <strong id="agent-handoff-title">-</strong>
         <p id="agent-handoff-detail">-</p>
       </div>
@@ -328,17 +260,17 @@
       <div class="agent-handoff-grid">
         <article class="agent-handoff-item">
           <div class="agent-handoff-item-header">
-            <span class="takeaway-path-label"><span data-lang="zh">目标角色 Agent</span><span data-lang="en">Target role Agent</span></span>
+            <span class="takeaway-path-label"><span data-lang="zh">目标 Agent</span><span data-lang="en">Target Agent</span></span>
             <button
               class="ghost-button agent-handoff-copy-button"
               type="button"
               data-agent-handoff-copy="target"
               data-testid="agent-handoff-copy-target"
-              aria-label="{{ '复制目标角色 Agent' if page_locale == 'zh' else 'Copy target role Agent' }}"
-              title="{{ '复制目标角色 Agent' if page_locale == 'zh' else 'Copy target role Agent' }}"
+              aria-label="{{ '复制目标 Agent' if page_locale == 'zh' else 'Copy target Agent' }}"
+              title="{{ '复制目标 Agent' if page_locale == 'zh' else 'Copy target Agent' }}"
             >
               <span aria-hidden="true">⧉</span>
-              <span class="sr-only"><span data-lang="zh">复制目标角色 Agent</span><span data-lang="en">Copy target role Agent</span></span>
+              <span class="sr-only"><span data-lang="zh">复制目标 Agent</span><span data-lang="en">Copy target Agent</span></span>
             </button>
           </div>
           <code id="agent-handoff-target">-</code>
@@ -429,7 +361,6 @@
           <code id="agent-handoff-submit">-</code>
         </article>
       </div>
-      <div class="agent-handoff-manual-copy" data-agent-handoff-manual-copy data-testid="agent-handoff-manual-copy" hidden></div>
       <div class="agent-handoff-contract" data-testid="agent-handoff-contract">
         <div class="agent-handoff-contract-item">
           <span class="takeaway-path-label"><span data-lang="zh">模板规则</span><span data-lang="en">Template rule</span></span>
@@ -447,165 +378,6 @@
       <ol class="agent-handoff-gaps" id="agent-handoff-gaps"></ol>
     </div>
     <div class="takeaway-evidence-strip" id="takeaway-evidence-strip" data-testid="takeaway-evidence-strip" hidden></div>
-    {% if terminal_run %}
-    <section
-      class="run-result-decision"
-      data-testid="run-result-decision"
-      data-result-decision-state="{{ 'recorded' if recorded_result else ('recovery' if terminal_without_recordable_result else ('unresolved' if unresolved_terminal_verdict else 'passing')) }}"
-    >
-      <header class="run-result-decision-copy">
-        <span><span data-lang="zh">下一步裁决</span><span data-lang="en">Next decision</span></span>
-        {% if recorded_result %}
-        <strong><span data-lang="zh">这轮结果已记录</span><span data-lang="en">This result is recorded</span></strong>
-        <p><span data-lang="zh">记录没有改变任务证据；需要时继续建议跟进，或重新打开记录。</span><span data-lang="en">Recording did not change task evidence; continue advisory follow-up when useful, or reopen the record.</span></p>
-        {% elif terminal_without_recordable_result %}
-        <strong><span data-lang="zh">先恢复可评估的运行结果</span><span data-lang="en">Restore a recordable run result first</span></strong>
-        <p><span data-lang="zh">这轮不是可记录证据结果；重试运行，或带现有证据回到 Loop 修复。</span><span data-lang="en">This run is not a recordable evidence result; retry it or repair the Loop with the current evidence.</span></p>
-        {% elif unresolved_terminal_verdict %}
-        <strong><span data-lang="zh">证据尚未收口</span><span data-lang="en">Evidence is not closed</span></strong>
-        <p><span data-lang="zh">优先改进 Loop 或继续补证据；记录当前结论只改变待办姿态，不会把缺口变成证明。</span><span data-lang="en">Improve the Loop or continue evidence first; recording changes attention state, not proof.</span></p>
-        {% else %}
-        <strong><span data-lang="zh">必需证据已形成可记录结论</span><span data-lang="en">Required evidence supports a recordable result</span></strong>
-        <p><span data-lang="zh">记录当前裁决以结束这轮待办；也可以按残余风险继续改进或重新运行。</span><span data-lang="en">Record the verdict to close this run's attention, or continue from residual risk.</span></p>
-        {% endif %}
-      </header>
-      <div class="run-result-decision-actions" data-testid="run-result-decision-actions">
-        {% if unresolved_needs_evidence_action %}
-        <form method="post" action="{{ workdir_context_href('/runs/' ~ run.id ~ '/revise', workdir_context) }}" class="inline-form" data-workdir-context-form="workdir">
-          <button class="primary-button" type="submit" data-testid="run-improve-chat-button">
-            <span data-lang="zh">用证据改进 Loop</span>
-            <span data-lang="en">Improve plan with evidence</span>
-          </button>
-        </form>
-        {% if not agent_entry_start %}
-        <form method="post" action="{{ workdir_context_href('/runs/' ~ run.id ~ '/rerun', workdir_context) }}" class="inline-form" data-workdir-context-form="workdir">
-          <button class="secondary-button" type="submit" data-testid="run-rerun-button">
-            <span data-lang="zh">继续补证据</span>
-            <span data-lang="en">Run next evidence pass</span>
-          </button>
-        </form>
-        {% endif %}
-        {% endif %}
-        {% if recordable_result or recorded_result %}
-        {% if acceptance_state.accepted %}
-        <button class="secondary-button" type="button" data-testid="run-accepted-result-state" disabled aria-disabled="true">
-          {% if advisory_follow_up and follow_up_status == "no_progress" %}
-          <span data-lang="zh">未进展跟进已记录</span>
-          <span data-lang="en">Follow-up without progress recorded</span>
-          {% elif advisory_follow_up and follow_up_status == "blocked" %}
-          <span data-lang="zh">受阻跟进已记录</span>
-          <span data-lang="en">Blocked follow-up recorded</span>
-          {% elif advisory_follow_up and follow_up_status == "progressed" %}
-          <span data-lang="zh">跟进进展已记录</span>
-          <span data-lang="en">Follow-up progress recorded</span>
-          {% elif advisory_follow_up and follow_up_status == "completed" %}
-          <span data-lang="zh">跟进完成已记录</span>
-          <span data-lang="en">Completed follow-up recorded</span>
-          {% elif task_verdict_status == "insufficient_evidence" %}
-          <span data-lang="zh">未证明结论已记录</span>
-          <span data-lang="en">Unproven verdict recorded</span>
-          {% elif task_verdict_status == "failed" %}
-          <span data-lang="zh">失败结论已记录</span>
-          <span data-lang="en">Failed verdict recorded</span>
-          {% elif task_verdict_status == "not_evaluated" %}
-          <span data-lang="zh">未评估结论已记录</span>
-          <span data-lang="en">Unevaluated verdict recorded</span>
-          {% elif task_verdict_status == "passed_with_residual_risk" %}
-          <span data-lang="zh">带残余风险的通过结论已记录</span>
-          <span data-lang="en">Pass-with-risk verdict recorded</span>
-          {% elif task_verdict_status == "passed" %}
-          <span data-lang="zh">通过结论已记录</span>
-          <span data-lang="en">Passing verdict recorded</span>
-          {% else %}
-          <span data-lang="zh">证据结论已记录</span>
-          <span data-lang="en">Evidence verdict recorded</span>
-          {% endif %}
-        </button>
-        {% if recorded_advisory_follow_up_available and not agent_entry_start %}
-        <form method="post" action="{{ workdir_context_href('/runs/' ~ run.id ~ '/rerun', workdir_context) }}" class="inline-form" data-testid="run-recorded-advisory-rerun-form" data-workdir-context-form="workdir">
-          <input type="hidden" name="follow_up_kind" value="advisory" />
-          <button class="primary-button" type="submit" data-testid="run-recorded-advisory-rerun-button">
-            <span data-lang="zh">开始建议跟进</span>
-            <span data-lang="en">Start advisory follow-up</span>
-          </button>
-        </form>
-        {% endif %}
-        <form method="post" action="{{ workdir_context_href('/runs/' ~ run.id ~ '/reopen-result', workdir_context) }}" class="inline-form" data-workdir-context-form="workdir">
-          <button class="ghost-button" type="submit" data-testid="run-reopen-recorded-result-button">
-            <span data-lang="zh">重新打开记录</span>
-            <span data-lang="en">Reopen recorded result</span>
-          </button>
-        </form>
-        {% else %}
-        <form method="post" action="{{ workdir_context_href('/runs/' ~ run.id ~ '/accept', workdir_context) }}" class="inline-form" data-workdir-context-form="workdir">
-          <button
-            class="{{ 'secondary-button' if unresolved_terminal_verdict or (advisory_follow_up and follow_up_status in ['blocked', 'no_progress']) else 'primary-button' }}"
-            type="submit"
-            data-testid="run-accept-result-button"
-            data-task-verdict-status="{{ task_verdict_status }}"
-          >
-            {% if advisory_follow_up and follow_up_status == "no_progress" %}
-            <span data-lang="zh">记录未进展跟进</span>
-            <span data-lang="en">Record follow-up without progress</span>
-            {% elif advisory_follow_up and follow_up_status == "blocked" %}
-            <span data-lang="zh">记录受阻跟进</span>
-            <span data-lang="en">Record blocked follow-up</span>
-            {% elif advisory_follow_up and follow_up_status == "progressed" %}
-            <span data-lang="zh">记录跟进进展</span>
-            <span data-lang="en">Record follow-up progress</span>
-            {% elif advisory_follow_up and follow_up_status == "completed" %}
-            <span data-lang="zh">记录跟进完成</span>
-            <span data-lang="en">Record completed follow-up</span>
-            {% elif task_verdict_status == "insufficient_evidence" %}
-            <span data-lang="zh">记录未证明结论</span>
-            <span data-lang="en">Record unproven verdict</span>
-            {% elif task_verdict_status == "failed" %}
-            <span data-lang="zh">记录失败结论</span>
-            <span data-lang="en">Record failed verdict</span>
-            {% elif task_verdict_status == "not_evaluated" %}
-            <span data-lang="zh">记录未评估结论</span>
-            <span data-lang="en">Record unevaluated verdict</span>
-            {% elif task_verdict_status == "passed_with_residual_risk" %}
-            <span data-lang="zh">记录带风险通过</span>
-            <span data-lang="en">Record pass with risk</span>
-            {% elif task_verdict_status == "passed" %}
-            <span data-lang="zh">记录通过结论</span>
-            <span data-lang="en">Record passing verdict</span>
-            {% else %}
-            <span data-lang="zh">记录证据结论</span>
-            <span data-lang="en">Record evidence verdict</span>
-            {% endif %}
-          </button>
-        </form>
-        {% endif %}
-        {% if not unresolved_terminal_verdict and not agent_entry_start and not recorded_result %}
-        <form method="post" action="{{ workdir_context_href('/runs/' ~ run.id ~ '/rerun', workdir_context) }}" class="inline-form" data-workdir-context-form="workdir">
-          <button class="secondary-button" type="submit" data-testid="run-rerun-button">
-            <span data-lang="zh">重新运行</span>
-            <span data-lang="en">Rerun</span>
-          </button>
-        </form>
-        {% endif %}
-        {% endif %}
-        {% if terminal_without_recordable_result and not agent_entry_start %}
-        <form method="post" action="{{ workdir_context_href('/runs/' ~ run.id ~ '/rerun', workdir_context) }}" class="inline-form" data-workdir-context-form="workdir">
-          <button class="primary-button" type="submit" data-testid="run-rerun-button">
-            <span data-lang="zh">重试运行</span>
-            <span data-lang="en">Retry run</span>
-          </button>
-        </form>
-        {% endif %}
-        {% if show_run_revision_action and not (terminal_run and unresolved_terminal_verdict) %}
-        <form method="post" action="{{ workdir_context_href('/runs/' ~ run.id ~ '/revise', workdir_context) }}" class="inline-form" data-workdir-context-form="workdir">
-          <button class="secondary-button" type="submit" data-testid="run-improve-chat-button">
-            <span data-lang="zh">用证据改进 Loop</span>
-            <span data-lang="en">Improve plan with evidence</span>
-          </button>
-        </form>
-        {% endif %}
-      </div>
-    </section>
-    {% endif %}
     <details class="trace-material-disclosure">
       <summary>
         <span data-lang="zh">追查材料路径</span>
@@ -628,30 +400,20 @@
           class="ghost-button"
           id="takeaway-open-build"
           data-testid="takeaway-open-build"
-          data-path-action-mode="{{ 'open' if access_state.native_dialogs_enabled else 'copy' }}"
+          {% if not access_state.native_dialogs_enabled %}disabled aria-disabled="true"{% endif %}
         >
-          {% if access_state.native_dialogs_enabled %}
           <span data-lang="zh">打开构建目录</span>
           <span data-lang="en">Open build folder</span>
-          {% else %}
-          <span data-lang="zh">复制工作目录路径</span>
-          <span data-lang="en">Copy workdir path</span>
-          {% endif %}
         </button>
         <button
           type="button"
           class="ghost-button"
           id="takeaway-open-logs"
           data-testid="takeaway-open-logs"
-          data-path-action-mode="{{ 'open' if access_state.native_dialogs_enabled else 'copy' }}"
+          {% if not access_state.native_dialogs_enabled %}disabled aria-disabled="true"{% endif %}
         >
-          {% if access_state.native_dialogs_enabled %}
           <span data-lang="zh">打开 .loopora 日志</span>
           <span data-lang="en">Open .loopora logs</span>
-          {% else %}
-          <span data-lang="zh">复制 .loopora 日志路径</span>
-          <span data-lang="en">Copy .loopora logs path</span>
-          {% endif %}
         </button>
         <span class="takeaway-feedback" id="takeaway-feedback"></span>
       </div>
@@ -674,20 +436,10 @@
         <span data-lang="zh">角色交接或轮次摘要写出后，这里会自动收敛成简洁结论。</span>
         <span data-lang="en">As soon as a role handoff or iteration summary lands, this area condenses it into concise takeaways.</span>
       </p>
-      <div class="card-actions">
-        <a class="secondary-button" href="#run-progress-panel" data-testid="takeaway-empty-progress-link">
-          <span data-lang="zh">查看运行进度</span>
-          <span data-lang="en">Review progress</span>
-        </a>
-        <a class="ghost-button" href="#run-console-panel" data-testid="takeaway-empty-console-link">
-          <span data-lang="zh">打开控制台</span>
-          <span data-lang="en">Open console</span>
-        </a>
-      </div>
     </div>
   </article>
 
-  <details class="panel progress-panel{% if terminal_run %} trace-material-panel{% else %} is-primary{% endif %}" id="run-progress-panel" data-testid="run-progress-panel"{% if not terminal_run %} open{% endif %}>
+  <details class="panel progress-panel trace-material-panel" data-testid="run-progress-panel">
     <summary class="panel-header progress-panel-header trace-material-summary">
       <div>
         <h2><span data-lang="zh">运行进度</span><span data-lang="en">Progress</span></h2>
@@ -821,7 +573,7 @@
     </div>
   </details>
 
-  <details class="panel console-panel trace-material-panel" id="run-console-panel" data-testid="run-console-panel">
+  <details class="panel console-panel trace-material-panel" data-testid="run-console-panel">
     <summary class="panel-header console-panel-header trace-material-summary">
       <div>
         <h2><span data-lang="zh">控制台</span><span data-lang="en">Console</span></h2>
@@ -844,8 +596,7 @@
           class="ghost-button console-popout-button"
           id="console-popout-link"
           data-testid="console-popout-link"
-          href="{{ workdir_context_href('/runs/' ~ run.id ~ '/console', workdir_context) }}"
-          data-workdir-context-link="workdir"
+          href="/runs/{{ run.id }}/console"
           target="_blank"
           rel="noreferrer"
           aria-label="{{ '打开全屏终端' if page_locale == 'zh' else 'Open fullscreen console' }}"
@@ -865,7 +616,7 @@
     </div>
   </details>
 
-  <details class="panel timeline-panel trace-material-panel" id="run-timeline-panel" data-testid="run-timeline-panel">
+  <details class="panel timeline-panel trace-material-panel" data-testid="run-timeline-panel">
     <summary class="panel-header timeline-panel-header trace-material-summary">
       <div>
         <h2><span data-lang="zh">追查时间线</span><span data-lang="en">Trace timeline</span></h2>
@@ -880,12 +631,6 @@
     <div class="timeline-empty" id="timeline-empty">
       <span data-lang="zh">还没有里程碑事件，更多信息会在运行推进后出现。</span>
       <span data-lang="en">No milestone events yet. More details will appear as the run progresses.</span>
-      <div class="card-actions card-actions-compact">
-        <a class="ghost-button" href="#run-console-panel" data-testid="timeline-empty-console-link">
-          <span data-lang="zh">查看控制台</span>
-          <span data-lang="en">View console</span>
-        </a>
-      </div>
     </div>
   </details>
 </section>

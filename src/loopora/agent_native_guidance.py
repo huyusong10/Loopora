@@ -28,8 +28,6 @@ GENERIC_NEXT_ACTIONS = {
     "na",
 }
 
-DEFAULT_BLOCKED_NEXT_ACTION = "Resolve the listed blocking items before continuing evidence."
-
 BLOCKER_EXPLANATIONS = {
     "gatekeeper_pass_has_unmanaged_residual_risk": (
         "residual_risks must name an owner, follow-up, or acceptance path; otherwise move the risk to blocking_issues before passing"
@@ -117,14 +115,13 @@ def actionable_next_action(action: str, blocking_items: list[str]) -> str:
         "not applicable",
         "no action needed",
         "no action required",
-        "continue only after the blocking issues are resolved",
     }:
         return cleaned
     joined = " ".join(blocking_items)
     for marker, next_action in BLOCKER_NEXT_ACTIONS:
         if marker in joined:
             return next_action
-    return DEFAULT_BLOCKED_NEXT_ACTION if any(str(item).strip() for item in blocking_items) else ""
+    return cleaned
 
 
 def core_blocker_kind(error: str) -> AgentCoreBlockerKind:

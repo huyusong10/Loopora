@@ -5,21 +5,205 @@ import re
 from loopora.alignment_readiness_improvement import (
     alignment_improvement_readiness_issues as alignment_improvement_readiness_issues,
 )
-from loopora.alignment_readiness_governance import (
-    alignment_governance_marker_responsibilities_present as alignment_governance_marker_responsibilities_present,
-    alignment_governance_marker_responsibility_present as alignment_governance_marker_responsibility_present,
-    local_governance_evidence_issue as local_governance_evidence_issue,
-)
-from loopora.alignment_readiness_shared import (
+from loopora.alignment_readiness_improvement import (
     ALIGNMENT_READINESS_EVIDENCE_KEYS as ALIGNMENT_READINESS_EVIDENCE_KEYS,
     has_any_marker as has_any_marker,
 )
-from loopora.alignment_readiness_workdir_facts import (
-    workdir_facts_claims_unsupported_observed_stack as workdir_facts_claims_unsupported_observed_stack,
-    workdir_facts_evidence_issue as workdir_facts_evidence_issue,
-)
 from loopora.alignment_semantics import semantic_antipattern_match_is_negated, text_mentions_loop_fit_contradiction
 from loopora.residual_risk_support import residual_risk_is_unmanaged
+
+
+
+
+from loopora.service_alignment_workdir_snapshot import alignment_workdir_snapshot_has_governance_markers
+
+GOVERNANCE_MARKER_PATTERN = (
+    r"agents\.md|design/readme\.md|design/|tests/|project-local|project local|"
+    r"local\s+design/test|design/test\s+obligations?|skipped\s+local\s+governance|项目本地"
+)
+
+def local_governance_evidence_issue(text: str, *, workdir_snapshot: str = "") -> bool:
+    if not re.search(GOVERNANCE_MARKER_PATTERN, text, re.IGNORECASE) and not alignment_workdir_snapshot_has_governance_markers(
+        workdir_snapshot
+    ):
+        return False
+    return not alignment_governance_marker_responsibilities_present(text)
+
+def alignment_governance_marker_responsibilities_present(text: str) -> bool:
+    builder_reads = alignment_governance_marker_responsibility_present(
+        text,
+        actor_pattern=r"\b(?:builder|generator)\b|构建者|构建|执行方|实施方",
+        action_pattern=(
+            r"\b(?:read|reads|consult|consults|follow|follows|respect|respects|use|uses|using|locate|locates|identify|identifies)\b"
+            r"|读取|查阅|查找|定位|识别|遵守|遵循|使用|读"
+        ),
+    )
+    review_checks = alignment_governance_marker_responsibility_present(
+        text,
+        actor_pattern=r"\b(?:inspector|inspectors|custom|review|reviewer|reviewers)\b|检查者|巡检|检查|审查|验证|检视方|评审方",
+        action_pattern=r"\b(?:verify|verifies|verification|check|checks|review|reviews|validate|validates|test|tests)\b|检查|审查|验证|测试|核对",
+    )
+    gatekeeper_gates = alignment_governance_marker_responsibility_present(
+        text,
+        actor_pattern=r"\b(?:gatekeeper|gate keeper|verifier)\b|守门|裁决|最终判断|最终裁决|收口|验收",
+        action_pattern=(
+            r"\b(?:weak|unproven|blocking|block|blocks|missing|skipped|fail closed|reject|rejects|gate|gates|gating)\b"
+            r"|弱证据|未证明|阻断|缺少|跳过|拒绝|视为"
+        ),
+    )
+    return builder_reads and review_checks and gatekeeper_gates
+
+def alignment_governance_marker_responsibility_present(
+    text: str,
+    *,
+    actor_pattern: str,
+    action_pattern: str,
+) -> bool:
+    segments = re.split(r"[\n.;。；]+", text)
+    marker_windows: list[str] = []
+    for match in re.finditer(GOVERNANCE_MARKER_PATTERN, text, flags=re.IGNORECASE):
+        start = max(0, match.start() - 320)
+        end = min(len(text), match.end() + 320)
+        marker_windows.append(text[start:end])
+    for segment in [*segments, *marker_windows]:
+        if (
+            re.search(GOVERNANCE_MARKER_PATTERN, segment, flags=re.IGNORECASE)
+            and re.search(actor_pattern, segment, flags=re.IGNORECASE)
+            and re.search(action_pattern, segment, flags=re.IGNORECASE)
+        ):
+            return True
+    return False
+
+def workdir_facts_evidence_issue(text: str, *, workdir_snapshot: str = "") -> bool:
+    has_grounding_marker = has_any_marker(
+        text,
+        (
+            "observed",
+            "snapshot",
+            "appears",
+            "assumption",
+            "assumed",
+            "unknown",
+            "uncertain",
+            "cannot confirm",
+            "empty",
+            "观察",
+            "看到",
+            "快照",
+            "看起来",
+            "假设",
+            "未知",
+            "不确定",
+            "无法确认",
+            "空目录",
+        ),
+    )
+    if not has_grounding_marker:
+        return True
+    return workdir_facts_claims_unsupported_observed_stack(text, workdir_snapshot=workdir_snapshot)
+
+def workdir_facts_claims_unsupported_observed_stack(text: str, *, workdir_snapshot: str = "") -> bool:
+    if not has_any_marker(text, ("observed", "snapshot", "appears", "观察", "看到", "快照", "看起来")):
+        return False
+    if has_any_marker(text, ("unknown", "uncertain", "assumption", "无法确认", "未知", "不确定", "假设")):
+        return False
+    snapshot = str(workdir_snapshot or "").lower()
+    support_markers = {
+        "package.json": (
+            r"\breact\b",
+            r"\bvue\b",
+            r"\bsvelte\b",
+            r"\bnext(?:\.js|js)\b",
+            r"\bvite\b",
+            r"\bnode(?:\.js|js)?\b",
+            r"\bnpm\b",
+            r"\bpnpm\b",
+            r"\byarn\b",
+            r"\bjavascript\b",
+            r"\btypescript\b",
+            r"\bfrontend\b",
+            "前端",
+        ),
+        "pyproject.toml": (
+            r"\bpython\b",
+            r"\bpytest\b",
+            r"\bruff\b",
+            r"\buv\b",
+            r"\bfastapi\b",
+            r"\bdjango\b",
+            r"\bflask\b",
+        ),
+        "requirements.txt": (r"\bpython\b", r"\bpytest\b", r"\bfastapi\b", r"\bdjango\b", r"\bflask\b"),
+        "cargo.toml": (r"\brust\b", r"\bcargo\b"),
+        "go.mod": (r"\bgolang\b", r"\bgo\s+(?:service|backend|app|module|project|codebase|stack|server)\b"),
+    }
+    unsupported_terms: list[str] = []
+    for marker, terms in support_markers.items():
+        if _snapshot_supports_marker(snapshot, marker):
+            continue
+        unsupported_terms.extend(term for term in terms if _term_has_unsupported_stack_claim(term, text))
+    return bool(unsupported_terms)
+
+def _term_has_unsupported_stack_claim(term_pattern: str, text: str) -> bool:
+    for match in re.finditer(term_pattern, text):
+        context = text[max(0, match.start() - 140) : match.end() + 140]
+        if not has_any_marker(context, ("observed", "snapshot", "appears", "观察", "看到", "快照", "看起来")):
+            continue
+        if _stack_term_context_is_fake_done_or_negated(context):
+            continue
+        return True
+    return False
+
+def _stack_term_context_is_fake_done_or_negated(context: str) -> bool:
+    return has_any_marker(
+        context,
+        (
+            "fake done",
+            "fake-done",
+            "fail closed",
+            "fails closed",
+            "must fail",
+            "must not pass",
+            "cannot pass",
+            "block ",
+            "blocking",
+            "do not accept",
+            "not accept",
+            "do not claim",
+            "shallow",
+            "frontend-only",
+            "ui-only",
+            "screenshot-only",
+            "mock-only",
+            "happy-path-only",
+            "status-only",
+            "prose-only",
+            "missing ",
+            "缺失",
+            "阻断",
+            "浅层",
+            "只前端",
+            "仅前端",
+            "只.*界面",
+            "solo frontend",
+            "frontend-only",
+        ),
+    )
+
+def _snapshot_supports_marker(snapshot: str, marker: str) -> bool:
+    marker_text = marker.lower()
+    marker_pattern = re.escape(marker_text)
+    if re.search(rf"(?m)^\s*-\s*{marker_pattern}\s*$", snapshot):
+        return True
+    if re.search(rf"(?m)^\s*{marker_pattern}\s*$", snapshot):
+        return True
+    for line in snapshot.splitlines():
+        label, separator, value = line.partition(":")
+        if separator and label.strip().lower() == "detected markers":
+            detected = {item.strip().lower() for item in value.split(",")}
+            if marker_text in detected:
+                return True
+    return False
 
 
 def readiness_evidence_issues(output: dict, *, workdir_snapshot: str = "") -> list[str]:

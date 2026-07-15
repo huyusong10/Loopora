@@ -10,7 +10,7 @@ from loopora.agent_native_evidence_contracts import (
     agent_native_coverage_targets_from_judgment_contract,
 )
 from loopora.service_types import LooporaError
-from loopora.structured_numbers import structured_non_negative_int
+from loopora.utils import structured_non_negative_int
 from loopora.utils import write_json
 
 

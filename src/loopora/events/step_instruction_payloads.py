@@ -4,7 +4,7 @@ from collections.abc import Mapping
 from dataclasses import asdict
 
 from loopora.kernel import ActionPolicy, EvidenceScope, RoleSpec, StepInstruction, StepOutputContract
-from loopora.structured_numbers import coerced_int
+from loopora.utils import coerced_int
 
 
 def step_instruction_event_payload(instruction: StepInstruction) -> dict:

@@ -191,11 +191,11 @@ class RepositoryBundleGraphRecordsMixin:
                 (bundle_id, asset_type, asset_id, now),
             )
 
-    def _upsert_bundle_local_asset_root_for_connection(self, connection, payload: dict, *, now: str) -> None:
+    @staticmethod
+    def _upsert_bundle_local_asset_root_for_connection(connection, payload: dict, *, now: str) -> None:
         bundle_id = str(payload.get("id") or "").strip()
         if not bundle_id:
             return
-        normalized_asset_root = self._normalize_local_asset_path(app_home() / "bundles" / bundle_id)
         connection.execute(
             """
             INSERT INTO local_asset_roots
@@ -209,7 +209,7 @@ class RepositoryBundleGraphRecordsMixin:
             """,
             (
                 bundle_id,
-                normalized_asset_root,
+                str(app_home() / "bundles" / bundle_id),
                 str(payload.get("workdir") or ""),
                 bundle_id,
                 now,

@@ -3,4 +3,3 @@ read next_step.role_dispatch.target_agent and invoke that exact host-native role
 compact role-dispatch message
 open those local paths for the full prompt, output schema, judgment contract
 task_next_action.kind=continue_evidence
-task_next_action.kind=retry_lifecycle_failure

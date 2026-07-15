@@ -48,34 +48,6 @@ def install_cli_bundle_service(monkeypatch, tmp_path: Path) -> dict[str, object]
                 collaboration_intent="",
             )
 
-        def preview_bundle_delete(self, bundle_id: str):
-            calls["preview_delete"] = bundle_id
-            return {
-                "status": "dry_run",
-                "dry_run": True,
-                "delete_allowed": True,
-                "id": bundle_id,
-                "name": "CLI Bundle",
-                "workdir": str(tmp_path / "workdir"),
-                "would_delete": {
-                    "bundle": bundle_id,
-                    "linked_loop": "loop_cli",
-                    "linked_orchestration": "orch_cli",
-                    "linked_role_definition_count": 2,
-                    "linked_role_definition_ids": ["role_builder", "role_gatekeeper"],
-                    "linked_run_count": 1,
-                    "linked_run_ids": ["run_cli"],
-                },
-                "blocked_by_active_runs": [],
-                "blockers": [],
-                "does_not_delete": [
-                    "original_exported_yaml_file",
-                    "source_project_workdir",
-                    "non_bundle_owned_assets",
-                    "external_provider_history",
-                ],
-            }
-
         def delete_bundle(self, bundle_id: str):
             calls["delete"] = bundle_id
             return {"id": bundle_id, "deleted": True}

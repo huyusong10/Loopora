@@ -6,13 +6,8 @@ from hashlib import sha256
 from pathlib import Path
 from typing import Protocol
 
-from loopora.action_readiness_projection import project_next_action_readiness_contract
-from loopora.run_worker_start import BACKGROUND_WORKER_START_ERROR
-from loopora.service_alignment_artifacts import (
-    write_alignment_transcript_log_best_effort,
-    write_alignment_validation_log_best_effort,
-)
-from loopora.service_alignment_bundle_validation_payloads import (
+from loopora.service_alignment_artifacts import write_alignment_transcript_log
+from loopora.service_alignment_bundle_preview import (
     alignment_bundle_missing_file_validation as alignment_bundle_missing_file_validation,
     alignment_bundle_validation_failure as alignment_bundle_validation_failure,
     alignment_bundle_validation_success as alignment_bundle_validation_success,
@@ -94,23 +89,8 @@ def alignment_imported_event_payload(bundle: dict) -> dict:
     return {"bundle_id": bundle["id"], "loop_id": bundle.get("loop_id", "")}
 
 
-def alignment_run_start_failed_event_payload(bundle: dict, error: str, run: dict | None = None) -> dict:
-    payload = {"bundle_id": bundle["id"], "loop_id": bundle.get("loop_id", ""), "error": error}
-    if run:
-        payload["run_id"] = run["id"]
-    if run and error == BACKGROUND_WORKER_START_ERROR:
-        payload["run_start_error"] = BACKGROUND_WORKER_START_ERROR
-        payload["run_recovery"] = "retry_run_start"
-        payload["next_actions"] = alignment_run_start_retry_actions(bundle)
-        project_next_action_readiness_contract(payload)
-    return payload
-
-
-def alignment_run_start_retry_actions(bundle: dict) -> list[dict]:
-    loop_id = str(bundle.get("loop_id") or "").strip()
-    if not loop_id:
-        return []
-    return [{"kind": "retry_web_run_start", "target": "web_loop_start", "action": "start_run", "loop_id": loop_id}]
+def alignment_run_start_failed_event_payload(bundle: dict, error: str) -> dict:
+    return {"bundle_id": bundle["id"], "loop_id": bundle.get("loop_id", ""), "error": error}
 
 
 def alignment_run_started_event_payload(bundle: dict, run: dict) -> dict:
@@ -142,11 +122,7 @@ def apply_alignment_validation_failure(
 ) -> None:
     repository = context.repository
     repository.update_alignment_session(session_id, validation=validation, error_message=error)
-    write_alignment_validation_log_best_effort(
-        context.get_session(session_id),
-        validation,
-        writer=context.write_validation_log,
-    )
+    context.write_validation_log(context.get_session(session_id), validation)
     repository.append_alignment_event(session_id, "alignment_validation_failed", validation)
 
 
@@ -158,11 +134,7 @@ def apply_alignment_validation_success(
 ) -> None:
     repository = context.repository
     repository.update_alignment_session(session_id, validation=validation)
-    write_alignment_validation_log_best_effort(
-        context.get_session(session_id),
-        validation,
-        writer=context.write_validation_log,
-    )
+    context.write_validation_log(context.get_session(session_id), validation)
     repository.append_alignment_event(session_id, "alignment_validation_passed", validation)
 
 
@@ -175,8 +147,8 @@ def apply_alignment_bundle_sync_success(
     repository = context.repository
     repository.update_alignment_session(session_id, **alignment_bundle_sync_success_update_fields(validation))
     session = context.get_session(session_id)
-    write_alignment_validation_log_best_effort(session, validation, writer=context.write_validation_log)
-    write_alignment_transcript_log_best_effort(session)
+    context.write_validation_log(session, validation)
+    write_alignment_transcript_log(session)
     repository.append_alignment_event(session_id, "alignment_bundle_synced", validation)
     return session
 
@@ -194,8 +166,8 @@ def apply_alignment_bundle_sync_failure(
         **alignment_bundle_sync_failure_update_fields(validation, finished_at=finished_at),
     )
     session = context.get_session(session_id)
-    write_alignment_validation_log_best_effort(session, validation, writer=context.write_validation_log)
-    write_alignment_transcript_log_best_effort(session)
+    context.write_validation_log(session, validation)
+    write_alignment_transcript_log(session)
     repository.append_alignment_event(session_id, "alignment_bundle_sync_failed", validation)
     return alignment_bundle_sync_failure_result(session, validation)
 
@@ -209,11 +181,7 @@ def apply_alignment_import_failure(
 ) -> None:
     repository = context.repository
     repository.update_alignment_session(session_id, validation=validation, error_message=error)
-    write_alignment_validation_log_best_effort(
-        context.get_session(session_id),
-        validation,
-        writer=context.write_validation_log,
-    )
+    context.write_validation_log(context.get_session(session_id), validation)
     repository.append_alignment_event(
         session_id,
         "alignment_import_failed",
@@ -230,11 +198,7 @@ def apply_alignment_imported(
 ) -> None:
     repository = context.repository
     repository.update_alignment_session(session_id, **alignment_imported_update_fields(bundle, validation))
-    write_alignment_validation_log_best_effort(
-        context.get_session(session_id),
-        validation,
-        writer=context.write_validation_log,
-    )
+    context.write_validation_log(context.get_session(session_id), validation)
     repository.append_alignment_event(session_id, "alignment_imported", alignment_imported_event_payload(bundle))
 
 
@@ -244,16 +208,12 @@ def apply_alignment_run_start_failed(
     *,
     bundle: dict,
     error: str,
-    run: dict | None = None,
 ) -> None:
-    fields: dict[str, object] = {"error_message": error}
-    if run:
-        fields["linked_run_id"] = run["id"]
-    repository.update_alignment_session(session_id, **fields)
+    repository.update_alignment_session(session_id, error_message=error)
     repository.append_alignment_event(
         session_id,
         "alignment_run_start_failed",
-        alignment_run_start_failed_event_payload(bundle, error, run),
+        alignment_run_start_failed_event_payload(bundle, error),
     )
 
 

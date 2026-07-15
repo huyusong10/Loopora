@@ -12,8 +12,8 @@ Loopora's stable workflow is:
 | Document | Stable boundary |
 | --- | --- |
 | `contracts.md` | Product, compiler, bundle, runtime, workflow, Web composer, Agent Native, and open-source collaboration contracts |
-| `domain-workflow-contracts.md` | Task-domain workflow routing, phase-scoped evidence shapes, and secondary-object precedence |
 | `service-boundaries.md` | Implementation ownership map for module splits and service boundaries |
+| `complexity-budget.md` | Repository-level complexity metrics, measured baseline, reduction targets, and anti-gaming rules |
 | `decisions/agent-native-execution-plane.md` | Accepted execution-plane split between Agent Native and headless worker paths |
 
 ## Maintenance Rules

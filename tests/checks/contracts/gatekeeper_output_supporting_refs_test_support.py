@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any
 
 from loopora.runner_gatekeeper_output_validation import BLOCKED_GATEKEEPER_COMPOSITE_SCORE
-from loopora.service_runner_support import ServiceRunnerSupportMixin
+from loopora.service_app import ServiceRunnerSupportMixin
 
 
 PASSING_METRIC_SCORES = {

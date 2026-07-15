@@ -1,15 +1,65 @@
 from __future__ import annotations
 
+from pathlib import Path
+
+from loopora.context_value_helpers import string_list as _string_list
+
+from loopora.run_artifacts import RunArtifactLayout
+
+def output_workspace_artifact_refs(layout: RunArtifactLayout, output: dict) -> list[dict[str, str]]:
+    fields = (
+        ("proof_files", "proof-file"),
+        ("proof_artifacts", "proof-artifact"),
+        ("artifact_paths", "artifact"),
+        ("generated_files", "generated-file"),
+        ("changed_files", "changed-file"),
+    )
+    refs: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for field_name, label_prefix in fields:
+        for value in _string_list(output.get(field_name)):
+            ref = workspace_artifact_ref(layout, value, label_prefix=label_prefix)
+            if not ref or ref["absolute_path"] in seen:
+                continue
+            refs.append(ref)
+            seen.add(ref["absolute_path"])
+    return refs[:20]
+
+def workspace_artifact_ref(layout: RunArtifactLayout, value: str, *, label_prefix: str) -> dict[str, str] | None:
+    cleaned = str(value or "").strip()
+    if not cleaned or "\x00" in cleaned:
+        return None
+    candidate = Path(cleaned)
+    workdir = layout.workdir_path.resolve()
+    try:
+        resolved = candidate.resolve() if candidate.is_absolute() else (workdir / candidate).resolve()
+    except (OSError, RuntimeError, ValueError):
+        return None
+    try:
+        workspace_path = resolved.relative_to(workdir).as_posix()
+    except ValueError:
+        return None
+    try:
+        if not resolved.exists():
+            return None
+    except OSError:
+        return None
+    return {
+        "kind": "workspace",
+        "label": f"{label_prefix}:{workspace_path}",
+        "relative_path": workspace_path,
+        "workspace_path": workspace_path,
+        "absolute_path": str(resolved),
+    }
+
 """Step handoff projection from role output."""
 
 from typing import Protocol
 
-from loopora.context_step_artifact_refs import output_workspace_artifact_refs
 from loopora.context_value_helpers import clean_text, gatekeeper_blockers, inspector_blockers, string_list
-from loopora.run_artifacts import RunArtifactLayout, artifact_ref
-from loopora.runtime_task_language import runtime_task_text
-from loopora.structured_booleans import structured_bool_is_true
-from loopora.structured_numbers import coerced_non_negative_int
+from loopora.run_artifacts import artifact_ref
+from loopora.utils import structured_bool_is_true
+from loopora.utils import coerced_non_negative_int
 
 
 class StepHandoffContext(Protocol):
@@ -20,14 +70,13 @@ class StepHandoffContext(Protocol):
     role: dict
     runtime_role: str
     output: dict
-    task_language: str
 
 
 def build_step_handoff(result: StepHandoffContext) -> dict:
     archetype = str(result.role["archetype"])
     iter_id = coerced_non_negative_int(result.iter_id)
     step_order = coerced_non_negative_int(result.step_order)
-    handoff = _handoff_core(archetype, result.output, language=result.task_language)
+    handoff = _handoff_core(archetype, result.output)
     artifact_refs = [
         artifact_ref(
             result.layout,
@@ -65,72 +114,64 @@ def build_step_handoff(result: StepHandoffContext) -> dict:
     }
 
 
-def _handoff_core(archetype: str, output: dict, *, language: str) -> dict:
+def _handoff_core(archetype: str, output: dict) -> dict:
     if archetype == "builder":
-        return _builder_handoff(output, language=language)
+        return _builder_handoff(output)
     if archetype == "inspector":
-        return _inspector_handoff(output, language=language)
+        return _inspector_handoff(output)
     if archetype == "gatekeeper":
-        return _gatekeeper_handoff(output, language=language)
+        return _gatekeeper_handoff(output)
     if archetype == "guide":
-        return _guide_handoff(output, language=language)
-    return _custom_handoff(output, language=language)
+        return _guide_handoff(output)
+    return _custom_handoff(output)
 
 
-def _builder_handoff(output: dict, *, language: str) -> dict:
-    summary = clean_text(output.get("summary") or output.get("attempted")) or runtime_task_text(
-        language,
-        "Builder completed its change pass.",
-        "Builder 已完成本轮改动。",
-    )
+def _builder_handoff(output: dict) -> dict:
+    summary = clean_text(output.get("summary") or output.get("attempted")) or "Builder completed its change pass."
     abandoned = clean_text(output.get("abandoned"))
     if abandoned:
-        abandoned_label = runtime_task_text(language, "Out-of-scope or unfinished note: ", "范围外或未完成说明：")
-        summary = f"{summary} {abandoned_label}{abandoned}"
+        summary = f"{summary} Out-of-scope or unfinished note: {abandoned}"
     return {
         "status": "completed",
         "summary": summary,
         "blocking_items": [],
-        "recommended_next_action": clean_text(output.get("assumption"))
-        or runtime_task_text(language, "Validate the visible change with inspection.", "通过检查验证可见改动。"),
+        "recommended_next_action": clean_text(output.get("assumption")) or "Validate the visible change with inspection.",
     }
 
 
-def _inspector_handoff(output: dict, *, language: str) -> dict:
+def _inspector_handoff(output: dict) -> dict:
     blocking_items = inspector_blockers(output)
     return {
         "status": "blocked" if blocking_items else "completed",
-        "summary": clean_text(output.get("tester_observations"))
-        or runtime_task_text(language, "Inspector collected workspace evidence.", "Inspector 已收集工作区证据。"),
+        "summary": clean_text(output.get("tester_observations")) or "Inspector collected workspace evidence.",
         "blocking_items": blocking_items,
         "recommended_next_action": (
-            runtime_task_text(language, "Address the failing checks with the strongest direct evidence.", "用最强的直接证据处理未通过的检查。")
+            "Address the failing checks with the strongest direct evidence."
             if blocking_items
-            else runtime_task_text(language, "Pass the evidence bundle to GateKeeper for a verdict.", "将证据包提交给 GateKeeper 裁决。")
+            else "Pass the evidence bundle to GateKeeper for a verdict."
         ),
     }
 
 
-def _gatekeeper_handoff(output: dict, *, language: str) -> dict:
+def _gatekeeper_handoff(output: dict) -> dict:
     blocking_items = gatekeeper_blockers(output)
     status = "passed" if structured_bool_is_true(output.get("passed")) else "blocked"
     recommended_next_action = clean_text(output.get("feedback_to_builder") or output.get("feedback_to_generator"))
     if not recommended_next_action:
         recommended_next_action = (
-            runtime_task_text(language, "No further role action is required; the GateKeeper verdict passed.", "GateKeeper 裁决已通过，无需继续执行角色动作。")
+            "No further role action is required; the GateKeeper verdict passed."
             if status == "passed"
-            else runtime_task_text(language, "Continue only after the blocking issues are resolved.", "只有解决阻断问题后才能继续。")
+            else "Continue only after the blocking issues are resolved."
         )
     return {
         "status": status,
-        "summary": clean_text(output.get("decision_summary"))
-        or runtime_task_text(language, "GateKeeper evaluated the current evidence.", "GateKeeper 已评估当前证据。"),
+        "summary": clean_text(output.get("decision_summary")) or "GateKeeper evaluated the current evidence.",
         "blocking_items": blocking_items,
         "recommended_next_action": recommended_next_action,
     }
 
 
-def _guide_handoff(output: dict, *, language: str) -> dict:
+def _guide_handoff(output: dict) -> dict:
     analysis = output.get("analysis") if isinstance(output.get("analysis"), dict) else {}
     blocking_items = []
     risk_note = clean_text(analysis.get("risk_note"))
@@ -138,28 +179,26 @@ def _guide_handoff(output: dict, *, language: str) -> dict:
         blocking_items.append(risk_note)
     return {
         "status": "advisory",
-        "summary": clean_text(analysis.get("recommended_shift") or output.get("meta_note"))
-        or runtime_task_text(language, "Guide proposed a direction shift.", "Guide 提出了方向调整建议。"),
+        "summary": clean_text(analysis.get("recommended_shift") or output.get("meta_note")) or "Guide proposed a direction shift.",
         "blocking_items": blocking_items,
         "recommended_next_action": (
             clean_text(output.get("seed_question") or analysis.get("recommended_shift"))
-            or runtime_task_text(language, "Use the guidance as the next experiment seed.", "将这条建议作为下一次实验的起点。")
+            or "Use the guidance as the next experiment seed."
         ),
     }
 
 
-def _custom_handoff(output: dict, *, language: str) -> dict:
+def _custom_handoff(output: dict) -> dict:
     blocking_items = [item for item in string_list(output.get("blocking_items")) if item]
     if not blocking_items:
         blocking_items = [item for item in string_list(output.get("risks")) if item]
     return {
         "status": clean_text(output.get("status")).lower() or "advisory",
-        "summary": clean_text(output.get("summary") or output.get("handoff_note"))
-        or runtime_task_text(language, "Custom role prepared a scoped handoff.", "自定义角色已准备好范围明确的交接。"),
+        "summary": clean_text(output.get("summary") or output.get("handoff_note")) or "Custom role prepared a scoped handoff.",
         "blocking_items": blocking_items,
         "recommended_next_action": (
             clean_text(output.get("recommended_next_action"))
             or clean_text((string_list(output.get("recommendations")) or [""])[0] or output.get("handoff_note"))
-            or runtime_task_text(language, "Use this handoff in a Builder or Inspector step.", "在 Builder 或 Inspector 步骤中使用这份交接。")
+            or "Use this handoff in a Builder or Inspector step."
         ),
     }

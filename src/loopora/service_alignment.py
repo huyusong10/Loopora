@@ -7,22 +7,17 @@ from loopora.service_alignment_bundle_preview import alignment_bundle_preview
 from loopora.service_alignment_context_factory import AlignmentServiceContextFactory
 from loopora.service_alignment_delete import delete_alignment_session as delete_alignment_session_command
 from loopora.service_alignment_import import import_alignment_bundle as import_alignment_bundle_command
-from loopora.service_alignment_message import append_alignment_message as append_alignment_message_command
+from loopora.service_alignment_context_factory import append_alignment_message as append_alignment_message_command
 from loopora.service_alignment_requests import (
     AlignmentSessionCreateRequest,
     RevisionSessionOptions,
     coerce_alignment_session_create_request,
     coerce_revision_session_options,
 )
-from loopora.service_alignment_recovery import (
-    orphaned_alignment_sessions,
-    reconcile_orphaned_alignment_sessions,
-)
 from loopora.service_alignment_revision import (
     create_bundle_revision_alignment_session as create_bundle_revision_alignment_session_command,
     create_run_revision_alignment_session as create_run_revision_alignment_session_command,
 )
-from loopora.service_alignment_retry import AlignmentGenerationRetryContext, retry_alignment_generation as retry_alignment_generation_command
 from loopora.service_alignment_session_creation import create_alignment_session as create_alignment_session_command
 from loopora.service_alignment_session_lifecycle import (
     cancel_alignment_session as cancel_alignment_session_lifecycle,
@@ -35,7 +30,7 @@ from loopora.service_alignment_session_projection import (
     list_alignment_events as list_alignment_events_command,
     list_alignment_sessions as list_alignment_sessions_command,
 )
-from loopora.service_alignment_status import ALIGNMENT_ACTIVE_STATUSES, ALIGNMENT_CONFIRMED_STAGES
+from loopora.service_alignment_context_factory import ALIGNMENT_ACTIVE_STATUSES, ALIGNMENT_CONFIRMED_STAGES
 from loopora.service_alignment_sync import sync_alignment_bundle_from_file as sync_alignment_bundle_from_file_command
 from loopora.service_alignment_workdir_context import (
     AlignmentLooporaContextResolutionRequest,
@@ -56,24 +51,10 @@ class ServiceAlignmentMixin:
         return create_alignment_session_command(self._alignment_context_factory().session_creation_context(), request)
 
     def get_alignment_session(self, session_id: str) -> dict:
-        self.reconcile_orphaned_alignment_sessions()
         return get_alignment_session_command(self._alignment_context_factory().session_access_context(), session_id)
 
     def list_alignment_sessions(self, *, limit: int = 30) -> list[dict]:
-        self.reconcile_orphaned_alignment_sessions()
         return list_alignment_sessions_command(self._alignment_context_factory().session_access_context(), limit=limit)
-
-    def orphaned_alignment_sessions(self, *, workdir: str = "") -> list[dict]:
-        return orphaned_alignment_sessions(
-            self._alignment_context_factory().recovery_context(),
-            workdir=workdir,
-        )
-
-    def reconcile_orphaned_alignment_sessions(self, *, workdir: str = "") -> list[str]:
-        return reconcile_orphaned_alignment_sessions(
-            self._alignment_context_factory().recovery_context(),
-            workdir=workdir,
-        )
 
     def delete_alignment_session(self, session_id: str) -> bool:
         return delete_alignment_session_command(
@@ -120,17 +101,6 @@ class ServiceAlignmentMixin:
             active_statuses=ALIGNMENT_ACTIVE_STATUSES,
         )
 
-    def retry_alignment_generation(self, session_id: str, **raw_settings: object) -> dict:
-        return retry_alignment_generation_command(
-            AlignmentGenerationRetryContext(
-                repository=self.repository,
-                get_session=self.get_alignment_session,
-                start_session_async=self.start_alignment_session_async,
-            ),
-            session_id,
-            raw_settings,
-        )
-
     def cancel_alignment_session(self, session_id: str) -> dict:
         return cancel_alignment_session_lifecycle(
             self._alignment_context_factory().session_lifecycle_context(),
@@ -140,7 +110,6 @@ class ServiceAlignmentMixin:
         )
 
     def list_alignment_events(self, session_id: str, *, after_id: int = 0, limit: int = 200) -> list[dict]:
-        self.reconcile_orphaned_alignment_sessions()
         return list_alignment_events_command(
             self._alignment_context_factory().session_access_context(),
             session_id,
@@ -149,7 +118,6 @@ class ServiceAlignmentMixin:
         )
 
     def latest_alignment_event_id(self, session_id: str) -> int:
-        self.reconcile_orphaned_alignment_sessions()
         return latest_alignment_event_id_command(self._alignment_context_factory().session_access_context(), session_id)
 
     def get_alignment_workdir_context(self, workdir: Path) -> dict:

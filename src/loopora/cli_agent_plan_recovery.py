@@ -4,14 +4,8 @@ from pathlib import Path
 
 import typer
 
-from loopora.agent_adapters import (
-    adapter_first_task_handoff_policy,
-    adapter_first_task_message_example,
-    adapter_first_task_message_example_state,
-    resolve_adapter_project_root,
-)
-from loopora.agent_adapter_command_prefix import copyable_loopora_command
-from loopora.cli_first_task_handoff import echo_first_task_handoff
+from loopora.agent_adapters import adapter_first_task_message_example, resolve_adapter_project_root
+from loopora.agent_native_surface import agent_native_run_surface_for_result, native_surface_plain_lines
 from loopora.cli_agent_runtime_support import agent_plan_cli_command
 from loopora.system_prompt_assets import load_system_prompt_asset
 
@@ -71,12 +65,8 @@ def agent_plan_context_guidance_fields(
         "message_source_policy": PLAN_MESSAGE_SOURCE_POLICY,
         "message_cli_command": message_cli_command,
         "next_plan_cli_command": message_cli_command,
-        "task_message_template": (
-            "Loopora fit: ...; Goal: ...; Fake-done risks: ...; Required evidence: ...; Judgment tradeoffs: ..."
-        ),
+        "task_message_template": "Goal: ...; Fake-done risks: ...; Required evidence: ...; Judgment tradeoffs: ...",
         "first_task_message_example": adapter_first_task_message_example(),
-        "first_task_message_example_state": adapter_first_task_message_example_state(),
-        "first_task_handoff_policy": _agent_plan_first_task_handoff_policy(workdir=workdir),
         "debug_cli_example_command": _agent_plan_debug_cli_example_command(
             adapter=adapter,
             workdir=workdir,
@@ -88,12 +78,11 @@ def agent_plan_context_guidance_fields(
 
 def agent_plan_context_request_fields() -> dict:
     ask_user = (
-        "What long-running task should Loopora govern? Please include the Loopora fit reason, goal, "
-        "fake-done risks, required evidence, and any judgment tradeoff that should guide later rounds."
+        "What long-running task should Loopora govern? Please include the goal, fake-done risks, required evidence, "
+        "and any judgment tradeoff that should guide later rounds."
     )
     return {
         "required_inputs": [
-            "loopora_fit_reason",
             "task_goal",
             "fake_done_risks",
             "required_evidence",
@@ -104,30 +93,16 @@ def agent_plan_context_request_fields() -> dict:
             "kind": "ask_user",
             "target": "main_agent_session",
             "prompt": ask_user,
-            "recommended_reply_shape": (
-                "Loopora fit: ...; Goal: ...; Fake-done risks: ...; Required evidence: ...; Judgment tradeoffs: ..."
-            ),
+            "recommended_reply_shape": "Goal: ...; Fake-done risks: ...; Required evidence: ...; Judgment tradeoffs: ...",
             "decision_impact": PLAN_QUESTION_DECISION_IMPACT,
             "native_tool_policy": PLAN_QUESTION_NATIVE_TOOL_POLICY,
             "subagent_policy": PLAN_QUESTION_SUBAGENT_POLICY,
         },
         "example_user_reply": (
-            "Loopora fit: account deletion needs multi-round audit and provider-failure evidence; "
-            "Goal: build the account-deletion audit flow; "
-            "Fake-done risks: UI-only deletion or missing provider-failure handling; "
-            "Required evidence: contract tests plus an audit-log artifact; "
-            "Judgment tradeoffs: prefer a smaller proven flow over broad unverified polish."
+            "Build the account-deletion audit flow; fake done would be UI-only deletion or missing provider-failure handling; "
+            "required evidence is contract tests plus an audit-log artifact; prefer a smaller proven flow over broad unverified polish."
         ),
     }
-
-
-def _agent_plan_first_task_handoff_policy(*, workdir: Path) -> dict[str, str]:
-    policy = adapter_first_task_handoff_policy(workdir=workdir)
-    raw_fit_command = str(policy.get("fit_command") or "").strip()
-    fit_command = copyable_loopora_command(raw_fit_command)
-    policy["fit_command"] = fit_command
-    policy["copy_rule"] = str(policy.get("copy_rule") or "").replace(raw_fit_command, fit_command)
-    return policy
 
 
 def print_agent_plan_message_required(result: dict) -> None:
@@ -135,7 +110,7 @@ def print_agent_plan_message_required(result: dict) -> None:
     typer.echo(f"message: {result.get('message')}")
     typer.echo(f"next_plan_command: {result.get('next_plan_command') or '/loopora-plan'}")
     print_agent_plan_context_request_fields(result)
-    print_agent_plan_surface_hint()
+    _print_agent_native_run_surface(result)
     typer.echo(f"next: {result.get('next')}")
 
 
@@ -144,7 +119,7 @@ def print_agent_plan_context_request_fields(result: dict) -> None:
     if inputs:
         typer.echo("required_inputs:")
         for item in inputs:
-            typer.echo(f"- {_required_input_label(item)} ({item})")
+            typer.echo(f"- {item}")
     ask_user = str(result.get("ask_user") or "").strip()
     if ask_user:
         typer.echo(f"ask_user: {ask_user}")
@@ -171,24 +146,14 @@ def print_agent_plan_context_request_fields(result: dict) -> None:
         typer.echo(f"message_cli_command: {command}")
 
 
-def _required_input_label(input_id: str) -> str:
-    labels = {
-        "loopora_fit_reason": "Loopora fit reason",
-        "task_goal": "Task goal",
-        "fake_done_risks": "Fake-done risks",
-        "required_evidence": "Required evidence",
-        "judgment_tradeoffs": "Judgment tradeoffs",
-    }
-    return labels.get(input_id, input_id.replace("_", " ").strip().capitalize())
-
-
 def print_agent_plan_context_guidance_fields(result: dict) -> None:
     task_message_template = str(result.get("task_message_template") or "").strip()
     if task_message_template:
         typer.echo(f"task_message_template: {task_message_template}")
     first_task_message_example = str(result.get("first_task_message_example") or "").strip()
     if first_task_message_example:
-        echo_first_task_handoff(result, example=first_task_message_example)
+        typer.echo("first_task_message_example:")
+        typer.echo(first_task_message_example)
     debug_cli_example_command = str(result.get("debug_cli_example_command") or "").strip()
     if debug_cli_example_command:
         typer.echo(f"debug_cli_example_command: {debug_cli_example_command}")
@@ -218,7 +183,7 @@ def _agent_plan_message_cli_command(
     context_id: str = "",
     entry_source: str = "",
 ) -> str:
-    message = "<replace with current user task: Loopora fit reason, goal, fake-done risks, required evidence, judgment tradeoffs>"
+    message = "<replace with current user task: goal, fake-done risks, required evidence, judgment tradeoffs>"
     return (
         agent_plan_cli_command(
             adapter=adapter,
@@ -231,8 +196,6 @@ def _agent_plan_message_cli_command(
     )
 
 
-def print_agent_plan_surface_hint() -> None:
-    typer.echo(
-        "agent_surface: current host Agent remains the executor; /loopora-plan and /loopora-run are "
-        "project-local entries; full surface diagnostics are available with --json --compact-json."
-    )
+def _print_agent_native_run_surface(result: dict) -> None:
+    for line in native_surface_plain_lines(agent_native_run_surface_for_result(result)):
+        typer.echo(line)

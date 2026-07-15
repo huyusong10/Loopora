@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from loopora.agent_native_parallel_groups import agent_native_claim_input_snapshot
-from loopora.agent_native_projection_state import agent_native_active_step_view_fields
+from loopora.agent_native_evidence_contracts import agent_native_active_step_view_fields
 from loopora.runner_step_runtime_requests import (
     RunnerStepRuntimeInputSnapshot,
     RunnerStepRuntimeRequestBuildRequest,

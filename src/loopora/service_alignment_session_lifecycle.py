@@ -7,13 +7,8 @@ from collections.abc import Callable, MutableMapping
 from dataclasses import dataclass
 from typing import Protocol
 
-from loopora.diagnostics import get_logger, log_exception
-from loopora.service_alignment_failure_recovery import ALIGNMENT_WORKER_START_ERROR
 from loopora.service_cleanup_diagnostics import cleanup_diagnostic_payload, log_cleanup_diagnostic
 from loopora.service_types import LooporaConflictError
-from loopora.utils import utc_now
-
-logger = get_logger(__name__)
 
 
 class AlignmentLifecycleRepository(Protocol):
@@ -53,7 +48,6 @@ class AlignmentSessionLifecycleContext:
     append_diagnostic_event: Callable[[str, str, dict], dict]
     thread_factory: Callable[[str, Callable[[str], None]], AlignmentThread] = default_alignment_thread_factory
     signal_process: Callable[[int, int], None] = os.kill
-    now: Callable[[], str] = utc_now
 
 
 def start_alignment_session_async(context: AlignmentSessionLifecycleContext, session_id: str, *, active_statuses: set[str]) -> None:
@@ -77,27 +71,9 @@ def start_alignment_session_async(context: AlignmentSessionLifecycleContext, ses
     context.threads[key] = thread
     try:
         thread.start()
-    except Exception as exc:  # noqa: BLE001 - thread dispatch failure must leave a recoverable session record.
+    except Exception:
         context.threads.pop(key, None)
-        log_exception(
-            logger,
-            "service.alignment.worker_start_failed",
-            "Planning worker thread could not be started",
-            error=exc,
-            session_id=session_id,
-        )
-        context.repository.update_alignment_session(
-            session_id,
-            status="failed",
-            finished_at=context.now(),
-            clear_active_child_pid=True,
-            error_message=ALIGNMENT_WORKER_START_ERROR,
-        )
-        context.repository.append_alignment_event(
-            session_id,
-            "alignment_failed",
-            {"status": "failed", "error": ALIGNMENT_WORKER_START_ERROR, "reason": "worker_start_failed"},
-        )
+        raise
 
 
 def start_alignment_session_sync(context: AlignmentSessionLifecycleContext, session_id: str, *, active_statuses: set[str]) -> None:

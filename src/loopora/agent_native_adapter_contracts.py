@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from loopora.agent_native_adapter_dispatch_policies import (
+from loopora.agent_native_adapter_policies import (
     NATIVE_PROOF_BOUNDARY as NATIVE_PROOF_BOUNDARY,
     NATIVE_RUN_ENTRY_CONTRACT_BULLETS as NATIVE_RUN_ENTRY_CONTRACT_BULLETS,
     NATIVE_RUN_ENTRY_CONTRACT_TITLE as NATIVE_RUN_ENTRY_CONTRACT_TITLE,
@@ -10,7 +10,7 @@ from loopora.agent_native_adapter_dispatch_policies import (
     agent_adapter_accepted_native_tools as agent_adapter_accepted_native_tools,
     agent_adapter_native_dispatch_mechanism as agent_adapter_native_dispatch_mechanism,
 )
-from loopora.agent_native_adapter_identity import (
+from loopora.agent_native_adapter_policies import (
     AGENT_ADAPTER_KINDS as AGENT_ADAPTER_KINDS,
     normalize_agent_adapter_kind as normalize_agent_adapter_kind,
 )
@@ -33,7 +33,59 @@ from loopora.agent_native_adapter_policies import (
     agent_adapter_session_recovery_policy as agent_adapter_session_recovery_policy,
     agent_adapter_tooling_boundary as agent_adapter_tooling_boundary,
 )
-from loopora.agent_native_surface_schema import NATIVE_RUN_SURFACE_FIELDS, compact_surface_fields
+
+
+NATIVE_SURFACE_DICT_SECTIONS = (
+    "entry_paths",
+    "slash_commands",
+    "role_agents",
+    "capability_contract",
+    "packaging",
+    "context_loading",
+    "health_check",
+    "session_recovery",
+    "handoff_protocol",
+    "permission_boundary",
+    "tooling_boundary",
+    "observability",
+    "experience_capabilities",
+    "ownership_boundary",
+)
+
+NATIVE_RUN_SURFACE_FIELDS = (
+    "entry_kind",
+    "entry_paths",
+    "capability_contract",
+    "slash_commands",
+    "orchestrator",
+    "target_agents",
+    "host_mechanism",
+    "accepted_native_tools",
+    "context_identity_env",
+    "packaging",
+    "context_loading",
+    "health_check",
+    "session_recovery",
+    "handoff_protocol",
+    "permission_boundary",
+    "tooling_boundary",
+    "observability",
+    "experience_capabilities",
+    "ownership_boundary",
+    "submit_contract",
+    "proof_boundary",
+    "nested_provider_cli",
+)
+
+def compact_surface_fields(surface: dict[str, Any], keys: tuple[str, ...]) -> dict[str, Any]:
+    return {key: surface.get(key) for key in keys if surface.get(key) not in ("", [], {})}
+
+def surface_dict_sections(surface: dict[str, Any]) -> dict[str, dict]:
+    return {key: _surface_dict(surface, key) for key in NATIVE_SURFACE_DICT_SECTIONS}
+
+def _surface_dict(surface: dict[str, Any], key: str) -> dict:
+    value = surface.get(key)
+    return value if isinstance(value, dict) else {}
 
 
 def agent_adapter_native_surface_summary(adapter: str) -> dict[str, Any]:

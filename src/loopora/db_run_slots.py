@@ -1,19 +1,24 @@
 from __future__ import annotations
 
 import logging
+import os
 
 from loopora.db_shared import logger
 from loopora.diagnostics import log_event, log_exception
 from loopora.utils import utc_now
-from loopora.workdir_inputs import same_workdir_identity
 
 
 class RepositoryRunSlotsMixin:
     def has_active_run_for_workdir(self, workdir: str) -> bool:
-        query = "SELECT workdir FROM loop_runs WHERE status IN ('queued', 'running', 'awaiting_agent')"
+        query = """
+            SELECT 1
+            FROM loop_runs
+            WHERE workdir = ? AND status IN ('queued', 'running', 'awaiting_agent')
+            LIMIT 1
+        """
         with self._connect() as connection:
-            rows = connection.execute(query).fetchall()
-        return any(same_workdir_identity(row["workdir"], workdir) for row in rows)
+            row = connection.execute(query, (workdir,)).fetchone()
+        return row is not None
 
     def claim_run_slot(self, run_id: str, max_concurrent_runs: int) -> bool:
         now = utc_now()
@@ -49,17 +54,12 @@ class RepositoryRunSlotsMixin:
             if active_count >= max_concurrent_runs:
                 return False
 
-            existing_locks = connection.execute("SELECT workdir, run_id FROM workdir_locks").fetchall()
-            existing_lock = next(
-                (lock for lock in existing_locks if same_workdir_identity(lock["workdir"], run["workdir"])),
-                None,
-            )
+            existing_lock = connection.execute(
+                "SELECT run_id FROM workdir_locks WHERE workdir = ?",
+                (run["workdir"],),
+            ).fetchone()
             if existing_lock and existing_lock["run_id"] != run_id:
                 return False
-            if existing_lock and existing_lock["workdir"] != run["workdir"]:
-                connection.execute("DELETE FROM workdir_locks WHERE workdir = ?", (existing_lock["workdir"],))
-
-            from loopora import db as db_module
 
             connection.execute(
                 """
@@ -78,7 +78,7 @@ class RepositoryRunSlotsMixin:
                     updated_at = ?
                 WHERE id = ?
                 """,
-                (now, db_module.os.getpid(), now, run_id),
+                (now, os.getpid(), now, run_id),
             )
         log_event(
             logger,
@@ -146,10 +146,8 @@ class RepositoryRunSlotsMixin:
             )
             return True
 
-        from loopora import db as db_module
-
         try:
-            db_module.os.kill(child_pid, 15)
+            os.kill(child_pid, 15)
         except ProcessLookupError:
             self.update_run(run_id, clear_child_pid=True)
             log_event(

@@ -17,7 +17,7 @@ from loopora.events.invariants.common import (
     verdict_residual_risk_entries,
 )
 from loopora.events.store import DomainEventAppendRequest
-from loopora.structured_numbers import structured_non_negative_int
+from loopora.utils import structured_non_negative_int
 
 
 def require_verdict_status_known(request: DomainEventAppendRequest) -> None:

@@ -1,100 +1,63 @@
 {% extends "base.html" %}
-{% block title %}{{ '同一 Agent 设置' if page_locale == 'zh' else 'Same-Agent Setup' }}{% endblock %}
-{% block styles %}<link rel="stylesheet" href="{{ static_asset_url('pages/tools.css') }}" />{% endblock %}
+{% block title %}{{ '工具' if page_locale == 'zh' else 'Tools' }}{% endblock %}
 {% block content %}
 <div class="page-stack">
-<section class="tools-page-intro" data-testid="tools-page-intro">
-  <h1><span data-lang="zh">同一 Agent 设置</span><span data-lang="en">Same-Agent Setup</span></h1>
-  <p>
-    <span data-lang="zh">为当前项目确认正在使用的 Codex、Claude Code 或 OpenCode，并只在需要时安装或更新项目入口；完成后回到同一个 Agent 运行 <code>/loopora-plan</code>。</span>
-    <span data-lang="en">Confirm the Codex, Claude Code, or OpenCode host used for this project, then install or update its project entry only when needed. Return to that same Agent for <code>/loopora-plan</code>.</span>
-  </p>
+<section class="hero hero-tight">
+  <div class="hero-copy-stack">
+    <h1>
+      <span data-lang="zh">先接上 Agent 入口，其余维护工具留在这里。</span>
+      <span data-lang="en">Connect the Agent entry first; keep the maintenance tools here.</span>
+    </h1>
+    <p>
+      <span data-lang="zh">默认从当前 Coding Agent 开始；防休眠和本机资产健康放在后面，服务需要时再打开。</span>
+      <span data-lang="en">Start from the Coding Agent you already use; wake lock and local asset health sit below for when they are needed.</span>
+    </p>
+  </div>
 </section>
 
-<section class="panel tools-setup-workbench" id="agent-adapters-panel" data-testid="agent-adapters-panel">
+<section class="panel" data-testid="agent-adapters-panel">
   <header class="panel-header">
     <div>
-      <h2><span data-lang="zh">设置目标与当前宿主</span><span data-lang="en">Setup target and current host</span></h2>
+      <h2><span data-lang="zh">Coding Agent 接入</span><span data-lang="en">Coding Agent entry</span></h2>
       <p class="tools-copy">
-        <span data-lang="zh">目标项目与当前宿主共同决定将检查或修改哪个项目入口；读取状态不会改动文件。</span>
-        <span data-lang="en">The target project and current host determine which project entry can be checked or changed. Reading status does not modify files.</span>
+        <span data-lang="zh">把 Loopora 接到当前项目的 Agent 入口；运行和证据仍由 Loopora Core 管理。</span>
+        <span data-lang="en">Connect Loopora to this project's Agent entry while Loopora Core keeps run and evidence state.</span>
       </p>
     </div>
   </header>
-  <div class="tools-setup-context-grid">
-  <div class="agent-adapter-target" data-testid="agent-adapter-target">
+  <div class="agent-adapter-target">
     <label for="agent-adapter-workdir">
-      <span data-lang="zh">设置目标项目</span>
-      <span data-lang="en">Setup target project</span>
+      <span data-lang="zh">Agent 工作项目目录</span>
+      <span data-lang="en">Agent working project directory</span>
     </label>
-    <div class="input-with-action input-with-multi-actions">
+    <div class="input-with-action">
       <input
         id="agent-adapter-workdir"
         type="text"
         autocomplete="off"
         spellcheck="false"
         placeholder="{{ '项目绝对路径' if page_locale == 'zh' else 'Project absolute path' }}"
-        list="agent-adapter-recent-workdir-options"
         data-testid="agent-adapter-workdir"
-        data-agent-adapter-preference-scope="{{ agent_adapter_preference_scope }}"
-        data-agent-adapter-workdir-context="{{ workdir_context or '' }}"
       />
-      {% if access_state.native_dialogs_enabled %}
-      <button class="ghost-button" type="button" data-testid="agent-adapter-browse-workdir">
-        <span data-lang="zh">选择目录</span>
-        <span data-lang="en">Choose folder</span>
-      </button>
-      {% endif %}
-      <button class="ghost-button" type="button" data-testid="agent-adapter-use-server-workdir" hidden>
-        <span data-lang="zh">使用服务目录</span>
-        <span data-lang="en">Use service folder</span>
+      <button class="ghost-button" type="button" data-testid="agent-adapter-refresh">
+        <span data-lang="zh">刷新</span>
+        <span data-lang="en">Refresh</span>
       </button>
     </div>
     <p class="agent-adapter-target-note" id="agent-adapter-target-note" data-testid="agent-adapter-target-note" aria-live="polite">
-      <span data-lang="zh">这里的目标会同步为 Web 项目作用域；安装或移除入口前必须选择可用项目。</span>
-      <span data-lang="en">This target also becomes the Web project scope. Choose an available project before installing or removing an entry.</span>
+      <span data-lang="zh">通常填写你会运行 Codex、Claude Code 或 OpenCode 的项目目录；只有服务已从目标项目启动时才适合留空。</span>
+      <span data-lang="en">Usually set the project directory where you will run Codex, Claude Code, or OpenCode; leave blank only when the server was started from that target project.</span>
     </p>
-    {% if recent_workdirs %}
-    <datalist id="agent-adapter-recent-workdir-options">
-      {% for recent_workdir in recent_workdirs %}
-      <option value="{{ recent_workdir }}"></option>
-      {% endfor %}
-    </datalist>
-    {% endif %}
   </div>
-  <fieldset class="agent-host-selector" data-testid="agent-host-selector">
-    <legend>
-      <span data-lang="zh">你现在使用哪个 Agent？</span>
-      <span data-lang="en">Which Agent are you using now?</span>
-    </legend>
-    <div class="agent-host-segmented" role="radiogroup" aria-describedby="agent-host-selection-status">
-      <label class="agent-host-option" data-agent-host-option="codex">
-        <input class="agent-host-radio" type="radio" name="agent-host" value="codex" data-agent-host="codex" data-testid="agent-host-codex" />
-        <span class="agent-host-option-body">
-          <strong>Codex</strong>
-          <span data-agent-host-status="codex"><span data-lang="zh">正在读取…</span><span data-lang="en">Loading…</span></span>
-        </span>
-      </label>
-      <label class="agent-host-option" data-agent-host-option="claude">
-        <input class="agent-host-radio" type="radio" name="agent-host" value="claude" data-agent-host="claude" data-testid="agent-host-claude" />
-        <span class="agent-host-option-body">
-          <strong>Claude Code</strong>
-          <span data-agent-host-status="claude"><span data-lang="zh">正在读取…</span><span data-lang="en">Loading…</span></span>
-        </span>
-      </label>
-      <label class="agent-host-option" data-agent-host-option="opencode">
-        <input class="agent-host-radio" type="radio" name="agent-host" value="opencode" data-agent-host="opencode" data-testid="agent-host-opencode" />
-        <span class="agent-host-option-body">
-          <strong>OpenCode</strong>
-          <span data-agent-host-status="opencode"><span data-lang="zh">正在读取…</span><span data-lang="en">Loading…</span></span>
-        </span>
-      </label>
-    </div>
-    <p id="agent-host-selection-status" data-testid="agent-host-selection-status" aria-live="polite">
-      <span data-lang="zh">先选择当前宿主，再安装或管理它的项目入口。</span>
-      <span data-lang="en">Choose the current host before installing or managing its project entry.</span>
-    </p>
-  </fieldset>
+  <div class="agent-adapter-next-steps" data-testid="agent-adapter-next-steps">
+    <strong>
+      <span data-lang="zh">先准备任务判断</span>
+      <span data-lang="en">Task brief first</span>
+    </strong>
+    <span>
+      <span data-lang="zh">回到对应 Agent，在当前任务里说明目标、伪完成风险和必需证据，再运行 <code>/loopora-plan</code>；预览 READY 并审查后，才在同一 Agent 会话运行 <code>/loopora-run</code>。</span>
+      <span data-lang="en">Return to that Agent with the task goal, fake-done risk, and required evidence, then run <code>/loopora-plan</code>; after the READY preview is reviewed, run <code>/loopora-run</code> in the same Agent session.</span>
+    </span>
   </div>
   <div class="agent-readiness-summary" id="agent-readiness-summary" data-testid="agent-readiness-summary" aria-live="polite">
     <div class="agent-readiness-copy">
@@ -103,8 +66,8 @@
         <span data-lang="en">Loading local readiness…</span>
       </strong>
       <span>
-        <span data-lang="zh">Loopora 会只读检查当前目标项目、Web 入口和同一 Agent 项目入口。</span>
-        <span data-lang="en">Loopora checks the target project, Web entry, and same-Agent project entries without changing files.</span>
+        <span data-lang="zh">Loopora 会只读检查当前目标项目、Web 入口和 Agent 入口。</span>
+        <span data-lang="en">Loopora checks the target project, Web entry, and Agent entries without changing files.</span>
       </span>
     </div>
     <span class="wake-lock-pill wake-lock-pill-neutral">
@@ -113,16 +76,7 @@
     </span>
   </div>
   <div class="agent-adapter-handoff" id="agent-adapter-handoff" data-testid="agent-adapter-handoff" aria-live="polite" hidden></div>
-  <div class="agent-adapter-draft-handoff" id="agent-adapter-draft-handoff" data-testid="agent-adapter-draft-handoff" aria-live="polite" hidden></div>
-  <div
-    class="manual-recovery-panel"
-    id="agent-adapter-recovery-panel"
-    data-recovery-panel
-    data-testid="agent-adapter-workdir-recovery"
-    aria-live="polite"
-    hidden
-  ></div>
-  <div class="agent-adapter-grid" id="agent-adapter-grid" data-testid="agent-adapter-grid" hidden>
+  <div class="agent-adapter-grid" id="agent-adapter-grid" data-testid="agent-adapter-grid">
     <article class="agent-adapter-card" data-agent-adapter="codex" data-testid="agent-adapter-codex">
       <div class="agent-adapter-copy">
         <div class="agent-adapter-head">
@@ -133,16 +87,16 @@
           </span>
         </div>
         <p>
-          <span data-lang="zh">安装同一 Agent 项目入口，供 Codex 触发 /loopora-plan 和 /loopora-run。</span>
-          <span data-lang="en">Installs the same-Agent project entry for /loopora-plan and /loopora-run in Codex.</span>
+          <span data-lang="zh">安装项目级入口，供 Codex 触发 /loopora-plan 和 /loopora-run。</span>
+          <span data-lang="en">Installs project-level entries for /loopora-plan and /loopora-run in Codex.</span>
         </p>
       </div>
       <div class="agent-adapter-actions">
-        <button class="secondary-button" type="button" data-agent-adapter-install="codex" data-testid="agent-adapter-install-codex" disabled>
+        <button class="secondary-button" type="button" data-agent-adapter-install="codex" data-testid="agent-adapter-install-codex">
           <span data-lang="zh">安装 / 更新</span>
           <span data-lang="en">Install / Update</span>
         </button>
-        <button class="ghost-button" type="button" data-agent-adapter-uninstall="codex" data-testid="agent-adapter-uninstall-codex" disabled>
+        <button class="ghost-button" type="button" data-agent-adapter-uninstall="codex" data-testid="agent-adapter-uninstall-codex">
           <span data-lang="zh">卸载</span>
           <span data-lang="en">Uninstall</span>
         </button>
@@ -158,16 +112,16 @@
           </span>
         </div>
         <p>
-          <span data-lang="zh">安装同一 Agent 项目入口，供 Claude Code 触发 /loopora-plan 和 /loopora-run。</span>
-          <span data-lang="en">Installs the same-Agent project entry for /loopora-plan and /loopora-run in Claude Code.</span>
+          <span data-lang="zh">安装项目级入口，供 Claude Code 触发 /loopora-plan 和 /loopora-run。</span>
+          <span data-lang="en">Installs project-level entries for /loopora-plan and /loopora-run in Claude Code.</span>
         </p>
       </div>
       <div class="agent-adapter-actions">
-        <button class="secondary-button" type="button" data-agent-adapter-install="claude" data-testid="agent-adapter-install-claude" disabled>
+        <button class="secondary-button" type="button" data-agent-adapter-install="claude" data-testid="agent-adapter-install-claude">
           <span data-lang="zh">安装 / 更新</span>
           <span data-lang="en">Install / Update</span>
         </button>
-        <button class="ghost-button" type="button" data-agent-adapter-uninstall="claude" data-testid="agent-adapter-uninstall-claude" disabled>
+        <button class="ghost-button" type="button" data-agent-adapter-uninstall="claude" data-testid="agent-adapter-uninstall-claude">
           <span data-lang="zh">卸载</span>
           <span data-lang="en">Uninstall</span>
         </button>
@@ -183,60 +137,24 @@
           </span>
         </div>
         <p>
-          <span data-lang="zh">安装同一 Agent 项目入口，供 OpenCode 触发 /loopora-plan 和 /loopora-run。</span>
-          <span data-lang="en">Installs the same-Agent project entry for /loopora-plan and /loopora-run in OpenCode.</span>
+          <span data-lang="zh">安装项目级命令，供 OpenCode 触发 /loopora-plan 和 /loopora-run。</span>
+          <span data-lang="en">Installs project-level commands for /loopora-plan and /loopora-run in OpenCode.</span>
         </p>
       </div>
       <div class="agent-adapter-actions">
-        <button class="secondary-button" type="button" data-agent-adapter-install="opencode" data-testid="agent-adapter-install-opencode" disabled>
+        <button class="secondary-button" type="button" data-agent-adapter-install="opencode" data-testid="agent-adapter-install-opencode">
           <span data-lang="zh">安装 / 更新</span>
           <span data-lang="en">Install / Update</span>
         </button>
-        <button class="ghost-button" type="button" data-agent-adapter-uninstall="opencode" data-testid="agent-adapter-uninstall-opencode" disabled>
+        <button class="ghost-button" type="button" data-agent-adapter-uninstall="opencode" data-testid="agent-adapter-uninstall-opencode">
           <span data-lang="zh">卸载</span>
           <span data-lang="en">Uninstall</span>
         </button>
       </div>
     </article>
   </div>
-  <div class="agent-adapter-next-steps" data-testid="agent-adapter-next-steps" hidden>
-    <strong>
-      <span data-lang="zh">安装后</span>
-      <span data-lang="en">After install</span>
-    </strong>
-    <span>
-      <span data-lang="zh">回到对应 Agent，在当前任务里说明 Loopora 适配理由、任务目标、伪完成风险、必需证据、判断取舍和可选直接路径上下文，再运行 <code>/loopora-plan</code>；预览 READY 并审查后，才在同一 Agent 会话运行 <code>/loopora-run</code>。</span>
-      <span data-lang="en">Return to that Agent with the Loopora fit reason, task goal, fake-done risk, required evidence, judgment tradeoffs, and optional direct-path context, then run <code>/loopora-plan</code>; after the READY preview is reviewed, run <code>/loopora-run</code> in the same Agent session.</span>
-      <a
-        class="inline-hint-link"
-        href="{{ nav_tutorial_fit_href }}"
-        data-testid="tools-fit-guide-link"
-        data-agent-adapter-workdir-context-link="1"
-      >
-        <span data-lang="zh">不确定是否该用 Loopora？先看适用性判断。</span>
-        <span data-lang="en">Not sure this needs Loopora? Check the fit guide first.</span>
-      </a>
-    </span>
-  </div>
   <div class="field-status" id="agent-adapter-status" data-testid="agent-adapter-status" hidden></div>
 </section>
-
-<nav class="tools-peer-routes" data-testid="tools-route-actions" aria-label="{{ '其他开始路径' if page_locale == 'zh' else 'Other start paths' }}">
-  <strong><span data-lang="zh">当前任务不由这个 Agent 继续？</span><span data-lang="en">Not continuing in this Agent?</span></strong>
-  <div class="tools-peer-route-actions">
-    <a class="secondary-button" href="{{ nav_compose_href }}" data-testid="tools-create-choice-link" data-workdir-context-link="workdir">
-      <span data-lang="zh">选择创建方式</span><span data-lang="en">Choose Creation Path</span>
-    </a>
-    <a class="ghost-button" href="{{ nav_tutorial_fit_href }}" data-testid="tools-hero-fit-guide-link" data-agent-adapter-workdir-context-link="1">
-      <span data-lang="zh">先判断是否适合</span><span data-lang="en">Check Fit First</span>
-    </a>
-    <a class="ghost-button" href="#tools-support-panel" data-testid="tools-hero-support-link">
-      <span data-lang="zh">支持与诊断</span><span data-lang="en">Support &amp; Diagnostics</span>
-    </a>
-  </div>
-</nav>
-
-{% include "partials/support_panel.html" %}
 
 <details class="panel maintenance-disclosure" data-testid="wake-lock-panel-section">
   <summary class="panel-header workbench-disclosure-summary">
@@ -252,9 +170,9 @@
     <button
       class="help-dot help-dot--tips maintenance-disclosure-help"
       type="button"
-      data-title-zh="只会在检测到有运行正在执行时请求浏览器保持屏幕唤醒，没有运行中的 Loop 会自动释放。保持此页面标签可见时更稳；如果浏览器或系统回收防休眠锁，页面也会在重新可见后自动重试。"
-      data-title-en="The page only requests a wake lock while a run is actively executing, and releases it automatically when nothing is running. It works best while this page stays visible, and retries automatically if the browser or system releases the wake lock."
-      aria-label="{{ '查看提示：只会在检测到有运行正在执行时请求浏览器保持屏幕唤醒，没有运行中的 Loop 会自动释放。保持此页面标签可见时更稳；如果浏览器或系统回收防休眠锁，页面也会在重新可见后自动重试。' if page_locale == 'zh' else 'Show tip: The page only requests a wake lock while a run is actively executing, and releases it automatically if no Loop is running. It works best while this page is visible, and retries if the browser or system releases the wake lock.' }}"
+      data-title-zh="只会在检测到有运行正在执行时请求浏览器保持屏幕唤醒，没有运行中的 Loop 会自动释放。保持这个工具页标签可见时更稳；如果浏览器或系统回收防休眠锁，页面也会在重新可见后自动重试。"
+      data-title-en="The page only requests a wake lock while a run is actively executing, and releases it automatically when nothing is running. It works best while this Tools tab stays visible, and retries automatically if the browser or system releases the wake lock."
+      aria-label="{{ '查看提示：只会在检测到有运行正在执行时请求浏览器保持屏幕唤醒，没有运行中的 Loop 会自动释放。保持这个工具页标签可见时更稳；如果浏览器或系统回收防休眠锁，页面也会在重新可见后自动重试。' if page_locale == 'zh' else 'Show tip: The page only requests a wake lock while a run is actively executing, and releases it automatically if no Loop is running. It works best while this Tools tab is visible, and retries if the browser or system releases the wake lock.' }}"
     >i</button>
     <label class="checkbox-row wake-lock-toggle-row" for="wake-lock-toggle">
       <input id="wake-lock-toggle" type="checkbox" />
@@ -278,11 +196,7 @@
   </div>
 </details>
 
-<details
-  class="panel maintenance-disclosure"
-  data-testid="local-assets-diagnostics-panel"
-  data-native-dialogs-enabled="{{ 'true' if access_state.native_dialogs_enabled else 'false' }}"
->
+<details class="panel maintenance-disclosure" data-testid="local-assets-diagnostics-panel">
   <summary class="panel-header workbench-disclosure-summary">
     <div>
       <h2><span data-lang="zh">本地资产健康</span><span data-lang="en">Local asset health</span></h2>
@@ -296,12 +210,6 @@
       <span data-lang="en">Open when diagnosing cleanup</span>
     </span>
   </summary>
-  {% if access_state.remote_access_enabled %}
-  <div class="field-status is-warning" data-testid="local-assets-remote-path-note">
-    <span data-lang="zh">当前是网络访问模式，维护动作会复制服务端路径，不会尝试打开浏览器这台机器上的文件夹。</span>
-    <span data-lang="en">Network access mode is on, so maintenance actions copy server-side paths instead of trying to open folders on this browser machine.</span>
-  </div>
-  {% endif %}
   <div class="local-assets-summary" data-testid="local-assets-summary">
     <span class="wake-lock-pill wake-lock-pill-neutral" data-local-assets-count="orphan_alignment_dirs">
       <span data-lang="zh">对话编排残留目录：0</span>
@@ -336,7 +244,6 @@
   <div class="local-assets-details" id="local-assets-details" data-testid="local-assets-details" hidden></div>
 </details>
 
-<script src="{{ static_asset_url('pages/support.js') }}" defer></script>
 <script src="{{ static_asset_url('pages/tools.js') }}" defer></script>
 </div>
 {% endblock %}

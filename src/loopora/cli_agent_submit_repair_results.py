@@ -3,28 +3,301 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from loopora.agent_native_evidence_refs import agent_known_evidence_ref_summaries as _agent_known_evidence_ref_summaries
-from loopora.agent_native_projection_state import agent_native_active_step_view as _agent_native_active_step_view
-from loopora.cli_agent_result_files import (
-    RESULT_FILE_INVALID_JSON_ERROR,
-    RESULT_FILE_OBJECT_ERROR,
-    RESULT_FILE_UNREADABLE_ERROR,
-)
+from loopora.agent_native_step_view import agent_known_evidence_ref_summaries as _agent_known_evidence_ref_summaries
+from loopora.agent_native_evidence_contracts import agent_native_active_step_view as _agent_native_active_step_view
 from loopora.cli_agent_runtime_support import agent_next_command_hint as _agent_next_command_hint
-from loopora.cli_agent_submit_repair_guidance import (
-    _agent_submit_core_blocker_kind as _agent_submit_core_blocker_kind,
-    _agent_submit_error_is_repairable as _agent_submit_error_is_repairable,
-    _agent_submit_next_repair_step as _agent_submit_next_repair_step,
-    _agent_submit_result_file_dispatch_summary as _agent_submit_result_file_dispatch_summary,
-    _host_dispatch_error_is_repairable as _host_dispatch_error_is_repairable,
-    _result_file_missing as _result_file_missing,
-)
-from loopora.cli_agent_submit_repair_schema import (
-    active_step_coverage_target_ids as _active_step_coverage_target_ids,
-    output_schema_error_hints as _output_schema_error_hints,
-    result_file_null_placeholder_focus as _result_file_null_placeholder_focus,
-)
 from loopora.service import LooporaError
+
+
+
+from loopora.agent_native_guidance import core_blocker_kind as _core_blocker_kind
+
+from loopora.cli_summary_helpers import non_bool_int as _non_bool_int
+
+from loopora.cli_summary_helpers import set_summary_text as _set_summary_text
+
+
+import re
+
+
+_SCHEMA_TYPE_ERROR_RE = re.compile(r"(?P<path>\$(?:\.[A-Za-z0-9_-]+|\[\d+\])*) expected (?P<expected>[A-Za-z_]+), got (?P<actual>[A-Za-z_]+)")
+
+_SCHEMA_REQUIRED_ERROR_RE = re.compile(r"(?P<path>\$(?:\.[A-Za-z0-9_-]+|\[\d+\])*) is required")
+
+_SCHEMA_EXTRA_ERROR_RE = re.compile(r"(?P<path>\$(?:\.[A-Za-z0-9_-]+|\[\d+\])*) is not allowed by output_schema")
+
+_SCHEMA_ENUM_ERROR_RE = re.compile(r"(?P<path>\$(?:\.[A-Za-z0-9_-]+|\[\d+\])*) must be one of (?P<values>\[[^\]]+\])")
+
+def result_file_null_placeholder_focus(result_file: Path) -> str:
+    try:
+        payload = json.loads(result_file.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        return ""
+    result = payload.get("result") if isinstance(payload, dict) else None
+    paths: list[str] = []
+    _collect_null_paths(result, "$", paths)
+    if not paths:
+        return ""
+    return "replace null placeholders before submit: " + _format_bounded_list(paths, limit=12)
+
+def output_schema_error_hint(error: str, schema: dict) -> str:
+    hints = output_schema_error_hints(error, schema)
+    return hints[0] if hints else ""
+
+def output_schema_error_hints(error: str, schema: dict, *, limit: int = 6) -> list[str]:
+    hints: list[str] = []
+    type_matches = list(_SCHEMA_TYPE_ERROR_RE.finditer(error))
+    null_paths = [match.group("path") for match in type_matches if match.group("actual") == "null"]
+    if len(null_paths) > 1:
+        hints.append("replace null placeholders before submit: " + _format_bounded_list(null_paths, limit=6))
+    for match in type_matches:
+        hints.append(_schema_type_error_hint(match, schema))
+        if len(hints) >= limit:
+            return list(dict.fromkeys(hints))[:limit]
+    for match in _SCHEMA_REQUIRED_ERROR_RE.finditer(error):
+        hints.append(f"add missing result field {match.group('path').removeprefix('$.')}")
+        if len(hints) >= limit:
+            return list(dict.fromkeys(hints))[:limit]
+    for match in _SCHEMA_EXTRA_ERROR_RE.finditer(error):
+        hints.append(f"remove non-schema result field {match.group('path').removeprefix('$.')}")
+        if len(hints) >= limit:
+            return list(dict.fromkeys(hints))[:limit]
+    for match in _SCHEMA_ENUM_ERROR_RE.finditer(error):
+        hints.append(f"{match.group('path')} must use one allowed value: {match.group('values')}")
+        if len(hints) >= limit:
+            return list(dict.fromkeys(hints))[:limit]
+    return list(dict.fromkeys(hints))[:limit]
+
+def active_step_coverage_target_ids(active_step: dict) -> list[str]:
+    judgment_contract = active_step.get("judgment_contract") if isinstance(active_step.get("judgment_contract"), dict) else {}
+    ids: list[str] = []
+    for item in list(judgment_contract.get("coverage_targets") or []):
+        if isinstance(item, dict):
+            target_id = str(item.get("id") or item.get("target_id") or "").strip()
+            if target_id:
+                ids.append(target_id)
+    return list(dict.fromkeys(ids))
+
+def _collect_null_paths(value: object, path: str, paths: list[str]) -> None:
+    if value is None:
+        paths.append(path)
+        return
+    if isinstance(value, dict):
+        for key, child in value.items():
+            _collect_null_paths(child, f"{path}.{key}", paths)
+        return
+    if isinstance(value, list):
+        for index, child in enumerate(value):
+            _collect_null_paths(child, f"{path}[{index}]", paths)
+
+def _schema_type_error_hint(match: re.Match[str], schema: dict) -> str:
+    path = match.group("path")
+    expected = match.group("expected")
+    node = _schema_node_at_path(schema, path)
+    shape = _schema_shape_hint(node)
+    if shape:
+        return f"{path} must be {shape}"
+    return f"{path} must be {expected}; rewrite that value inside result"
+
+def _format_bounded_list(items: list[str], *, limit: int) -> str:
+    visible = items[:limit]
+    suffix = f" (+{len(items) - limit} more)" if len(items) > limit else ""
+    return ", ".join(visible) + suffix
+
+def _schema_node_at_path(schema: dict, path: str) -> dict:
+    node: object = schema
+    for segment in _schema_path_segments(path):
+        if not isinstance(node, dict):
+            return {}
+        if isinstance(segment, int):
+            node = node.get("items")
+        else:
+            properties = node.get("properties") if isinstance(node.get("properties"), dict) else {}
+            node = properties.get(segment)
+    return node if isinstance(node, dict) else {}
+
+def _schema_path_segments(path: str) -> list[str | int]:
+    segments: list[str | int] = []
+    for match in re.finditer(r"\.([A-Za-z0-9_-]+)|\[(\d+)\]", path):
+        if match.group(1) is not None:
+            segments.append(match.group(1))
+        else:
+            segments.append(int(match.group(2)))
+    return segments
+
+def _schema_shape_hint(node: dict) -> str:
+    schema_type = str(node.get("type") or "").strip()
+    if schema_type == "object":
+        required = [str(item) for item in list(node.get("required") or []) if str(item).strip()]
+        if required:
+            return "an object with required fields: " + ", ".join(required)
+        return "an object"
+    if schema_type == "array":
+        item_shape = _schema_shape_hint(node.get("items") if isinstance(node.get("items"), dict) else {})
+        return f"an array of {item_shape}" if item_shape else "an array"
+    if schema_type:
+        return schema_type
+    return ""
+
+_active_step_coverage_target_ids = active_step_coverage_target_ids
+_output_schema_error_hints = output_schema_error_hints
+_result_file_null_placeholder_focus = result_file_null_placeholder_focus
+
+def _agent_submit_next_repair_step(result: dict) -> str:
+    error = str(result.get("error") or "")
+    if _result_file_missing(error):
+        template = str(result.get("active_result_template") or "the active result template").strip()
+        step = (
+            "create the missing filled result file by copying "
+            f"{template}, replacing null placeholders in result, preserving loopora_host_dispatch, then submit again"
+        )
+    elif result.get("submitted_template_file"):
+        result_file_to_write = str(result.get("active_result_file_to_write") or "").strip()
+        if result_file_to_write:
+            destination = f" to {result_file_to_write}"
+        else:
+            outbox = str(result.get("result_outbox_dir") or "").strip()
+            destination = f" under {outbox}" if outbox else " beside the template or in the result outbox"
+        step = (
+            "save a filled result copy"
+            f"{destination}; do not overwrite the .result.template.json audit template; preserve loopora_host_dispatch, "
+            "replace null placeholders, then submit the filled copy"
+        )
+    elif "submitted step_id does not match" in error or "agent-native step was already submitted" in error:
+        active_step_id = str(result.get("active_step_id") or "").strip()
+        step_part = f" for active step {active_step_id}" if active_step_id else ""
+        stale_detail = _agent_submit_stale_dispatch_detail(result)
+        stale_part = f"{stale_detail}; " if stale_detail else ""
+        lookup = str(result.get("schema_lookup") or "agent next --json").strip()
+        step = (
+            "discard the stale result file for the previous step; "
+            f"{stale_part}run {lookup}, fill the active result template{step_part}, then submit that filled file"
+        )
+    elif _host_dispatch_missing(error):
+        step = (
+            "restore loopora_host_dispatch by copying it from the active result template or rerun agent next --json to locate it; "
+            "keep adapter/run_id/step_id exact, then submit again"
+        )
+    elif _host_dispatch_error_is_repairable(error):
+        target = str(result.get("active_target_agent") or "").strip()
+        target_part = f" target_agent and actual_agent to {target}," if target else " target_agent and actual_agent,"
+        step = (
+            "fix loopora_host_dispatch to match the active role dispatch:"
+            f"{target_part} accepted dispatch_mode, inline=false, and exact adapter/run_id/iter/step_id/step_order; then submit again"
+        )
+    elif "evidence_refs_unknown" in error:
+        known = [str(item).strip() for item in list(result.get("active_known_evidence_ids") or []) if str(item).strip()]
+        known_part = f" ({', '.join(known[:6])})" if known else ""
+        step = (
+            "replace invented evidence_refs with exact active known_evidence_ids"
+            f"{known_part}, or remove/mark weak the claim that cannot cite known evidence; then submit again"
+        )
+    elif "coverage_results_unknown_target_id" in error:
+        target_ids = [str(item).strip() for item in list(result.get("active_coverage_target_ids") or []) if str(item).strip()]
+        target_part = f" ({', '.join(target_ids[:8])})" if target_ids else ""
+        step = (
+            "replace invented coverage_results.target_id with an exact active coverage target ID"
+            f"{target_part}, or remove that coverage_result; then submit again"
+        )
+    elif "read-only step cannot claim workspace artifact fields" in error:
+        step = (
+            "remove workspace artifact fields from this read_only role result; report observations/checks instead of claiming changed files, "
+            "then submit again"
+        )
+    else:
+        step = "edit the result JSON, preserve loopora_host_dispatch, rerun agent next --json if you need the active output_schema, then submit again"
+    return step
+
+def _agent_submit_result_file_dispatch_summary(result_file: Path) -> dict:
+    try:
+        payload = json.loads(result_file.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        return {}
+    if not isinstance(payload, dict):
+        return {}
+    dispatch = payload.get("loopora_host_dispatch")
+    if not isinstance(dispatch, dict):
+        return {}
+    summary: dict[str, object] = {}
+    for key in ("adapter", "run_id", "step_id", "target_agent", "actual_agent", "dispatch_mode"):
+        _set_summary_text(summary, key, dispatch.get(key))
+    for key in ("iter", "step_order"):
+        value = _non_bool_int(dispatch.get(key))
+        if value is not None:
+            summary[key] = value
+    if isinstance(dispatch.get("inline"), bool):
+        summary["inline"] = dispatch.get("inline")
+    return summary
+
+def _agent_submit_stale_dispatch_detail(result: dict) -> str:
+    submitted = result.get("submitted_dispatch")
+    if not isinstance(submitted, dict) or not submitted:
+        return ""
+    submitted_step = str(submitted.get("step_id") or "").strip()
+    submitted_bits: list[str] = []
+    submitted_iter = submitted.get("iter")
+    if isinstance(submitted_iter, int) and not isinstance(submitted_iter, bool):
+        submitted_bits.append(f"iter {submitted_iter}")
+    submitted_step_order = submitted.get("step_order")
+    if isinstance(submitted_step_order, int) and not isinstance(submitted_step_order, bool):
+        submitted_bits.append(f"step_order {submitted_step_order}")
+    submitted_label = submitted_step or "another step"
+    if submitted_bits:
+        submitted_label = f"{submitted_label} ({', '.join(submitted_bits)})"
+    active_step_id = str(result.get("active_step_id") or "").strip()
+    if not active_step_id:
+        return f"submitted file is for {submitted_label}"
+    active_bits: list[str] = []
+    active_iter = result.get("active_iter")
+    if isinstance(active_iter, int) and not isinstance(active_iter, bool):
+        active_bits.append(f"iter {active_iter}")
+    active_step_order = result.get("active_step_order")
+    if isinstance(active_step_order, int) and not isinstance(active_step_order, bool):
+        active_bits.append(f"step_order {active_step_order}")
+    active_label = active_step_id
+    if active_bits:
+        active_label = f"{active_label} ({', '.join(active_bits)})"
+    return f"submitted file is for {submitted_label}, but active step is {active_label}"
+
+def _agent_submit_error_is_repairable(error: str) -> bool:
+    markers = (
+        "result file is not valid JSON",
+        "result file must contain one JSON object",
+        "agent-native result does not match output_schema",
+        "result wrapper must contain",
+        "loopora_host_dispatch",
+        "agent-native host dispatch",
+        "agent-native submit used",
+        "agent-native submit dispatch_mode must be one of",
+        "agent-native submit cannot claim inline role execution",
+        "evidence_refs_unknown",
+        "coverage_results_unknown_target_id",
+        "read-only step cannot claim workspace artifact fields",
+        "submitted step_id does not match",
+        "agent-native step was already submitted",
+    )
+    return any(marker in error for marker in markers)
+
+def _agent_submit_core_blocker_kind(error: str) -> str:
+    return _core_blocker_kind(error)
+
+def _host_dispatch_missing(error: str) -> bool:
+    return "result wrapper must contain loopora_host_dispatch object" in error or "requires loopora_host_dispatch proof" in error
+
+def _result_file_missing(error: str) -> bool:
+    return "result file is not valid JSON" in error and ("No such file or directory" in error or "Errno 2" in error)
+
+def _host_dispatch_error_is_repairable(error: str) -> bool:
+    return any(
+        marker in error
+        for marker in (
+            "loopora_host_dispatch",
+            "agent-native host dispatch",
+            "agent-native submit used",
+            "agent-native submit dispatch_mode must be one of",
+            "agent-native submit cannot claim inline role execution",
+        )
+    )
 
 
 def _agent_submit_repair_result(
@@ -136,7 +409,7 @@ def _same_path(candidate: Path, reference: str) -> bool:
 
 
 def _active_agent_native_step_view(service, *, run_id: str) -> dict:
-    if service is None or not run_id:
+    if not run_id:
         return {}
     try:
         run = service.get_run(run_id)
@@ -157,11 +430,9 @@ def _agent_submit_repair_focus(error: str, active_step_view: dict) -> list[str]:
     focus: list[str] = []
     if _result_file_missing(error):
         focus.append("create the filled result JSON file at result_file_to_repair before submitting")
-    elif RESULT_FILE_UNREADABLE_ERROR in error:
-        focus.append("make result_file_to_repair readable as UTF-8 JSON or recreate it from the active result template")
-    elif RESULT_FILE_INVALID_JSON_ERROR in error or "result file is not valid JSON" in error:
+    elif "result file is not valid JSON" in error:
         focus.append("fix JSON syntax; the file must be one wrapper object with loopora_host_dispatch and result")
-    if RESULT_FILE_OBJECT_ERROR in error:
+    if "result file must contain one JSON object" in error:
         focus.append("replace the file with one JSON object; do not submit an array, string, or multiple documents")
     schema = active_step_view.get("output_schema") if isinstance(active_step_view.get("output_schema"), dict) else {}
     focus.extend(_output_schema_error_hints(error, schema))

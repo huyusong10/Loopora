@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from loopora.events.envelope import EventEnvelope
-from loopora.structured_numbers import coerced_int
+from loopora.utils import coerced_int
 
 
 EVENT_REPLAY_PROJECTION_SCHEMA_VERSION = 1

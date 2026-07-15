@@ -17,7 +17,7 @@ from loopora.run_artifact_io import (
     write_text_with_mirrors as write_text_with_mirrors,
 )
 from loopora.run_artifact_layout import RunArtifactLayout as RunArtifactLayout, artifact_ref as artifact_ref
-from loopora.run_artifact_layout_setup import (
+from loopora.run_artifact_layout import (
     INITIAL_LATEST_STATE as INITIAL_LATEST_STATE,
     initialize_run_artifact_layout as initialize_run_artifact_layout,
     legacy_role_output_alias_paths as legacy_role_output_alias_paths,

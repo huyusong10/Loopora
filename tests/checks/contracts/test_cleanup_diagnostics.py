@@ -147,7 +147,6 @@ def test_api_local_asset_diagnostics_ignores_legacy_relative_recent_workdirs(
     for forbidden in ("run_cwd", "align_cwd", str(wrong_cwd)):
         assert forbidden not in response.text
 
-
 def test_api_local_asset_diagnostics_ignores_legacy_blank_or_relative_registry_paths(
     monkeypatch,
     tmp_path: Path,
@@ -181,26 +180,3 @@ def test_api_local_asset_diagnostics_ignores_legacy_blank_or_relative_registry_p
     assert response.status_code == HTTPStatus.OK
     for forbidden in (*[row[1] for row in legacy_rows], "relative-run", "relative-bundle", "relative-align", str(wrong_cwd)):
         assert forbidden not in response.text
-
-
-def test_local_asset_diagnostics_delegate_orphan_dir_projection() -> None:
-    diagnostics_source = (REPO_ROOT / "src" / "loopora" / "service_local_asset_diagnostics.py").read_text(
-        encoding="utf-8"
-    )
-    diagnostics_route_source = (REPO_ROOT / "src" / "loopora" / "web_route_diagnostics_api.py").read_text(
-        encoding="utf-8"
-    )
-    orphans_source = (REPO_ROOT / "src" / "loopora" / "service_local_asset_orphans.py").read_text(
-        encoding="utf-8"
-    )
-    design_source = (REPO_ROOT / "design" / "contracts.md").read_text(encoding="utf-8")
-
-    assert "from loopora.diagnose_doctor import" in diagnostics_route_source
-    assert '"/api/diagnostics/doctor"' in diagnostics_route_source
-    assert "from loopora.service_local_asset_orphans import" in diagnostics_source
-    for marker in ("def orphan_bundle_dirs", "def orphan_run_dirs", "def orphan_alignment_dirs"):
-        assert marker in orphans_source
-        assert marker not in diagnostics_source
-    assert "def _records_without_dirs" in diagnostics_source
-    assert "web_route_diagnostics_api.py" in design_source
-    assert "service_local_asset_orphans.py" in design_source

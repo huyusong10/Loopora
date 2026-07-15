@@ -3,14 +3,100 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from loopora.local_workdir_artifacts import state_dir_for_ready_workdir, stored_local_asset_path
+from loopora.branding import state_dir_for_workdir
 from loopora.service_alignment_artifacts import alignment_session_root
-from loopora.service_local_asset_orphans import (
-    orphan_alignment_dirs,
-    orphan_bundle_dirs,
-    orphan_run_dirs,
-)
 from loopora.settings import load_recent_workdirs
+
+
+
+from loopora.settings import app_home
+
+def orphan_bundle_dirs(registry_rows: list[dict], bundle_ids: set[str]) -> list[dict]:
+    orphan_bundle_dirs = []
+    orphan_bundle_paths: set[str] = set()
+    bundle_root = app_home() / "bundles"
+    if bundle_root.exists():
+        for path in sorted(item for item in bundle_root.iterdir() if item.is_dir()):
+            if path.name not in bundle_ids:
+                orphan_bundle_dirs.append({"bundle_id": path.name, "path": str(path)})
+                orphan_bundle_paths.add(str(path))
+    for row in registry_rows:
+        if row.get("resource_type") != "bundle" or row.get("state") == "cleaned":
+            continue
+        bundle_id = str(row.get("resource_id") or "").strip()
+        path = _stored_absolute_path(row.get("path"))
+        if path is None:
+            continue
+        if path.exists() and (bundle_id not in bundle_ids or row.get("state") == "orphaned"):
+            normalized_path = str(path)
+            if normalized_path not in orphan_bundle_paths:
+                orphan_bundle_dirs.append({"bundle_id": bundle_id, "path": normalized_path})
+                orphan_bundle_paths.add(normalized_path)
+    return orphan_bundle_dirs
+
+def orphan_run_dirs(registry_rows: list[dict], run_ids: set[str], known_workdirs: set[str]) -> list[dict]:
+    orphan_run_dirs = []
+    orphan_run_paths: set[str] = set()
+    for row in registry_rows:
+        if row.get("resource_type") != "run" or row.get("state") == "cleaned":
+            continue
+        run_id = str(row.get("resource_id") or "").strip()
+        path = _stored_absolute_path(row.get("path"))
+        if path is None:
+            continue
+        if path.exists() and (run_id not in run_ids or row.get("state") == "orphaned"):
+            normalized_path = str(path)
+            if normalized_path not in orphan_run_paths:
+                orphan_run_dirs.append(
+                    {
+                        "run_id": run_id,
+                        "workdir": str(row.get("workdir") or ""),
+                        "path": normalized_path,
+                        "source": "registry",
+                    }
+                )
+                orphan_run_paths.add(normalized_path)
+    for workdir, root in _ready_asset_roots(known_workdirs, "runs"):
+        for path in sorted(item for item in root.iterdir() if item.is_dir()):
+            if path.name in run_ids:
+                continue
+            normalized_path = str(path)
+            if normalized_path in orphan_run_paths:
+                continue
+            orphan_run_dirs.append(
+                {
+                    "run_id": path.name,
+                    "workdir": workdir,
+                    "path": normalized_path,
+                    "source": "recent_workdir",
+                }
+            )
+            orphan_run_paths.add(normalized_path)
+    return orphan_run_dirs
+
+def orphan_alignment_dirs(registry_rows: list[dict], alignment_session_ids: set[str], known_workdirs: set[str]) -> list[dict]:
+    orphan_alignment_dirs = []
+    orphan_alignment_paths: set[str] = set()
+    for workdir, root in _ready_asset_roots(known_workdirs, "alignment_sessions"):
+        for path in sorted(item for item in root.iterdir() if item.is_dir()):
+            if path.name not in alignment_session_ids:
+                orphan_alignment_dirs.append({"session_id": path.name, "workdir": workdir, "path": str(path)})
+                orphan_alignment_paths.add(str(path))
+    for row in registry_rows:
+        if row.get("resource_type") != "alignment_session" or row.get("state") == "cleaned":
+            continue
+        session_id = str(row.get("resource_id") or "").strip()
+        path = _stored_absolute_path(row.get("path"))
+        if path is None:
+            continue
+        if path.exists() and (session_id not in alignment_session_ids or row.get("state") == "orphaned"):
+            normalized_path = str(path)
+            if normalized_path not in orphan_alignment_paths:
+                orphan_alignment_dirs.append(
+                    {"session_id": session_id, "workdir": str(row.get("workdir") or ""), "path": normalized_path}
+                )
+                orphan_alignment_paths.add(normalized_path)
+    return orphan_alignment_dirs
 
 
 @dataclass(frozen=True)
@@ -84,7 +170,7 @@ def _known_workdirs(loops: list[dict], alignment_sessions: list[dict], registry_
         if row.get("resource_type") in {"alignment_session", "run"} and str(row.get("workdir") or "").strip()
     )
     known_workdirs.update(load_recent_workdirs(limit=100))
-    return known_workdirs
+    return {str(path) for value in known_workdirs if (path := _stored_absolute_path(value)) is not None}
 
 
 def _run_records(repository, loops: list[dict]) -> list[dict]:
@@ -110,8 +196,6 @@ def _records_without_dirs(context: LocalAssetDiagnosticsContext) -> list[dict]:
         if not session_id:
             continue
         root = _alignment_session_root(context.service, session, session_id)
-        if root is None:
-            continue
         if not root.exists():
             record_without_dir.append({"resource_type": "alignment_session", "resource_id": session_id, "path": str(root)})
     for run in context.run_records:
@@ -129,13 +213,13 @@ def _records_without_dirs(context: LocalAssetDiagnosticsContext) -> list[dict]:
     return record_without_dir
 
 
-def _alignment_session_root(_service, session: dict, session_id: str) -> Path | None:
+def _alignment_session_root(_service, session: dict, session_id: str) -> Path:
     if session.get("bundle_path"):
         return alignment_session_root(session)
-    state_dir = state_dir_for_ready_workdir(session.get("workdir"))
-    if state_dir is None:
-        return None
-    return state_dir / "alignment_sessions" / session_id
+    workdir = _stored_absolute_path(session.get("workdir"))
+    if workdir is None:
+        return Path("/__loopora_unavailable__")
+    return state_dir_for_workdir(workdir) / "alignment_sessions" / session_id
 
 
 def _append_registry_records_without_dirs(
@@ -155,7 +239,7 @@ def _append_registry_records_without_dirs(
             continue
         resource_type = str(row.get("resource_type") or "").strip()
         resource_id = str(row.get("resource_id") or "").strip()
-        path = stored_local_asset_path(row.get("path"))
+        path = _stored_absolute_path(row.get("path"))
         if not resource_type or not resource_id or path is None or path.exists():
             continue
         key = (resource_type, resource_id, str(path))
@@ -187,3 +271,23 @@ def _registry_record_has_live_owner(
     if resource_type == "run":
         return resource_id in run_ids
     return True
+
+
+def _stored_absolute_path(value: object) -> Path | None:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    path = Path(text).expanduser()
+    return path if path.is_absolute() else None
+
+
+def _ready_asset_roots(known_workdirs: set[str], child: str) -> list[tuple[str, Path]]:
+    roots = []
+    for value in sorted(known_workdirs):
+        workdir = _stored_absolute_path(value)
+        if workdir is None:
+            continue
+        root = state_dir_for_workdir(workdir) / child
+        if root.exists():
+            roots.append((str(workdir), root))
+    return roots

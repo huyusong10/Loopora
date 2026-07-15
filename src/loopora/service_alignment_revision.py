@@ -6,8 +6,7 @@ from pathlib import Path
 from typing import Protocol
 
 from loopora.bundles import bundle_to_yaml
-from loopora.service_bundle_file_writes import write_bundle_text_atomically
-from loopora.service_alignment_artifacts import write_alignment_transcript_log, write_alignment_transcript_log_best_effort
+from loopora.service_alignment_artifacts import write_alignment_transcript_log
 from loopora.service_alignment_run_source_projection import (
     alignment_run_artifact_paths,
     alignment_run_coverage_summary,
@@ -20,12 +19,10 @@ from loopora.service_alignment_source_seed import (
     alignment_revision_seed_bundle,
 )
 from loopora.service_alignment_requests import RevisionAlignmentSessionRequest, RevisionSessionOptions
-from loopora.service_types import LooporaError
 
 
 BUNDLE_REVISION_DEFAULT_MESSAGE = "请先阅读这份已有 Loop 方案，和我对话改进它。先指出你需要确认的最小问题，不要直接生成。"
 RUN_REVISION_DEFAULT_MESSAGE = "请基于这次运行的证据和守门裁决，和我对话改进 Loop 方案。先说明最可能要改的治理点，再问我最小必要问题。"
-REVISION_SESSION_CREATE_ERROR = "revision session could not be created"
 
 
 class AlignmentRevisionRepository(Protocol):
@@ -80,20 +77,8 @@ def create_revision_alignment_session(context: AlignmentRevisionContext, request
         start_immediately=False,
     )
     bundle_path = Path(session["bundle_path"])
-    try:
-        write_bundle_text_atomically(bundle_path, bundle_to_yaml(seed_bundle))
-    except OSError as exc:
-        context.repository.update_alignment_session(
-            session["id"],
-            status="failed",
-            error_message=REVISION_SESSION_CREATE_ERROR,
-        )
-        context.repository.append_alignment_event(
-            session["id"],
-            "alignment_bundle_improvement_seed_failed",
-            {"status": "failed", "error": REVISION_SESSION_CREATE_ERROR},
-        )
-        raise LooporaError(REVISION_SESSION_CREATE_ERROR) from exc
+    bundle_path.parent.mkdir(parents=True, exist_ok=True)
+    bundle_path.write_text(bundle_to_yaml(seed_bundle), encoding="utf-8")
     redacted_source = context.redact_source_value(request.source_context)
     working_agreement = {
         "mode": "improvement",
@@ -116,10 +101,7 @@ def create_revision_alignment_session(context: AlignmentRevisionContext, request
             "bundle_path": str(bundle_path),
         },
     )
-    write_alignment_transcript_log_best_effort(
-        context.get_session(session["id"]),
-        writer=context.write_transcript_log,
-    )
+    context.write_transcript_log(context.get_session(session["id"]))
     if request.start_immediately:
         context.start_session_async(session["id"])
     return context.get_session(session["id"])

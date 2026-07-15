@@ -41,11 +41,9 @@ def _agent_plan_summary(result: dict, *, compact: bool = False) -> dict:
         "loop_recovery": str(result.get("loop_recovery") or "").strip(),
         "requires_web_alignment": bool(result.get("requires_web_alignment")),
         "requires_candidate_repair": bool(result.get("requires_candidate_repair")),
-        "requires_context_repair": bool(result.get("requires_context_repair")),
         "loopora_fit_contradiction": bool(result.get("loopora_fit_contradiction")),
     }
     _attach_plan_repair_summary_fields(summary, result)
-    _set_summary_text(summary, "context_binding_error", result.get("context_binding_error"))
     _set_summary_text(summary, "workdir", result.get("workdir"))
     _set_summary_text(summary, "message", result.get("message"))
     _set_summary_list(summary, "required_inputs", result.get("required_inputs"))
@@ -55,24 +53,21 @@ def _agent_plan_summary(result: dict, *, compact: bool = False) -> dict:
     _set_summary_text(summary, "message_source_policy", result.get("message_source_policy"))
     _set_summary_text(summary, "message_cli_command", result.get("message_cli_command"))
     _set_summary_text(summary, "next_plan_cli_command", result.get("next_plan_cli_command"))
-    _set_summary_text(summary, "next_plan_cli_command_policy", result.get("next_plan_cli_command_policy"))
     _set_summary_text(summary, "task_message_template", result.get("task_message_template"))
     _set_summary_text(summary, "first_task_message_example", result.get("first_task_message_example"))
-    for key in ("first_task_message_example_state", "first_task_handoff_policy"):
-        _set_summary_mapping(summary, key, result.get(key))
     _set_summary_text(summary, "debug_cli_example_command", result.get("debug_cli_example_command"))
     _set_summary_text(summary, "next", result.get("next"))
     _attach_alignment_session_summary_fields(summary, result)
     _attach_alignment_dialogue_summary_fields(summary, result)
     if status != "skipped":
         _set_summary_text(summary, "preview_url", result.get("preview_url") or result.get("preview_path"))
-        _set_summary_text(summary, "preview_url_status", result.get("preview_url_status"))
-        _set_summary_text(summary, "preview_url_web_start_command", result.get("preview_url_web_start_command"))
     attach_native_run_surface(summary, result, compact=compact)
     _set_summary_text(summary, "next_review_step", result.get("next_review_step"))
     _set_summary_text(summary, "review_status", result.get("review_status"))
     _set_summary_list(summary, "review_focus", result.get("review_focus"))
-    _attach_task_review_summary_fields(summary, result)
+    _set_summary_text(summary, "task_anchor_status", result.get("task_anchor_status"))
+    _set_summary_text(summary, "task_anchor_preview", result.get("task_anchor_preview"))
+    _set_summary_text(summary, "review_scope", result.get("review_scope"))
     _set_summary_text(summary, "review_recommended_action", result.get("review_recommended_action"))
     _set_summary_text(summary, "review_reply_message", result.get("review_reply_message"))
     _set_summary_text(summary, "review_reply_preview", result.get("review_reply_preview"))
@@ -137,8 +132,3 @@ def _attach_plan_repair_summary_fields(summary: dict[str, object], result: dict)
     _set_summary_text(summary, "repair_cli_command_policy", result.get("repair_cli_command_policy"))
     _set_summary_text(summary, "repair_reference", result.get("repair_reference"))
     _set_summary_text(summary, "next_repair_step", result.get("next_repair_step"))
-
-
-def _attach_task_review_summary_fields(summary: dict[str, object], result: dict) -> None:
-    for key in ("ready_meaning", "task_anchor_status", "task_anchor", "task_anchor_preview", "review_scope"):
-        _set_summary_text(summary, key, result.get(key))

@@ -68,13 +68,6 @@
       return localeText("证据结论已记录", "Evidence verdict recorded");
     }
 
-    function reopenedVerdictSummary(payload) {
-      const verdictStatus = String(payload.task_verdict_status || "").trim();
-      return verdictStatus
-        ? `${localeText("记录结论已重新打开", "Recorded evidence verdict reopened")} · ${localeText("Loop 裁决", "Task verdict")} ${verdictStatus}`
-        : localeText("记录结论已重新打开", "Recorded evidence verdict reopened");
-    }
-
     function buildConsoleLines(event) {
       const payload = event.payload || {};
 
@@ -231,15 +224,6 @@
           channel: "state",
           filterKey: "result",
           summary: recordedVerdictSummary(payload),
-          text: prettyConsoleJson(payload),
-        })];
-      }
-      if (event.event_type === "run_result_acceptance_reopened") {
-        return [buildConsoleEntry(event, {
-          tone: "neutral",
-          channel: "state",
-          filterKey: "result",
-          summary: reopenedVerdictSummary(payload),
           text: prettyConsoleJson(payload),
         })];
       }

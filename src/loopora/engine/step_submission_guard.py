@@ -6,7 +6,7 @@ from loopora.events.envelope import EventEnvelope
 from loopora.events.projection_cache import current_step_projection_for_run
 from loopora.events.run_event_queries import list_run_events
 from loopora.kernel import ActorRef, StepResult
-from loopora.structured_numbers import coerced_int
+from loopora.utils import coerced_int
 
 _ACTOR_IDENTITY_KEYS = ("kind", "id", "adapter")
 

@@ -5,12 +5,6 @@ from hashlib import sha256
 from pathlib import Path
 
 from loopora.event_redaction import redact_sensitive_text
-from loopora.service_alignment_ready_bundle_validation import (
-    alignment_assert_bundle_workdir as alignment_assert_bundle_workdir,
-    alignment_bundle_file_has_ready_validation as alignment_bundle_file_has_ready_validation,
-    alignment_bundle_file_is_valid_alignment_bundle as alignment_bundle_file_is_valid_alignment_bundle,
-    alignment_session_has_current_ready_bundle as alignment_session_has_current_ready_bundle,
-)
 from loopora.service_alignment_language import (
     alignment_generation_prefers_chinese as alignment_generation_prefers_chinese,
     alignment_message_is_language_neutral_confirmation as alignment_message_is_language_neutral_confirmation,
@@ -32,7 +26,7 @@ from loopora.service_alignment_source_seed import (
     alignment_source_seed_payload as alignment_source_seed_payload,
     alignment_spec_file_source_seed as alignment_spec_file_source_seed,
 )
-from loopora.service_alignment_source_context import (
+from loopora.service_alignment_source_seed import (
     alignment_transcript_source_summary as alignment_transcript_source_summary,
     bounded_alignment_file_text as bounded_alignment_file_text,
     redact_alignment_source_value as redact_alignment_source_value,
@@ -54,9 +48,66 @@ from loopora.service_alignment_run_source_projection import (
     alignment_source_string_list as alignment_source_string_list,
 )
 
+import json
+
+
+from loopora.bundles import (
+    BundleError,
+    lint_alignment_bundle_generation_text,
+    lint_alignment_bundle_semantics,
+    load_bundle_text,
+    read_bundle_file_text,
+)
+
+from loopora.service_types import LooporaError
+
+def alignment_assert_bundle_workdir(bundle: dict, *, expected_workdir: Path) -> None:
+    actual = Path(str(bundle["loop"]["workdir"])).expanduser().resolve()
+    expected = expected_workdir.expanduser().resolve()
+    if actual != expected:
+        raise LooporaError(f"bundle loop.workdir must be {expected}, got {actual}")
+
+def alignment_bundle_file_is_valid_alignment_bundle(
+    bundle_path: Path,
+    *,
+    expected_workdir: Path | None = None,
+) -> bool:
+    try:
+        raw_yaml = read_bundle_file_text(bundle_path)
+        generation_issues = lint_alignment_bundle_generation_text(raw_yaml)
+        bundle = load_bundle_text(raw_yaml)
+        if expected_workdir is not None:
+            alignment_assert_bundle_workdir(bundle, expected_workdir=expected_workdir)
+        semantic_issues = lint_alignment_bundle_semantics(bundle)
+    except (BundleError, LooporaError, OSError):
+        return False
+    return not generation_issues and not semantic_issues
+
+def alignment_bundle_file_has_ready_validation(bundle_path: Path, *, expected_workdir: Path | None = None) -> bool:
+    validation_path = bundle_path.parent / "validation.json"
+    try:
+        payload = json.loads(validation_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        return False
+    if not isinstance(payload, dict) or payload.get("ok") is not True:
+        return False
+    return alignment_bundle_file_is_valid_alignment_bundle(
+        bundle_path,
+        expected_workdir=expected_workdir,
+    )
+
+def alignment_session_has_current_ready_bundle(session: dict, bundle_path: Path) -> bool:
+    expected_workdir = Path(session["workdir"]) if session.get("workdir") else None
+    validation = session.get("validation") if isinstance(session.get("validation"), dict) else {}
+    if validation.get("ok") is True:
+        return alignment_bundle_file_is_valid_alignment_bundle(
+            bundle_path,
+            expected_workdir=expected_workdir,
+        )
+    return alignment_bundle_file_has_ready_validation(bundle_path, expected_workdir=expected_workdir)
+
 
 ALIGNMENT_CONTEXT_TITLE_PREVIEW_LIMIT = 80
-ALIGNMENT_CONTEXT_PATH_ERRORS = (OSError, RuntimeError, ValueError)
 
 
 def alignment_source_option_id(source_type: str, identifier: object) -> str:
@@ -107,8 +158,8 @@ def alignment_session_context_options(session: dict) -> list[dict]:
                 "description_en": "Return to this chat and append the next message to the same session.",
             }
         )
-    bundle_path = _existing_alignment_context_path(session.get("bundle_path"))
-    if status == "ready" and bundle_path is not None and alignment_session_has_current_ready_bundle(session, bundle_path):
+    bundle_path = Path(str(session.get("bundle_path") or ""))
+    if status == "ready" and bundle_path.exists() and alignment_session_has_current_ready_bundle(session, bundle_path):
         options.append(
             {
                 "option_id": alignment_source_option_id("alignment_session", session_id),
@@ -125,17 +176,6 @@ def alignment_session_context_options(session: dict) -> list[dict]:
             }
         )
     return options
-
-
-def _existing_alignment_context_path(path: object) -> Path | None:
-    path_text = str(path or "").strip()
-    if not path_text:
-        return None
-    try:
-        candidate = Path(path_text)
-        return candidate if candidate.exists() else None
-    except ALIGNMENT_CONTEXT_PATH_ERRORS:
-        return None
 
 
 def add_alignment_context_option(option: dict, options: list[dict], seen_option_ids: set[str]) -> None:

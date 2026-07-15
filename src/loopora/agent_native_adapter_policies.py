@@ -1,25 +1,119 @@
 from __future__ import annotations
 
-from loopora.agent_native_adapter_dispatch_policies import (
-    NATIVE_PROOF_BOUNDARY as NATIVE_PROOF_BOUNDARY,
-    NATIVE_RUN_ENTRY_CONTRACT_BULLETS as NATIVE_RUN_ENTRY_CONTRACT_BULLETS,
-    NATIVE_RUN_ENTRY_CONTRACT_TITLE as NATIVE_RUN_ENTRY_CONTRACT_TITLE,
-    NATIVE_SUBMIT_CONTRACT as NATIVE_SUBMIT_CONTRACT,
-    agent_adapter_accepted_native_tools as agent_adapter_accepted_native_tools,
-    agent_adapter_native_dispatch_mechanism as agent_adapter_native_dispatch_mechanism,
+
+
+from loopora.service_types import LooporaError
+
+from loopora.system_prompt_assets import load_system_prompt_asset
+
+
+AGENT_ADAPTER_KINDS = ("codex", "claude", "opencode")
+
+def normalize_agent_adapter_kind(value: str | None) -> str:
+    normalized = str(value or "").strip().lower().replace("_", "-")
+    aliases = {
+        "codex": "codex",
+        "openai-codex": "codex",
+        "claude": "claude",
+        "claude-code": "claude",
+        "claudecode": "claude",
+        "opencode": "opencode",
+        "open-code": "opencode",
+    }
+    if normalized in aliases:
+        return aliases[normalized]
+    supported = ", ".join(AGENT_ADAPTER_KINDS)
+    raise LooporaError(f"unsupported agent adapter: {value!r}. Expected one of: {supported}")
+
+NATIVE_SUBMIT_CONTRACT = "loopora_host_dispatch + schema-shaped result template"
+
+NATIVE_PROOF_BOUNDARY = "native todo/trace may guide host work; Loopora evidence refs and task verdict remain the proof source"
+
+_NATIVE_RUN_ENTRY_CONTRACT = load_system_prompt_asset("agent_native/run-entry-contract.md")
+
+NATIVE_RUN_ENTRY_CONTRACT_TITLE = _NATIVE_RUN_ENTRY_CONTRACT.splitlines()[0].removeprefix("## ").strip()
+
+NATIVE_RUN_ENTRY_CONTRACT_BULLETS = tuple(
+    line.removeprefix("- ").strip() for line in _NATIVE_RUN_ENTRY_CONTRACT.splitlines() if line.startswith("- ")
 )
-from loopora.agent_native_adapter_host_mappings import (
-    ROLE_AGENT_KINDS as ROLE_AGENT_KINDS,
-    agent_adapter_context_identity_env as agent_adapter_context_identity_env,
-    agent_adapter_entry_kind as agent_adapter_entry_kind,
-    agent_adapter_entry_paths as agent_adapter_entry_paths,
-    agent_adapter_role_agent_map as agent_adapter_role_agent_map,
-    agent_adapter_role_agent_paths as agent_adapter_role_agent_paths,
-)
-from loopora.agent_native_adapter_identity import (
-    AGENT_ADAPTER_KINDS as AGENT_ADAPTER_KINDS,
-    normalize_agent_adapter_kind as normalize_agent_adapter_kind,
-)
+
+def agent_adapter_accepted_native_tools(adapter: str) -> list[str]:
+    try:
+        kind = normalize_agent_adapter_kind(adapter)
+    except LooporaError:
+        return []
+    if kind == "codex":
+        return ["spawn_agent"]
+    if kind == "claude":
+        return ["Agent", "Task"]
+    if kind == "opencode":
+        return ["task"]
+    return []
+
+def agent_adapter_native_dispatch_mechanism(adapter: str) -> str:
+    try:
+        kind = normalize_agent_adapter_kind(adapter)
+    except LooporaError:
+        return "host-native role agent dispatch"
+    if kind == "codex":
+        return "Codex spawn_agent with agent_type=<role_dispatch.target_agent>"
+    if kind == "claude":
+        return "Claude Code Agent/Task with the named Loopora role agent"
+    if kind == "opencode":
+        return "OpenCode project command agent=loopora-orchestrator, then native task tool"
+    return "host-native role agent dispatch"
+
+ROLE_AGENT_KINDS = ("builder", "inspector", "gatekeeper", "guide", "orchestrator")
+
+def agent_adapter_entry_kind(kind: str) -> str:
+    if kind == "opencode":
+        return "project_command"
+    return "project_skill"
+
+def agent_adapter_entry_paths(kind: str) -> dict[str, str]:
+    if kind == "codex":
+        return {
+            "plan": ".agents/skills/loopora-plan/SKILL.md",
+            "run": ".agents/skills/loopora-run/SKILL.md",
+        }
+    if kind == "claude":
+        return {
+            "plan": ".claude/skills/loopora-plan/SKILL.md",
+            "run": ".claude/skills/loopora-run/SKILL.md",
+        }
+    if kind == "opencode":
+        return {
+            "plan": ".opencode/commands/loopora-plan.md",
+            "run": ".opencode/commands/loopora-run.md",
+        }
+    return {}
+
+def agent_adapter_role_agent_paths(kind: str) -> dict[str, str]:
+    if kind == "codex":
+        return {role: f".codex/agents/loopora-{role}.toml" for role in ROLE_AGENT_KINDS}
+    if kind == "claude":
+        return {role: f".claude/agents/loopora-{role}.md" for role in ROLE_AGENT_KINDS}
+    if kind == "opencode":
+        return {role: f".opencode/agents/loopora-{role}.md" for role in ROLE_AGENT_KINDS}
+    return {}
+
+def agent_adapter_role_agent_map(kind: str) -> dict[str, dict[str, str]]:
+    return {
+        role: {
+            "target_agent": f"loopora-{role}",
+            "path": path,
+        }
+        for role, path in agent_adapter_role_agent_paths(kind).items()
+    }
+
+def agent_adapter_context_identity_env(kind: str) -> list[str]:
+    if kind == "codex":
+        return ["LOOPORA_AGENT_SESSION_ID", "CODEX_SESSION_ID", "CODEX_THREAD_ID"]
+    if kind == "claude":
+        return ["LOOPORA_AGENT_SESSION_ID", "CLAUDE_SESSION_ID"]
+    if kind == "opencode":
+        return ["LOOPORA_AGENT_SESSION_ID", "OPENCODE_SESSION_ID"]
+    return ["LOOPORA_AGENT_SESSION_ID"]
 
 
 def agent_adapter_native_capability_contract(adapter: str) -> dict[str, str]:

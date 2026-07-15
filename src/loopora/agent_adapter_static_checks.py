@@ -4,12 +4,11 @@ import shlex
 from pathlib import Path
 from typing import Any
 
-from loopora.agent_adapter_check_utils import (
+from loopora.agent_adapter_manifest import (
     adapter_check,
     adapter_label,
     read_text_or_empty,
 )
-from loopora.agent_adapter_command_prefix import copyable_loopora_command
 from loopora.agent_adapter_entry_static_checks import (
     adapter_entry_shape_checks,
     adapter_reference_paths,
@@ -30,7 +29,25 @@ from loopora.agent_native_adapter_contracts import (
     agent_adapter_native_surface_summary,
     agent_adapter_role_agent_paths,
 )
-from loopora.first_use_web_guidance import use_web_creation_step
+
+import os
+
+
+from loopora.branding import APP_HOME_ENV
+
+def loopora_command_env_prefix(*, entry_source: str = "") -> str:
+    bits: list[str] = []
+    configured_home = os.environ.get(APP_HOME_ENV, "").strip()
+    if configured_home:
+        bits.append(f"{APP_HOME_ENV}={shlex.quote(configured_home)}")
+    normalized_entry_source = str(entry_source or "").strip()
+    if normalized_entry_source:
+        bits.append(f"LOOPORA_AGENT_ENTRY_SOURCE={shlex.quote(normalized_entry_source)}")
+    return " ".join(bits)
+
+def prefix_loopora_command(command: str, *, entry_source: str = "") -> str:
+    prefix = loopora_command_env_prefix(entry_source=entry_source)
+    return f"{prefix} {command}" if prefix else command
 
 
 def adapter_static_checks(kind: str, root: Path, status: dict[str, Any]) -> list[dict[str, str]]:
@@ -65,19 +82,14 @@ def adapter_static_checks(kind: str, root: Path, status: dict[str, Any]) -> list
     return checks
 
 
-def adapter_install_next_steps(kind: str, root: Path) -> list[str]:
+def adapter_install_next_steps(kind: str) -> list[str]:
     label = adapter_label(kind)
-    doctor_command = adapter_install_next_commands(kind, root)["doctor"]
     return [
-        f"Confirm local readiness before returning to {label}: {doctor_command}",
-        (
-            f"Return to {label} in this project with the Loopora fit reason, task goal, fake-done risk, "
-            "required evidence, judgment tradeoffs, and optional direct-path context."
-        ),
-        adapter_entry_visibility_hint(kind),
+        f"Return to {label} in this project with the task goal, fake-done risk, and required evidence.",
         "Run /loopora-plan to prepare the Loop preview before starting work.",
         "Review the READY Loop preview, then run /loopora-run in the same Agent session.",
-        use_web_creation_step(),
+        adapter_entry_visibility_hint(kind),
+        "Use Web to observe evidence, gaps, and verdicts while execution stays in the Agent.",
     ]
 
 
@@ -100,50 +112,9 @@ def adapter_install_next_commands(kind: str, root: Path) -> dict[str, str]:
     return {
         "plan": "/loopora-plan",
         "run": "/loopora-run",
-        "web_start": copyable_loopora_command(f"loopora serve --open --workdir {workdir_arg} --host 127.0.0.1 --port 8742"),
-        "doctor": copyable_loopora_command(f"loopora doctor --workdir {workdir_arg}"),
-        "check": copyable_loopora_command(f"loopora init {kind} --workdir {workdir_arg} --check"),
-        "agent_check": copyable_loopora_command(f"loopora agent {kind} check --workdir {workdir_arg}"),
-        "support": copyable_loopora_command(f"loopora support --workdir {workdir_arg}"),
+        "check": prefix_loopora_command(f"loopora init {kind} --workdir {workdir_arg} --check"),
+        "agent_check": prefix_loopora_command(f"loopora agent {kind} check --workdir {workdir_arg}"),
     }
-
-
-def adapter_uninstall_next_commands(kind: str, root: Path) -> dict[str, str]:
-    workdir_arg = shlex.quote(str(root))
-    return {
-        "reinstall": copyable_loopora_command(f"loopora init {kind} --workdir {workdir_arg}"),
-    }
-
-
-def adapter_uninstall_next_actions(kind: str, root: Path, *, has_kept_files: bool = False) -> list[dict[str, Any]]:
-    label = adapter_label(kind)
-    actions: list[dict[str, Any]] = [
-        {
-            "kind": "reinstall_agent_entry",
-            "adapter": kind,
-            "label": label,
-            "command": adapter_uninstall_next_commands(kind, root)["reinstall"],
-        },
-        {
-            "kind": "refresh_agent_host",
-            "adapter": kind,
-            "label": label,
-        },
-    ]
-    if has_kept_files:
-        actions.append({"kind": "review_kept_files"})
-    return actions
-
-
-def adapter_uninstall_next_steps(kind: str, root: Path, *, has_kept_files: bool = False) -> list[str]:
-    label = adapter_label(kind)
-    steps = [
-        f"Reinstall later: {adapter_uninstall_next_commands(kind, root)['reinstall']}",
-        f"If {label} still shows /loopora-plan or /loopora-run, refresh or restart {label}.",
-    ]
-    if has_kept_files:
-        steps.append("Review kept files before assuming all project entries are gone.")
-    return steps
 
 
 def adapter_native_surface(kind: str, root: Path) -> dict[str, Any]:
@@ -157,7 +128,6 @@ def adapter_native_surface(kind: str, root: Path) -> dict[str, Any]:
             manifest_relative_path(kind),
         ],
         "diagnostics": {
-            "readiness_command": next_commands["doctor"],
             "check_command": next_commands["check"],
             "agent_check_command": next_commands["agent_check"],
         },
@@ -200,7 +170,7 @@ def adapter_role_agent_checks(kind: str, root: Path) -> list[dict[str, str]]:
             )
         )
     if kind == "codex":
-        install_command = copyable_loopora_command(f"loopora init codex --workdir {shlex.quote(str(root))}")
+        install_command = prefix_loopora_command(f"loopora init codex --workdir {shlex.quote(str(root))}")
         checks.extend(
             codex_role_agent_checks(
                 root,
@@ -209,7 +179,7 @@ def adapter_role_agent_checks(kind: str, root: Path) -> list[dict[str, str]]:
             )
         )
     if kind == "claude":
-        install_command = copyable_loopora_command(f"loopora init claude --workdir {shlex.quote(str(root))}")
+        install_command = prefix_loopora_command(f"loopora init claude --workdir {shlex.quote(str(root))}")
         checks.extend(
             claude_role_agent_checks(
                 root,
@@ -218,7 +188,7 @@ def adapter_role_agent_checks(kind: str, root: Path) -> list[dict[str, str]]:
             )
         )
     if kind == "opencode":
-        install_command = copyable_loopora_command(f"loopora init opencode --workdir {shlex.quote(str(root))}")
+        install_command = prefix_loopora_command(f"loopora init opencode --workdir {shlex.quote(str(root))}")
         checks.extend(
             opencode_role_permission_checks(
                 root,
@@ -231,7 +201,7 @@ def adapter_role_agent_checks(kind: str, root: Path) -> list[dict[str, str]]:
 
 def adapter_missing_role_agent_message(kind: str, root: Path, relative_path: str) -> str:
     target_agent = Path(relative_path).stem
-    install_command = copyable_loopora_command(f"loopora init {kind} --workdir {shlex.quote(str(root))}")
+    install_command = prefix_loopora_command(f"loopora init {kind} --workdir {shlex.quote(str(root))}")
     return f"managed role agent config for {target_agent} is missing; run {install_command} before /loopora-run dispatch"
 
 

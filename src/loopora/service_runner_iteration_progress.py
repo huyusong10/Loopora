@@ -7,8 +7,8 @@ from loopora.engine.runner_context import RunnerIterationState, RunnerRunContext
 from loopora.engine.runner_runtime import RunnerRunProgress
 from loopora.run_artifacts import read_stagnation_state
 from loopora.runner_run_requests import RunnerIterationCheckpointRequest
-from loopora.runner_support_requests import RunnerSummaryRequest
-from loopora.structured_booleans import structured_bool_is_true
+from loopora.runner_summary_projection import RunnerSummaryRequest
+from loopora.utils import structured_bool_is_true
 
 logger = get_logger(__name__)
 

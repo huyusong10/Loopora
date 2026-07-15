@@ -40,11 +40,14 @@ def _normalize_role_definition_form(values: Mapping[str, object] | None, *, loca
             _builtin_prompt_ref_for_archetype(archetype),
             locale=locale,
         )
-    execution_defaults = _default_role_execution_form_values(normalized.get("executor_kind", "codex"))
-    if execution_defaults["executor_mode"] == "command":
+    try:
+        profile = executor_profile(str(normalized.get("executor_kind", "codex")))
+    except ValueError:
+        profile = executor_profile("codex")
+    if profile.command_only:
         normalized["executor_mode"] = "command"
-    if "command_cli" not in values or not str(normalized.get("command_cli", "")).strip():
-        normalized["command_cli"] = execution_defaults["command_cli"]
+    if not str(normalized.get("command_cli", "")).strip():
+        normalized["command_cli"] = profile.cli_name
     return normalized
 
 
@@ -179,14 +182,6 @@ def _role_definition_payload_from_mapping(payload: Mapping[str, object]) -> dict
 
 def _builtin_prompt_ref_for_archetype(archetype: str) -> str:
     return "gatekeeper.md" if archetype == "gatekeeper" else f"{archetype}.md"
-
-
-def _default_role_execution_form_values(executor_kind: object) -> dict[str, str]:
-    executor_kind_text = str(executor_kind or "codex").strip() or "codex"
-    try:
-        return default_strategy_role_execution_settings(executor_kind_text)
-    except ValueError:
-        return default_strategy_role_execution_settings("codex")
 
 
 def _builtin_role_templates(*, locale: str = "en") -> dict[str, dict[str, object]]:

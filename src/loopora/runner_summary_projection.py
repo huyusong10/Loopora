@@ -1,10 +1,53 @@
 from __future__ import annotations
 
-from loopora.runner_support_requests import RunnerSummaryRequest
 from loopora.score_history_values import structured_score_value, structured_score_values
-from loopora.structured_booleans import structured_bool_is_true
-from loopora.structured_numbers import structured_non_negative_int
+from loopora.utils import structured_bool_is_true
+from loopora.utils import structured_non_negative_int
 from loopora.utils import utc_now
+
+from dataclasses import dataclass
+
+from loopora.run_artifacts import RunArtifactLayout
+
+@dataclass(frozen=True)
+class StepOutputNormalizationRequest:
+    archetype: str
+    output: dict
+    compiled_spec: dict
+    inspector_output: dict | None
+    evidence_context: dict | None = None
+    current_evidence_id: str = ""
+
+@dataclass(frozen=True)
+class StepOutputsWriteRequest:
+    layout: RunArtifactLayout
+    iter_id: int
+    step: dict
+    step_order: int
+    role: dict
+    runtime_role: str
+    output: dict
+    handoff: dict
+
+@dataclass(frozen=True)
+class IterationContextPersistRequest:
+    layout: RunArtifactLayout
+    run_id: str
+    iter_id: int
+    step_results: list[dict]
+    stagnation: dict
+    previous_composite: float | None
+
+@dataclass(frozen=True)
+class RunnerSummaryRequest:
+    run: dict
+    strategy_source: dict
+    compiled_spec: dict
+    iter_id: int
+    step_results: list[dict]
+    stagnation: dict
+    exhausted: bool
+    previous_composite: float | None
 
 
 def build_runner_iteration_entry(

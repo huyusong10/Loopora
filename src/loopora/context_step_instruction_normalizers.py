@@ -10,13 +10,9 @@ from loopora.context_contract_snapshot import (
 from loopora.context_value_helpers import evidence_coverage_results as _evidence_coverage_results
 from loopora.context_value_helpers import normalize_coverage_gap_rows as _normalize_coverage_gap_rows
 from loopora.context_value_helpers import normalize_manifest_claim_coverage_targets as normalize_manifest_claim_coverage_targets
-from loopora.run_continuation_progress import (
-    CONTINUATION_ACTION_MODES,
-    normalize_continuation_progress_context,
-)
 from loopora.context_value_helpers import string_list as _string_list
-from loopora.structured_booleans import structured_bool_is_true
-from loopora.structured_numbers import structured_non_negative_int
+from loopora.utils import structured_bool_is_true
+from loopora.utils import structured_non_negative_int
 
 
 def int_value(value: object) -> int:
@@ -79,12 +75,7 @@ def empty_continuation_context() -> dict:
             "missing_check_ids": [],
             "top_gaps": [],
         },
-        "focus_kind": "",
-        "focus_target_count": 0,
-        "focus_targets": [],
         "next_focus": [],
-        "action_mode": "",
-        "prior_run_progress": {},
     }
 
 
@@ -92,9 +83,6 @@ def normalize_continuation_context(value: object) -> dict:
     if not isinstance(value, dict) or value.get("active") is not True:
         return empty_continuation_context()
     coverage = value.get("coverage") if isinstance(value.get("coverage"), dict) else {}
-    action_mode = _contract_string(value.get("action_mode"))
-    if action_mode not in CONTINUATION_ACTION_MODES:
-        action_mode = "close_gaps"
     return {
         "active": True,
         "reason": _contract_string(value.get("reason")),
@@ -117,12 +105,7 @@ def normalize_continuation_context(value: object) -> dict:
             "missing_check_ids": _string_list(coverage.get("missing_check_ids")),
             "top_gaps": _normalize_coverage_gap_rows(coverage.get("top_gaps")),
         },
-        "focus_kind": _contract_string(value.get("focus_kind")),
-        "focus_target_count": int_value(value.get("focus_target_count")),
-        "focus_targets": _normalize_coverage_gap_rows(value.get("focus_targets"), limit=8),
         "next_focus": _contract_string_list(value.get("next_focus"))[:8],
-        "action_mode": action_mode,
-        "prior_run_progress": normalize_continuation_progress_context(value.get("prior_run_progress")),
     }
 
 

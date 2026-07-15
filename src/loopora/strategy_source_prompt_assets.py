@@ -92,23 +92,13 @@ def builtin_prompt_markdown(prompt_ref: str, *, locale: str | None = None) -> st
     return builtin_strategy_prompt_markdown(prompt_ref, locale=locale)
 
 
-def resolve_strategy_prompt_file_path(path: Path) -> Path:
-    try:
-        return path.expanduser().resolve()
-    except (OSError, RuntimeError) as exc:
-        raise WorkflowError("prompt file could not be read") from exc
-
-
 def load_strategy_prompt_file(path: Path) -> str:
-    resolved_path = resolve_strategy_prompt_file_path(path)
     try:
-        return resolved_path.read_text(encoding="utf-8")
+        return path.read_text(encoding="utf-8")
     except UnicodeDecodeError as exc:
         raise WorkflowError("prompt file must be UTF-8 encoded Markdown") from exc
-    except FileNotFoundError as exc:
-        raise WorkflowError("prompt file does not exist") from exc
     except OSError as exc:
-        raise WorkflowError("prompt file could not be read") from exc
+        raise WorkflowError(f"prompt file could not be read: {path}") from exc
 
 
 def load_prompt_file(path: Path) -> str:

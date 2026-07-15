@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from loopora.events.step_instruction_payloads import step_instruction_event_payload
 from loopora.kernel.step import StepInstruction, StepResult
-from loopora.structured_numbers import coerced_non_negative_int
+from loopora.utils import coerced_non_negative_int
 from loopora.task_verdict_aliases import canonical_task_verdict_status
 
 

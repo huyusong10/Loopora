@@ -15,8 +15,6 @@ from loopora.service_alignment_execution import (
     alignment_waiting_user_transition_plan,
 )
 
-ALIGNMENT_LOCAL_RUNTIME_ERROR = "alignment session could not access local runtime resources"
-
 
 class AlignmentOrchestrationRepository(Protocol):
     def update_alignment_session(self, session_id: str, **fields: object) -> dict: ...
@@ -133,15 +131,9 @@ def execute_alignment_session(
             error=exc,
             session_id=session_id,
         )
-        context.fail_session(session_id, alignment_orchestration_failure_message(exc))
+        context.fail_session(session_id, str(exc) or type(exc).__name__)
     finally:
         context.repository.update_alignment_session(session_id, clear_active_child_pid=True)
         thread = context.threads.get(key)
         if (thread is context.current_thread()) or (thread is not None and not thread.is_alive()):
             context.threads.pop(key, None)
-
-
-def alignment_orchestration_failure_message(exc: Exception) -> str:
-    if isinstance(exc, OSError):
-        return ALIGNMENT_LOCAL_RUNTIME_ERROR
-    return str(exc) or type(exc).__name__

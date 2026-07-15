@@ -1,28 +1,77 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-
 from loopora.agent_adapters import agent_loop_command
 from loopora.service_alignment_context import alignment_source_option_id
-from loopora.service_alignment_run_context_recovery_fields import (
-    AGENT_CONTEXT_BINDING_RECOVERY_KEYS as AGENT_CONTEXT_BINDING_RECOVERY_KEYS,
-    agent_exact_binding_recovery_action as agent_exact_binding_recovery_action,
-    agent_failed_preview_choice_repair_fields as agent_failed_preview_choice_repair_fields,
-    agent_redacted_context_binding as agent_redacted_context_binding,
-    agent_run_context_task_verdict as agent_run_context_task_verdict,
-)
 from loopora.service_types import TERMINAL_RUN_STATUSES
 from loopora.task_verdicts import PASSING_TASK_VERDICT_STATUSES
 
+from loopora.event_redaction import redact_sensitive_value
 
-@dataclass(frozen=True)
-class AgentRunContextNextActionRequest:
-    session_status: str
-    linked_run_id: str
-    linked_run_status: str = ""
-    task_verdict_status: str = ""
-    linked_run_lifecycle_failure: bool = False
-    linked_run_found: bool = True
+from loopora.run_projection_fields import task_verdict_from_run
+
+from loopora.system_prompt_assets import load_system_prompt_asset
+
+AGENT_CONTEXT_BINDING_RECOVERY_KEYS = {
+    "path",
+    "alignment_session_id",
+    "alignment_status",
+    "linked_run_id",
+    "linked_loop_id",
+    "linked_bundle_id",
+    "workdir",
+    "host_context_id",
+    "context_source",
+    "updated_at",
+    "requires_web_alignment",
+    "requires_candidate_repair",
+    "loopora_fit_contradiction",
+    "preview_path",
+    "run_path",
+}
+
+RECOVERABLE_CONTEXT_REPAIR_NEXT_STEP = load_system_prompt_asset(
+    "agent_native/recoverable-context-repair-next-step.md"
+).strip()
+
+def agent_exact_binding_recovery_action(choice: dict) -> str:
+    if choice.get("linked_run_id"):
+        return "resume_run"
+    if choice.get("alignment_status") in {"ready", "imported"}:
+        return "start_ready_preview"
+    return "blocked"
+
+def agent_failed_preview_choice_repair_fields(
+    session: dict,
+    *,
+    payload: dict | None = None,
+    failed_payload: dict | None = None,
+) -> dict:
+    validation = session.get("validation") if isinstance(session.get("validation"), dict) else {}
+    failed_payload = failed_payload if isinstance(failed_payload, dict) else {}
+    validation_error = str(
+        validation.get("error") or session.get("error_message") or failed_payload.get("error") or ""
+    ).strip()
+    source_path = str((payload or {}).get("source_path") or "").strip()
+    preview_plan_copy = str(
+        session.get("bundle_path") or validation.get("bundle_path") or failed_payload.get("bundle_path") or ""
+    ).strip()
+    summary = {
+        "validation_error": validation_error,
+        "plan_file_to_repair": source_path or preview_plan_copy,
+        "preview_plan_copy": preview_plan_copy,
+        "next_repair_step": RECOVERABLE_CONTEXT_REPAIR_NEXT_STEP,
+    }
+    return {key: value for key, value in summary.items() if value not in ("", [], {})}
+
+def agent_redacted_context_binding(binding: dict) -> dict:
+    return {
+        key: redact_sensitive_value(key, value)
+        for key, value in binding.items()
+        if key in AGENT_CONTEXT_BINDING_RECOVERY_KEYS
+    }
+
+def agent_run_context_task_verdict(run: dict) -> dict:
+    return task_verdict_from_run(run)
 
 
 def agent_run_context_choice_summary(choices: list[dict]) -> dict[str, object]:
@@ -48,26 +97,25 @@ def agent_run_context_choice_summary(choices: list[dict]) -> dict[str, object]:
     }
 
 
-def agent_run_context_next_action(request: AgentRunContextNextActionRequest) -> str:
-    if request.linked_run_id:
-        return _linked_run_context_next_action(request)
-    if request.session_status == "failed":
+def agent_run_context_next_action(
+    *,
+    session_status: str,
+    linked_run_id: str,
+    linked_run_status: str = "",
+    task_verdict_status: str = "",
+    linked_run_found: bool = True,
+) -> str:
+    if linked_run_id:
+        if not linked_run_found:
+            return "stale_linked_run"
+        if linked_run_status in TERMINAL_RUN_STATUSES:
+            return "replay_terminal_pass" if task_verdict_status in PASSING_TASK_VERDICT_STATUSES else "continue_terminal_evidence"
+        return "resume_active_run"
+    if session_status == "failed":
         return "repair_failed_preview"
-    if request.session_status not in {"ready", "imported"}:
+    if session_status not in {"ready", "imported"}:
         return "preview_not_ready"
     return "start_ready_preview"
-
-
-def _linked_run_context_next_action(request: AgentRunContextNextActionRequest) -> str:
-    if not request.linked_run_found:
-        return "stale_linked_run"
-    if request.linked_run_status in TERMINAL_RUN_STATUSES:
-        if request.linked_run_lifecycle_failure:
-            return "retry_lifecycle_failure"
-        if request.task_verdict_status in PASSING_TASK_VERDICT_STATUSES:
-            return "replay_terminal_pass"
-        return "continue_terminal_evidence"
-    return "resume_active_run"
 
 
 def agent_run_context_choice_payload(  # noqa: PLR0913 - recovery choice payloads expose explicit stable projection inputs.
@@ -79,8 +127,6 @@ def agent_run_context_choice_payload(  # noqa: PLR0913 - recovery choice payload
     linked_run_status: str = "",
     task_verdict_status: str = "",
     task_verdict_summary: str = "",
-    linked_run_lifecycle_failure: bool = False,
-    recording_blocked_reason: str = "",
     next_action: str = "start_ready_preview",
 ) -> dict:
     session_id = str(session.get("id") or "").strip()
@@ -89,16 +135,15 @@ def agent_run_context_choice_payload(  # noqa: PLR0913 - recovery choice payload
     entry_source = str((payload or {}).get("entry_source") or "")
     choice_status, choice_hint_en, choice_hint_zh = agent_run_context_choice_hint(next_action)
     runnable = next_action not in {"preview_not_ready", "repair_failed_preview", "stale_linked_run"}
-    workdir = str(session.get("workdir") or "").strip()
     next_slash_command = f"/loopora-run option:{option_id}" if runnable else ""
     next_cli_command = (
         agent_loop_command(
             adapter,
-            workdir,
+            str(session.get("workdir") or "."),
             entry_source=entry_source,
             source_option_id=option_id,
         )
-        if runnable and adapter and workdir
+        if runnable and adapter
         else ""
     )
     preview_path = f"/loops/new/bundle?alignment_session_id={session_id}" if session_id else ""
@@ -111,8 +156,6 @@ def agent_run_context_choice_payload(  # noqa: PLR0913 - recovery choice payload
         "alignment_status": str(session.get("status") or ""),
         "linked_run_id": linked_run_id,
         "linked_run_status": linked_run_status,
-        "linked_run_lifecycle_failure": linked_run_lifecycle_failure,
-        "recording_blocked_reason": recording_blocked_reason,
         "task_verdict_status": task_verdict_status,
         "task_verdict_summary": task_verdict_summary,
         "choice_status": choice_status,
@@ -130,8 +173,8 @@ def agent_run_context_choice_payload(  # noqa: PLR0913 - recovery choice payload
         "agent_cli_command": next_cli_command,
         "label_zh": f"{agent_run_context_choice_label_prefix_zh(next_action)}：{title}",
         "label_en": f"{agent_run_context_choice_label_prefix_en(next_action)}: {title}",
-        "description_zh": "回到这个 Agent Native Loop 的现有运行或 READY 预览；不会重新规划。",
-        "description_en": "Return to this Agent Native Loop's existing run or READY preview without replanning.",
+        "description_zh": "回到这个 Agent Runner Loop 的现有运行或 READY 预览；不会重新规划。",
+        "description_en": "Return to this Agent Runner Loop's existing run or READY preview without replanning.",
     }
     if next_action == "preview_not_ready":
         choice["next_review_step"] = "open the preview, complete Web review or rerun /loopora-plan, then use /loopora-run only after it is ready"
@@ -144,7 +187,6 @@ def agent_run_context_choice_label_prefix_en(action: str) -> str:
         "start_ready_preview": "Start READY preview",
         "replay_terminal_pass": "Replay terminal run",
         "continue_terminal_evidence": "Continue evidence from terminal run",
-        "retry_lifecycle_failure": "Retry failed run start",
         "preview_not_ready": "Review unfinished preview",
         "repair_failed_preview": "Repair Agent plan",
         "stale_linked_run": "Repair missing run link",
@@ -158,7 +200,6 @@ def agent_run_context_choice_label_prefix_zh(action: str) -> str:
         "start_ready_preview": "启动 READY 预览",
         "replay_terminal_pass": "回放已结束运行",
         "continue_terminal_evidence": "从已结束运行继续补证据",
-        "retry_lifecycle_failure": "重试启动失败运行",
         "preview_not_ready": "检查未完成预览",
         "repair_failed_preview": "修复 Agent 方案",
         "stale_linked_run": "修复缺失运行关联",
@@ -187,11 +228,6 @@ def agent_run_context_choice_hint(action: str) -> tuple[str, str, str]:
             "terminal_unproven",
             "Continue from a terminal run whose task verdict is not proven; selecting this starts the next evidence pass.",
             "从任务裁决未证明的已结束 run 继续；选择它会启动下一轮补证据。",
-        ),
-        "retry_lifecycle_failure": (
-            "terminal_retry",
-            "Retry a terminal run that failed before evidence work could start; selecting this starts a fresh run from the reviewed Loop.",
-            "重试一个在证据工作开始前失败的已结束 run；选择它会从已审查 Loop 启动新的运行。",
         ),
         "preview_not_ready": (
             "not_ready",

@@ -8,12 +8,9 @@ from loopora.agent_native_task_proof import (
     AGENT_TASK_PROOF_SOURCE,
     PASSING_TASK_VERDICT_STATUSES,
 )
-from loopora.agent_native_surface import (
-    agent_native_run_surface_for_result,
-    compact_native_run_surface,
-    native_surface_plain_lines,
-)
+from loopora.agent_native_surface import agent_native_run_surface_for_result, native_surface_plain_lines
 from loopora.cli_agent_current_step_output import _print_agent_current_step
+from loopora.cli_agent_runtime_support import print_web_status as _print_web_status
 from loopora.cli_agent_submit_results import (
     _agent_submit_json_payload,
     _agent_submit_summary,
@@ -29,7 +26,7 @@ from loopora.cli_agent_step_results import (
 )
 from loopora.cli_agent_submitted_step_output import _print_agent_submitted_step
 from loopora.cli_agent_work_panel import print_agent_work_panel as _print_agent_work_panel
-from loopora.cli_run_output import print_run_contract_anchor, print_task_verdict
+from loopora.cli_run_output import print_run_contract_summary, print_task_verdict
 from loopora.cli_shared import echo_json
 from loopora.cli_summary_helpers import clip as _clip
 from loopora.run_projection_fields import run_status_from_run, task_verdict_from_run
@@ -61,14 +58,15 @@ def _print_agent_loop_result(result: dict, *, json_output: bool, compact_json_ou
     typer.echo(f"Loopora run: {run.get('id')}")
     typer.echo(f"run_status: {run_status_from_run(run)}")
     _print_agent_loop_start_state(result)
-    _print_agent_context_binding_warning(result)
     _print_agent_native_run_surface(result)
-    print_run_contract_anchor(run)
+    print_run_contract_summary(run)
     task_verdict = task_verdict_from_run(run)
     if result.get("complete"):
         print_task_verdict(task_verdict)
         _print_terminal_task_next_action(task_verdict, result.get("task_next_action"))
         _print_agent_native_terminal_state(task_verdict)
+    typer.echo(f"run_url: {result.get('run_url') or result.get('run_path')}")
+    _print_web_status(result)
     next_step = result.get("next_step") if isinstance(result.get("next_step"), dict) else {}
     if next_step:
         _print_agent_current_step(next_step)
@@ -78,22 +76,11 @@ def _print_agent_loop_start_state(result: dict) -> None:
     if "started_new_run" not in result:
         return
     if result.get("started_new_run") is True:
-        typer.echo("run_start: started_new_agent_native_run")
+        typer.echo("run_start: started_new_agent_runner_run")
     elif result.get("complete") is True:
         typer.echo("run_start: replayed_existing_terminal_run")
     else:
-        typer.echo("run_start: resumed_existing_agent_native_run")
-
-
-def _print_agent_context_binding_warning(result: dict) -> None:
-    error = str(result.get("context_binding_error") or "").strip()
-    if not error:
-        return
-    typer.echo(f"context_binding_warning: {error}")
-    action = result.get("context_repair_action") if isinstance(result.get("context_repair_action"), dict) else {}
-    next_action = str(action.get("next_action") or "").strip()
-    if next_action:
-        typer.echo(f"context_repair_next: {_clip(next_action, 320)}")
+        typer.echo("run_start: resumed_existing_agent_runner_run")
 
 
 def _print_agent_step_result(result: dict, *, json_output: bool, compact_json_output: bool = False) -> None:
@@ -101,9 +88,6 @@ def _print_agent_step_result(result: dict, *, json_output: bool, compact_json_ou
         echo_json(_agent_submit_json_payload(result, include_raw=not compact_json_output))
         return
     _print_agent_work_panel(result)
-    attestation_source = str(result.get("host_dispatch_attestation_source") or "").strip()
-    if attestation_source:
-        typer.echo(f"host_dispatch_attestation_source: {attestation_source}")
     if result.get("auto_repair_applied") is True:
         actions = [str(item).strip() for item in list(result.get("auto_repair_actions") or []) if str(item).strip()]
         rendered = ", ".join(actions[:4]) if actions else "safe wrapper repair"
@@ -114,11 +98,13 @@ def _print_agent_step_result(result: dict, *, json_output: bool, compact_json_ou
     _print_agent_native_run_surface(result)
     _print_agent_submitted_step(result.get("submitted_step"))
     _print_agent_coverage_after_submit(result)
-    print_run_contract_anchor(run)
+    print_run_contract_summary(run)
     task_verdict = task_verdict_from_run(run)
     if result.get("complete"):
         print_task_verdict(task_verdict)
         _print_terminal_task_next_action(task_verdict, result.get("task_next_action"))
+    typer.echo(f"run_url: {result.get('run_url') or result.get('run_path')}")
+    _print_web_status(result)
     next_step = result.get("next_step") if isinstance(result.get("next_step"), dict) else {}
     if result.get("complete"):
         _print_agent_native_terminal_state(task_verdict)
@@ -135,7 +121,7 @@ def _print_agent_next_result(result: dict, *, json_output: bool, compact_json_ou
 
 def _print_agent_native_run_surface(result: dict) -> None:
     next_step = result.get("next_step") if isinstance(result.get("next_step"), dict) else {}
-    surface = compact_native_run_surface(agent_native_run_surface_for_result(result, next_step))
+    surface = agent_native_run_surface_for_result(result, next_step)
     for line in native_surface_plain_lines(surface):
         typer.echo(line)
 
@@ -167,13 +153,13 @@ def _print_agent_coverage_after_submit(result: dict) -> None:
 def _print_agent_native_terminal_state(task_verdict: object) -> None:
     status = _task_verdict_status(task_verdict)
     if status in PASSING_TASK_VERDICT_STATUSES:
-        typer.echo("agent_native: complete")
+        typer.echo("agent_runner: complete")
         _print_agent_native_terminal_sources()
         return
     if not status:
         status = "not_evaluated"
-    typer.echo("agent_native: lifecycle_closed_task_unproven")
-    typer.echo(f"agent_native_task_verdict: {status}")
+    typer.echo("agent_runner: lifecycle_closed_task_unproven")
+    typer.echo(f"agent_runner_task_verdict: {status}")
     _print_agent_native_terminal_sources()
 
 
@@ -184,25 +170,10 @@ def _print_agent_native_terminal_sources() -> None:
 
 def _print_terminal_task_next_action(task_verdict: object, task_next_action: object = None) -> None:
     action = task_next_action if isinstance(task_next_action, dict) else {}
-    action_kind = str(action.get("kind") or "").strip()
     status = _task_verdict_status(task_verdict)
     summary = ""
     if isinstance(task_verdict, dict):
         summary = str(task_verdict.get("summary") or "").strip()
-    if action_kind == "retry_lifecycle_failure":
-        guidance = str(action.get("guidance") or "").strip()
-        typer.echo(
-            "task_next_action: "
-            + (
-                guidance
-                or load_system_prompt_asset("agent_native/task-verdict-retry-lifecycle-failure.md").strip()
-            )
-        )
-        typer.echo(f"next_loop_command: {(action.get('next_loop_command') or '/loopora-run')!s}")
-        blocked_reason = str(action.get("recording_blocked_reason") or "").strip()
-        if blocked_reason:
-            typer.echo(f"recording_blocked_reason: {blocked_reason}")
-        return
     if status in PASSING_TASK_VERDICT_STATUSES:
         typer.echo(f"task_next_action: {_lowercase_first(load_system_prompt_asset('agent_native/task-verdict-already-passed.md').strip())}")
         return

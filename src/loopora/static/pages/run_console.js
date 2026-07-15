@@ -199,13 +199,6 @@ document.addEventListener("DOMContentLoaded", () => {
     return localeText("证据结论已记录", "Evidence verdict recorded");
   }
 
-  function reopenedVerdictSummary(payload) {
-    const verdictStatus = String(payload.task_verdict_status || "").trim();
-    return verdictStatus
-      ? `${localeText("记录结论已重新打开", "Recorded evidence verdict reopened")} · ${localeText("Loop 裁决", "Task verdict")} ${verdictStatus}`
-      : localeText("记录结论已重新打开", "Recorded evidence verdict reopened");
-  }
-
   function buildConsoleLines(event) {
     const payload = event.payload || {};
     if (event.event_type === "run_started") {
@@ -364,15 +357,6 @@ document.addEventListener("DOMContentLoaded", () => {
         channel: "state",
         filterKey: "result",
         summary: recordedVerdictSummary(payload),
-        text: prettyJson(payload),
-      })];
-    }
-    if (event.event_type === "run_result_acceptance_reopened") {
-      return [buildConsoleEntry(event, {
-        tone: "neutral",
-        channel: "state",
-        filterKey: "result",
-        summary: reopenedVerdictSummary(payload),
         text: prettyJson(payload),
       })];
     }
@@ -742,7 +726,6 @@ document.addEventListener("DOMContentLoaded", () => {
     "challenger_done",
     "stop_requested",
     "run_result_accepted",
-    "run_result_acceptance_reopened",
     "run_aborted",
     "workspace_guard_triggered",
   ];

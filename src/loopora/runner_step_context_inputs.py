@@ -3,8 +3,8 @@ from __future__ import annotations
 from loopora.context_flow import normalize_manifest_claim_coverage_targets
 from loopora.run_artifacts import RunArtifactLayout
 from loopora.strategy_source import normalize_strategy_step_evidence_limit
-from loopora.structured_booleans import structured_bool_is_true
-from loopora.structured_numbers import structured_non_negative_int
+from loopora.utils import structured_bool_is_true
+from loopora.utils import structured_non_negative_int
 from loopora.utils import read_json
 
 

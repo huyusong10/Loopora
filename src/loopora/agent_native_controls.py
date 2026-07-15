@@ -14,7 +14,7 @@ from loopora.strategy_controls import (
     strategy_control_after_seconds,
     strategy_iteration_control_triggers,
 )
-from loopora.structured_numbers import structured_non_negative_int
+from loopora.utils import structured_non_negative_int
 
 
 @dataclass(frozen=True)

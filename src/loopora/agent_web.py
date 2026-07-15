@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+import json
 import os
 import socket
+from urllib.error import URLError
+from urllib.request import urlopen
 
 from loopora.settings import app_home
-from loopora.web_bind_preflight import next_available_web_port
-from loopora.web_service_probe import loopora_web_responds
 
 DEFAULT_AGENT_WEB_HOST = "127.0.0.1"
 DEFAULT_AGENT_WEB_PORT = 8742
@@ -14,11 +15,7 @@ AGENT_WEB_PORT_ENV = "LOOPORA_AGENT_WEB_PORT"
 AGENT_WEB_DISCOVERY_PORT_WINDOW = 25
 
 
-def discover_local_web_service(
-    *,
-    host: str = DEFAULT_AGENT_WEB_HOST,
-    preferred_port: int = DEFAULT_AGENT_WEB_PORT,
-) -> dict[str, object]:
+def ensure_local_web_service(*, host: str = DEFAULT_AGENT_WEB_HOST, preferred_port: int = DEFAULT_AGENT_WEB_PORT) -> dict[str, object]:
     selected_host = str(os.environ.get(AGENT_WEB_HOST_ENV) or host)
     selected_port = _agent_web_port_from_env(preferred_port)
     expected_app_home = str(app_home().resolve())
@@ -37,8 +34,6 @@ def discover_local_web_service(
             }
         if first_available_port is None and _port_is_available(selected_host, port):
             first_available_port = port
-    if first_available_port is None:
-        first_available_port = next_available_web_port(host=selected_host, port=selected_port)
     if first_available_port is not None:
         return {
             "status": "not_running",
@@ -61,6 +56,7 @@ def discover_local_web_service(
         "warning": "no available Loopora Web port was found",
     }
 
+
 def web_url_for_path(path: str, *, web: dict[str, object]) -> str:
     base_url = str(web.get("base_url") or f"http://{DEFAULT_AGENT_WEB_HOST}:{DEFAULT_AGENT_WEB_PORT}").rstrip("/")
     normalized_path = "/" + str(path or "/").lstrip("/")
@@ -68,7 +64,16 @@ def web_url_for_path(path: str, *, web: dict[str, object]) -> str:
 
 
 def _loopora_web_responds(base_url: str, *, expected_app_home: str = "") -> bool:
-    return loopora_web_responds(base_url, expected_app_home=expected_app_home)
+    try:
+        with urlopen(f"{base_url}/api/runtime/activity", timeout=0.35) as response:
+            if int(response.status) != 200:
+                return False
+            payload = json.loads(response.read().decode("utf-8"))
+            if not isinstance(payload, dict) or not {"running_count", "queued_count", "runs"}.issubset(payload):
+                return False
+            return not (expected_app_home and str(payload.get("app_home") or "") != expected_app_home)
+    except (json.JSONDecodeError, OSError, UnicodeDecodeError, URLError, TimeoutError):
+        return False
 
 
 def _port_is_available(host: str, port: int) -> bool:

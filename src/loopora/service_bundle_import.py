@@ -4,7 +4,6 @@ from copy import deepcopy
 from pathlib import Path
 
 from loopora.bundles import BundleError, bundle_to_yaml, normalize_bundle_identifier
-from loopora.service_bundle_file_writes import write_bundle_text_atomically
 from loopora.service_bundle_import_cleanup import (
     BundleImportRollbackState,
     BundleImportTarget,
@@ -12,9 +11,6 @@ from loopora.service_bundle_import_cleanup import (
 )
 from loopora.service_types import LooporaConflictError, LooporaError
 from loopora.utils import make_id
-
-PLAN_FILE_IMPORT_ERROR = "plan file could not be imported"
-
 
 class ServiceBundleImportMixin(ServiceBundleImportCleanupMixin):
     def _import_normalized_bundle(
@@ -24,14 +20,11 @@ class ServiceBundleImportMixin(ServiceBundleImportCleanupMixin):
         replace_bundle_id: str | None = None,
         imported_from_path: str,
     ) -> dict:
-        try:
-            target = self._prepare_bundle_import_target(
-                bundle,
-                replace_bundle_id=replace_bundle_id,
-                imported_from_path=imported_from_path,
-            )
-        except OSError as exc:
-            raise LooporaError(PLAN_FILE_IMPORT_ERROR) from exc
+        target = self._prepare_bundle_import_target(
+            bundle,
+            replace_bundle_id=replace_bundle_id,
+            imported_from_path=imported_from_path,
+        )
         state = BundleImportRollbackState(target=target)
         try:
             target.bundle_dir.mkdir(parents=True, exist_ok=True)
@@ -70,9 +63,6 @@ class ServiceBundleImportMixin(ServiceBundleImportCleanupMixin):
                 self._delete_replaced_bundle_artifact_paths(target.target_bundle_id, target.old_local_paths)
             state.committed = True
             return self.get_bundle(state.saved["id"])
-        except OSError as exc:
-            self._rollback_failed_bundle_import(state)
-            raise LooporaError(PLAN_FILE_IMPORT_ERROR) from exc
         except Exception:
             self._rollback_failed_bundle_import(state)
             raise
@@ -136,7 +126,7 @@ class ServiceBundleImportMixin(ServiceBundleImportCleanupMixin):
 
     def _write_imported_bundle_spec(self, target_bundle_id: str, bundle: dict) -> Path:
         spec_path = self._bundle_spec_path(target_bundle_id)
-        write_bundle_text_atomically(spec_path, str(bundle["spec"]["markdown"]))
+        spec_path.write_text(str(bundle["spec"]["markdown"]), encoding="utf-8")
         return spec_path
 
     def _create_imported_bundle_roles(
@@ -219,4 +209,4 @@ class ServiceBundleImportMixin(ServiceBundleImportCleanupMixin):
             description=payload["description"],
             collaboration_summary=payload["collaboration_summary"],
         )
-        write_bundle_text_atomically(self._bundle_yaml_path(target_bundle_id), bundle_to_yaml(export_payload))
+        self._bundle_yaml_path(target_bundle_id).write_text(bundle_to_yaml(export_payload), encoding="utf-8")

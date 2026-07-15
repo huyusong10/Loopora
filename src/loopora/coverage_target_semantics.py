@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from loopora.structured_booleans import structured_bool_is_true
+from loopora.utils import structured_bool_is_true
 
 REQUIRED_TARGET_KINDS = {"done_when", "gatekeeper"}
 

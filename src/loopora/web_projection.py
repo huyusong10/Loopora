@@ -3,9 +3,9 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any, Literal, TypedDict
 
-from loopora.run_status_aliases import public_run_status_from_lifecycle
+from loopora.run_projection_fields import public_run_status_from_lifecycle
 from loopora.run_projection_fields import event_projection_payload, task_verdict_from_run
-from loopora.structured_numbers import coerced_optional_non_negative_int
+from loopora.utils import coerced_optional_non_negative_int
 from loopora.strategy_source import (
     normalize_strategy_role_display_name,
     strategy_archetype_display_name,

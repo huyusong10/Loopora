@@ -2,11 +2,10 @@ from __future__ import annotations
 
 import hashlib
 import os
-from contextlib import suppress
 from pathlib import Path
 from typing import Any
 
-from loopora.agent_adapter_check_utils import adapter_label
+from loopora.agent_adapter_manifest import adapter_label
 from loopora.agent_adapter_manifest import (
     CLAUDE_MANIFEST_RELATIVE_PATH,
     CODEX_MANIFEST_RELATIVE_PATH,
@@ -27,7 +26,6 @@ from loopora.service_types import LooporaConflictError
 __all__ = [
     "CLAUDE_MANIFEST_RELATIVE_PATH",
     "CODEX_MANIFEST_RELATIVE_PATH",
-    "MANAGED_FILE_READ_ERROR",
     "MANIFEST_RELATIVE_PATH",
     "MANIFEST_RELATIVE_PATHS",
     "OBSOLETE_MANAGED_PATHS",
@@ -47,8 +45,6 @@ __all__ = [
     "remove_obsolete_managed_files",
     "sha256_text",
 ]
-
-MANAGED_FILE_READ_ERROR = "managed file could not be read"
 
 
 def managed_file_status(
@@ -80,9 +76,9 @@ def managed_file_status(
 
     try:
         content = target.read_text(encoding="utf-8")
-    except (OSError, UnicodeDecodeError):
+    except (OSError, UnicodeDecodeError) as exc:
         payload["state"] = "error"
-        payload["error"] = MANAGED_FILE_READ_ERROR
+        payload["error"] = str(exc)
         return {
             "payload": payload,
             "current": False,
@@ -153,8 +149,8 @@ def remove_obsolete_managed_files(kind: str, root: Path, templates: dict[str, st
             continue
         try:
             content = target.read_text(encoding="utf-8")
-        except (OSError, UnicodeDecodeError):
-            conflicts.append(relative_path)
+        except (OSError, UnicodeDecodeError) as exc:
+            conflicts.append(f"{relative_path} ({exc})")
             continue
         content_hash = sha256_text(content)
         manifest_hash = manifest_hash_for_path(manifest_payload, relative_path) if isinstance(manifest_payload, dict) else ""
@@ -182,8 +178,8 @@ def assert_targets_are_replaceable(kind: str, root: Path, templates: dict[str, s
             continue
         try:
             existing = target.read_text(encoding="utf-8")
-        except (OSError, UnicodeDecodeError):
-            conflicts.append(relative_path)
+        except (OSError, UnicodeDecodeError) as exc:
+            conflicts.append(f"{relative_path} ({exc})")
             continue
         manifest_hash = manifest_hash_for_path(manifest_payload, relative_path) if isinstance(manifest_payload, dict) else ""
         existing_hash = sha256_text(existing)
@@ -199,13 +195,8 @@ def assert_targets_are_replaceable(kind: str, root: Path, templates: dict[str, s
 def atomic_write_text(path: Path, content: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(f".{path.name}.tmp.{os.getpid()}")
-    try:
-        tmp.write_text(content, encoding="utf-8")
-        tmp.replace(path)
-    except OSError:
-        with suppress(OSError):
-            tmp.unlink()
-        raise
+    tmp.write_text(content, encoding="utf-8")
+    tmp.replace(path)
 
 
 def sha256_text(value: str) -> str:

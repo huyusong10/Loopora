@@ -20,9 +20,9 @@ from loopora.context_prompt_contracts import (
     output_contract_prompt as output_contract_prompt,
     render_role_note_section as render_role_note_section,
     render_run_contract_section as render_run_contract_section,
-    render_step_prompt as render_step_prompt,
     system_prompt_prefix as system_prompt_prefix,
 )
+from loopora.headless_prompt import render_step_prompt as render_step_prompt
 from loopora.context_prompt_sections import (
     render_artifact_refs as render_artifact_refs,
     render_continuation_section as render_continuation_section,
@@ -31,29 +31,6 @@ from loopora.context_prompt_sections import (
     render_handoff_section as render_handoff_section,
     render_iteration_section as render_iteration_section,
     render_previous_iteration_summary as render_previous_iteration_summary,
-)
-from loopora.context_step_results import (
-    StepEvidenceEntryRequest as StepEvidenceEntryRequest,
-    StepResultContext as StepResultContext,
-    build_step_evidence_entry as build_step_evidence_entry,
-    build_step_handoff as build_step_handoff,
-    evidence_entry_id as evidence_entry_id,
-)
-from loopora.context_schemas import (
-    ARTIFACT_REF_SCHEMA as ARTIFACT_REF_SCHEMA,
-    EVIDENCE_COVERAGE_GAP_SCHEMA as EVIDENCE_COVERAGE_GAP_SCHEMA,
-    EVIDENCE_COVERAGE_RESULT_SCHEMA as EVIDENCE_COVERAGE_RESULT_SCHEMA,
-    EVIDENCE_ITEM_SCHEMA as EVIDENCE_ITEM_SCHEMA,
-    EVIDENCE_MANIFEST_CLAIM_SCHEMA as EVIDENCE_MANIFEST_CLAIM_SCHEMA,
-    EVIDENCE_MANIFEST_CLAIM_TARGET_SCHEMA as EVIDENCE_MANIFEST_CLAIM_TARGET_SCHEMA,
-    EVIDENCE_MANIFEST_SUMMARY_SCHEMA as EVIDENCE_MANIFEST_SUMMARY_SCHEMA,
-    ITERATION_SUMMARY_SCHEMA as ITERATION_SUMMARY_SCHEMA,
-    LATEST_STATE_SCHEMA as LATEST_STATE_SCHEMA,
-    ROLE_POSTURE_CONTRACT_SCHEMA as ROLE_POSTURE_CONTRACT_SCHEMA,
-    STEP_HANDOFF_SCHEMA as STEP_HANDOFF_SCHEMA,
-    STEP_INSTRUCTION_CONTEXT_SCHEMA as STEP_INSTRUCTION_CONTEXT_SCHEMA,
-    TASK_VERDICT_BUCKETS_SCHEMA as TASK_VERDICT_BUCKETS_SCHEMA,
-    TASK_VERDICT_CONTEXT_SCHEMA as TASK_VERDICT_CONTEXT_SCHEMA,
 )
 from loopora.context_step_instruction_normalizers import (
     int_value as _int_value,
@@ -71,7 +48,65 @@ from loopora.service_bundle_control_trace_mining import (
     build_loop_fit_trace,
     build_runtime_local_governance_trace,
 )
-from loopora.structured_numbers import coerced_non_negative_int
+from loopora.utils import coerced_non_negative_int
+
+
+from loopora.context_step_evidence_entries import (
+    build_step_evidence_entry as _build_step_evidence_entry,
+    evidence_entry_id as _evidence_entry_id,
+)
+
+from loopora.context_step_handoffs import build_step_handoff as _build_step_handoff
+
+
+from loopora.context_schema_runtime import (
+    ITERATION_SUMMARY_SCHEMA as ITERATION_SUMMARY_SCHEMA,
+    LATEST_STATE_SCHEMA as LATEST_STATE_SCHEMA,
+    STEP_INSTRUCTION_CONTEXT_SCHEMA as STEP_INSTRUCTION_CONTEXT_SCHEMA,
+)
+
+from loopora.context_schema_evidence import (
+    ARTIFACT_REF_SCHEMA as ARTIFACT_REF_SCHEMA,
+    EVIDENCE_COVERAGE_GAP_SCHEMA as EVIDENCE_COVERAGE_GAP_SCHEMA,
+    EVIDENCE_COVERAGE_RESULT_SCHEMA as EVIDENCE_COVERAGE_RESULT_SCHEMA,
+    EVIDENCE_ITEM_SCHEMA as EVIDENCE_ITEM_SCHEMA,
+    EVIDENCE_MANIFEST_CLAIM_SCHEMA as EVIDENCE_MANIFEST_CLAIM_SCHEMA,
+    EVIDENCE_MANIFEST_CLAIM_TARGET_SCHEMA as EVIDENCE_MANIFEST_CLAIM_TARGET_SCHEMA,
+    EVIDENCE_MANIFEST_SUMMARY_SCHEMA as EVIDENCE_MANIFEST_SUMMARY_SCHEMA,
+)
+
+from loopora.context_schema_shared import (
+    CONTINUATION_CONTEXT_SCHEMA as CONTINUATION_CONTEXT_SCHEMA,
+    CONTINUATION_COVERAGE_SCHEMA as CONTINUATION_COVERAGE_SCHEMA,
+    ROLE_POSTURE_CONTRACT_SCHEMA as ROLE_POSTURE_CONTRACT_SCHEMA,
+    STEP_HANDOFF_SCHEMA as STEP_HANDOFF_SCHEMA,
+    TASK_VERDICT_BUCKETS_SCHEMA as TASK_VERDICT_BUCKETS_SCHEMA,
+    TASK_VERDICT_CONTEXT_SCHEMA as TASK_VERDICT_CONTEXT_SCHEMA,
+)
+
+@dataclass(frozen=True)
+class StepResultContext:
+    layout: RunArtifactLayout
+    iter_id: int
+    step: dict
+    step_order: int
+    role: dict
+    runtime_role: str
+    output: dict
+
+@dataclass(frozen=True)
+class StepEvidenceEntryRequest:
+    result: StepResultContext
+    handoff: dict
+
+def build_step_handoff(result: StepResultContext) -> dict:
+    return _build_step_handoff(result)
+
+def evidence_entry_id(iter_id: int, step_order: int, step_id: str) -> str:
+    return _evidence_entry_id(iter_id, step_order, step_id)
+
+def build_step_evidence_entry(request: StepEvidenceEntryRequest) -> dict:
+    return _build_step_evidence_entry(request)
 
 
 @dataclass(frozen=True)

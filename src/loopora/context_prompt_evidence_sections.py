@@ -3,10 +3,10 @@ from __future__ import annotations
 import json
 
 from loopora.context_value_helpers import string_list as _string_list
-from loopora.evidence_support import evidence_item_is_supporting_gatekeeper_ref
+from loopora.evidence_coverage import evidence_item_is_supporting_gatekeeper_ref
 from loopora.residual_risk_support import residual_risk_is_meaningful
-from loopora.structured_booleans import structured_bool_is_true
-from loopora.structured_numbers import structured_non_negative_int
+from loopora.utils import structured_bool_is_true
+from loopora.utils import structured_non_negative_int
 
 
 def render_evidence_section(evidence: dict) -> str:

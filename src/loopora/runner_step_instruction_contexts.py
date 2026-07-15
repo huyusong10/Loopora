@@ -20,7 +20,7 @@ from loopora.runner_step_context_inputs import (
     merge_coverage_gap_evidence,
     step_declares_evidence_query,
 )
-from loopora.runner_step_runtime import RunnerStepRuntimeRequest
+from loopora.runner_step_runtime_requests import RunnerStepRuntimeRequest
 from loopora.utils import write_json
 
 

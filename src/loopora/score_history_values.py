@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from loopora.structured_numbers import structured_optional_finite_number
+from loopora.utils import structured_optional_finite_number
 
 
 def structured_score_value(value: object) -> float | None:

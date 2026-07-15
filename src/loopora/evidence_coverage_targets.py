@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from loopora.runtime_task_language import runtime_task_language, runtime_task_text
+from loopora.utils import runtime_task_language, runtime_task_text
 
 
 def with_coverage_targets(compiled_spec: Mapping[str, Any], *, completion_mode: str = "gatekeeper") -> dict:

@@ -254,73 +254,7 @@
       return bits.slice(0, 8).join(" · ");
     }
 
-    function targetRequirementCounts(snapshot, requirement) {
-      const coverage = snapshot?.evidence_coverage || {};
-      const totalField = `${requirement}_target_count`;
-      const total = displayCount(coverage[totalField]);
-      const statuses = {
-        covered: displayCount(coverage[`covered_${requirement}_target_count`]),
-        weak: displayCount(coverage[`weak_${requirement}_target_count`]),
-        missing: displayCount(coverage[`missing_${requirement}_target_count`]),
-        blocked: displayCount(coverage[`blocked_${requirement}_target_count`]),
-      };
-      if (total > 0) {
-        return {total, ...statuses};
-      }
-      const required = requirement === "required";
-      const bucketCounts = {
-        covered: bucketItems(snapshot, "proven").filter((item) => item?.required === required).length,
-        weak: bucketItems(snapshot, "weak").filter((item) => item?.required === required).length,
-        missing: bucketItems(snapshot, "unproven").filter((item) => item?.required === required).length,
-        blocked: bucketItems(snapshot, "blocking").filter((item) => item?.required === required).length,
-      };
-      return {total: Object.values(bucketCounts).reduce((sum, count) => sum + count, 0), ...bucketCounts};
-    }
-
-    function targetBasis(snapshot) {
-      const required = targetRequirementCounts(snapshot, "required");
-      const advisory = targetRequirementCounts(snapshot, "advisory");
-      return {
-        required,
-        advisory,
-        requiredOpen: required.weak + required.missing + required.blocked,
-        advisoryOpen: advisory.weak + advisory.missing + advisory.blocked,
-      };
-    }
-
-    function targetBasisDetail(counts) {
-      return localeText(
-        `已证明 ${counts.covered} · 偏弱 ${counts.weak} · 未证明 ${counts.missing} · 阻断 ${counts.blocked}`,
-        `Proven ${counts.covered} · weak ${counts.weak} · unproven ${counts.missing} · blocking ${counts.blocked}`
-      );
-    }
-
-    function passingBasisDetail(snapshot) {
-      const basis = targetBasis(snapshot);
-      if (!basis.required.total) {
-        return "";
-      }
-      const required = localeText(
-        `必需依据 ${basis.required.covered}/${basis.required.total} 已证明。`,
-        `Required basis ${basis.required.covered}/${basis.required.total} proven.`
-      );
-      if (!basis.advisory.total) {
-        return required;
-      }
-      const advisory = basis.advisoryOpen
-        ? localeText(
-          `仍有 ${basis.advisoryOpen} 项建议跟进；它们保留审计，但不阻断本次裁决。`,
-          `${basis.advisoryOpen} advisory follow-up${basis.advisoryOpen === 1 ? " remains" : "s remain"}; they stay visible for audit but do not block this verdict.`
-        )
-        : localeText("建议目标也已全部覆盖。", "Advisory targets are also fully covered.");
-      return `${required} ${advisory}`;
-    }
-
-    function runIsActive(run) {
-      return ["queued", "running", "awaiting_agent"].includes(String(run?.status || "").toLowerCase());
-    }
-
-    function evidenceCoverageHtml(snapshot, runId, currentRun) {
+    function evidenceCoverageHtml(snapshot, runId) {
       const coverage = snapshot?.evidence_coverage || {};
       const manifest = snapshot?.evidence_manifest || {};
       const judgmentContract = snapshot?.judgment_contract || {};
@@ -355,45 +289,27 @@
           ? localeText(`${evidenceCount} 条证据 · 账本 ${coverage.ledger_path}`, `${evidenceCount} evidence item${evidenceCount === 1 ? "" : "s"} · Ledger ${coverage.ledger_path}`)
           : localeText("运行开始后会写入证据账本。", "The ledger appears after the run starts.");
       const claimCount = displayCount(manifest.claim_count);
-      const artifactBackedCount = displayCount(manifest.artifact_backed_claim_count);
       const directProofCount = displayCount(manifest.direct_proof_claim_count);
       const workspaceArtifactCount = displayCount(manifest.workspace_artifact_claim_count);
       const runArtifactCount = displayCount(manifest.run_artifact_claim_count);
       const ledgerOnlyCount = displayCount(manifest.ledger_only_claim_count);
       const unverifiedCount = displayCount(manifest.unverified_claim_count);
-      const sourceDetail = manifestPath
+      const proofDetail = manifestPath
         ? localeText(
           `直接证明 ${directProofCount} · 工作区产物 ${workspaceArtifactCount} · 运行产物 ${runArtifactCount} · 仅账本 ${ledgerOnlyCount} · 未验证 ${unverifiedCount}`,
-          `Direct ${directProofCount} · workspace artifact ${workspaceArtifactCount} · run artifact ${runArtifactCount} · ledger-only ${ledgerOnlyCount} · unverified ${unverifiedCount}`
+          `Direct ${directProofCount} · workspace ${workspaceArtifactCount} · run artifact ${runArtifactCount} · ledger-only ${ledgerOnlyCount} · unverified ${unverifiedCount}`
         )
         : localeText("证据清单会在证据账本落账后生成。", "The evidence manifest appears after ledger claims are written.");
-      const basis = targetBasis(snapshot);
+      const provenCount = evidenceBucketCount(snapshot, "proven");
+      const weakBucketCount = evidenceBucketCount(snapshot, "weak");
+      const unprovenCount = evidenceBucketCount(snapshot, "unproven");
       const blockingCount = evidenceBucketCount(snapshot, "blocking");
       const riskCount = evidenceBucketCount(snapshot, "residual_risk") || (hasBucketProjection(snapshot) ? 0 : displayCount(coverage.residual_risk_count));
-      const active = runIsActive(currentRun);
-      const verdictStatus = active
-        ? localeText("等待运行收束", "Pending run completion")
-        : taskVerdictStatusLabel(snapshot?.task_verdict?.status);
-      const verdictDetail = active
-        ? localeText(
-          "角色仍在执行；当前覆盖只表示证据进度，不是最终裁决。",
-          "Roles are still running; current coverage is evidence progress, not a final verdict."
-        )
-        : statusDetail;
       return [
-        evidenceCoverageCard("裁决状态", "Verdict status", verdictStatus, verdictDetail, `${verdictAction}${traceAction}`),
-        evidenceCoverageCard(
-          active ? "必需证据" : "必需依据",
-          active ? "Required evidence" : "Required basis",
-          basis.required.total ? `${basis.required.covered}/${basis.required.total}` : "-",
-          targetBasisDetail(basis.required)
-        ),
-        evidenceCoverageCard(
-          "建议跟进",
-          "Advisory follow-up",
-          basis.advisory.total ? localeText(`${basis.advisoryOpen} 项`, `${basis.advisoryOpen} open`) : "-",
-          [targetBasisDetail(basis.advisory), primaryGap?.required === false ? primaryGap?.text : ""].filter(Boolean).join(" · ")
-        ),
+        evidenceCoverageCard("裁决状态", "Verdict status", taskVerdictStatusLabel(snapshot?.task_verdict?.status), statusDetail, `${verdictAction}${traceAction}`),
+        evidenceCoverageCard("已证明", "Proven", String(provenCount || coveredChecks || 0), bucketDetailText(snapshot, "proven", checkCount ? `${coveredChecks}/${checkCount}` : "")),
+        evidenceCoverageCard("偏弱", "Weak", String(weakBucketCount), bucketDetailText(snapshot, "weak")),
+        evidenceCoverageCard("未证明", "Unproven", String(unprovenCount), bucketDetailText(snapshot, "unproven", primaryGap?.text || "")),
         evidenceCoverageCard(
           "阻断",
           "Blocking",
@@ -401,13 +317,7 @@
           bucketDetailText(snapshot, "blocking", gatekeeperRefs ? localeText("守门者已引用上游证据。", "GateKeeper cited upstream evidence.") : "")
         ),
         evidenceCoverageCard("残余风险", "Residual risk", String(riskCount), bucketDetailText(snapshot, "residual_risk")),
-        evidenceCoverageCard(
-          "证据来源",
-          "Evidence sources",
-          claimCount ? localeText(`${artifactBackedCount}/${claimCount} 条有产物`, `${artifactBackedCount}/${claimCount} artifact-backed`) : "-",
-          sourceDetail,
-          manifestAction
-        ),
+        evidenceCoverageCard("证明强度", "Proof strength", claimCount ? `${directProofCount}/${claimCount}` : "-", proofDetail, manifestAction),
         evidenceCoverageCard(
           "判断契约",
           "Judgment contract",
@@ -427,37 +337,24 @@
       const missingCount = displayCount(coverage.missing_target_count);
       const blockedCount = displayCount(coverage.blocked_target_count);
       const primaryGap = Array.isArray(coverage.top_gaps) && coverage.top_gaps.length ? coverage.top_gaps[0] : null;
-      const passingBasis = passingBasisDetail(snapshot);
-      if (runIsActive(currentRun)) {
-        return {
-          soft: true,
-          title: localeText("等待证据收束", "Evidence pending"),
-          detail: localeText(
-            "角色交接、证据账本和 GateKeeper 裁决仍在生成；当前缺口不会提前定性为失败。",
-            "Role handoffs, the evidence ledger, and the GateKeeper verdict are still being produced; current gaps are not classified as failure yet."
-          ),
-        };
-      }
       if (taskStatus === "passed_with_residual_risk") {
         return {
           soft: false,
           title: taskVerdictStatusLabel(taskStatus),
-          detail: [passingBasis, taskVerdict.summary || firstBucketText(snapshot, "residual_risk") || localeText(
+          detail: taskVerdict.summary || firstBucketText(snapshot, "residual_risk") || localeText(
             "Loop 裁决已通过，但仍保留可见且已接受的残余风险。",
             "The task verdict passed, with accepted residual risk still visible."
-          )].filter(Boolean).join(" "),
+          ),
         };
       }
       if (taskStatus === "passed") {
         return {
           soft: true,
-          title: passingBasis
-            ? localeText("必需证据已通过", "Required evidence passed")
-            : taskVerdictStatusLabel(taskStatus),
-          detail: [passingBasis, taskVerdict.summary || localeText(
+          title: taskVerdictStatusLabel(taskStatus),
+          detail: taskVerdict.summary || localeText(
             "Loop 裁决由证据桶支撑；可继续查看已证明 / 残余风险的明细。",
             "The task verdict is backed by evidence buckets; inspect proven and residual-risk details as needed."
-          )].filter(Boolean).join(" "),
+          ),
         };
       }
       if (taskStatus === "failed" || ["blocked", "partial"].includes(coverageStatus) || blockedCount > 0 || missingCount > 0) {

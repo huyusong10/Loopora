@@ -6,7 +6,7 @@ from typing import Protocol
 
 from loopora.context_value_helpers import clean_text, evidence_coverage_results, string_list, unique_string_list
 from loopora.evidence_gate import concrete_evidence_claim_count, has_measured_gate_evidence
-from loopora.structured_numbers import coerced_non_negative_int
+from loopora.utils import coerced_non_negative_int
 from loopora.utils import utc_now
 
 

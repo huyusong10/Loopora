@@ -8,7 +8,7 @@ from loopora.recovery import RetryConfig
 from loopora.run_artifacts import INITIAL_STAGNATION_STATE
 from loopora.service_types import normalize_completion_mode
 from loopora.strategy_source import normalize_strategy_source, strategy_source_from_record
-from loopora.structured_numbers import coerced_non_negative_int
+from loopora.utils import coerced_non_negative_int
 from loopora.utils import read_json
 
 

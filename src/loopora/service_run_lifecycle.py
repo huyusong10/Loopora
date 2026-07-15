@@ -2,27 +2,185 @@ from __future__ import annotations
 
 import logging
 import threading
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 
-from loopora.diagnostics import get_logger, log_event, log_exception
-from loopora.run_worker_start import BACKGROUND_WORKER_START_ERROR, background_worker_start_failure_summary
+from loopora.diagnostics import get_logger, log_event
 from loopora.run_observation_events import TAKEAWAY_PROJECTION_EVENT_TYPES
-from loopora.service_loop_deletion import ServiceLoopDeletionMixin
 from loopora.service_run_acceptance import ServiceRunAcceptanceMixin
-from loopora.service_run_continuation import ServiceRunContinuationMixin
-from loopora.service_run_evidence_export import ServiceRunEvidenceExportMixin
-from loopora.service_run_file_access import ServiceRunFileAccessMixin
 from loopora.service_run_finalization import TerminalRunFinalizationRequest
 from loopora.service_run_observation import ServiceRunObservationMixin
 from loopora.service_run_recovery import ServiceRunRecoveryMixin
-from loopora.service_run_takeaway_projection import ServiceRunTakeawayProjectionMixin
-from loopora.service_types import (
-    ACTIVE_RUN_STATUSES,
-    LooporaConflictError,
-    LooporaError,
-    LooporaNotFoundError,
-    TERMINAL_RUN_STATUSES,
-)
+from loopora.service_types import ACTIVE_RUN_STATUSES, LooporaConflictError, LooporaNotFoundError, TERMINAL_RUN_STATUSES
+
+
+from loopora.branding import state_dir_for_workdir
+
+from loopora.file_previews import preview_existing_path
+
+from loopora.service_types import LooporaError
+
+
+from loopora.service_cleanup_diagnostics import best_effort_rmtree, record_cleanup_failure
+
+
+from loopora.diagnostics import log_exception
+
+
+from loopora.run_takeaways import build_minimal_run_takeaway_projection, build_run_key_takeaways
+
+
+class ServiceRunTakeawayProjectionMixin:
+    def _record_run_takeaway_projection_for_event(self, run_id: str, source_event_id: int) -> None:
+        if source_event_id <= 0:
+            return
+        try:
+            run = self.repository.get_run(run_id)
+            if not run:
+                return
+            payload = build_run_key_takeaways(self._hydrate_run_files(run))
+            self.repository.record_run_takeaway_projection(run_id, source_event_id, payload)
+        except Exception as exc:  # noqa: BLE001 - takeaway projection failures must not change run state.
+            log_exception(
+                logger,
+                "service.run_takeaway_projection.write_failed",
+                "Failed to persist run takeaway projection",
+                error=exc,
+                run_id=run_id,
+                source_event_id=source_event_id,
+            )
+
+    def _backfill_missing_run_takeaway_projections(self) -> None:
+        if not hasattr(self.repository, "list_terminal_runs_without_takeaway_projection"):
+            return
+        for run in self.repository.list_terminal_runs_without_takeaway_projection(limit=5000):
+            run_id = str(run.get("id") or "").strip()
+            if not run_id:
+                continue
+            try:
+                trigger_event_id = self.repository.latest_event_id_for_types(
+                    run_id,
+                    TAKEAWAY_PROJECTION_EVENT_TYPES,
+                )
+                latest_event_id = self.repository.latest_event_id(run_id)
+                source_event_id = trigger_event_id or latest_event_id
+                if source_event_id <= 0:
+                    continue
+                hydrated = self._hydrate_run_files(run)
+                payload = (
+                    build_run_key_takeaways(hydrated) if trigger_event_id else build_minimal_run_takeaway_projection(hydrated, source_event_id=source_event_id)
+                )
+                self.repository.record_run_takeaway_projection(run_id, source_event_id, payload)
+            except Exception as exc:  # noqa: BLE001 - projection backfill is best-effort startup repair.
+                log_exception(
+                    logger,
+                    "service.run_takeaway_projection.backfill_failed",
+                    "Failed to backfill run takeaway projection",
+                    error=exc,
+                    run_id=run_id,
+                )
+
+
+class ServiceLoopDeletionMixin:
+    def delete_loop(self, loop_id: str, *, allow_bundle_owned: bool = False) -> dict:
+        if not allow_bundle_owned and hasattr(self, "_bundle_record_for_loop_id"):
+            bundle = self._bundle_record_for_loop_id(loop_id)
+            if bundle:
+                raise LooporaConflictError(f"loop {loop_id} is managed by bundle {bundle['id']}; delete the bundle instead")
+        loop = self.get_loop(loop_id)
+        active_runs = [run["id"] for run in loop["runs"] if run["status"] in ACTIVE_RUN_STATUSES]
+        if active_runs:
+            raise LooporaConflictError(f"cannot delete loop with active runs: {', '.join(active_runs)}")
+
+        paths_to_remove = [Path(run["runs_dir"]) for run in loop["runs"]]
+        paths_to_remove.append(state_dir_for_workdir(loop["workdir"]) / "loops" / loop_id)
+
+        self.repository.delete_loop(loop_id)
+        for path in paths_to_remove:
+            best_effort_rmtree(
+                path,
+                logger,
+                operation="loop_artifact_delete",
+                owner_id=loop_id,
+                workdir=loop["workdir"],
+            )
+            self._mark_local_asset_cleanup_by_path(path, operation="loop_artifact_delete", owner_id=loop_id)
+        self._write_recent_workdirs()
+        result = {"id": loop_id, "deleted_runs": len(loop["runs"]), "workdir": loop["workdir"]}
+        log_event(
+            logger,
+            logging.INFO,
+            "service.loop.deleted",
+            "Deleted loop definition and local artifacts",
+            loop_id=loop_id,
+            workdir=loop["workdir"],
+            deleted_run_count=len(loop["runs"]),
+        )
+        return result
+
+    def _mark_local_asset_cleanup_by_path(self, path: Path, *, operation: str = "local_asset_cleanup", owner_id: object = "") -> None:
+        target = Path(path)
+        state = "cleaned" if not target.exists() else "orphaned"
+        if hasattr(self.repository, "mark_local_asset_root_state_by_path"):
+            try:
+                self.repository.mark_local_asset_root_state_by_path(path=target, state=state)
+            except Exception as exc:  # noqa: BLE001 - local asset registry marking is diagnostic-only cleanup.
+                record_cleanup_failure(
+                    logger,
+                    operation=f"{operation}_registry_mark",
+                    resource_type="local_asset_root",
+                    resource_id=target,
+                    owner_id=owner_id,
+                    error=exc,
+                )
+
+
+class ServiceRunFileAccessMixin:
+    def _file_root_base(self, run: dict, root: str) -> Path:
+        workdir_text = str(run.get("workdir") or "").strip()
+        workdir = Path(workdir_text).expanduser()
+        if not workdir_text or not workdir.is_absolute():
+            raise LooporaError("run workdir is not available")
+        if root == "workdir":
+            return workdir.resolve()
+        if root == "loopora":
+            return state_dir_for_workdir(workdir)
+        raise LooporaError("invalid file root")
+
+    def _resolve_file_path(self, run_id: str, root: str, relative_path: str) -> tuple[Path, Path]:
+        run = self.get_run(run_id)
+        base = self._file_root_base(run, root)
+        requested_path = _normalize_requested_relative_path(relative_path)
+        base_resolved = base.resolve()
+        resolved = (base_resolved / requested_path).resolve()
+        if not resolved.is_relative_to(base_resolved):
+            raise LooporaError("requested path is outside the allowed root")
+        if not resolved.exists():
+            raise LooporaError("requested path does not exist")
+        return base_resolved, resolved
+
+    def preview_file(self, run_id: str, root: str, relative_path: str = "") -> dict:
+        base, resolved = self._resolve_file_path(run_id, root, relative_path)
+        return preview_existing_path(base=base, relative_path=relative_path, resolved=resolved)
+
+    def download_file_path(self, run_id: str, root: str, relative_path: str = "") -> Path:
+        _base, resolved = self._resolve_file_path(run_id, root, relative_path)
+        if not resolved.is_file():
+            raise LooporaError("path is not a file")
+        try:
+            with resolved.open("rb"):
+                pass
+        except OSError as exc:
+            raise LooporaError("file could not be downloaded") from exc
+        return resolved
+
+
+def _normalize_requested_relative_path(relative_path: str) -> str:
+    path_text = str(relative_path or "").strip()
+    windows_path = PureWindowsPath(path_text)
+    if Path(path_text).is_absolute() or windows_path.is_absolute() or windows_path.drive:
+        raise LooporaError("requested path must be relative")
+    return path_text
+
 
 logger = get_logger(__name__)
 
@@ -30,8 +188,6 @@ logger = get_logger(__name__)
 class ServiceRunLifecycleMixin(
     ServiceRunTakeawayProjectionMixin,
     ServiceRunAcceptanceMixin,
-    ServiceRunContinuationMixin,
-    ServiceRunEvidenceExportMixin,
     ServiceRunFileAccessMixin,
     ServiceLoopDeletionMixin,
     ServiceRunRecoveryMixin,
@@ -66,7 +222,12 @@ class ServiceRunLifecycleMixin(
             self._threads.pop(run_id, None)
         if not self._try_mark_run_active(run_id):
             raise LooporaConflictError(f"run {run_id} is already executing in this process")
-        thread = self._build_run_thread(run_id)
+        thread = threading.Thread(
+            target=self._execute_preclaimed_run,
+            args=(run_id,),
+            daemon=True,
+            name=f"run-{run_id}",
+        )
         self._threads[run_id] = thread
         try:
             thread.start()
@@ -78,62 +239,10 @@ class ServiceRunLifecycleMixin(
                 run_id=run_id,
                 thread_name=thread.name,
             )
-        except Exception as exc:
+        except Exception:
             self._mark_run_inactive(run_id)
             self._threads.pop(run_id, None)
-            self._fail_run_after_worker_start_error(run_id, exc)
-            raise LooporaError(BACKGROUND_WORKER_START_ERROR) from exc
-
-    def _fail_run_after_worker_start_error(self, run_id: str, exc: BaseException) -> None:
-        run = self.repository.get_run(run_id)
-        log_exception(
-            logger,
-            "service.run.dispatch_failed",
-            "Failed to start run background worker",
-            error=exc,
-            **self._run_log_context(run),
-        )
-        if not run:
-            return
-        try:
-            failed = self._finalize_terminal_run(
-                TerminalRunFinalizationRequest(
-                    run_id=run_id,
-                    run_dir=Path(run["runs_dir"]),
-                    status="failed",
-                    summary=background_worker_start_failure_summary(),
-                    error_message=BACKGROUND_WORKER_START_ERROR,
-                    final_reason="background_worker_start_failed",
-                )
-            )
-            self._append_run_aborted_event(
-                run_id,
-                role=None,
-                attempts=1,
-                degraded=False,
-                error_text=BACKGROUND_WORKER_START_ERROR,
-            )
-            self.append_run_event(
-                run_id,
-                "run_finished",
-                self._run_finished_event_payload(failed, status="failed", reason="background_worker_start_failed"),
-            )
-        except Exception as finalization_exc:  # noqa: BLE001 - dispatch failure must still surface a stable error.
-            log_exception(
-                logger,
-                "service.run.dispatch_failure_finalization_failed",
-                "Failed to persist run dispatch failure",
-                error=finalization_exc,
-                **self._run_log_context(run),
-            )
-
-    def _build_run_thread(self, run_id: str) -> threading.Thread:
-        return threading.Thread(
-            target=self._execute_preclaimed_run,
-            args=(run_id,),
-            daemon=True,
-            name=f"run-{run_id}",
-        )
+            raise
 
     def stop_run(self, run_id: str) -> dict:
         self._reconcile_local_orphaned_runs()
@@ -200,13 +309,8 @@ class ServiceRunLifecycleMixin(
             loop_id=loop_id,
             background=background,
         )
-        run = self.start_next_run(loop_id)
+        run = self.start_run(loop_id)
         if background:
-            try:
-                self.start_run_async(run["id"])
-            except LooporaError as exc:
-                if str(exc) != BACKGROUND_WORKER_START_ERROR:
-                    raise
-                return {**self.get_run(run["id"]), "run_start_error": str(exc)}
+            self.start_run_async(run["id"])
             return run
         return self.execute_run(run["id"])

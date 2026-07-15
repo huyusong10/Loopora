@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from loopora.events.replay import RunSnapshot
 from loopora.kernel.run_state import RunState
-from loopora.run_status_aliases import lifecycle_status_from_public_run_status
-from loopora.structured_numbers import coerced_non_negative_int
+from loopora.run_projection_fields import lifecycle_status_from_public_run_status
+from loopora.utils import coerced_non_negative_int
 from loopora.task_verdict_aliases import verdict_status_from_task_status
 
 

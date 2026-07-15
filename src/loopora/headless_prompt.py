@@ -50,10 +50,7 @@ def build_headless_prompt(request: HeadlessPromptRequest) -> str:
         output_contract_prompt(role["archetype"]),
         prompt_body.strip(),
         render_run_contract_section(step_context["contract"], compiled_spec),
-        render_continuation_section(
-            step_context.get("continuation") or {},
-            role_archetype=str(role.get("archetype") or ""),
-        ),
+        render_continuation_section(step_context.get("continuation") or {}),
         render_role_note_section(role_guidance),
         render_iteration_section(step_context),
         render_handoff_section(
@@ -82,3 +79,22 @@ def build_headless_prompt(request: HeadlessPromptRequest) -> str:
         f"Prompt template: {prompt_label}",
     ]
     return "\n\n".join(section for section in sections if str(section).strip()).strip()
+
+
+def render_step_prompt(
+    *,
+    role: dict,
+    prompt_label: str,
+    prompt_body: str,
+    step_instruction_context: dict,
+    compiled_spec: dict,
+) -> str:
+    return build_headless_prompt(
+        HeadlessPromptRequest(
+            role=role,
+            prompt_label=prompt_label,
+            prompt_body=prompt_body,
+            step_instruction_context=step_instruction_context,
+            compiled_spec=compiled_spec,
+        )
+    )

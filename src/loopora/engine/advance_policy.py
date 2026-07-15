@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
-from loopora.structured_numbers import coerced_int, coerced_non_negative_int
+from loopora.utils import coerced_int, coerced_non_negative_int
 
 
 @dataclass(frozen=True, slots=True)

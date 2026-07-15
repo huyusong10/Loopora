@@ -7,7 +7,7 @@ from loopora.agent_native_coverage_summary import (
     coverage_gap_summaries,
     required_coverage_summary,
 )
-from loopora.agent_native_evidence_refs import agent_known_evidence_ref_summaries
+from loopora.agent_native_step_view import agent_known_evidence_ref_summaries
 from loopora.agent_native_next_step_sections import (
     action_policy_summary,
     agent_current_step_evidence_scope_summary,
@@ -27,7 +27,6 @@ from loopora.system_prompt_assets import load_system_prompt_asset
 
 ROLE_DISPATCH_MESSAGE_LIMIT = 1000
 ROLE_DISPATCH_LIST_ITEM_LIMIT = 8
-ROLE_DISPATCH_ABSOLUTE_PATH_TAIL_PARTS = 6
 
 
 def agent_next_step_summary(next_step: dict, *, adapter: str = "", workdir: str = "", compact: bool = False) -> dict:
@@ -57,7 +56,7 @@ def agent_next_step_summary(next_step: dict, *, adapter: str = "", workdir: str 
         summary["native_trace_contract"] = native_trace_contract
     dispatch_unavailable = agent_dispatch_unavailable_summary(
         adapter=str(next_step.get("adapter") or adapter or "").strip() or "codex",
-        workdir=str(workdir or "").strip(),
+        workdir=str(workdir or "").strip() or "$PWD",
         role_dispatch=role_dispatch,
     )
     if dispatch_unavailable:
@@ -160,15 +159,8 @@ def _dispatch_path_text(value: str, *, workdir: str = "") -> str:
     try:
         relative = path.resolve().relative_to(Path(workdir).expanduser().resolve())
     except (OSError, ValueError):
-        return _compact_dispatch_absolute_path(path)
+        return text
     return str(relative)
-
-
-def _compact_dispatch_absolute_path(path: Path) -> str:
-    parts = path.parts
-    if len(parts) <= ROLE_DISPATCH_ABSOLUTE_PATH_TAIL_PARTS:
-        return str(path)
-    return str(Path("…", *parts[-ROLE_DISPATCH_ABSOLUTE_PATH_TAIL_PARTS:]))
 
 
 def _attach_agent_next_step_submit_summary(summary: dict[str, object], next_step: dict, submit_hint: dict) -> None:

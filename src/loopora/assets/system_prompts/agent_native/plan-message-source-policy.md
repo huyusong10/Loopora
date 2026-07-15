@@ -1,1 +1,1 @@
-If the current host user prompt already contains the Loopora fit reason, goal, fake-done risks, required evidence, judgment tradeoffs, and any direct-path context, preserve those concrete details in --message instead of asking again or shrinking them into a title.
+If the current host user prompt already contains the goal, fake-done risks, required evidence, and judgment tradeoffs, preserve those concrete details in --message instead of asking again or shrinking them into a title.

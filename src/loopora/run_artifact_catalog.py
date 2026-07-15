@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from loopora.run_artifacts import RunArtifactLayout
+    from loopora.run_artifact_layout import RunArtifactLayout
 
 
 RUN_ARTIFACT_SPECS = (
@@ -141,7 +141,7 @@ STEP_ARTIFACT_FILENAMES = {
 
 
 def list_run_artifacts(run: dict) -> list[dict]:
-    from loopora.run_artifacts import RunArtifactLayout
+    from loopora.run_artifact_layout import RunArtifactLayout
 
     layout = RunArtifactLayout(Path(run["runs_dir"]))
     artifacts: list[dict] = []

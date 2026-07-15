@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from loopora.runner_gatekeeper_output_validation import BLOCKED_GATEKEEPER_COMPOSITE_SCORE
-from loopora.service_runner_support import ServiceRunnerSupportMixin
+from loopora.service_app import ServiceRunnerSupportMixin
 
 
 def test_gatekeeper_output_rejects_unmanaged_residual_risk_on_pass() -> None:

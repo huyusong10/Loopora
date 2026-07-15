@@ -7,7 +7,7 @@ from loopora.evidence_coverage_targets import with_coverage_targets
 from loopora.run_artifacts import write_json_with_mirrors
 from loopora.service_asset_common import normalize_role_models
 from loopora.service_types import LooporaError, LooporaNotFoundError
-from loopora.specs import compile_markdown_spec, save_spec_file
+from loopora.specs import compile_markdown_spec
 from loopora.strategy_source import (
     STRATEGY_ROLE_EXECUTION_FIELDS,
     STRATEGY_ROLE_POSTURE_FIELDS,
@@ -42,7 +42,9 @@ class ServiceBundleLoopSnapshotMixin:
 
         spec_path = self._bundle_spec_path(bundle_id)
         if spec_markdown is None:
-            effective_spec_markdown, compiled_spec = self._bundle_snapshot_spec_from_file_or_loop(spec_path, loop)
+            if not spec_path.exists():
+                raise LooporaError(f"bundle spec does not exist: {spec_path}")
+            effective_spec_markdown, compiled_spec = self._read_and_compile_spec(spec_path)
         else:
             effective_spec_markdown = str(spec_markdown or "").strip() + "\n"
             compiled_spec = compile_markdown_spec(effective_spec_markdown)
@@ -76,9 +78,10 @@ class ServiceBundleLoopSnapshotMixin:
         resolved_orchestration = snapshot["resolved_orchestration"]
         self._persist_refreshed_bundle_orchestration(resolved_orchestration)
 
-        save_spec_file(spec_path, spec_markdown)
+        spec_path.parent.mkdir(parents=True, exist_ok=True)
+        spec_path.write_text(spec_markdown, encoding="utf-8")
         loop_dir = self._ensure_loop_dir(Path(loop["workdir"]), loop_id)
-        save_spec_file(loop_dir / "spec.md", spec_markdown)
+        (loop_dir / "spec.md").write_text(spec_markdown, encoding="utf-8")
         write_json(loop_dir / "compiled_spec.json", compiled_spec)
         self._persist_prompt_files(loop_dir, resolved_orchestration["prompt_files"])
         write_json_with_mirrors(
@@ -101,74 +104,6 @@ class ServiceBundleLoopSnapshotMixin:
         if not updated:
             raise LooporaError(f"failed to update bundle loop snapshot: {loop_id}")
         return self._hydrate_loop_files(updated)
-
-    def _bundle_loop_snapshot_rollback_state(self, snapshot: dict) -> dict:
-        raw_loop = dict(snapshot["loop"])
-        hydrated_loop = self._hydrate_loop_files(dict(raw_loop))
-        return {
-            "bundle": snapshot["bundle"],
-            "loop": raw_loop,
-            "orchestration": dict(snapshot["resolved_orchestration"].get("stored_orchestration") or {}),
-            "prompt_files": dict(hydrated_loop.get("prompt_files") or {}),
-            "spec_path": snapshot["spec_path"],
-        }
-
-    def _restore_bundle_loop_snapshot(self, rollback_state: dict) -> dict:
-        loop = rollback_state["loop"]
-        loop_id = str(loop["id"])
-        spec_path = Path(str(loop.get("spec_path") or rollback_state["spec_path"]))
-        spec_markdown = str(loop.get("spec_markdown") or "")
-        compiled_spec = loop.get("compiled_spec_json") or loop.get("compiled_spec") or {}
-        workflow = strategy_source_from_record(loop) or loop.get("workflow_json") or {}
-        prompt_files = dict(rollback_state.get("prompt_files") or {})
-
-        self._restore_bundle_orchestration_snapshot(rollback_state.get("orchestration") or {})
-        save_spec_file(spec_path, spec_markdown)
-        loop_dir = self._ensure_loop_dir(Path(loop["workdir"]), loop_id)
-        save_spec_file(loop_dir / "spec.md", spec_markdown)
-        write_json(loop_dir / "compiled_spec.json", compiled_spec)
-        self._persist_prompt_files(loop_dir, prompt_files)
-        write_json_with_mirrors(
-            loop_dir / "strategy_source.json",
-            workflow,
-            mirror_paths=[loop_dir / "workflow.json"],
-        )
-
-        restored = self.repository.update_loop_contract(
-            loop_id,
-            {
-                "orchestration_id": loop.get("orchestration_id", ""),
-                "orchestration_name": loop.get("orchestration_name", ""),
-                "spec_path": str(spec_path.resolve()),
-                "spec_markdown": spec_markdown,
-                "compiled_spec": compiled_spec,
-                "workflow": workflow,
-            },
-        )
-        if not restored:
-            raise LooporaError(f"failed to restore bundle loop snapshot: {loop_id}")
-        return self._hydrate_loop_files(restored)
-
-    def _restore_bundle_orchestration_snapshot(self, orchestration: dict) -> None:
-        orchestration_id = str(orchestration.get("id", "") or "").strip()
-        if not orchestration_id:
-            return
-        self.repository.update_orchestration(
-            orchestration_id,
-            {
-                "name": orchestration["name"],
-                "description": orchestration.get("description", ""),
-                "workflow": strategy_source_from_record(orchestration) or orchestration.get("workflow_json") or {},
-                "prompt_files": orchestration.get("prompt_files_json") or {},
-            },
-        )
-
-    def _bundle_snapshot_spec_from_file_or_loop(self, spec_path: Path, loop: dict) -> tuple[str, dict]:
-        try:
-            return self._read_and_compile_spec(spec_path)
-        except (FileNotFoundError, OSError, UnicodeDecodeError):
-            spec_markdown = str(loop.get("spec_markdown") or "").strip() + "\n"
-            return spec_markdown, compile_markdown_spec(spec_markdown)
 
     def _resolve_bundle_orchestration_for_snapshot(self, bundle: dict, *, role_models: dict) -> dict:
         orchestration_id = str(bundle.get("orchestration_id", "") or "").strip()

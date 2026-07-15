@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from loopora.events.streams import run_stream_id
-from loopora.structured_numbers import coerced_int
+from loopora.utils import coerced_int
 
 
 def list_run_events(repository, run_id: str):

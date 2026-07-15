@@ -9,16 +9,12 @@ from loopora.alignment_readiness_rules import (
     alignment_improvement_readiness_issues,
     readiness_evidence_issues,
 )
-from loopora.service_alignment_agreement_decisions import alignment_agreement_readiness_checklist_issues
-from loopora.service_alignment_agreement_projection import (
+from loopora.service_alignment_agreement_stage import (
     alignment_agreement_ready_stage_plan,
+    alignment_agreement_readiness_checklist_issues,
     alignment_agreement_working_agreement,
     alignment_merge_improvement_context,
     alignment_visible_agreement_message,
-)
-from loopora.service_alignment_agreement_block_plan import (
-    AlignmentAgreementBlockCandidate,
-    alignment_agreement_block_plan,
 )
 from loopora.service_alignment_language import (
     alignment_agreement_language_issues,
@@ -31,7 +27,11 @@ from loopora.service_alignment_stage import (
     alignment_bundle_stage_error,
     alignment_bundle_stage_missing_items,
 )
-from loopora.service_alignment_stage_messages import alignment_clarifying_stage_plan
+from loopora.service_alignment_stage_messages import (
+    AlignmentAgreementBlockCandidate,
+    alignment_agreement_block_plan,
+    alignment_clarifying_stage_plan,
+)
 from loopora.service_alignment_workdir_snapshot import alignment_workdir_snapshot
 from loopora.utils import utc_now
 
@@ -192,7 +192,9 @@ def alignment_output_stage_plan(
 def alignment_not_fit_source_text(session: dict, output: dict) -> str:
     transcript = session.get("transcript") if isinstance(session.get("transcript"), list) else []
     text_parts = [
-        str(entry.get("content") or "") for entry in transcript if isinstance(entry, dict) and str(entry.get("role") or "").strip() in {"user", "assistant"}
+        str(entry.get("content") or "")
+        for entry in transcript
+        if isinstance(entry, dict) and str(entry.get("role") or "").strip() in {"user", "assistant"}
     ]
     text_parts.extend(
         [

@@ -8,7 +8,7 @@ from loopora.engine import (
     runner_step_result,
 )
 from loopora.kernel import ActorRef
-from loopora.context_step_results import StepResultContext, build_step_handoff
+from loopora.context_flow import StepResultContext, build_step_handoff
 from loopora.service_runner_step_artifacts import (
     RunnerStepCompletionLogRequest,
     RunnerStepResultEntryRequest,
@@ -18,9 +18,8 @@ from loopora.service_runner_iteration_state import (
     GatekeeperIterationRecordRequest,
     RunnerGatekeeperSuccessRequest,
 )
-from loopora.runtime_task_language import runtime_task_language
 from loopora.step_instruction_context import required_step_instruction_context_from_mapping
-from loopora.structured_numbers import coerced_non_negative_int
+from loopora.utils import coerced_non_negative_int
 
 
 class ServiceRunnerStepCommitMixin:
@@ -68,14 +67,15 @@ class ServiceRunnerStepCommitMixin:
                 role=role,
                 runtime_role=runtime_role,
                 normalized_output=normalized_output,
-                task_language=runtime_task_language(context.compiled_spec),
             )
         )
         handoff = step_write.handoff
         actor = ActorRef.from_dict(result.get("actor_ref"))
         run_engine = RepositoryRunEngine(self.repository)
         submit_result = run_engine.submit_step(
-            RunEngineSubmitStepRequest(result=self._runner_step_result_for_engine(context, iteration, result, handoff=handoff, actor=actor))
+            RunEngineSubmitStepRequest(
+                result=self._runner_step_result_for_engine(context, iteration, result, handoff=handoff, actor=actor)
+            )
         )
         submitted_event = submit_result.submitted_event
         run_engine.record_step_evidence(
@@ -189,7 +189,6 @@ class ServiceRunnerStepCommitMixin:
                 role=result["role"],
                 runtime_role=result["runtime_role"],
                 output=result["normalized_output"],
-                task_language=runtime_task_language(context.compiled_spec),
             )
         )
 

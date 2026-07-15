@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from loopora.agent_native_projection_state import agent_native_active_step_view
+from loopora.agent_native_evidence_contracts import agent_native_active_step_view
 from loopora.agent_native_result_schema import agent_native_schema_validation_issues
 from loopora.agent_native_evidence_contracts import (
     AGENT_NATIVE_WORKSPACE_ARTIFACT_FIELDS,

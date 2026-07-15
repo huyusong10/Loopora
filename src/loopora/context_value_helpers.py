@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from loopora.coverage_target_semantics import coverage_target_is_required
-from loopora.structured_booleans import structured_bool_is_true
+from loopora.utils import structured_bool_is_true
 
 
 def clean_text(value: object) -> str:
@@ -65,7 +65,7 @@ def evidence_coverage_results(value: object) -> list[dict]:
     return results[:20]
 
 
-def normalize_coverage_gap_rows(value: object, *, limit: int = 5) -> list[dict]:
+def normalize_coverage_gap_rows(value: object) -> list[dict]:
     if not isinstance(value, list):
         return []
     rows: list[dict] = []
@@ -87,7 +87,7 @@ def normalize_coverage_gap_rows(value: object, *, limit: int = 5) -> list[dict]:
                 "evidence_refs": string_list(item.get("evidence_refs"))[:8],
             }
         )
-    return rows[:limit]
+    return rows[:5]
 
 
 def normalize_manifest_claim_coverage_targets(value: object) -> list[dict]:

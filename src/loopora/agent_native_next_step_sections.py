@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import shlex
 
-from loopora.agent_adapter_command_prefix import copyable_loopora_command
+from loopora.agent_adapters import prefix_loopora_command
 from loopora.agent_native_coverage_summary import (
     coverage_gap_summaries,
     evidence_scope_items,
@@ -33,21 +33,15 @@ def agent_dispatch_unavailable_summary(*, adapter: str, workdir: str, role_dispa
         role_dispatch.get("target_agent_config_absolute_path") or role_dispatch.get("target_agent_config_path") or ""
     ).strip()
     normalized_adapter = str(adapter or "").strip() or "codex"
-    summary: dict[str, object] = {
+    workdir_arg = _quoted_workdir_arg(workdir)
+    return {
         "reason": "target_agent_config_missing",
         "target_agent": target_agent,
         "target_agent_config": target_config,
+        "check_command": prefix_loopora_command(f"loopora agent {normalized_adapter} check --workdir {workdir_arg}"),
+        "repair_command": prefix_loopora_command(f"loopora init {normalized_adapter} --workdir {workdir_arg}"),
         "next": load_system_prompt_asset("agent_native/dispatch-unavailable-next.md").strip(),
     }
-    if not str(workdir or "").strip():
-        summary["workdir_available"] = False
-        summary["next"] = "Recover the project workdir before repairing the managed role agent config."
-        return summary
-    workdir_arg = _quoted_workdir_arg(workdir)
-    summary["workdir_available"] = True
-    summary["check_command"] = copyable_loopora_command(f"loopora agent {normalized_adapter} check --workdir {workdir_arg}")
-    summary["repair_command"] = copyable_loopora_command(f"loopora init {normalized_adapter} --workdir {workdir_arg}")
-    return summary
 
 
 def agent_next_step_continuation_summary(next_step: dict) -> dict[str, object]:
@@ -58,10 +52,8 @@ def agent_next_step_continuation_summary(next_step: dict) -> dict[str, object]:
         continuation.get("previous_task_verdict") if isinstance(continuation.get("previous_task_verdict"), dict) else {}
     )
     coverage = continuation.get("coverage") if isinstance(continuation.get("coverage"), dict) else {}
-    progress = continuation.get("prior_run_progress") if isinstance(continuation.get("prior_run_progress"), dict) else {}
     summary: dict[str, object] = {"active": True}
     set_summary_text(summary, "previous_run_id", continuation.get("previous_run_id"))
-    set_summary_text(summary, "action_mode", continuation.get("action_mode"))
     set_summary_text(summary, "previous_task_verdict_status", previous_verdict.get("status"))
     set_summary_text(summary, "previous_task_verdict_summary", clip_inline(str(previous_verdict.get("summary") or ""), 220))
     missing_required_check_count = non_bool_int(coverage.get("missing_check_count"))
@@ -78,13 +70,6 @@ def agent_next_step_continuation_summary(next_step: dict) -> dict[str, object]:
     )
     if next_focus:
         summary["next_focus"] = next_focus[:6]
-    if progress:
-        set_summary_text(summary, "prior_run_progress_status", progress.get("status"))
-        set_summary_text(summary, "prior_run_id", progress.get("prior_run_id"))
-        for field in ("improved_target_count", "regressed_target_count", "closed_gap_count", "reopened_target_count"):
-            count = non_bool_int(progress.get(field))
-            if count is not None:
-                summary[field] = count
     return {"continuation": {key: value for key, value in summary.items() if value not in ("", [], {})}}
 
 

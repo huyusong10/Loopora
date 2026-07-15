@@ -35,7 +35,7 @@ class AgentNextCliRequest:
 
 @dataclass(frozen=True)
 class AgentSubmitErrorCliRequest:
-    service: object | None
+    service: object
     adapter: str
     context_id: str
     run_id: str
@@ -52,8 +52,6 @@ class AgentPlanErrorCliRequest:
     workdir: Path
     context_id: str
     entry_source: str
-    message: str
-    bundle_file: Path | None
     json_output: bool
 
 
@@ -67,10 +65,9 @@ class AgentLoopStartCliRequest:
 
 
 def claim_agent_next_from_cli(request: AgentNextCliRequest) -> None:
-    service = None
+    service = get_service()
     resolved_entry_source = _resolved_entry_source(request.entry_source)
     try:
-        service = get_service()
         result = service.claim_agent_native_step(
             AgentNativeStepClaimRequest(
                 adapter=request.adapter,
@@ -80,10 +77,10 @@ def claim_agent_next_from_cli(request: AgentNextCliRequest) -> None:
                 entry_source=resolved_entry_source,
             )
         )
-        _attach_web_url(result, path_key="run_path", url_key="run_url", no_web=request.no_web, workdir=request.workdir)
+        _attach_web_url(result, path_key="run_path", url_key="run_url", no_web=request.no_web)
         _print_agent_next_result(result, json_output=request.json_output, compact_json_output=request.compact_json_output)
     except (LooporaError, StrategySourceError) as exc:
-        if service is not None and _print_agent_next_recovery_guidance(
+        if _print_agent_next_recovery_guidance(
             exc,
             service=service,
             adapter=request.adapter,
@@ -94,11 +91,7 @@ def claim_agent_next_from_cli(request: AgentNextCliRequest) -> None:
             json_output=request.json_output or request.compact_json_output,
         ):
             raise typer.Exit(code=1) from None
-        handle_error(
-            exc,
-            json_output=request.json_output or request.compact_json_output,
-            recovery_workdir=request.workdir,
-        )
+        handle_error(exc)
 
 
 def handle_agent_submit_error(
@@ -118,7 +111,7 @@ def handle_agent_submit_error(
         auto_repair_actions=request.auto_repair_actions or [],
     ):
         raise typer.Exit(code=1)
-    handle_error(exc, json_output=request.json_output, recovery_workdir=request.workdir)
+    handle_error(exc)
 
 
 def handle_agent_plan_error(
@@ -131,12 +124,10 @@ def handle_agent_plan_error(
         workdir=request.workdir,
         context_id=request.context_id,
         entry_source=request.entry_source,
-        message=request.message,
-        bundle_file=request.bundle_file,
         json_output=request.json_output,
     ):
         raise typer.Exit(code=1)
-    handle_error(exc, json_output=request.json_output, recovery_workdir=request.workdir)
+    handle_error(exc)
 
 
 def start_agent_loop_from_cli(

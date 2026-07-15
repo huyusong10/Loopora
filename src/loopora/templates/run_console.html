@@ -4,17 +4,17 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>{{ run.loop_name or run.id }} · {{ "控制台" if page_locale == "zh" else "Console" }}</title>
-  <link rel="icon" href="{{ logo_asset_url('logo.svg') }}" sizes="any" type="image/svg+xml" />
-  <link rel="shortcut icon" href="{{ logo_asset_url('logo.svg') }}" type="image/svg+xml" />
+  <link rel="icon" href="/logo/logo.svg" sizes="any" type="image/svg+xml" />
+  <link rel="shortcut icon" href="/logo/logo.svg" type="image/svg+xml" />
   {% include "_display_preferences_bootstrap.html" %}
-  {% include "_global_stylesheets.html" %}
+  <link rel="stylesheet" href="{{ static_asset_url('app.css') }}" />
   <script src="{{ static_asset_url('app.js') }}" defer></script>
   <script src="{{ static_asset_url('pages/run_console.js') }}" defer></script>
 </head>
 <body class="console-focus-body">
   <main class="console-focus-shell console-focus-shell--immersive">
     <div class="console-focus-topbar">
-      <a class="secondary-button console-focus-back" href="{{ workdir_context_href('/runs/' ~ run.id, workdir_context) }}" data-testid="console-back-link" data-workdir-context-link="workdir">
+      <a class="secondary-button console-focus-back" href="/runs/{{ run.id }}">
         <span data-lang="zh">返回运行详情</span>
         <span data-lang="en">Back to run</span>
       </a>

@@ -1,94 +1,74 @@
 from __future__ import annotations
 
+from importlib.metadata import PackageNotFoundError, version
 import logging
 from pathlib import Path
 from typing import Annotated
 
 import typer
+import uvicorn
 
-from loopora.agent_adapter_command_prefix import (
-    rewrite_loopora_help_commands,
+from loopora.branding import APP_AUTH_ENV
+from loopora.cli_agent_adapter_lifecycle_commands import AdapterWorkdirOption
+from loopora.cli_diagnose_commands import run_doctor_command
+from loopora.cli_shared import (
+    BackgroundOption,
+    CommandArgOption,
+    CommandCliOption,
+    CompletionModeOption,
+    DeltaThresholdOption,
+    ExecutorModeOption,
+    ExecutorOption,
+    IterationIntervalOption,
+    JsonOutputOption,
+    MaxItersOption,
+    MaxRoleRetriesOption,
+    ModelOption,
+    NameOption,
+    OrchestrationIdOption,
+    ReasoningOption,
+    RegressionWindowOption,
+    RoleModelOption,
+    SpecOption,
+    StrategyFileOption,
+    StrategyPresetOption,
+    TriggerWindowOption,
+    WorkdirOption,
+    LoopCreateRequest,
+    create_and_maybe_start_loop,
+    handle_error,
+    get_service,
+    logger,
+    print_loop_created,
+    print_run_result,
 )
-from loopora.cli_diagnose_commands import (
-    DOCTOR_HELP_EPILOG,
-    DoctorLanguageOption,
-    DoctorWorkdirOption,
-    DoctorWebHostOption,
-    DoctorWebPortOption,
-    PublicJsonOutputOption,
-    StrictDoctorOption,
-    run_doctor_command,
-)
-from loopora.cli_demo_commands import register_demo_command as _register_demo_command
-from loopora.cli_fit_commands import register_fit_command as _register_fit_command
-from loopora.cli_group_help import print_help_when_no_subcommand
-from loopora.cli_run_commands import register_run_command as _register_run_command
-from loopora.cli_serve_commands import register_serve_command as _register_serve_command
-from loopora.cli_shared import JsonOutputOption, get_service, echo_json, handle_error, logger, print_run_result
-from loopora.cli_start_commands import register_start_command as _register_start_command
-from loopora.cli_status_commands import register_status_command as _register_status_command
-from loopora.cli_support_output import print_public_support_command_output
 from loopora.diagnostics import log_event
-from loopora.diagnose_doctor_identity import package_identity_report, package_source_label
 from loopora.service import LooporaError
 from loopora.settings import configure_logging
 from loopora.specs import SpecError
-from loopora.support_guidance import (
-    SUPPORT_HELP_EPILOG,
-)
+from loopora.web import build_app
+from loopora.web_request_context import _is_loopback_host
 
-SupportWorkdirOption = Annotated[
-    Path | None,
-    typer.Option(
-        "--workdir",
-        file_okay=True,
-        dir_okay=True,
-        exists=False,
-        help="Project directory to use in the copyable public doctor command.",
-    ),
-]
-SupportLanguageOption = Annotated[
-    str,
-    typer.Option(
-        "--language",
-        help="Plain support-guide language: en or zh; common aliases like en-US and zh-CN are normalized.",
-    ),
-]
-SupportWebHostOption = Annotated[
-    str | None,
-    typer.Option("--web-host", help="Web bind host to pass through to the redacted public doctor command."),
-]
-SupportWebPortOption = Annotated[
-    str | None,
-    typer.Option("--web-port", help="Web bind port to pass through to the redacted public doctor command."),
-]
-SupportPublicIssueBundleOption = Annotated[
+AllowUnsafeOpenOption = Annotated[
     bool,
     typer.Option(
-        "--public-issue-bundle",
-        help=("Run redacted public diagnostics for --workdir and print one pasteable public issue support bundle. Cannot be combined with --json."),
+        "--allow-unsafe-open",
+        help="Allow non-loopback hosts without an auth token. Dangerous on shared networks.",
     ),
 ]
 
 
 def register_root_commands(app: typer.Typer) -> None:
     _register_main_callback(app)
-    _register_version_command(app)
-    _register_start_command(app)
-    _register_status_command(app)
-    _register_fit_command(app)
-    _register_demo_command(app)
     _register_doctor_command(app)
-    _register_support_command(app)
     _register_run_command(app)
     _register_serve_command(app)
     _register_execute_run_worker_command(app)
 
 
 def _register_main_callback(app: typer.Typer) -> None:
-    @app.callback(invoke_without_command=True)
+    @app.callback()
     def main(
-        ctx: typer.Context,
         *,
         version_requested: Annotated[
             bool,
@@ -101,96 +81,144 @@ def _register_main_callback(app: typer.Typer) -> None:
         ] = False,
     ) -> None:
         _ = version_requested
-        if ctx.invoked_subcommand not in {"demo", "status"}:
-            configure_logging()
-        print_help_when_no_subcommand(ctx)
+        configure_logging()
 
 
 def _version_callback(value: object) -> None:
     if not value:
         return
-    typer.echo(version_identity_text())
+    try:
+        package_version = version("loopora")
+    except PackageNotFoundError:
+        package_version = "unknown"
+    typer.echo(f"loopora {package_version}")
     raise typer.Exit
 
 
-def version_identity_text() -> str:
-    package = package_identity_report()
-    source = package_source_label(package)
-    source_note = f" ({source})" if source else ""
-    return f"loopora {package.get('version')}{source_note}"
-
-
-def version_identity_payload() -> dict[str, object]:
-    package = package_identity_report()
-    source = package_source_label(package)
-    payload = {
-        "schema_version": 1,
-        "redacted": True,
-        "name": package.get("name"),
-        "version": package.get("version"),
-        "source_revision": package.get("source_revision"),
-        "source_tree_status": package.get("source_tree_status"),
-        "source_label": source,
-    }
-    return {"version_identity_summary": dict(payload), **payload}
-
-
-def _register_version_command(app: typer.Typer) -> None:
-    @app.command()
-    def version(
-        *,
-        json_output: JsonOutputOption = False,
-    ) -> None:
-        """Show compact package/source identity without readiness diagnostics."""
-        if json_output:
-            echo_json(version_identity_payload())
-            return
-        typer.echo(version_identity_text())
-
-
 def _register_doctor_command(app: typer.Typer) -> None:
-    @app.command(epilog=rewrite_loopora_help_commands(DOCTOR_HELP_EPILOG))
-    def doctor(
-        workdir: DoctorWorkdirOption = None,
-        language: DoctorLanguageOption = "en",
-        web_host: DoctorWebHostOption = "127.0.0.1",
-        web_port: DoctorWebPortOption = 8742,
-        *,
-        json_output: JsonOutputOption = False,
-        public_json_output: PublicJsonOutputOption = False,
-        strict: StrictDoctorOption = False,
-    ) -> None:
+    @app.command()
+    def doctor(workdir: AdapterWorkdirOption = Path(), *, json_output: JsonOutputOption = False) -> None:
         """Report local first-use readiness without installing or repairing files."""
-        run_doctor_command(
-            workdir=workdir,
-            language=language,
-            web_host=web_host,
-            web_port=web_port,
-            json_output=json_output,
-            public_json_output=public_json_output,
-            strict=strict,
-        )
+        run_doctor_command(workdir=workdir, json_output=json_output)
 
 
-def _register_support_command(app: typer.Typer) -> None:
-    @app.command(epilog=rewrite_loopora_help_commands(SUPPORT_HELP_EPILOG))
-    def support(
-        workdir: SupportWorkdirOption = None,
-        language: SupportLanguageOption = "en",
-        web_host: SupportWebHostOption = None,
-        web_port: SupportWebPortOption = None,
+def _register_run_command(app: typer.Typer) -> None:
+    @app.command()
+    def run(
+        spec: SpecOption,
+        workdir: WorkdirOption,
+        executor_kind: ExecutorOption = "codex",
+        executor_mode: ExecutorModeOption = "preset",
+        model: ModelOption = "",
+        reasoning_effort: ReasoningOption = "",
+        completion_mode: CompletionModeOption = "gatekeeper",
+        iteration_interval_seconds: IterationIntervalOption = 0.0,
+        command_cli: CommandCliOption = "",
+        command_arg: CommandArgOption = None,
+        max_iters: MaxItersOption = 8,
+        max_role_retries: MaxRoleRetriesOption = 2,
+        delta_threshold: DeltaThresholdOption = 0.005,
+        trigger_window: TriggerWindowOption = 4,
+        regression_window: RegressionWindowOption = 2,
+        name: NameOption = None,
+        role_model: RoleModelOption = None,
+        orchestration_id: OrchestrationIdOption = "",
+        strategy_preset: StrategyPresetOption = "",
+        strategy_file: StrategyFileOption = None,
         *,
-        json_output: JsonOutputOption = False,
-        public_issue_bundle: SupportPublicIssueBundleOption = False,
+        background: BackgroundOption = False,
     ) -> None:
-        """Show safe public support and reporting guidance."""
-        print_public_support_command_output(
-            workdir=workdir,
-            language=language,
-            web_host=web_host,
-            web_port=web_port,
-            json_output=json_output,
-            public_issue_bundle=public_issue_bundle,
+        """Expert: create and run a Loop from an existing spec file."""
+        try:
+            loop, result = create_and_maybe_start_loop(
+                LoopCreateRequest(
+                    spec=spec,
+                    workdir=workdir,
+                    executor_kind=executor_kind,
+                    executor_mode=executor_mode,
+                    model=model,
+                    reasoning_effort=reasoning_effort,
+                    completion_mode=completion_mode,
+                    iteration_interval_seconds=iteration_interval_seconds,
+                    command_cli=command_cli,
+                    command_arg=command_arg,
+                    max_iters=max_iters,
+                    max_role_retries=max_role_retries,
+                    delta_threshold=delta_threshold,
+                    trigger_window=trigger_window,
+                    regression_window=regression_window,
+                    name=name,
+                    role_model=role_model,
+                    orchestration_id=orchestration_id,
+                    strategy_preset=strategy_preset,
+                    strategy_file=strategy_file,
+                    start=True,
+                    background=background,
+                )
+            )
+            print_loop_created(loop)
+            if result is not None:
+                print_run_result(result)
+        except (LooporaError, SpecError, FileExistsError) as exc:
+            handle_error(exc)
+
+
+def _register_serve_command(app: typer.Typer) -> None:
+    @app.command()
+    def serve(
+        host: str = typer.Option("127.0.0.1", help="Bind host."),
+        port: int = typer.Option(8742, min=1, max=65535, help="Bind port."),
+        auth_token: str = typer.Option(
+            "",
+            "--auth-token",
+            envvar=APP_AUTH_ENV,
+            help="Optional token required for all web and API requests.",
+        ),
+        *,
+        allow_unsafe_open: AllowUnsafeOpenOption = False,
+    ) -> None:
+        """Run the local Web UI."""
+        log_event(
+            logger,
+            logging.INFO,
+            "cli.server.starting",
+            "Starting the local web console",
+            bind_host=host,
+            bind_port=port,
+            auth_enabled=bool(auth_token),
+            allow_unsafe_open=allow_unsafe_open,
+        )
+        if not _is_loopback_host(host) and not auth_token and not allow_unsafe_open:
+            handle_error(
+                LooporaError(
+                    "refusing to bind a non-loopback host without protection; use --auth-token <token> or explicitly pass --allow-unsafe-open"
+                )
+            )
+        if not _is_loopback_host(host):
+            typer.secho(
+                "Network mode enabled. Use absolute paths from the server machine in the Web UI; native file dialogs are disabled.",
+                fg=typer.colors.YELLOW,
+            )
+            if auth_token:
+                typer.secho(
+                    "Open the token form and enter the configured token, or send it as Authorization: Bearer.",
+                    fg=typer.colors.YELLOW,
+                )
+        try:
+            web_app = build_app(
+                bind_host=host,
+                bind_port=port,
+                auth_token=auth_token or None,
+                allow_unsafe_open=allow_unsafe_open,
+            )
+        except LooporaError as exc:
+            handle_error(exc)
+        uvicorn.run(
+            web_app,
+            host=host,
+            port=port,
+            log_level="info",
+            access_log=False,
         )
 
 

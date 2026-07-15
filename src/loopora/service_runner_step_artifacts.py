@@ -3,13 +3,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 import logging
 
-from loopora.context_step_results import StepEvidenceEntryRequest, StepResultContext, build_step_evidence_entry, build_step_handoff
+from loopora.context_flow import StepEvidenceEntryRequest, StepResultContext, build_step_evidence_entry, build_step_handoff
 from loopora.diagnostics import get_logger, log_event
 from loopora.engine import RunnerStepEvidenceArtifactsRequest, write_runner_step_evidence_artifacts
 from loopora.run_artifacts import append_jsonl_with_mirrors
-from loopora.runner_support_requests import StepOutputsWriteRequest
+from loopora.runner_summary_projection import StepOutputsWriteRequest
 from loopora.step_instruction_context import STEP_INSTRUCTION_CONTEXT_KEY
-from loopora.structured_numbers import coerced_non_negative_int
+from loopora.utils import coerced_non_negative_int
 
 logger = get_logger(__name__)
 
@@ -24,7 +24,6 @@ class RunnerStepWriteRequest:
     role: dict
     runtime_role: str
     normalized_output: dict
-    task_language: str = "en"
 
 
 @dataclass(frozen=True)
@@ -73,7 +72,6 @@ class ServiceRunnerStepArtifactsMixin:
             role=request.role,
             runtime_role=request.runtime_role,
             output=request.normalized_output,
-            task_language=request.task_language,
         )
         handoff = build_step_handoff(step_result)
         evidence_entry = build_step_evidence_entry(StepEvidenceEntryRequest(result=step_result, handoff=handoff))
@@ -91,7 +89,9 @@ class ServiceRunnerStepArtifactsMixin:
             )
         )
         append_jsonl_with_mirrors(request.layout.evidence_ledger_path, evidence_entry)
-        evidence_artifacts = write_runner_step_evidence_artifacts(RunnerStepEvidenceArtifactsRequest(layout=request.layout))
+        evidence_artifacts = write_runner_step_evidence_artifacts(
+            RunnerStepEvidenceArtifactsRequest(layout=request.layout)
+        )
         coverage_projection = evidence_artifacts.coverage_projection
         manifest_projection = evidence_artifacts.manifest_projection
         self.append_run_event(

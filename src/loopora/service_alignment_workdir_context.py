@@ -16,12 +16,9 @@ from loopora.service_alignment_context import (
     alignment_spec_file_context_option,
     bounded_alignment_context_options,
 )
-from loopora.service_alignment_ready_bundle_validation import alignment_bundle_file_has_ready_validation
-from loopora.service_alignment_workdir_inputs import normalize_alignment_workdir
+from loopora.service_alignment_context import alignment_bundle_file_has_ready_validation
 from loopora.service_alignment_workdir_snapshot import alignment_same_workdir, alignment_workdir_spec_candidates
 from loopora.service_types import LooporaError
-
-ALIGNMENT_CONTEXT_PATH_ERRORS = (OSError, RuntimeError, ValueError)
 
 
 @dataclass(frozen=True)
@@ -48,7 +45,7 @@ class AlignmentLooporaContextResolutionRequest:
 
 
 def get_alignment_workdir_context(context: AlignmentLooporaContextResolverContext, workdir: Path) -> dict:
-    root = normalize_alignment_workdir(workdir)
+    root = workdir.expanduser().resolve()
     payload = context.workdir_context_payload(root)
     payload["resolution"] = context.resolve_plan_context(payload)
     return payload
@@ -60,7 +57,9 @@ def resolve_loopora_context(
     request: AlignmentLooporaContextResolutionRequest | None = None,
 ) -> dict:
     request = request or AlignmentLooporaContextResolutionRequest()
-    root = normalize_alignment_workdir(workdir)
+    root = workdir.expanduser().resolve()
+    if not root.exists() or not root.is_dir():
+        raise LooporaError(f"workdir does not exist: {root}")
     normalized_intent = str(request.intent or "plan").strip().lower()
     if normalized_intent == "run":
         return context.resolve_run_context(root, adapter=request.adapter, context_id=request.context_id)
@@ -69,7 +68,8 @@ def resolve_loopora_context(
 
 
 def alignment_workdir_context_payload(context: AlignmentWorkdirContextResolverContext, root: Path) -> dict:
-    root = normalize_alignment_workdir(root)
+    if not root.exists() or not root.is_dir():
+        raise LooporaError(f"workdir does not exist: {root}")
     options: list[dict] = []
     seen_option_ids: set[str] = set()
     seen_bundle_paths = collect_alignment_session_context_options(context.repository, root, options, seen_option_ids)
@@ -174,7 +174,7 @@ def collect_alignment_session_context_options(
             add_alignment_context_option(option, options, seen_option_ids)
             bundle_path = str(option.get("bundle_path") or "").strip()
             if bundle_path:
-                _remember_resolved_path(seen_bundle_paths, Path(bundle_path))
+                seen_bundle_paths.add(str(Path(bundle_path).expanduser().resolve()))
     return seen_bundle_paths
 
 
@@ -190,7 +190,7 @@ def collect_alignment_loop_context_options(
             continue
         spec_path = str(loop.get("spec_path") or "").strip()
         if spec_path:
-            _remember_resolved_path(seen_spec_paths, Path(spec_path))
+            seen_spec_paths.add(str(Path(spec_path).expanduser().resolve()))
         latest_run_id = str(loop.get("latest_run_id") or "").strip()
         if latest_run_id:
             with suppress(LooporaError):
@@ -222,9 +222,7 @@ def collect_alignment_filesystem_context_options(
         return
     expected_workdir = state_dir.parent
     for bundle_path in sorted((state_dir / "alignment_sessions").glob("*/artifacts/bundle.yml"))[:20]:
-        resolved_bundle_path = _resolved_path_text(bundle_path)
-        if not resolved_bundle_path:
-            continue
+        resolved_bundle_path = str(bundle_path.expanduser().resolve())
         if resolved_bundle_path in seen_bundle_paths:
             continue
         seen_bundle_paths.add(resolved_bundle_path)
@@ -239,23 +237,8 @@ def collect_alignment_filesystem_context_options(
             seen_option_ids,
         )
     for spec_path in alignment_workdir_spec_candidates(state_dir):
-        resolved_spec = _resolved_path_text(spec_path)
-        if not resolved_spec:
-            continue
+        resolved_spec = str(spec_path.expanduser().resolve())
         if resolved_spec in seen_spec_paths:
             continue
         seen_spec_paths.add(resolved_spec)
         add_alignment_context_option(alignment_spec_file_context_option(spec_path), options, seen_option_ids)
-
-
-def _resolved_path_text(path: Path) -> str:
-    try:
-        return str(path.expanduser().resolve())
-    except ALIGNMENT_CONTEXT_PATH_ERRORS:
-        return ""
-
-
-def _remember_resolved_path(seen_paths: set[str], path: Path) -> None:
-    resolved = _resolved_path_text(path)
-    if resolved:
-        seen_paths.add(resolved)

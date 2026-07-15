@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 import re
 import subprocess
+from pathlib import Path
 from typing import Any
 
 SOURCE_PROVENANCE_FILENAME = "_build_provenance.json"

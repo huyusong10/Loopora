@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import re
 
-from loopora.alignment_readiness_governance import alignment_governance_marker_responsibilities_present
+from loopora.alignment_readiness_rules import alignment_governance_marker_responsibilities_present
 from loopora.specs import SpecError, compile_markdown_spec
 
 

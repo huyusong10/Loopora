@@ -7,7 +7,7 @@ from loopora.events.invariants.common import (
     require_gap_entries_shape,
 )
 from loopora.events.store import DomainEventAppendRequest
-from loopora.structured_numbers import structured_non_negative_int
+from loopora.utils import structured_non_negative_int
 
 
 def require_coverage_payload_status_consistency(request: DomainEventAppendRequest) -> None:

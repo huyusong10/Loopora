@@ -86,7 +86,7 @@ def test_bundles_page_scopes_plan_files_and_loop_export_picker_to_target_workdir
         )
 
     other_loop = create_loop(name="Other Project Loop", workdir=other_workdir)
-    other_bundle = service.import_bundle_text(
+    service.import_bundle_text(
         bundle_to_yaml(
             service.derive_bundle_from_loop(
                 other_loop["id"],
@@ -98,23 +98,14 @@ def test_bundles_page_scopes_plan_files_and_loop_export_picker_to_target_workdir
     )
     client = TestClient(build_app(service=service))
     encoded_current_workdir = quote(str(current_workdir.resolve()), safe="")
-    encoded_other_workdir = quote(str(other_workdir.resolve()), safe="")
-
     foreign_only_response = client.get(f"/bundles?workdir={encoded_current_workdir}")
 
     assert foreign_only_response.status_code == HTTPStatus.OK
-    assert 'data-testid="bundle-derive-empty-state"' in foreign_only_response.text
-    assert 'data-testid="bundle-derive-form"' not in foreign_only_response.text
-    assert 'id="bundles-empty-state"' in foreign_only_response.text
-    assert f'data-testid="bundle-exchange-item-{other_bundle["id"]}"' not in foreign_only_response.text
+    assert "Other Project Loop" not in foreign_only_response.text
     assert "Other Project Plan" not in foreign_only_response.text
-    assert (
-        f'href="/loops/new?workdir={encoded_current_workdir}" data-testid="bundle-derive-create-loop-link"'
-        in foreign_only_response.text
-    )
 
     current_loop = create_loop(name="Current Project Loop", workdir=current_workdir)
-    current_bundle = service.import_bundle_text(
+    service.import_bundle_text(
         bundle_to_yaml(
             service.derive_bundle_from_loop(
                 current_loop["id"],
@@ -128,27 +119,12 @@ def test_bundles_page_scopes_plan_files_and_loop_export_picker_to_target_workdir
     global_response = client.get("/bundles")
 
     assert scoped_response.status_code == HTTPStatus.OK
-    assert 'data-testid="bundle-derive-form"' in scoped_response.text
-    assert f'action="/bundles/derive?workdir={encoded_current_workdir}"' in scoped_response.text
-    derive_form = scoped_response.text[
-        scoped_response.text.index('data-testid="bundle-derive-form"') : scoped_response.text.index(
-            'data-testid="bundle-derive-loop-select"'
-        )
-    ]
-    assert 'data-workdir-context-form="workdir"' in derive_form
-    assert f'value="{current_loop["id"]}"' in scoped_response.text
     assert "Current Project Loop" in scoped_response.text
-    assert f'value="{other_loop["id"]}"' not in scoped_response.text
-    assert "Other Project Loop" not in scoped_response.text
-    assert f'data-testid="bundle-exchange-item-{current_bundle["id"]}"' in scoped_response.text
     assert "Current Project Plan" in scoped_response.text
-    assert f'href="/bundles/{current_bundle["id"]}/export?workdir={encoded_current_workdir}" data-workdir-context-link="workdir"' in scoped_response.text
-    assert f'data-testid="bundle-exchange-item-{other_bundle["id"]}"' not in scoped_response.text
+    assert "Other Project Loop" not in scoped_response.text
     assert "Other Project Plan" not in scoped_response.text
     assert global_response.status_code == HTTPStatus.OK
-    assert f'value="{current_loop["id"]}"' in global_response.text
-    assert f'value="{other_loop["id"]}"' in global_response.text
-    assert f'data-testid="bundle-exchange-item-{current_bundle["id"]}"' in global_response.text
-    assert f'data-testid="bundle-exchange-item-{other_bundle["id"]}"' in global_response.text
-    assert f'href="/bundles/{current_bundle["id"]}/export?workdir={encoded_current_workdir}" data-workdir-context-link="workdir"' in global_response.text
-    assert f'href="/bundles/{other_bundle["id"]}/export?workdir={encoded_other_workdir}" data-workdir-context-link="workdir"' in global_response.text
+    assert "Current Project Loop" in global_response.text
+    assert "Current Project Plan" in global_response.text
+    assert "Other Project Loop" in global_response.text
+    assert "Other Project Plan" in global_response.text

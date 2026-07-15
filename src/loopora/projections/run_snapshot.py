@@ -4,7 +4,7 @@ from loopora.events.envelope import EventEnvelope
 from loopora.events.replay import RunSnapshot, replay_run_snapshot
 from loopora.kernel import ActorRef, RunLifecycleStatus, RunState, VerdictStatus
 from loopora.projections._event_replay_support import EVENT_REPLAY_PROJECTION_SCHEMA_VERSION
-from loopora.structured_numbers import coerced_int
+from loopora.utils import coerced_int
 
 
 def replay_run_snapshot_projection(events: list[EventEnvelope]) -> dict:

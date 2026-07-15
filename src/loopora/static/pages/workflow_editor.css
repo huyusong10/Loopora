@@ -178,7 +178,7 @@ html[data-locale="zh"] .workflow-loop-pill-tag {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  min-height: 44px;
+  min-height: 34px;
   padding: 6px 12px;
   border: 1px solid var(--workflow-loop-pill-border);
   background: var(--workflow-loop-pill-bg);

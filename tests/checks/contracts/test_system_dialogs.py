@@ -190,8 +190,8 @@ modal.contains = function (node) {
 
 const deleteButton = element("BUTTON", {
   dataset: {
-    deleteRoleDefinition: "role-1",
-    roleDefinitionName: "Reviewer",
+    deleteLoop: "loop-1",
+    loopName: "Example",
   },
 });
 const outsideButton = element("BUTTON");
@@ -229,7 +229,7 @@ const context = {
     },
     querySelector() { return null; },
     querySelectorAll(selector) {
-      return selector === "[data-delete-role-definition]" ? [deleteButton] : [];
+      return selector === "[data-delete-loop]" ? [deleteButton] : [];
     },
   },
   navigator: {},
@@ -249,8 +249,8 @@ context.window.LooporaUI.bindDeleteLoopButtons();
 deleteButton.listeners.click();
 assert(!modal.hidden, "delete confirmation should open the modal", modal.hidden);
 assert(modal.getAttribute("aria-hidden") === "false", "open delete confirmation should expose the dialog", modal.attributes);
-assert(modalConfirm.disabled, "destructive confirmation stays disabled until preview finishes", modalConfirm.disabled);
-assert(documentState.activeElement === modalCancel, "preview-gated delete confirmation should focus cancel first", documentState.activeElement?.id);
+assert(!modalConfirm.disabled, "destructive confirmation should be available after the dialog opens", modalConfirm.disabled);
+assert(documentState.activeElement === modalConfirm, "delete confirmation should focus its primary action", documentState.activeElement?.id);
 
 let prevented = 0;
 listeners.keydown({key: "Tab", shiftKey: false, preventDefault() { prevented += 1; }});

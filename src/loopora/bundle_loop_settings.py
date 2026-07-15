@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import math
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
 from loopora.bundle_contract import BUNDLE_DEFAULT_LOOP, BUNDLE_EXECUTION_FIELDS, BundleError
-from loopora.loop_compose_validation import normalize_loop_compose_execution_options, normalize_loop_compose_runtime_options
+from loopora.executor_command_args import normalize_reasoning_effort, validate_command_args_text
+from loopora.numeric_inputs import coerce_integral_number
+from loopora.providers import executor_profile, normalize_executor_kind, normalize_executor_mode
 from loopora.service_types import LooporaError, normalize_completion_mode
 
 
@@ -19,11 +22,10 @@ def normalize_bundle_loop(raw_loop: object) -> dict[str, Any]:
     name = str(payload.get("name", "") or "").strip() or Path(workdir).expanduser().resolve().name
     runtime = _normalize_bundle_loop_runtime(payload)
     execution = _normalize_bundle_loop_execution(payload)
-    completion_mode = execution.pop("completion_mode")
     return {
         "name": name,
         "workdir": workdir,
-        "completion_mode": completion_mode,
+        "completion_mode": normalize_bundle_completion_mode(payload.get("completion_mode")),
         **execution,
         **runtime,
     }
@@ -44,49 +46,70 @@ def bundle_loop_role_execution_defaults(loop: Mapping[str, Any]) -> dict[str, st
 
 def _normalize_bundle_loop_execution(payload: Mapping[str, Any]) -> dict[str, str]:
     try:
-        execution_options = normalize_loop_compose_execution_options(
-            executor_kind=payload.get("executor_kind", "codex"),
-            executor_mode=payload.get("executor_mode", "preset"),
-            reasoning_effort=payload.get("reasoning_effort", ""),
-            completion_mode=payload.get("completion_mode", "gatekeeper"),
-            command_cli=payload.get("command_cli", ""),
-            command_args_text=payload.get("command_args_text", ""),
-            model=payload.get("model", ""),
-        )
+        executor_kind = normalize_executor_kind(str(payload.get("executor_kind", "codex") or "codex").strip())
+        executor_mode = normalize_executor_mode(str(payload.get("executor_mode", "preset") or "preset").strip())
+        profile = executor_profile(executor_kind)
+        if profile.command_only and executor_mode != "command":
+            raise ValueError(f"{profile.label} only supports command mode")
+        command_cli = str(payload.get("command_cli", "") or "").strip()
+        command_args_text = str(payload.get("command_args_text", "") or "")
+        model = str(payload.get("model", "") or "").strip()
+        reasoning_effort = str(payload.get("reasoning_effort", "") or "").strip()
+        if executor_mode == "preset":
+            return {
+                "executor_kind": executor_kind,
+                "executor_mode": executor_mode,
+                "command_cli": "",
+                "command_args_text": "",
+                "model": model if model or profile.default_model == "" else profile.default_model,
+                "reasoning_effort": normalize_reasoning_effort(reasoning_effort, executor_kind),
+            }
+        validate_command_args_text(command_args_text, executor_kind=executor_kind)
         return {
-            "executor_kind": execution_options.executor_kind,
-            "executor_mode": execution_options.executor_mode,
-            "command_cli": execution_options.command_cli,
-            "command_args_text": execution_options.command_args_text,
-            "model": execution_options.model,
-            "reasoning_effort": execution_options.reasoning_effort,
-            "completion_mode": execution_options.completion_mode,
+            "executor_kind": executor_kind,
+            "executor_mode": executor_mode,
+            "command_cli": command_cli or profile.cli_name,
+            "command_args_text": command_args_text,
+            "model": model,
+            "reasoning_effort": reasoning_effort,
         }
     except ValueError as exc:
-        raise BundleError(_bundle_loop_compose_error_message(str(exc))) from exc
+        raise BundleError(str(exc)) from exc
 
 
 def _normalize_bundle_loop_runtime(payload: Mapping[str, Any]) -> dict[str, int | float]:
     try:
-        runtime_options = normalize_loop_compose_runtime_options(
-            iteration_interval_seconds=_bundle_numeric_value(payload, "iteration_interval_seconds"),
-            max_iters=_bundle_numeric_value(payload, "max_iters"),
-            max_role_retries=_bundle_numeric_value(payload, "max_role_retries"),
-            delta_threshold=_bundle_numeric_value(payload, "delta_threshold"),
-            trigger_window=_bundle_numeric_value(payload, "trigger_window"),
-            regression_window=_bundle_numeric_value(payload, "regression_window"),
-        )
+        iteration_interval_seconds = float(_bundle_numeric_value(payload, "iteration_interval_seconds"))
+        max_iters = _bundle_integer_value(payload, "max_iters")
+        max_role_retries = _bundle_integer_value(payload, "max_role_retries")
+        delta_threshold = float(_bundle_numeric_value(payload, "delta_threshold"))
+        trigger_window = _bundle_integer_value(payload, "trigger_window")
+        regression_window = _bundle_integer_value(payload, "regression_window")
     except BundleError:
         raise
-    except ValueError as exc:
-        raise BundleError(_bundle_loop_compose_error_message(str(exc))) from exc
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise BundleError("bundle loop settings must use valid numbers") from exc
+    if not math.isfinite(iteration_interval_seconds) or not math.isfinite(delta_threshold):
+        raise BundleError("bundle loop settings must use finite numbers")
+    if max_iters < 0:
+        raise BundleError("bundle loop.max_iters must be >= 0")
+    if max_role_retries < 0:
+        raise BundleError("bundle loop.max_role_retries must be >= 0")
+    if delta_threshold < 0:
+        raise BundleError("bundle loop.delta_threshold must be >= 0")
+    if trigger_window < 1:
+        raise BundleError("bundle loop.trigger_window must be >= 1")
+    if regression_window < 1:
+        raise BundleError("bundle loop.regression_window must be >= 1")
+    if iteration_interval_seconds < 0:
+        raise BundleError("bundle loop.iteration_interval_seconds must be >= 0")
     return {
-        "iteration_interval_seconds": runtime_options.iteration_interval_seconds,
-        "max_iters": runtime_options.max_iters,
-        "max_role_retries": runtime_options.max_role_retries,
-        "delta_threshold": runtime_options.delta_threshold,
-        "trigger_window": runtime_options.trigger_window,
-        "regression_window": runtime_options.regression_window,
+        "iteration_interval_seconds": iteration_interval_seconds,
+        "max_iters": max_iters,
+        "max_role_retries": max_role_retries,
+        "delta_threshold": delta_threshold,
+        "trigger_window": trigger_window,
+        "regression_window": regression_window,
     }
 
 
@@ -101,29 +124,9 @@ def _bundle_numeric_value(payload: Mapping[str, Any], key: str) -> object:
     return value
 
 
-def _bundle_loop_compose_error_message(message: str) -> str:
-    runtime_replacements = {
-        "invalid --iteration-interval-seconds:": "iteration_interval_seconds",
-        "invalid --max-iters:": "max_iters",
-        "invalid --max-role-retries:": "max_role_retries",
-        "invalid --delta-threshold:": "delta_threshold",
-        "invalid --trigger-window:": "trigger_window",
-        "invalid --regression-window:": "regression_window",
-    }
-    for cli_prefix, field_name in runtime_replacements.items():
-        if message.startswith(cli_prefix):
-            suffix = message[len(cli_prefix) :]
-            if "must be a finite number" in suffix:
-                return "bundle loop settings must use finite numbers"
-            return f"bundle loop.{field_name}{suffix}"
-    semantic_replacements = {
-        "invalid --executor:": "bundle loop.executor_kind:",
-        "invalid --executor-mode:": "bundle loop.executor_mode:",
-        "invalid --reasoning-effort:": "bundle loop.reasoning_effort:",
-        "invalid --completion-mode:": "bundle loop.completion_mode:",
-        "invalid --command-arg:": "bundle loop.command_args_text:",
-    }
-    for cli_prefix, field_prefix in semantic_replacements.items():
-        if message.startswith(cli_prefix):
-            return f"{field_prefix}{message[len(cli_prefix):]}"
-    return message
+def _bundle_integer_value(payload: Mapping[str, Any], key: str) -> int:
+    value = _bundle_numeric_value(payload, key)
+    try:
+        return coerce_integral_number(value, field_name=f"bundle loop.{key}")
+    except ValueError as exc:
+        raise BundleError(str(exc)) from exc

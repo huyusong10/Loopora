@@ -27,27 +27,6 @@ _OUTPUT_CONTRACT_ASSETS = {
 }
 
 
-def render_step_prompt(
-    *,
-    role: dict,
-    prompt_label: str,
-    prompt_body: str,
-    step_instruction_context: dict,
-    compiled_spec: dict,
-) -> str:
-    from loopora.headless_prompt import HeadlessPromptRequest, build_headless_prompt
-
-    return build_headless_prompt(
-        HeadlessPromptRequest(
-            role=role,
-            prompt_label=prompt_label,
-            prompt_body=prompt_body,
-            step_instruction_context=step_instruction_context,
-            compiled_spec=compiled_spec,
-        )
-    )
-
-
 def system_prompt_prefix(archetype: str) -> str:
     return render_system_prompt_asset(
         _SYSTEM_PREFIX_ASSETS.get(archetype, "runtime/system-prefix-guide.md"),

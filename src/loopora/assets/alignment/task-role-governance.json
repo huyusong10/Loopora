@@ -1,6 +1,0 @@
-{
-  "builder": "Builder reads AGENTS.md, design/README.md, design/, and tests/ before changing code, then names project-local governance evidence in the handoff.",
-  "inspector": "Inspector must verify AGENTS.md, design/README.md, design/, and tests/ obligations against the result, and mark skipped governance as Weak, Unproven, or Blocking.",
-  "gatekeeper": "GateKeeper treats skipped AGENTS.md, design/README.md, design/, or tests/ responsibilities as Weak, Unproven, or Blocking before closure.",
-  "default": "Respect project-local governance when AGENTS.md, design/README.md, design/, or tests/ apply."
-}

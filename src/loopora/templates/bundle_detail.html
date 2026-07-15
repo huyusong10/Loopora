@@ -1,89 +1,46 @@
 {% extends "base.html" %}
-{% from "partials/recovery_actions.html" import recovery_panel %}
 {% block title %}{{ bundle.name }}{% endblock %}
-{% block styles %}
-<link rel="stylesheet" href="{{ static_asset_url('pages/bundle_detail.css') }}" />
-{% endblock %}
 {% block content %}
 <div class="page-stack" data-testid="bundle-detail-page">
-  <section class="hero hero-tight bundle-detail-hero">
+  <section class="hero hero-tight hero-form">
     <div class="hero-copy-stack">
-      <span class="bundle-review-kicker"><span data-lang="zh">方案文件</span><span data-lang="en">Plan File</span></span>
       <h1>{{ bundle.name }}</h1>
       <p>{{ bundle.collaboration_summary }}</p>
-      <div class="bundle-detail-hero-meta" data-testid="bundle-detail-hero-meta">
-        <span>{{ bundle_traceability.get("mapped_count", 0) }}/{{ bundle_traceability.get("required_count", 0) }} <span data-lang="zh">判断已映射</span><span data-lang="en">judgments mapped</span></span>
-        {% if agent_entry_start %}
-        <span><span data-lang="zh">同一 Agent 所有</span><span data-lang="en">Same-Agent owned</span></span>
-        {% elif bundle.loop %}
-        <span><span data-lang="zh">可从 Web 运行</span><span data-lang="en">Web runnable</span></span>
-        {% else %}
-        <span><span data-lang="zh">未关联 Loop</span><span data-lang="en">No linked Loop</span></span>
-        {% endif %}
-      </div>
+    </div>
+    <div class="card-actions">
+      <a class="primary-button" href="/api/bundles/{{ bundle.id }}/export">
+        <span data-lang="zh">导出方案文件</span>
+        <span data-lang="en">Export plan</span>
+      </a>
+      <a class="secondary-button" href="/loops/new/manual?replace_bundle_id={{ bundle.id }}#bundle-import-form" data-testid="bundle-replace-yaml-link">
+        <span data-lang="zh">导入方案文件替换</span>
+        <span data-lang="en">Replace from YAML</span>
+      </a>
+      <form method="post" action="/bundles/{{ bundle.id }}/revise" class="inline-form">
+        <button class="secondary-button" type="submit" data-testid="bundle-improve-chat-button">
+          <span data-lang="zh">对话改进 Loop</span>
+          <span data-lang="en">Improve in chat</span>
+        </button>
+      </form>
+      {% if bundle.loop %}
+      <a class="ghost-button" href="/loops/{{ bundle.loop.id }}">
+        <span data-lang="zh">打开 Loop</span>
+        <span data-lang="en">Open run config</span>
+      </a>
+      {% endif %}
+      <button
+        class="ghost-button danger-button"
+        type="button"
+        data-delete-bundle="{{ bundle.id }}"
+        data-bundle-name="{{ bundle.name }}"
+      >
+        <span data-lang="zh">删除方案文件</span>
+        <span data-lang="en">Delete Plan</span>
+      </button>
     </div>
   </section>
-  {% if bundle_action_error %}
-  <div class="field-status is-error" data-testid="bundle-action-error" data-return-feedback-param="bundle_action_error" aria-live="polite">{{ bundle_action_error }}</div>
-  {% endif %}
-  {{ recovery_panel(bundle_action_recovery, "bundle-action-recovery", workdir_context=workdir_context, return_to=current_return_to) }}
-  {% if request.query_params.get("created_from_loop") == "1" %}
-  <div class="field-status is-success" data-testid="bundle-created-from-loop-feedback" data-return-feedback-param="created_from_loop" aria-live="polite">
-    <span data-lang="zh">已从现有 Loop 生成一份可管理的方案文件副本。</span>
-    <span data-lang="en">A manageable plan-file copy was created from the existing Loop.</span>
-  </div>
-  {% endif %}
 
-  {% if form_error %}
-  <div class="field-status is-warning bundle-spec-repair-notice" data-testid="bundle-spec-repair-notice" aria-live="polite">
-    <span>{{ form_error }}</span>
-    <a href="#bundle-detail-form" data-open-bundle-management><span data-lang="zh">打开契约编辑器</span><span data-lang="en">Open contract editor</span></a>
-  </div>
-  {% endif %}
-  {% if request.query_params.get("saved") == "1" %}
-  <div class="field-status is-success" data-return-feedback-param="saved" aria-live="polite" data-testid="bundle-saved-feedback">
-    <span data-lang="zh">方案文件已更新。</span>
-    <span data-lang="en">Plan updated.</span>
-  </div>
-  {% endif %}
-  {% if request.query_params.get("surface_updated") == "workflow" %}
-  <div class="field-status is-success" data-testid="bundle-surface-updated-workflow" data-surface-update-feedback data-return-feedback-param="surface_updated" aria-live="polite">
-    <span data-lang="zh">流程已保存，方案文件已更新。</span>
-    <span data-lang="en">The flow was saved, and the plan file was updated.</span>
-  </div>
-  {% endif %}
-  {% if request.query_params.get("surface_updated", "").startswith("role:") %}
-  <div class="field-status is-success" data-testid="bundle-surface-updated-role" data-surface-update-feedback data-return-feedback-param="surface_updated" aria-live="polite">
-    <span data-lang="zh">角色定义已保存，方案文件已更新。</span>
-    <span data-lang="en">The role definition was saved, and the plan file was updated.</span>
-  </div>
-  {% endif %}
-
-  {% include "partials/bundle_review_surface.html" %}
-
-  <details class="panel bundle-plan-management" id="bundle-plan-management" data-testid="bundle-plan-management" {% if form_error %}open{% endif %}>
-    <summary class="bundle-plan-management-summary">
-      <span>
-        <strong><span data-lang="zh">管理方案文件</span><span data-lang="en">Manage Plan File</span></strong>
-        <small><span data-lang="zh">编辑契约、底层构件和源 YAML，或执行导出、替换与删除。</span><span data-lang="en">Edit the contract, underlying assets, and source YAML, or export, replace, and delete.</span></small>
-      </span>
-    </summary>
-    <div class="bundle-plan-management-body">
-      <div class="card-actions bundle-plan-management-actions" data-testid="bundle-plan-management-actions">
-        {% if bundle.loop %}
-        <a class="secondary-button" href="{{ workdir_context_href('/bundles/' ~ bundle.id ~ '/export', workdir_context) }}" data-testid="bundle-export-yaml-link" data-workdir-context-link="workdir">
-          <span data-lang="zh">导出方案文件</span><span data-lang="en">Export plan</span>
-        </a>
-        {% endif %}
-        <a class="secondary-button" href="{{ bundle_replace_yaml_href }}" data-testid="bundle-replace-yaml-link" data-workdir-context-link="workdir">
-          <span data-lang="zh">导入方案文件替换</span><span data-lang="en">Replace from YAML</span>
-        </a>
-        <button class="ghost-button danger-button" type="button" data-delete-bundle="{{ bundle.id }}" data-bundle-name="{{ bundle.name }}">
-          <span data-lang="zh">删除方案文件</span><span data-lang="en">Delete Plan</span>
-        </button>
-      </div>
-
-  <section class="bundle-management-section" id="bundle-diagnostic-projection" data-testid="bundle-diagnostic-projection">
+  <section class="panel" data-testid="bundle-diagnostic-projection">
     <header class="panel-header">
       <div>
         <h2><span data-lang="zh">判断投影</span><span data-lang="en">Judgment Projection</span></h2>
@@ -149,28 +106,10 @@
         {% endif %}
       </article>
       {% else %}
-      <div class="empty-state empty-state--compact bundle-traceability-empty" data-testid="bundle-traceability-empty">
-        <p class="panel-note">
-          <span data-lang="zh">当前方案文件没有可展示的判断映射。</span>
-          <span data-lang="en">No judgment mapping is available for the current plan.</span>
-        </p>
-        <div class="card-actions card-actions-compact">
-          <a class="secondary-button" href="#bundle-detail-form" data-testid="bundle-traceability-empty-edit-link">
-            <span data-lang="zh">编辑契约</span>
-            <span data-lang="en">Edit contract</span>
-          </a>
-          <a class="ghost-button" href="{{ bundle_replace_yaml_href }}" data-testid="bundle-traceability-empty-replace-link" data-workdir-context-link="workdir">
-            <span data-lang="zh">替换 YAML</span>
-            <span data-lang="en">Replace YAML</span>
-          </a>
-          <form method="post" action="{{ workdir_context_href('/bundles/' ~ bundle.id ~ '/revise', workdir_context) }}" class="inline-form" data-workdir-context-form="workdir">
-            <button class="ghost-button" type="submit" data-testid="bundle-traceability-empty-improve-button">
-              <span data-lang="zh">对话改进</span>
-              <span data-lang="en">Improve in chat</span>
-            </button>
-          </form>
-        </div>
-      </div>
+      <p class="panel-note" data-testid="bundle-traceability-empty">
+        <span data-lang="zh">当前方案文件没有可展示的判断映射。</span>
+        <span data-lang="en">No judgment mapping is available for the current plan.</span>
+      </p>
       {% endfor %}
     </div>
     <div class="bundle-diagnostics-strip" data-testid="bundle-diagnostics-strip">
@@ -200,7 +139,7 @@
     </div>
   </section>
 
-  <details class="bundle-management-section expert-disclosure" id="bundle-linked-assets" data-testid="bundle-linked-assets">
+  <details class="panel expert-disclosure" data-testid="bundle-linked-assets">
     <summary>
       <span data-lang="zh">专家信息：底层资产</span>
       <span data-lang="en">Expert details: underlying assets</span>
@@ -217,7 +156,7 @@
         </div>
         {% if bundle.loop %}
         <div class="card-actions card-actions-compact">
-          <a class="secondary-button" href="{{ workdir_context_href('/loops/' ~ bundle.loop.id, workdir_context) }}" data-workdir-context-link="workdir">
+          <a class="secondary-button" href="/loops/{{ bundle.loop.id }}">
             <span data-lang="zh">查看 Loop</span>
             <span data-lang="en">View Loop</span>
           </a>
@@ -231,7 +170,7 @@
         </div>
         {% if bundle.orchestration %}
         <div class="card-actions card-actions-compact">
-          <a class="secondary-button" href="{{ bundle_orchestration_edit_href }}" data-testid="bundle-orchestration-edit-link" data-workdir-context-link="workdir">
+          <a class="secondary-button" href="/orchestrations/{{ bundle.orchestration.id }}/edit?return_to=/bundles/{{ bundle.id }}">
             <span data-lang="zh">编辑编排</span>
             <span data-lang="en">Edit orchestration</span>
           </a>
@@ -249,7 +188,7 @@
       {% if bundle.role_definitions %}
       <div class="card-actions card-actions-compact bundle-role-actions">
         {% for role_definition in bundle.role_definitions %}
-        <a class="ghost-button" href="{{ bundle_role_edit_hrefs.get(role_definition.id, '') }}" data-testid="bundle-role-edit-link-{{ role_definition.id }}" data-workdir-context-link="workdir">
+        <a class="ghost-button" href="/roles/{{ role_definition.id }}/edit?return_to=/bundles/{{ bundle.id }}">
           <span>{{ role_definition.name }}</span>
         </a>
         {% endfor %}
@@ -260,7 +199,7 @@
 
   {% set workflow_controls = control_summary.controls if control_summary and control_summary.controls else [] %}
   {% if workflow_controls %}
-  <section class="bundle-management-section" data-testid="bundle-workflow-controls">
+  <section class="panel" data-testid="bundle-workflow-controls">
     <header class="panel-header">
       <div>
       <h2><span data-lang="zh">运行控制</span><span data-lang="en">Runtime Controls</span></h2>
@@ -287,8 +226,26 @@
   </section>
   {% endif %}
 
-  <form class="bundle-management-section form-panel form-panel-wide" id="bundle-detail-form" method="post" action="{{ workdir_context_href('/bundles/' ~ bundle.id ~ '/edit', workdir_context) }}" data-testid="bundle-detail-form" data-workdir-context-form="workdir">
+  <form class="panel form-panel form-panel-wide" method="post" action="/bundles/{{ bundle.id }}/edit" data-testid="bundle-detail-form">
     <div class="field-status is-error" aria-live="polite" {% if not form_error %}hidden{% endif %}>{{ form_error or "" }}</div>
+    {% if request.query_params.get("saved") == "1" %}
+    <div class="field-status is-success">
+      <span data-lang="zh">方案文件已更新。</span>
+      <span data-lang="en">Plan updated.</span>
+    </div>
+    {% endif %}
+    {% if request.query_params.get("surface_updated") == "workflow" %}
+    <div class="field-status is-success" data-testid="bundle-surface-updated-workflow">
+      <span data-lang="zh">流程编排已保存，方案文件已更新。</span>
+      <span data-lang="en">The orchestration was saved, and the plan YAML was updated.</span>
+    </div>
+    {% endif %}
+    {% if request.query_params.get("surface_updated", "").startswith("role:") %}
+    <div class="field-status is-success" data-testid="bundle-surface-updated-role">
+      <span data-lang="zh">角色定义已保存，方案文件已更新。</span>
+      <span data-lang="en">The role definition was saved, and the plan YAML was updated.</span>
+    </div>
+    {% endif %}
 
     <div class="form-grid">
       <label class="wide">
@@ -319,7 +276,14 @@
     </div>
   </form>
 
-  <details class="bundle-management-section expert-disclosure" data-testid="bundle-yaml-preview">
+  <section class="panel" data-testid="bundle-spec-preview">
+    <header class="panel-header">
+      <h2><span data-lang="zh">Loop 契约预览</span><span data-lang="en">Task contract preview</span></h2>
+    </header>
+    <div class="markdown-body">{{ spec_rendered_html | safe }}</div>
+  </section>
+
+  <details class="panel expert-disclosure" data-testid="bundle-yaml-preview">
     <summary>
       <span data-lang="zh">专家信息：源文件</span>
       <span data-lang="en">Expert details: source file and YAML</span>
@@ -327,22 +291,13 @@
     <header class="panel-header">
       <h2><span data-lang="zh">当前方案文件</span><span data-lang="en">Current plan source</span></h2>
       <div class="card-actions">
-        <button
-          class="ghost-button"
-          type="button"
-          data-reveal-path="{{ bundle.managed_dir }}"
-          data-path-action-mode="{{ 'open' if access_state.native_dialogs_enabled else 'copy' }}"
-          data-testid="bundle-reveal-dir-button"
-        >
-          {% if access_state.native_dialogs_enabled %}
+        {% if access_state.native_dialogs_enabled %}
+        <button class="ghost-button" type="button" data-reveal-path="{{ bundle.managed_dir }}" data-testid="bundle-reveal-dir-button">
           <span data-lang="zh">打开方案文件目录</span>
           <span data-lang="en">Reveal bundle folder</span>
-          {% else %}
-          <span data-lang="zh">复制方案目录路径</span>
-          <span data-lang="en">Copy plan folder path</span>
-          {% endif %}
         </button>
-        <a class="secondary-button" href="{{ workdir_context_href('/bundles/' ~ bundle.id ~ '/export', workdir_context) }}" data-workdir-context-link="workdir">
+        {% endif %}
+        <a class="secondary-button" href="/api/bundles/{{ bundle.id }}/export">
           <span data-lang="zh">下载方案文件</span>
           <span data-lang="en">Download YAML</span>
         </a>
@@ -365,8 +320,5 @@
       <textarea rows="20" readonly>{{- bundle_yaml -}}</textarea>
     </label>
   </details>
-    </div>
-  </details>
-  <script src="{{ static_asset_url('pages/bundle_detail.js') }}" defer></script>
 </div>
 {% endblock %}

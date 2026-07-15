@@ -1,256 +1,107 @@
 {% extends "base.html" %}
-{% macro fit_review_field(field) -%}
-<label
-  class="tutorial-fit-task-field{% if field.id == 'task' %} tutorial-fit-task-field--primary{% else %} tutorial-fit-task-field--detail{% endif %}"
-  for="tutorial-fit-{{ field.id | replace('_', '-') }}-input"
-  data-fit-field-kind="{{ 'task' if field.id == 'task' else 'direct-check' if field.id == 'direct_path_check' else 'loop-review' }}"
->
-  <span class="tutorial-fit-task-label">
-    <span data-lang="zh" data-fit-label data-fit-label-default="{{ field.label_zh }}" data-fit-label-direct-decision="{{ field.get('direct_decision_label_zh', field.label_zh) }}">{{ field.label_zh }}</span>
-    <span data-lang="en" data-fit-label data-fit-label-default="{{ field.label_en }}" data-fit-label-direct-decision="{{ field.get('direct_decision_label_en', field.label_en) }}">{{ field.label_en }}</span>
-  </span>
-  <textarea
-    id="tutorial-fit-{{ field.id | replace('_', '-') }}-input"
-    class="tutorial-fit-task-input"
-    rows="{{ 2 if field.id == 'task' else 3 }}"
-    data-fit-draft-field="{{ field.id }}"
-    data-fit-command-option="{{ field.option }}"
-    data-fit-required-for-first-task="{{ '1' if field.required_for_first_task else '0' }}"
-    data-fit-placeholder-en="{{ field.placeholder_en }}"
-    data-fit-placeholder-zh="{{ field.placeholder_zh }}"
-    data-fit-direct-decision-input-placeholder-en="{{ field.get('direct_decision_placeholder_en', field.placeholder_en) }}"
-    data-fit-direct-decision-input-placeholder-zh="{{ field.get('direct_decision_placeholder_zh', field.placeholder_zh) }}"
-    data-fit-command-placeholder="{{ fit_guidance.fit_review_completion_placeholders[field.id] }}"
-    data-fit-command-placeholder-en="{{ fit_guidance.fit_review_completion_placeholders[field.id] }}"
-    data-fit-command-placeholder-zh="{{ fit_guidance.fit_review_completion_placeholders_zh[field.id] }}"
-    data-fit-direct-decision-placeholder-en="{{ fit_guidance.fit_direct_decision_completion_placeholders.get(field.id, '') }}"
-    data-fit-direct-decision-placeholder-zh="{{ fit_guidance.fit_direct_decision_completion_placeholders_zh.get(field.id, '') }}"
-    data-testid="tutorial-fit-{{ field.id | replace('_', '-') }}-input"
-    placeholder="{{ field.placeholder_zh if page_locale == 'zh' else field.placeholder_en }}"
-  ></textarea>
-</label>
-{%- endmacro %}
-{% block title %}{{ '适用性判断' if page_locale == 'zh' else 'Fit Guide' }}{% endblock %}
-{% block styles %}<link rel="stylesheet" href="{{ static_asset_url('pages/tutorial.css') }}" />{% endblock %}
+{% block title %}{{ '使用教程' if page_locale == 'zh' else 'Tutorial' }}{% endblock %}
 {% block content %}
 <div class="page-stack tutorial-page-stack" data-testid="tutorial-page">
-  <section class="tutorial-page-intro" data-testid="tutorial-page-intro">
-    <div>
+  <section class="hero hero-tight">
+    <div class="hero-copy-stack">
       <h1>
-        <span data-lang="zh">Loopora 适用性判断</span>
-        <span data-lang="en">Loopora Fit Guide</span>
+        <span data-lang="zh">从反复纠偏到 human-shaped Loop</span>
+        <span data-lang="en">From repeated correction to a human-shaped Loop</span>
       </h1>
       <p>
-        <span data-lang="zh">先描述任务，再判断它是否真的需要多轮证据治理；不适合时就停在直接路径。</span>
-        <span data-lang="en">Describe the task, then decide whether it really needs multi-round evidence governance; stop at the direct path when it does not.</span>
+        <span data-lang="zh">Loopora 把未来任务中人类本来要反复做的纠偏、质疑、取证、验收和阻断，提前编译成一个可运行的 Loop。模型学习通用能力，Loop 继承当前任务的判断方式。</span>
+        <span data-lang="en">Loopora moves the human corrections, doubts, evidence demands, acceptance calls, and blockers that would happen later into a runnable Loop shaped before execution. The model learns general capability; the Loop inherits task-scoped judgment.</span>
       </p>
+      <div class="first-run-judgment-brief tutorial-judgment-brief" data-testid="tutorial-hero-judgment-brief">
+        <strong>
+          <span data-lang="zh">开始前先写清三件事。</span>
+          <span data-lang="en">Name three things before you start.</span>
+        </strong>
+        <p>
+          <span data-lang="zh">任务目标、会伪装成完成的浅层状态，以及哪些记录、测试或产物才算必需证据。</span>
+          <span data-lang="en">The task goal, shallow states that would look done, and which records, tests, or artifacts count as required evidence.</span>
+        </p>
+      </div>
+      <div class="card-actions tutorial-hero-actions" data-testid="tutorial-hero-actions">
+        <a class="primary-button" href="/tools" data-testid="tutorial-hero-agent-entry-link">
+          <span data-lang="zh">安装 Agent 入口</span>
+          <span data-lang="en">Install Agent entry</span>
+        </a>
+        <a class="ghost-button" href="/loops/new/bundle" data-testid="tutorial-hero-web-compose-link">
+          <span data-lang="zh">Web 对话编排</span>
+          <span data-lang="en">Compose in Web</span>
+        </a>
+      </div>
     </div>
-    <a class="ghost-button" href="#tutorial-guide-panel" data-testid="tutorial-boundary-link">
-      <span data-lang="zh">适用边界</span>
-      <span data-lang="en">Fit boundary</span>
-    </a>
+  </section>
+
+  <section class="panel tutorial-guide-panel" data-testid="tutorial-guide-panel">
+    <header class="panel-header">
+      <h2><span data-lang="zh">先问这五个问题</span><span data-lang="en">Ask these five questions first</span></h2>
+    </header>
+    <div class="tutorial-guide-grid tutorial-guide-grid-compact">
+      <article class="tutorial-guide-card" data-testid="tutorial-core-spec">
+        <strong class="tutorial-guide-title"><span data-lang="zh">你要省下的是产出，还是判断？</span><span data-lang="en">Are you saving output, or judgment?</span></strong>
+        <p>
+          <span data-lang="zh">如果只是让智能体多做一轮，简单循环就够了。Loopora 真正节省的是人类反复回场做的判断：证据够不够、是否假完成、该继续还是转向。</span>
+          <span data-lang="en">If the only goal is another Agent pass, a simple loop is enough. Loopora saves the repeated human judgment loop: is the evidence real, is this fake done, should the next round continue or redirect?</span>
+        </p>
+      </article>
+      <article class="tutorial-guide-card" data-testid="tutorial-core-workflow">
+        <strong class="tutorial-guide-title"><span data-lang="zh">判断为什么不能只写成提示词？</span><span data-lang="en">Why is judgment not just a prompt?</span></strong>
+        <p>
+          <span data-lang="zh">因为提示词主要影响下一次回答。可运行的判断必须落到 Loop 契约、角色责任、流程时机和证据规则里，才能在每轮被追问、记录和裁决。</span>
+          <span data-lang="en">Because a prompt mainly shapes the next answer. Runnable judgment must land in the Loop contract, role responsibilities, run-flow timing, and evidence rules so every round can be questioned, recorded, and judged.</span>
+        </p>
+      </article>
+      <article class="tutorial-guide-card" data-testid="tutorial-core-bundle">
+        <strong class="tutorial-guide-title"><span data-lang="zh">为什么不让模型直接学？</span><span data-lang="en">Why should the model not just learn this?</span></strong>
+        <p>
+          <span data-lang="zh">这次任务的判断有局部性、时效性和可争议性，不该静默写进模型权重。Loop 让它保持显式、可预览、可修改、可丢弃。</span>
+          <span data-lang="en">This task's judgment is local, temporary, and debatable. It should not disappear into model weights. A Loop keeps it explicit, previewable, editable, and disposable.</span>
+        </p>
+      </article>
+      <article class="tutorial-guide-card" data-testid="tutorial-core-survivability">
+        <strong class="tutorial-guide-title"><span data-lang="zh">这套判断要不要活过一次聊天？</span><span data-lang="en">Should this judgment survive one chat?</span></strong>
+        <p>
+          <span data-lang="zh">如果判断只影响当前回复，直接聊天就够了。值得编译成 Loop 的判断，应被运行继承、导出复用，或作为之后审计证据的契约。</span>
+          <span data-lang="en">If the judgment only shapes this reply, direct chat is enough. A Loop-worthy judgment should be inherited by the run, exported for reuse, or audited later as evidence.</span>
+        </p>
+      </article>
+      <article class="tutorial-guide-card" data-testid="tutorial-core-loop">
+        <strong class="tutorial-guide-title"><span data-lang="zh">什么时候别开 Loop？</span><span data-lang="en">When should you not open a loop?</span></strong>
+        <p>
+          <span data-lang="zh">如果下一轮不会产生新证据，或者一次人工复核就能定案，就别开 Loop。没有治理结构和新证据的 Loop 不是收敛器，只是开盲盒。</span>
+          <span data-lang="en">If another round will not create new evidence, or one human review can settle it, do not open a loop. A loop without governance and new evidence is not convergence; it is a blind box.</span>
+        </p>
+      </article>
+    </div>
   </section>
 
   <section class="panel" id="tutorial-decision-tree-panel" data-testid="tutorial-decision-tree-panel">
     <header class="panel-header">
-      <h2><span data-lang="zh">补齐适配审查</span><span data-lang="en">Complete the Fit Review</span></h2>
+      <h2><span data-lang="zh">先问：这件事真的需要 Loopora 吗？</span><span data-lang="en">First ask: does this really need Loopora?</span></h2>
     </header>
     <div class="tutorial-decision-tree-shell">
       <section class="tutorial-decision-tree-canvas" data-testid="tutorial-decision-tree-canvas" aria-label="{{ 'Loopora 使用决策树' if page_locale == 'zh' else 'Loopora decision tree' }}">
-        <div
-          class="tutorial-fit-task-review"
-          data-testid="tutorial-fit-task-review"
-          data-fit-setup-ready="{{ fit_guidance.fit_review_setup_gate.ready }}"
-          data-fit-setup-blocked="{{ fit_guidance.fit_review_setup_gate.blocked }}"
-          data-fit-setup-direct="{{ fit_guidance.fit_review_setup_gate.direct }}"
-          data-fit-setup-blocker="{{ fit_guidance.fit_review_setup_gate.blocker }}"
-          data-fit-setup-direct-blocker="{{ fit_guidance.fit_review_setup_gate.direct_blocker }}"
-          data-fit-setup-direct-input-blocker="{{ fit_guidance.fit_review_setup_gate.direct_input_blocker }}"
-          data-fit-first-task-preview="{{ fit_guidance.fit_first_task_message_status.preview }}"
-          data-fit-first-task-ready="{{ fit_guidance.fit_first_task_message_status.ready }}"
-          data-fit-first-task-direct="{{ fit_guidance.fit_first_task_message_status.direct }}"
-          data-fit-first-task-direct-input="{{ fit_guidance.fit_first_task_message_status.direct_input }}"
-          data-fit-cli-entry="{{ fit_guidance.fit_completion_cli_entry }}"
-          data-current-workdir="{{ fit_guidance.workdir }}"
-          data-fit-workdir="{{ fit_guidance.workdir }}"
-          data-fit-workdir-state-status="{{ fit_guidance.workdir_state.status }}"
-          data-fit-workdir-ready="{{ 'true' if fit_guidance.workdir_ready else 'false' }}"
-          data-fit-target-project-required="{{ 'true' if fit_guidance.target_project_required else 'false' }}"
-          data-fit-route-commands-placeholders="{{ 'true' if fit_guidance.route_commands_are_placeholders else 'false' }}"
-        >
-          <section class="tutorial-fit-task-pane tutorial-fit-task-fields">
-            {% for field in fit_guidance.fit_review_input_fields if field.id == 'task' %}
-              {{ fit_review_field(field) }}
-            {% endfor %}
-            <label class="tutorial-fit-direct-decision" for="tutorial-fit-prefer-direct-input">
-              <input
-                id="tutorial-fit-prefer-direct-input"
-                type="checkbox"
-                data-fit-prefer-direct
-                data-testid="tutorial-fit-prefer-direct-input"
-              >
-              <span>
-                <strong>
-                  <span data-lang="zh">直接路径已经足够</span>
-                  <span data-lang="en">Direct path is enough</span>
-                </strong>
-                <span>
-                  <span data-lang="zh">需要先写直接路径理由；任务目标会作为上下文保留，但不能单独记录不用 Loopora 的决定。</span>
-                  <span data-lang="en">Add a direct-path reason first; the task goal is kept as context but cannot record a no-Loopora decision by itself.</span>
-                </span>
-              </span>
-            </label>
-            <div class="tutorial-fit-detail-fields" data-testid="tutorial-fit-detail-fields">
-              {% for field in fit_guidance.fit_review_input_fields if field.id != 'task' %}
-                {{ fit_review_field(field) }}
-              {% endfor %}
-            </div>
-          </section>
-          <section class="tutorial-fit-task-pane tutorial-fit-task-pane--draft">
-            <div class="tutorial-fit-task-draft-header">
-              <label class="tutorial-fit-task-label" for="tutorial-fit-task-draft">
-                <span data-lang="zh">单条 /loopora-plan 交接草稿</span>
-                <span data-lang="en">One-message /loopora-plan handoff</span>
-              </label>
-              <button
-                class="ghost-button tutorial-fit-task-copy"
-                type="button"
-                data-testid="tutorial-fit-task-copy"
-                disabled
-              >
-                <span data-lang="zh">复制</span>
-                <span data-lang="en">Copy</span>
-              </button>
-              <a
-                class="primary-button tutorial-fit-task-use-web"
-                href="{{ nav_web_compose_href }}"
-                data-testid="tutorial-fit-task-use-web"
-                data-workdir-context-link="workdir"
-                data-tutorial-fit-route="web"
-              >
-                <span data-lang="zh">在 Web 继续</span>
-                <span data-lang="en">Continue in Web</span>
-              </a>
-              <a
-                class="secondary-button tutorial-fit-task-use-tools"
-                href="{{ nav_tools_href }}"
-                data-testid="tutorial-fit-task-use-tools"
-                data-workdir-context-link="workdir"
-                data-tutorial-fit-route="setup"
-              >
-                <span data-lang="zh">同一 Agent 设置</span>
-                <span data-lang="en">Same-Agent Setup</span>
-              </a>
-            </div>
-            <textarea
-              id="tutorial-fit-task-draft"
-              class="tutorial-fit-task-draft"
-              rows="6"
-              data-testid="tutorial-fit-task-draft"
-              readonly
-              placeholder="{{ '输入任务后会生成一条可带回 Agent 的消息草稿。' if page_locale == 'zh' else 'Enter a task to generate a draft message for the Agent.' }}"
-            ></textarea>
-            <div class="tutorial-fit-command-shell" data-testid="tutorial-fit-completion-command-shell">
-              <div class="tutorial-fit-command-header">
-                <label class="tutorial-fit-task-label" for="tutorial-fit-completion-command">
-                  <span data-lang="zh">补完命令</span>
-                  <span data-lang="en">Completion command</span>
-                </label>
-                <button
-                  class="ghost-button tutorial-fit-command-copy"
-                  type="button"
-                  data-testid="tutorial-fit-completion-command-copy"
-                  disabled
-                >
-                  <span data-lang="zh">复制命令</span>
-                  <span data-lang="en">Copy command</span>
-                </button>
-              </div>
-              <textarea
-                id="tutorial-fit-completion-command"
-                class="tutorial-fit-completion-command"
-                rows="3"
-                data-testid="tutorial-fit-completion-command"
-                readonly
-                placeholder="{{ '输入任一判断字段后会生成当前入口的 fit 补完命令。' if page_locale == 'zh' else 'Enter any review field to generate a fit completion command for the current entry.' }}"
-              ></textarea>
-            </div>
-            <p
-              class="field-status tutorial-fit-task-status"
-              id="tutorial-fit-task-status"
-              data-testid="tutorial-fit-task-status"
-              aria-live="polite"
-            ></p>
-          </section>
-          <section class="tutorial-fit-task-questions" data-testid="tutorial-fit-task-review-questions">
-            <span class="tutorial-fit-guide-kicker">
-              <span data-lang="zh">提交前人工回答</span>
-              <span data-lang="en">Answer before setup</span>
-            </span>
-            <ul class="tutorial-fit-guide-list">
-              {% for question in fit_guidance.task_review_questions %}
-              <li data-fit-review-question-id="{{ question.id }}">
-                <span data-lang="zh">{{ question.text_zh }}</span>
-                <span data-lang="en">{{ question.text_en }}</span>
-              </li>
-              {% endfor %}
-            </ul>
-          </section>
+        <div class="tutorial-decision-tree-kicker" data-testid="tutorial-decision-tree-kicker">
+          <span data-lang="zh">构建 · 检查 · 守门 · 引导</span>
+          <span data-lang="en">Build · Inspect · Gate · Guide</span>
         </div>
-        <details class="tutorial-disclosure tutorial-fit-signal-disclosure" data-testid="tutorial-fit-signal-disclosure">
-          <summary class="tutorial-disclosure-summary">
-            <span data-lang="zh">比较强适配与直接路径信号</span>
-            <span data-lang="en">Compare strong-fit and direct-path signals</span>
-          </summary>
-          <div class="tutorial-disclosure-body">
-            <div class="tutorial-decision-tree-intro">
-              <h3>
-                <span data-lang="zh">如果不用 Loopora，人类会回来几次？</span>
-                <span data-lang="en">Without Loopora, how many times would humans return?</span>
-              </h3>
-              <p>
-                <span data-lang="zh">一次人工复核能定案时走直接路径；每轮都要重新判断证据和风险时，才继续塑形 Loop。</span>
-                <span data-lang="en">Use the direct path when one human review can settle the task; shape a Loop only when evidence and risk need renewed judgment every round.</span>
-              </p>
-            </div>
-            <div class="tutorial-fit-guide-grid" data-testid="tutorial-fit-guide">
-              <article class="tutorial-fit-guide-card tutorial-fit-guide-card--strong" data-testid="tutorial-fit-strong-signals">
-                <span class="tutorial-fit-guide-kicker">
-                  <span data-lang="zh">适合用 Loopora</span>
-                  <span data-lang="en">Strong Loopora fit</span>
-                </span>
-                <ul class="tutorial-fit-guide-list">
-                  {% for signal in fit_guidance.strong_fit_signals %}
-                  <li data-fit-signal-id="{{ signal.id }}">
-                    <span data-lang="zh">{{ signal.text_zh }}</span>
-                    <span data-lang="en">{{ signal.text_en }}</span>
-                  </li>
-                  {% endfor %}
-                </ul>
-              </article>
-              <article class="tutorial-fit-guide-card tutorial-fit-guide-card--direct" data-testid="tutorial-fit-direct-signals">
-                <span class="tutorial-fit-guide-kicker">
-                  <span data-lang="zh">先用直接 Agent 或硬性检查</span>
-                  <span data-lang="en">Prefer direct Agent or hard checks</span>
-                </span>
-                <ul class="tutorial-fit-guide-list">
-                  {% for signal in fit_guidance.prefer_direct_agent_or_checks %}
-                  <li data-fit-signal-id="{{ signal.id }}">
-                    <span data-lang="zh">{{ signal.text_zh }}</span>
-                    <span data-lang="en">{{ signal.text_en }}</span>
-                  </li>
-                  {% endfor %}
-                </ul>
-              </article>
-            </div>
-          </div>
-        </details>
-        <details class="tutorial-disclosure tutorial-flow-disclosure" data-testid="tutorial-flow-comparison-disclosure">
-          <summary class="tutorial-disclosure-summary">
-            <span data-lang="zh">审查完成后，比较可运行的流程形状</span>
-            <span data-lang="en">After the review, compare runnable flow shapes</span>
-          </summary>
-          <div class="tutorial-disclosure-body">
+        <div class="tutorial-decision-tree-intro">
+          <span class="tutorial-decision-tree-eyebrow">
+            <span data-lang="zh">不要先选流程名。先问未来哪些人类纠偏会反复发生，再问能否把那些判断提前塑形成 Loop。</span>
+            <span data-lang="en">Do not start with flow names. First ask which human corrections would repeat later, then ask whether those judgments can shape the Loop now.</span>
+          </span>
+          <h3>
+            <span data-lang="zh">如果不用 Loopora，人类会回来几次？</span>
+            <span data-lang="en">Without Loopora, how many times would humans return?</span>
+          </h3>
+          <p>
+            <span data-lang="zh">如果答案是“一次”，别开 Loop。如果答案是“每轮都要回来判断”，才继续往下选流程形状。</span>
+            <span data-lang="en">If the answer is "once", skip the loop. If the answer is "after every round", continue and choose the flow shape.</span>
+          </p>
+        </div>
         <div class="tutorial-decision-tree-stage">
           <article class="tutorial-decision-tree-question tutorial-decision-tree-question--primary" data-testid="tutorial-decision-tree-primary-question">
             <span class="tutorial-decision-tree-step-badge">01</span>
@@ -322,67 +173,11 @@
           </article>
           {% endfor %}
         </div>
-          </div>
-        </details>
       </section>
     </div>
   </section>
 
-  <details class="panel tutorial-guide-panel tutorial-disclosure" id="tutorial-guide-panel" data-testid="tutorial-guide-panel">
-    <summary class="tutorial-disclosure-summary">
-      <span data-lang="zh">为什么要先写清这五项判断？</span>
-      <span data-lang="en">Why name these five judgments first?</span>
-    </summary>
-    <div class="tutorial-disclosure-body">
-      <header class="panel-header">
-        <h2><span data-lang="zh">先问这五个问题</span><span data-lang="en">Ask these five questions first</span></h2>
-      </header>
-      <div class="tutorial-guide-grid tutorial-guide-grid-compact">
-        <article class="tutorial-guide-card" data-testid="tutorial-core-spec">
-          <strong class="tutorial-guide-title"><span data-lang="zh">你要省下的是产出，还是判断？</span><span data-lang="en">Are you saving output, or judgment?</span></strong>
-          <p>
-            <span data-lang="zh">如果只是让智能体多做一轮，简单循环就够了。Loopora 真正节省的是人类反复回场做的判断：证据够不够、是否假完成、该继续还是转向。</span>
-            <span data-lang="en">If the only goal is another Agent pass, a simple loop is enough. Loopora saves the repeated human judgment loop: is the evidence real, is this fake done, should the next round continue or redirect?</span>
-          </p>
-        </article>
-        <article class="tutorial-guide-card" data-testid="tutorial-core-workflow">
-          <strong class="tutorial-guide-title"><span data-lang="zh">判断为什么不能只写成提示词？</span><span data-lang="en">Why is judgment not just a prompt?</span></strong>
-          <p>
-            <span data-lang="zh">因为提示词主要影响下一次回答。可运行的判断必须落到 Loop 契约、角色责任、流程时机和证据规则里，才能在每轮被追问、记录和裁决。</span>
-            <span data-lang="en">Because a prompt mainly shapes the next answer. Runnable judgment must land in the Loop contract, role responsibilities, run-flow timing, and evidence rules so every round can be questioned, recorded, and judged.</span>
-          </p>
-        </article>
-        <article class="tutorial-guide-card" data-testid="tutorial-core-bundle">
-          <strong class="tutorial-guide-title"><span data-lang="zh">为什么不让模型直接学？</span><span data-lang="en">Why should the model not just learn this?</span></strong>
-          <p>
-            <span data-lang="zh">这次任务的判断有局部性、时效性和可争议性，不该静默写进模型权重。Loop 让它保持显式、可预览、可修改、可丢弃。</span>
-            <span data-lang="en">This task's judgment is local, temporary, and debatable. It should not disappear into model weights. A Loop keeps it explicit, previewable, editable, and disposable.</span>
-          </p>
-        </article>
-        <article class="tutorial-guide-card" data-testid="tutorial-core-survivability">
-          <strong class="tutorial-guide-title"><span data-lang="zh">这套判断要不要活过一次聊天？</span><span data-lang="en">Should this judgment survive one chat?</span></strong>
-          <p>
-            <span data-lang="zh">如果判断只影响当前回复，直接聊天就够了。值得编译成 Loop 的判断，应被运行继承、导出复用，或作为之后审计证据的契约。</span>
-            <span data-lang="en">If the judgment only shapes this reply, direct chat is enough. A Loop-worthy judgment should be inherited by the run, exported for reuse, or audited later as evidence.</span>
-          </p>
-        </article>
-        <article class="tutorial-guide-card" data-testid="tutorial-core-loop">
-          <strong class="tutorial-guide-title"><span data-lang="zh">什么时候别开 Loop？</span><span data-lang="en">When should you not open a loop?</span></strong>
-          <p>
-            <span data-lang="zh">如果下一轮不会产生新证据，或者一次人工复核就能定案，就别开 Loop。没有治理结构和新证据的 Loop 不是收敛器，只是开盲盒。</span>
-            <span data-lang="en">If another round will not create new evidence, or one human review can settle it, do not open a loop. A loop without governance and new evidence is not convergence; it is a blind box.</span>
-          </p>
-        </article>
-      </div>
-    </div>
-  </details>
-
-  <details class="panel tutorial-disclosure" data-testid="tutorial-workflow-scenarios-panel">
-    <summary class="tutorial-disclosure-summary">
-      <span data-lang="zh">浏览详细流程样例</span>
-      <span data-lang="en">Browse detailed flow examples</span>
-    </summary>
-    <div class="tutorial-disclosure-body">
+  <section class="panel" data-testid="tutorial-workflow-scenarios-panel">
     <header class="panel-header">
       <div>
         <h2><span data-lang="zh">如果需要，哪种流程最像这次判断？</span><span data-lang="en">If it does, which flow matches this judgment?</span></h2>
@@ -422,33 +217,32 @@
       </article>
       {% endfor %}
     </div>
-    </div>
-  </details>
+  </section>
 
   <section class="panel" data-testid="tutorial-actions-panel">
     <header class="panel-header">
       <div>
         <h2><span data-lang="zh">想好了为什么用，然后怎么用？</span><span data-lang="en">Once you know why, how do you use it?</span></h2>
         <p class="tutorial-panel-copy">
-          <span data-lang="zh">先选择创建路径：不在 Agent 会话里就进入 Web 对话；已经在 Codex、Claude Code 或 OpenCode 里工作时，再安装同一 Agent 项目入口并在同一个 Agent 会话里运行 /loopora-plan 和 /loopora-run。手动编排只留给已经清楚契约、角色和运行流程的专家路径。</span>
-          <span data-lang="en">Choose the creation path first: use Web conversation when you are not inside an Agent session; when you are already working in Codex, Claude Code, or OpenCode, install the same-Agent project entry and run /loopora-plan and /loopora-run in that same Agent session. Manual composition stays for expert paths where the contract, roles, and run flow are already clear.</span>
+          <span data-lang="zh">默认从你正在使用的 Coding Agent 开始：先安装项目级入口，带着任务目标、伪完成风险和必需证据运行 /loopora-plan，审查或调整预览，最后用同一个 Agent 执行 /loopora-run。Web 仍可直接编排 Loop，但它不再是 coding 任务的唯一起点。</span>
+          <span data-lang="en">Start from the Coding Agent you are already using: install the project entry, run /loopora-plan with the task goal, fake-done risk, and required evidence, review or adjust the Loop preview, then use the same Agent for /loopora-run. Web can still compose a Loop directly, but it is no longer the only starting point for coding work.</span>
         </p>
       </div>
     </header>
     <div class="card-actions">
-      <a class="primary-button" href="{{ nav_compose_href }}" data-testid="tutorial-web-compose-link" data-workdir-context-link="workdir" data-tutorial-fit-route="choice" data-tutorial-fit-empty-allowed="true">
-        <span data-lang="zh">选择创建方式</span>
-        <span data-lang="en">Choose Creation Path</span>
+      <a class="primary-button" href="/tools" data-testid="tutorial-agent-entry-link">
+        <span data-lang="zh">安装 Agent 入口</span>
+        <span data-lang="en">Install Agent entry</span>
       </a>
-      <a class="ghost-button" href="{{ nav_tools_href }}" data-testid="tutorial-agent-entry-link" data-workdir-context-link="workdir" data-tutorial-fit-route="setup" data-tutorial-fit-empty-allowed="true">
-        <span data-lang="zh">同一 Agent 设置</span>
-        <span data-lang="en">Same-Agent Setup</span>
+      <a class="ghost-button" href="/loops/new/bundle" data-testid="tutorial-web-compose-link">
+        <span data-lang="zh">Web 对话编排</span>
+        <span data-lang="en">Compose in Web</span>
       </a>
-      <a class="ghost-button" href="{{ nav_manual_loop_href }}" data-testid="tutorial-manual-compose-link" data-workdir-context-link="workdir" data-tutorial-fit-route="expert" data-tutorial-fit-empty-allowed="true">
+      <a class="ghost-button" href="/loops/new/manual" data-testid="tutorial-manual-compose-link">
         <span data-lang="zh">手动编排</span>
         <span data-lang="en">Manual Expert Mode</span>
       </a>
-      <a class="ghost-button" href="{{ nav_orchestrations_href }}" data-testid="tutorial-workflow-examples-link" data-workdir-context-link="workdir">
+      <a class="ghost-button" href="/orchestrations" data-testid="tutorial-workflow-examples-link">
         <span data-lang="zh">查看流程样例</span>
         <span data-lang="en">Browse flow examples</span>
       </a>

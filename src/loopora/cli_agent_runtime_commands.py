@@ -1,34 +1,48 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import typer
 
 from loopora import cli_agent_adapter_lifecycle_commands as _agent_adapter_lifecycle_commands
-from loopora.agent_adapter_command_prefix import rewrite_loopora_help_commands
-from loopora.cli_agent_command_options import AdapterGroupWorkdirOption
-from loopora.cli_agent_group_previews import agent_runtime_adapter_preview
-from loopora.cli_agent_next_command import AGENT_NEXT_HELP_EPILOG as AGENT_NEXT_HELP_EPILOG
-from loopora.cli_agent_next_command import register_agent_next_command
-from loopora.cli_agent_plan_command import AGENT_PLAN_HELP_EPILOG as AGENT_PLAN_HELP_EPILOG
-from loopora.cli_agent_plan_command import register_agent_plan_command
-from loopora.cli_agent_run_command import AGENT_RUN_HELP_EPILOG as AGENT_RUN_HELP_EPILOG
-from loopora.cli_agent_run_command import register_agent_run_command
-from loopora.cli_agent_runtime_actions import AgentNextCliRequest
-from loopora.cli_agent_runtime_actions import claim_agent_next_from_cli as claim_agent_next_from_cli
-from loopora.cli_agent_submit_command import AGENT_SUBMIT_HELP_EPILOG as AGENT_SUBMIT_HELP_EPILOG
-from loopora.cli_agent_submit_command import register_agent_submit_command
-from loopora.cli_group_help import help_first_typer
-
-
-AGENT_RUNTIME_HELP_EPILOG = (
-    "This adapter runtime is normally called by Loopora-managed Agent entries, not by first-use shell workflows. "
-    "If you are choosing how to start, run `loopora start` first, then use `loopora fit` when fit is uncertain. "
-    "Outside an Agent session, open Fit Guide/Web choices in Web with "
-    '`loopora serve --open --workdir "$PWD" --host 127.0.0.1 --port 8742` for conversation, import, or manual paths. '
-    'Same-Agent setup for this adapter uses `loopora init {adapter} --workdir "$PWD"`, then '
-    '`loopora doctor --workdir "$PWD"`; after readiness passes, return to that Agent for `/loopora-plan` and '
-    "`/loopora-run`. "
-    'Use `loopora agent {adapter} check --workdir "$PWD"` only when you need a CLI diagnostic for the installed entry.'
+from loopora.cli_agent_adapter_lifecycle_commands import (
+    AdapterMessageOption,
+    AdapterWorkdirOption,
+    BundleFileOption,
+    CompactJsonOutputOption,
+    ContextIdOption,
+    EntrySourceOption,
+    NextStepIdCompatOption,
+    NoWebOption,
+    ResultFileOption,
+    RunIdOption,
+    SourceOptionIdOption,
+    StepIdOption,
 )
+from loopora.cli_agent_plan_output import _print_agent_gen_result
+from loopora.cli_agent_recovery import _print_agent_loop_unready_guidance
+from loopora.cli_agent_runtime_actions import (
+    AgentLoopStartCliRequest,
+    AgentNextCliRequest,
+    AgentPlanErrorCliRequest,
+    AgentSubmitErrorCliRequest,
+    claim_agent_next_from_cli,
+    handle_agent_plan_error,
+    handle_agent_submit_error,
+    start_agent_loop_from_cli,
+)
+from loopora.cli_agent_runtime_support import (
+    attach_web_url,
+    resolved_entry_source,
+    spawn_agent_loop_worker_if_needed,
+)
+from loopora.cli_agent_step_presenters import _print_agent_loop_result, _print_agent_step_result
+from loopora.cli_agent_submit_auto_repair import read_result_json_with_auto_repair
+from loopora.cli_shared import JsonOutputOption, get_service, handle_error
+from loopora.service import LooporaError
+from loopora.service_agent_adapters import AgentBundleCandidateRequest
+from loopora.service_agent_native import AgentNativeStepSubmitRequest
+from loopora.strategy_source import StrategySourceError
 
 
 def register_agent_runtime_commands(agent_app: typer.Typer) -> None:
@@ -38,43 +52,171 @@ def register_agent_runtime_commands(agent_app: typer.Typer) -> None:
 
 
 def _register_agent_runtime_for(agent_app: typer.Typer, *, adapter: str, help_text: str) -> None:
-    def adapter_callback(ctx: typer.Context, workdir: AdapterGroupWorkdirOption = None) -> None:
-        if ctx.invoked_subcommand is not None:
-            return
-        if workdir is not None:
-            typer.echo(agent_runtime_adapter_preview(adapter, workdir))
-        else:
-            typer.echo(ctx.get_help())
-        raise typer.Exit
-
-    adapter_app = help_first_typer(
-        callback=adapter_callback,
-        help=help_text,
-        epilog=rewrite_loopora_help_commands(AGENT_RUNTIME_HELP_EPILOG.format(adapter=adapter)),
-    )
+    adapter_app = typer.Typer(help=help_text)
     agent_app.add_typer(adapter_app, name=adapter)
     _agent_adapter_lifecycle_commands.register_agent_check_command(adapter_app, adapter=adapter)
-    _register_agent_plan_command(adapter_app, adapter=adapter)
-    _register_agent_run_command(adapter_app, adapter=adapter)
-    _register_agent_next_command(adapter_app, adapter=adapter)
-    _register_agent_submit_command(adapter_app, adapter=adapter)
 
+    @adapter_app.command("plan")
+    def agent_plan(
+        workdir: AdapterWorkdirOption = Path(),
+        message: AdapterMessageOption = "",
+        bundle_file: BundleFileOption = None,
+        context_id: ContextIdOption = "",
+        entry_source: EntrySourceOption = "",
+        *,
+        json_output: JsonOutputOption = False,
+        compact_json_output: CompactJsonOutputOption = False,
+        no_web: NoWebOption = False,
+    ) -> None:
+        """Validate a generated Loop plan and return the Loop preview URL."""
+        try:
+            request = AgentBundleCandidateRequest(
+                adapter=adapter,
+                workdir=workdir,
+                message=message,
+                bundle_file=bundle_file,
+                context_id=context_id,
+                entry_source=resolved_entry_source(entry_source),
+            )
+            result = get_service().create_agent_bundle_candidate(request)
+            attach_web_url(result, path_key="preview_path", url_key="preview_url", no_web=no_web)
+            _print_agent_gen_result(result, json_output=json_output, compact_json_output=compact_json_output)
+        except (LooporaError, StrategySourceError) as exc:
+            handle_agent_plan_error(
+                exc,
+                AgentPlanErrorCliRequest(
+                    adapter=adapter,
+                    workdir=workdir,
+                    context_id=context_id,
+                    entry_source=resolved_entry_source(entry_source),
+                    json_output=json_output or compact_json_output,
+                ),
+            )
 
-def _register_agent_plan_command(adapter_app: typer.Typer, *, adapter: str) -> None:
-    register_agent_plan_command(adapter_app, adapter=adapter)
+    @adapter_app.command("run")
+    def agent_run(
+        workdir: AdapterWorkdirOption = Path(),
+        context_id: ContextIdOption = "",
+        source_option_id: SourceOptionIdOption = "",
+        entry_source: EntrySourceOption = "",
+        *,
+        json_output: JsonOutputOption = False,
+        compact_json_output: CompactJsonOutputOption = False,
+        no_web: NoWebOption = False,
+    ) -> None:
+        """Start or reuse the Loopora run associated with the current ready Loop preview."""
+        service = None
+        resolved_source = resolved_entry_source(entry_source)
+        try:
+            service = get_service()
+            result = start_agent_loop_from_cli(
+                service,
+                AgentLoopStartCliRequest(
+                    adapter=adapter,
+                    workdir=workdir,
+                    context_id=context_id,
+                    source_option_id=source_option_id,
+                    entry_source=resolved_source,
+                ),
+            )
+            spawn_agent_loop_worker_if_needed(service, result)
+            attach_web_url(result, path_key="run_path", url_key="run_url", no_web=no_web)
+            _print_agent_loop_result(result, json_output=json_output, compact_json_output=compact_json_output)
+        except (LooporaError, StrategySourceError) as exc:
+            if _print_agent_loop_unready_guidance(
+                exc,
+                service=service,
+                adapter=adapter,
+                workdir=workdir,
+                context_id=context_id,
+                entry_source=resolved_source,
+                no_web=no_web,
+                json_output=json_output or compact_json_output,
+            ):
+                raise typer.Exit(code=1) from None
+            handle_error(exc)
 
+    @adapter_app.command("next")
+    def agent_next(
+        workdir: AdapterWorkdirOption = Path(),
+        context_id: ContextIdOption = "",
+        run_id: RunIdOption = "",
+        _step_id: NextStepIdCompatOption = "",
+        entry_source: EntrySourceOption = "",
+        *,
+        json_output: JsonOutputOption = False,
+        compact_json_output: CompactJsonOutputOption = False,
+        no_web: NoWebOption = False,
+    ) -> None:
+        """Claim the next Loopora step contract for the host Agent to execute natively."""
+        claim_agent_next_from_cli(
+            AgentNextCliRequest(
+                adapter=adapter,
+                workdir=workdir,
+                context_id=context_id,
+                run_id=run_id,
+                entry_source=entry_source,
+                json_output=json_output,
+                compact_json_output=compact_json_output,
+                no_web=no_web,
+            ),
+        )
 
-def _register_agent_run_command(adapter_app: typer.Typer, *, adapter: str) -> None:
-    register_agent_run_command(adapter_app, adapter=adapter)
-
-
-def _register_agent_next_command(adapter_app: typer.Typer, *, adapter: str) -> None:
-    register_agent_next_command(adapter_app, adapter=adapter, claim_from_cli=_claim_agent_next_from_cli_compat)
-
-
-def _register_agent_submit_command(adapter_app: typer.Typer, *, adapter: str) -> None:
-    register_agent_submit_command(adapter_app, adapter=adapter)
-
-
-def _claim_agent_next_from_cli_compat(request: AgentNextCliRequest) -> None:
-    claim_agent_next_from_cli(request)
+    @adapter_app.command("submit")
+    def agent_submit(
+        result_file: ResultFileOption,
+        workdir: AdapterWorkdirOption = Path(),
+        context_id: ContextIdOption = "",
+        run_id: RunIdOption = "",
+        step_id: StepIdOption = "",
+        entry_source: EntrySourceOption = "",
+        *,
+        json_output: JsonOutputOption = False,
+        compact_json_output: CompactJsonOutputOption = False,
+        no_web: NoWebOption = False,
+    ) -> None:
+        """Submit a host Agent's structured step result back to Loopora Core."""
+        service = get_service()
+        resolved_source = resolved_entry_source(entry_source)
+        result_payload: dict = {}
+        host_dispatch: dict = {}
+        auto_repair_actions: list[str] = []
+        try:
+            result_payload, host_dispatch, auto_repair_actions = read_result_json_with_auto_repair(
+                result_file,
+                service=service,
+                run_id=run_id,
+                workdir=workdir,
+            )
+            result = service.submit_agent_native_step(
+                AgentNativeStepSubmitRequest(
+                    adapter=adapter,
+                    workdir=workdir,
+                    context_id=context_id,
+                    run_id=run_id,
+                    step_id=step_id,
+                    output=result_payload,
+                    host_dispatch=host_dispatch,
+                    entry_source=resolved_source,
+                )
+            )
+            if auto_repair_actions:
+                result["auto_repair_applied"] = True
+                result["auto_repair_actions"] = auto_repair_actions
+            attach_web_url(result, path_key="run_path", url_key="run_url", no_web=no_web)
+            _print_agent_step_result(result, json_output=json_output, compact_json_output=compact_json_output)
+        except (LooporaError, StrategySourceError) as exc:
+            handle_agent_submit_error(
+                exc,
+                AgentSubmitErrorCliRequest(
+                    service=service,
+                    adapter=adapter,
+                    context_id=context_id,
+                    run_id=run_id or str(host_dispatch.get("run_id") or ""),
+                    entry_source=resolved_source,
+                    result_file=result_file,
+                    workdir=workdir,
+                    json_output=json_output or compact_json_output,
+                    auto_repair_actions=auto_repair_actions,
+                ),
+            )

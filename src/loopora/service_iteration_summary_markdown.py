@@ -6,7 +6,7 @@ from collections.abc import Callable
 from typing import Protocol
 
 from loopora.service_iteration_result_enrichment import empty_status_counts, verifier_passed
-from loopora.structured_numbers import structured_optional_finite_number
+from loopora.utils import structured_optional_finite_number
 
 TruncateText = Callable[..., str]
 

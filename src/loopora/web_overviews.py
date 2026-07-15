@@ -15,13 +15,255 @@ from loopora.run_takeaway_evidence import build_evidence_coverage as _build_evid
 from loopora.run_takeaways import build_run_key_takeaways as _build_run_key_takeaways
 from loopora.strategy_source import strategy_source_from_record
 from loopora.web_task_verdict_overviews import build_run_summary_snapshot as _build_run_summary_snapshot
-from loopora.web_task_verdict_overviews import lifecycle_failure_summary_pair as _lifecycle_failure_summary_pair
 from loopora.web_task_verdict_overviews import task_verdict_label as _task_verdict_label
 from loopora.web_task_verdict_overviews import task_verdict_status as _task_verdict_status
 from loopora.web_task_verdict_overviews import task_verdict_status_from_run as _task_verdict_status_from_run
 from loopora.web_task_verdict_overviews import verdict_safe_excerpt_pair as _verdict_safe_excerpt_pair
-from loopora.web_timeline_overviews import format_timeline_event as _format_timeline_event
-from loopora.web_url_utils import with_query_params
+
+
+from loopora.utils import structured_bool_is_true
+
+from loopora.utils import structured_optional_non_negative_int
+
+
+
+def format_run_finished(payload: Mapping[str, object], _role: object, _event_type: str) -> tuple[str, str]:
+    status = str(payload.get("status") or "finished").strip()
+    title = {
+        "succeeded": "Run finished",
+        "failed": "Run failed",
+        "stopped": "Run stopped",
+    }.get(status, f"Run {status}" if status else "Run finished")
+    reason = str(payload.get("reason", "")).strip()
+    iter_id = payload.get("iter")
+    detail_parts: list[str] = []
+    if reason:
+        detail_parts.append(
+            {
+                "max_iters_exhausted": "max iterations exhausted",
+                "rounds_completed": "planned rounds completed",
+            }.get(reason, reason)
+        )
+    elif iter_id is not None:
+        display_iter = _display_iter(iter_id)
+        if display_iter is not None:
+            detail_parts.append(f"iter={display_iter}")
+    task_status = str(payload.get("task_verdict_status") or "not_evaluated").strip() or "not_evaluated"
+    detail_parts.append(f"task_verdict_status={task_status}")
+    task_summary = str(payload.get("task_verdict_summary") or "").strip()
+    if task_summary:
+        detail_parts.append(f"task_verdict_summary={task_summary[:120]}")
+    return title, ", ".join(detail_parts)
+
+def format_run_result_accepted(payload: Mapping[str, object], _role: object, _event_type: str) -> tuple[str, str]:
+    status = str(payload.get("status") or "").strip()
+    task_status = str(payload.get("task_verdict_status") or "").strip()
+    judgment_summary = str(payload.get("judgment_contract_summary") or "").strip()
+    loop_fit_reasons = _payload_string_list(payload, "loop_fit_reasons")
+    execution_strategy = _payload_string_list(payload, "execution_strategy")
+    local_governance = _payload_string_list(payload, "local_governance")
+    role_postures = _payload_string_list(payload, "role_postures")
+    judgment_tradeoffs = _payload_string_list(payload, "judgment_tradeoffs")
+    success_surface = _payload_string_list(payload, "success_surface")
+    fake_done_states = _payload_string_list(payload, "fake_done_states")
+    evidence_preferences = _payload_string_list(payload, "evidence_preferences")
+    residual_risk = str(payload.get("residual_risk") or "").strip()
+    run_contract_path = str(payload.get("run_contract_path") or "").strip()
+    detail = ", ".join(
+        part
+        for part in (
+            f"status={status}" if status else "",
+            f"task_verdict_status={task_status}" if task_status else "",
+            f"judgment={judgment_summary[:120]}" if judgment_summary else "",
+            f"loop_fit={loop_fit_reasons[0][:120]}" if loop_fit_reasons else "",
+            f"strategy={execution_strategy[0][:120]}" if execution_strategy else "",
+            f"local_governance={local_governance[0][:120]}" if local_governance else "",
+            f"role_posture={role_postures[0][:120]}" if role_postures else "",
+            f"tradeoff={judgment_tradeoffs[0][:120]}" if judgment_tradeoffs else "",
+            f"success={success_surface[0][:120]}" if success_surface else "",
+            f"fake_done={fake_done_states[0][:120]}" if fake_done_states else "",
+            f"evidence={evidence_preferences[0][:120]}" if evidence_preferences else "",
+            f"residual_risk={residual_risk[:120]}" if residual_risk else "",
+            f"run_contract={run_contract_path}" if run_contract_path and not judgment_summary else "",
+        )
+        if part
+    )
+    return recorded_verdict_title(task_status), detail
+
+def recorded_verdict_title(task_status: str) -> str:
+    return {
+        "passed": "Passing evidence verdict recorded",
+        "passed_with_residual_risk": "Pass-with-risk verdict recorded",
+        "insufficient_evidence": "Unproven evidence verdict recorded",
+        "failed": "Failed evidence verdict recorded",
+        "not_evaluated": "Unevaluated evidence verdict recorded",
+    }.get(str(task_status or "").strip().lower(), "Evidence verdict recorded")
+
+def _payload_string_list(payload: Mapping[str, object], key: str) -> list[str]:
+    values = payload.get(key)
+    if not isinstance(values, list):
+        return []
+    return [item.strip() for item in values if isinstance(item, str) and item.strip()]
+
+_format_run_finished = format_run_finished
+_format_run_result_accepted = format_run_result_accepted
+
+
+
+SIMPLE_TIMELINE_TITLES = {
+    "run_started": "Run started",
+    "stop_requested": "Stop requested",
+    "run_result_accepted": "Evidence verdict recorded",
+}
+
+CONTROL_TIMELINE_TITLES = {
+    "control_triggered": "Control triggered",
+    "control_completed": "Control completed",
+    "control_failed": "Control failed",
+    "control_skipped": "Control skipped",
+}
+
+PARALLEL_GROUP_TIMELINE_TITLES = {
+    "parallel_group_started": "Parallel review started",
+    "parallel_group_finished": "Parallel review finished",
+}
+
+def format_timeline_event(event: dict) -> dict:
+    payload = event.get("payload", {})
+    if not isinstance(payload, Mapping):
+        payload = {}
+    role = payload.get("role") or event.get("role")
+    formatter = TIMELINE_EVENT_FORMATTERS.get(event["event_type"])
+    if formatter:
+        title, detail = formatter(payload, role, event["event_type"])
+    else:
+        title = SIMPLE_TIMELINE_TITLES.get(event["event_type"], event["event_type"])
+        detail = ""
+
+    return {
+        "id": event["id"],
+        "event_type": event["event_type"],
+        "created_at": event["created_at"],
+        "title": title,
+        "detail": detail,
+        "role": event.get("role"),
+        "payload": payload,
+    }
+
+def _format_checks_resolved(payload: Mapping[str, object], _role: object, _event_type: str) -> tuple[str, str]:
+    source = "auto-generated" if payload.get("source") == "auto_generated" else "specified"
+    count = structured_optional_non_negative_int(payload.get("count")) or 0
+    return "Checks resolved", f"{count} checks, {source}"
+
+def _format_role_request_prepared(payload: Mapping[str, object], role: object, _event_type: str) -> tuple[str, str]:
+    return "Role request prepared", str(payload.get("role_name") or role or "").strip()
+
+def _format_step_instruction_context_prepared(
+    payload: Mapping[str, object],
+    _role: object,
+    _event_type: str,
+) -> tuple[str, str]:
+    return "StepInstruction context prepared", str(payload.get("step_id") or "").strip()
+
+def _format_role_execution_summary(payload: Mapping[str, object], role: object, _event_type: str) -> tuple[str, str]:
+    duration_ms = payload.get("duration_ms")
+    if structured_bool_is_true(payload.get("ok")):
+        return f"{role or 'role'} completed", _role_execution_success_detail(payload, duration_ms)
+    return f"{role or 'role'} failed", _role_execution_failure_detail(payload, duration_ms)
+
+def _role_execution_success_detail(payload: Mapping[str, object], duration_ms: object) -> str:
+    parts = []
+    attempts = structured_optional_non_negative_int(payload.get("attempts"))
+    if attempts is not None and attempts > 1:
+        parts.append(f"attempts={attempts}")
+    if structured_bool_is_true(payload.get("degraded")):
+        parts.append("degraded")
+    duration = structured_optional_non_negative_int(duration_ms)
+    if duration is not None:
+        parts.append(f"{duration}ms")
+    return ", ".join(parts) if parts else "ok"
+
+def _role_execution_failure_detail(payload: Mapping[str, object], duration_ms: object) -> str:
+    parts = [str(payload.get("error", "")).strip()]
+    duration = structured_optional_non_negative_int(duration_ms)
+    if duration is not None:
+        parts.append(f"{duration}ms")
+    return ", ".join(part for part in parts if part)
+
+def _format_role_degraded(payload: Mapping[str, object], role: object, _event_type: str) -> tuple[str, str]:
+    return f"{role or 'role'} degraded", str(payload.get("mode", "")).strip()
+
+def _format_step_handoff_written(payload: Mapping[str, object], _role: object, _event_type: str) -> tuple[str, str]:
+    return "Step handoff written", str(payload.get("summary") or payload.get("step_id") or "").strip()
+
+def _format_control_event(payload: Mapping[str, object], role: object, event_type: str) -> tuple[str, str]:
+    detail = " -> ".join(
+        item
+        for item in [
+            str(payload.get("signal") or "").strip(),
+            str(payload.get("role_id") or role or "").strip(),
+        ]
+        if item
+    )
+    return CONTROL_TIMELINE_TITLES[event_type], detail
+
+def _format_parallel_group_event(payload: Mapping[str, object], _role: object, event_type: str) -> tuple[str, str]:
+    group = str(payload.get("parallel_group") or "-").strip() or "-"
+    step_count = _parallel_group_step_count(payload)
+    detail = f"{group}, steps={step_count}" if step_count else group
+    return PARALLEL_GROUP_TIMELINE_TITLES[event_type], detail
+
+def _parallel_group_step_count(payload: Mapping[str, object]) -> int:
+    step_ids = payload.get("step_ids")
+    if isinstance(step_ids, list):
+        return len(step_ids)
+    step_orders = payload.get("step_orders")
+    if isinstance(step_orders, list):
+        return len(step_orders)
+    return 0
+
+def _format_iteration_summary_written(payload: Mapping[str, object], _role: object, _event_type: str) -> tuple[str, str]:
+    return "Iteration summary written", str(payload.get("composite_score", "")).strip()
+
+def _format_challenger_done(payload: Mapping[str, object], _role: object, _event_type: str) -> tuple[str, str]:
+    return "Guide suggested a new direction", str(payload.get("mode", "")).strip()
+
+def _format_iteration_wait_started(payload: Mapping[str, object], _role: object, _event_type: str) -> tuple[str, str]:
+    duration_seconds = structured_optional_non_negative_int(payload.get("duration_seconds")) or 0
+    return "Waiting for the next iteration", f"{duration_seconds}s"
+
+def _format_iteration_wait_finished(payload: Mapping[str, object], _role: object, _event_type: str) -> tuple[str, str]:
+    duration_seconds = structured_optional_non_negative_int(payload.get("duration_seconds")) or 0
+    return "Iteration wait finished", f"{duration_seconds}s"
+
+def _format_run_aborted(payload: Mapping[str, object], _role: object, _event_type: str) -> tuple[str, str]:
+    attempts = structured_optional_non_negative_int(payload.get("attempts"))
+    return f"Run aborted in {payload.get('role', 'role')}", f"attempts={attempts}" if attempts is not None else ""
+
+def _format_workspace_guard_triggered(payload: Mapping[str, object], _role: object, _event_type: str) -> tuple[str, str]:
+    deleted_count = structured_optional_non_negative_int(payload.get("deleted_original_count")) or 0
+    return "Workspace safety guard triggered", f"deleted={deleted_count}"
+
+TIMELINE_EVENT_FORMATTERS = {
+    "checks_resolved": _format_checks_resolved,
+    "role_request_prepared": _format_role_request_prepared,
+    "step_instruction_context_prepared": _format_step_instruction_context_prepared,
+    "role_execution_summary": _format_role_execution_summary,
+    "role_degraded": _format_role_degraded,
+    "step_handoff_written": _format_step_handoff_written,
+    "iteration_summary_written": _format_iteration_summary_written,
+    "challenger_done": _format_challenger_done,
+    "iteration_wait_started": _format_iteration_wait_started,
+    "iteration_wait_finished": _format_iteration_wait_finished,
+    "run_aborted": _format_run_aborted,
+    "workspace_guard_triggered": _format_workspace_guard_triggered,
+    "run_finished": _format_run_finished,
+    "run_result_accepted": _format_run_result_accepted,
+    **dict.fromkeys(CONTROL_TIMELINE_TITLES, _format_control_event),
+    **dict.fromkeys(PARALLEL_GROUP_TIMELINE_TITLES, _format_parallel_group_event),
+}
+
+_format_timeline_event = format_timeline_event
 
 
 def _artifact_record_or_404(run: dict, artifact_id: str) -> dict:
@@ -66,15 +308,7 @@ def _decorate_loop_overview(loop: dict) -> dict:
     task_verdict = loop.get("latest_task_verdict_json") if isinstance(loop.get("latest_task_verdict_json"), Mapping) else {}
     task_status = _task_verdict_status(task_verdict)
     task_label_zh, task_label_en = _task_verdict_label(task_status)
-    lifecycle_excerpt_zh, lifecycle_excerpt_en = _lifecycle_failure_summary_pair(
-        run_status=latest_status,
-        error_message=loop.get("latest_error_message"),
-    )
-    card_excerpt_zh, card_excerpt_en = (
-        (lifecycle_excerpt_zh, lifecycle_excerpt_en)
-        if lifecycle_excerpt_zh or lifecycle_excerpt_en
-        else _verdict_safe_excerpt_pair(task_verdict, run_status=latest_status, raw_excerpt=summary_excerpt)
-    )
+    card_excerpt_zh, card_excerpt_en = _verdict_safe_excerpt_pair(task_verdict, run_status=latest_status, raw_excerpt=summary_excerpt)
     hints = {
         "draft": ("还没有运行，先检查 Loop 契约和工作目录。", "No run yet. Start by checking the spec and workdir."),
         "queued": ("已经进入队列，点进去看最新状态。", "Queued up. Open it to see the current state."),
@@ -84,9 +318,7 @@ def _decorate_loop_overview(loop: dict) -> dict:
         "stopped": ("最近一次运行已停止。", "The latest run was stopped."),
     }
     hint_zh, hint_en = hints.get(latest_status, hints["draft"])
-    if lifecycle_excerpt_zh or lifecycle_excerpt_en:
-        hint_zh, hint_en = ("最近一次运行启动失败，需要重试运行。", "The latest run failed to start and needs retry.")
-    elif latest_status == "succeeded" and task_status == "passed_with_residual_risk":
+    if latest_status == "succeeded" and task_status == "passed_with_residual_risk":
         hint_zh, hint_en = ("最近一次 Loop 裁决带残余风险通过。", "The latest task verdict passed with residual risk.")
     elif latest_status == "succeeded" and task_status == "passed":
         hint_zh, hint_en = ("最近一次 Loop 裁决已通过。", "The latest task verdict passed.")
@@ -105,9 +337,7 @@ def _decorate_loop_overview(loop: dict) -> dict:
         "role_count": len(strategy_source.get("roles", []) if isinstance(strategy_source, Mapping) else []),
         "step_count": len(strategy_source.get("steps", []) if isinstance(strategy_source, Mapping) else []),
         "display_iter": _display_iter(loop.get("latest_current_iter")),
-        "card_href": _loop_card_href(loop, latest_run_id=latest_run_id),
-        "detail_href": _loop_detail_href(loop),
-        "start_run_action": _loop_start_run_action(loop),
+        "card_href": f"/runs/{latest_run_id}" if latest_run_id else f"/loops/{loop['id']}",
         "card_hint_zh": hint_zh,
         "card_hint_en": hint_en,
         "card_excerpt": card_excerpt_en or summary_excerpt,
@@ -120,19 +350,6 @@ def _decorate_loop_overview(loop: dict) -> dict:
         "bundle_id": str((bundle or {}).get("id", "") or "").strip(),
         "bundle_name": str((bundle or {}).get("name", "") or "").strip(),
     }
-
-
-def _loop_card_href(loop: Mapping[str, object], *, latest_run_id: object = "") -> str:
-    target = f"/runs/{latest_run_id}" if latest_run_id else f"/loops/{loop['id']}"
-    return with_query_params(target, workdir=str(loop.get("workdir") or "").strip() or None)
-
-
-def _loop_detail_href(loop: Mapping[str, object]) -> str:
-    return with_query_params(f"/loops/{loop['id']}", workdir=str(loop.get("workdir") or "").strip() or None)
-
-
-def _loop_start_run_action(loop: Mapping[str, object]) -> str:
-    return with_query_params(f"/loops/{loop['id']}/runs", workdir=str(loop.get("workdir") or "").strip() or None)
 
 
 def _decorate_run_overview(run: dict) -> dict:

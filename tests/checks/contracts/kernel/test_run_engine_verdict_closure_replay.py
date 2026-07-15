@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from loopora.db import LooporaRepository
-from loopora.db_run_state_records import RunUpdate
+from loopora.db_runtime_state import RunUpdate
 from loopora.engine import (
     RepositoryRunEngine,
     RunEngineAdvanceStatus,

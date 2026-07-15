@@ -9,8 +9,8 @@ from loopora.service_bundle_control_trace_mining import (
     build_loop_fit_trace,
     build_runtime_local_governance_trace,
 )
-from loopora.service_bundle_control_trace_preview import role_posture_preview
-from loopora.structured_numbers import coerced_non_negative_int, structured_non_negative_int
+from loopora.service_bundle_control_trace_mining import role_posture_preview
+from loopora.utils import coerced_non_negative_int, structured_non_negative_int
 
 
 @dataclass(frozen=True)

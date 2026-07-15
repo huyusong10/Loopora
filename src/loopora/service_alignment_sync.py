@@ -6,7 +6,6 @@ from pathlib import Path
 from typing import Protocol
 
 from loopora.bundles import BundleError, read_bundle_file_text
-from loopora.service_bundle_file_writes import write_bundle_text_atomically
 from loopora.service_alignment_bundle_lifecycle import (
     AlignmentBundleLifecycleContext,
     alignment_bundle_missing_file_validation,
@@ -15,7 +14,6 @@ from loopora.service_alignment_bundle_lifecycle import (
     apply_alignment_bundle_sync_failure,
     apply_alignment_bundle_sync_success,
 )
-from loopora.service_alignment_bundle_validation_payloads import ALIGNMENT_BUNDLE_SAVE_FAILED_ERROR
 from loopora.service_alignment_language import alignment_prefers_chinese
 from loopora.service_types import LooporaConflictError, LooporaError
 from loopora.utils import utc_now
@@ -59,21 +57,12 @@ def sync_alignment_bundle_from_file(
     try:
         raw_yaml = read_bundle_file_text(bundle_path)
         bundle, normalized_yaml = context.load_validated_bundle_text(session, raw_yaml, semantic_issues)
-    except (BundleError, LooporaError) as exc:
+        bundle_path.write_text(normalized_yaml, encoding="utf-8")
+    except (BundleError, LooporaError, OSError) as exc:
         validation = alignment_bundle_validation_failure(
             bundle_path,
             error=str(exc),
             semantic_issues=semantic_issues,
-            checked_at=context.now(),
-        )
-        return _record_alignment_bundle_sync_failure(context, session_id, validation)
-    try:
-        write_bundle_text_atomically(bundle_path, normalized_yaml)
-    except OSError:
-        validation = alignment_bundle_validation_failure(
-            bundle_path,
-            error=ALIGNMENT_BUNDLE_SAVE_FAILED_ERROR,
-            semantic_issues=[ALIGNMENT_BUNDLE_SAVE_FAILED_ERROR],
             checked_at=context.now(),
         )
         return _record_alignment_bundle_sync_failure(context, session_id, validation)

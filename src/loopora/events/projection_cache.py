@@ -6,7 +6,7 @@ from loopora.events.envelope import EventEnvelope
 from loopora.events.streams import loop_stream_id, run_stream_id
 from loopora.projections._event_replay_support import EVENT_REPLAY_PROJECTION_SCHEMA_VERSION
 from loopora.projections import replay_loop_projection_bundle, replay_run_projection_bundle
-from loopora.structured_numbers import coerced_int, coerced_non_negative_int
+from loopora.utils import coerced_int, coerced_non_negative_int
 
 RUN_PROJECTION_KINDS = {
     "run_snapshot": "event_replayed_run_snapshot",

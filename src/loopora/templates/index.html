@@ -2,198 +2,73 @@
 {% block title %}{{ 'Loop 工作台' if page_locale == 'zh' else 'Loop Workspace' }}{% endblock %}
 {% block content %}
 <div class="page-stack" data-testid="home-workbench">
-  {% set has_attention_work = active_loops|length > 0 %}
-  {% set has_recent_activity = recent_loops|length > 0 %}
-  {% set has_saved_loops = loops|length > 0 %}
-  {% set primary_attention_item = active_loops[0] if has_attention_work else none %}
-  {% set primary_recent_item = recent_loops[0] if has_recent_activity else none %}
-  {% set primary_attention_href = workdir_context_href(primary_attention_item.card_href, workdir_context) if primary_attention_item else '#activity' %}
-  {% set primary_recent_href = workdir_context_href(primary_recent_item.card_href, workdir_context) if primary_recent_item else '#activity' %}
-  {% set single_saved_loop_available = loops|length == 1 %}
-  {% set primary_saved_loop_item = loops[0] if single_saved_loop_available else none %}
-  {% set primary_saved_loop_href = workdir_context_href(primary_saved_loop_item.detail_href|default(primary_saved_loop_item.card_href, true), workdir_context) if primary_saved_loop_item else '#saved-loops' %}
-  {% set has_hidden_home_work = workdir_context and not demo_playground_active and (hidden_activity_count > 0 or hidden_loop_count > 0) %}
-  {% set has_visible_home_work = has_attention_work or has_recent_activity or has_saved_loops %}
-  {% set is_true_first_run = not has_visible_home_work and not has_hidden_home_work %}
   <section class="hero hero-tight workbench-hero" data-testid="home-hero">
     <div class="hero-copy-stack">
       <h1>
-        {% if is_true_first_run %}
-        <span data-lang="zh">开始第一个 Loop</span>
-        <span data-lang="en">Start your first Loop</span>
-        {% else %}
         <span data-lang="zh">Loop 工作台</span>
         <span data-lang="en">Loop Workspace</span>
-        {% endif %}
       </h1>
       <p>
-        {% if is_true_first_run %}
-        <span data-lang="zh">一句话说明要完成什么即可开始 Web 对话；Loopora 会在生成可运行方案前逐项补齐适用性、完成标准、风险、证据和取舍。</span>
-        <span data-lang="en">One task goal is enough to start a Web conversation. Loopora clarifies fit, success, risk, evidence, and tradeoffs before producing a runnable plan.</span>
-        {% else %}
-        <span data-lang="zh">先处理正在编排、READY Plan File 候选、等待同一 Agent、证据不足或需要复核的当前工作；生成失败且仍可恢复的对话也会留在这里。历史记录和已保存 Loop 仍在本页，但默认退到后面。</span>
-        <span data-lang="en">Start with current work: Web conversations still composing, READY Plan File candidates, same-Agent handoffs, weak evidence, or review. Recoverable generation failures stay here too. History and saved Loops sit behind the current work.</span>
-        {% endif %}
+        <span data-lang="zh">先处理等待 Agent、证据不足或需要复核的 Loop；历史记录和已保存 Loop 仍在本页，但默认退到后面。</span>
+        <span data-lang="en">Start with Loops waiting on Agent work, weak evidence, or review. History and saved Loops stay here, but sit behind the active work.</span>
       </p>
-      {% if is_true_first_run %}
+      {% if not loops and not active_loops and not recent_loops %}
       <div class="first-run-judgment-brief" data-testid="home-first-run-judgment-brief">
         <strong>
-          <span data-lang="zh">不确定是否需要 Loopora？先做适用性判断。</span>
-          <span data-lang="en">Not sure Loopora fits? Check fit first.</span>
+          <span data-lang="zh">先带上任务判断，不只是任务标题。</span>
+          <span data-lang="en">Bring task judgment, not just a task title.</span>
         </strong>
         <p>
-          <span data-lang="zh">已经知道任务需要多轮证据审查时，可以直接开始 Web 对话；已有判断可在第一条消息里一并带入，但不是开始条件。</span>
-          <span data-lang="en">If the task already needs multi-round evidence review, start the Web conversation directly. Existing judgment can travel with the first message, but it is not required to begin.</span>
+          <span data-lang="zh">无论从 Agent 入口还是 Web 编排开始，都先写清任务目标、伪完成风险和必需证据。</span>
+          <span data-lang="en">Whether you start from the Agent entry or Web composition, name the task goal, fake-done risk, and required evidence first.</span>
         </p>
+        <ul aria-label="{{ '首次任务判断清单' if page_locale == 'zh' else 'First-run judgment checklist' }}">
+          <li><span data-lang="zh">目标</span><span data-lang="en">Goal</span></li>
+          <li><span data-lang="zh">伪完成</span><span data-lang="en">Fake done</span></li>
+          <li><span data-lang="zh">证据</span><span data-lang="en">Evidence</span></li>
+        </ul>
       </div>
       <div class="card-actions workbench-first-run-actions" data-testid="home-first-run-actions">
-        <a class="primary-button" href="{{ nav_tutorial_fit_href }}" data-testid="home-fit-guide-link" data-workdir-context-link="workdir">
-          <span data-lang="zh">先判断是否适合</span>
-          <span data-lang="en">Check Fit First</span>
+        <a class="primary-button" href="/tools" data-testid="home-agent-entry-link">
+          <span data-lang="zh">安装 Agent 入口</span>
+          <span data-lang="en">Install Agent entry</span>
         </a>
-        <a class="secondary-button" href="{{ nav_web_compose_href if demo_playground_workdir else home_web_conversation_href }}" data-testid="home-compose-loop-link" data-workdir-context-link="alignment_workdir">
-          <span data-lang="zh">开始 Web 对话</span>
-          <span data-lang="en">Start Web Conversation</span>
-        </a>
-        <a class="ghost-button" href="{{ nav_tools_href }}" data-testid="home-agent-entry-link" data-workdir-context-link="workdir">
-          <span data-lang="zh">同一 Agent 设置</span>
-          <span data-lang="en">Same-Agent Setup</span>
-        </a>
-        <a class="ghost-button" href="{{ nav_compose_href }}" data-testid="home-all-start-paths-link" data-workdir-context-link="workdir">
-          <span data-lang="zh">查看全部创建方式</span>
-          <span data-lang="en">View All Creation Paths</span>
-        </a>
-      </div>
-      {% else %}
-      <div class="card-actions workbench-returning-actions" data-testid="home-returning-actions">
-        {% if not has_visible_home_work and has_hidden_home_work %}
-        <a class="primary-button" href="{{ home_all_href }}" data-testid="home-empty-show-all-link">
-          <span data-lang="zh">查看其它项目的工作</span>
-          <span data-lang="en">View Work in Other Projects</span>
-        </a>
-        <a class="secondary-button" href="{{ nav_compose_href }}" data-testid="home-returning-compose-link" data-workdir-context-link="workdir">
-          <span data-lang="zh">为当前项目开始 Loop</span>
-          <span data-lang="en">Start a Loop for This Project</span>
-        </a>
-        {% elif has_attention_work %}
-        <a class="primary-button" href="{{ primary_attention_href }}" data-testid="home-returning-attention-link" data-workdir-context-link="workdir">
-          <span data-lang="zh">继续处理</span>
-          <span data-lang="en">Review Needs Attention</span>
-        </a>
-        <a class="secondary-button" href="{{ nav_compose_href }}" data-testid="home-returning-compose-link" data-workdir-context-link="workdir">
-          <span data-lang="zh">开始新的 Loop</span>
-          <span data-lang="en">Start New Loop</span>
-        </a>
-        {% elif has_recent_activity %}
-        <a class="primary-button" href="{{ primary_recent_href }}" data-testid="home-returning-recent-link" data-workdir-context-link="workdir">
-          <span data-lang="zh">查看最近记录</span>
-          <span data-lang="en">Review Recent Activity</span>
-        </a>
-        <a class="secondary-button" href="{{ nav_compose_href }}" data-testid="home-returning-compose-link" data-workdir-context-link="workdir">
-          <span data-lang="zh">开始新的 Loop</span>
-          <span data-lang="en">Start New Loop</span>
-        </a>
-        {% elif has_saved_loops %}
-        <a class="primary-button" href="{{ primary_saved_loop_href }}" data-testid="home-returning-saved-link" {% if single_saved_loop_available %}data-workdir-context-link="workdir" {% endif %}data-home-saved-action-kind="{{ 'open_saved_loop' if single_saved_loop_available else 'review_saved_loops' }}">
-          {% if single_saved_loop_available %}
-          <span data-lang="zh">打开已保存 Loop</span>
-          <span data-lang="en">Open saved Loop</span>
-          {% else %}
-          <span data-lang="zh">查看已保存 Loop</span>
-          <span data-lang="en">Review Saved Loops</span>
-          {% endif %}
-        </a>
-        <a class="secondary-button" href="{{ nav_compose_href }}" data-testid="home-returning-compose-link" data-workdir-context-link="workdir">
-          <span data-lang="zh">开始新的 Loop</span>
-          <span data-lang="en">Start New Loop</span>
-        </a>
-        {% else %}
-        <a class="primary-button" href="{{ nav_compose_href }}" data-testid="home-returning-compose-link" data-workdir-context-link="workdir">
-          <span data-lang="zh">开始新的 Loop</span>
-          <span data-lang="en">Start New Loop</span>
-        </a>
-        {% endif %}
-        <a class="ghost-button" href="{{ nav_tutorial_fit_href }}" data-testid="home-returning-fit-link" data-workdir-context-link="workdir">
-          <span data-lang="zh">重新判断是否适合</span>
-          <span data-lang="en">Recheck Fit</span>
+        <a class="secondary-button" href="/loops/new/bundle" data-testid="home-compose-loop-link">
+          <span data-lang="zh">Web 编排 Loop</span>
+          <span data-lang="en">Compose in Web</span>
         </a>
       </div>
       {% endif %}
     </div>
   </section>
 
-  {% if not is_true_first_run %}
   <section class="panel workbench-activity-panel" id="activity" data-testid="home-activity-section">
     <header class="panel-header">
       <div>
         <h2>
-          {% if has_attention_work %}
           <span data-lang="zh">需要处理</span>
           <span data-lang="en">Needs attention</span>
-          {% else %}
-          <span data-lang="zh">最近记录</span>
-          <span data-lang="en">Recent activity</span>
-          {% endif %}
         </h2>
         <p class="panel-note">
-          {% if has_attention_work %}
-          <span data-lang="zh">默认只把还在编排或等待恢复、READY 候选、运行推进、等待同一 Agent 或证据未收束的工作放到第一视野。</span>
-          <span data-lang="en">The first view is reserved for work still composing or awaiting recovery, READY candidates, moving, waiting on same-Agent work, or lacking closure evidence.</span>
-          {% else %}
-          <span data-lang="zh">当前没有待处理工作；这里保留最近完成的运行，方便复查证据、裁决和记录状态。</span>
-          <span data-lang="en">There is no active attention item right now; recent runs stay here for evidence, verdict, and recorded-result review.</span>
-          {% endif %}
+          <span data-lang="zh">默认只把还在推进、等待 Agent 或证据未收束的 Loop 放到第一视野。</span>
+          <span data-lang="en">The first view is reserved for Loops still moving, waiting on Agent work, or lacking closure evidence.</span>
         </p>
       </div>
-      {% if has_attention_work %}
-      <span><span data-lang="zh">待处理</span><span data-lang="en">Attention</span> {{ active_loops|length }}</span>
-      {% else %}
-      <span><span data-lang="zh">最近</span><span data-lang="en">Recent</span> {{ recent_loops|length }}</span>
-      {% endif %}
+      <span><span data-lang="zh">运行中</span><span data-lang="en">Active</span> {{ active_loops|length }}</span>
     </header>
     {% if active_loops or recent_loops %}
       <div class="activity-list" data-testid="home-activity-list">
         {% for loop_item in active_loops %}
-        {% set loop_item_card_href = workdir_context_href(loop_item.card_href, workdir_context) %}
-        {% set loop_item_status_label = loop_item.status_label|default(loop_item.latest_status or 'draft', true) %}
-        <a class="activity-row activity-row--active" href="{{ loop_item_card_href }}" data-testid="home-active-loop" data-attention-priority="{{ loop_item.attention_priority }}" data-workdir-context-link="workdir">
+        <a class="activity-row activity-row--active" href="{{ loop_item.card_href }}" data-testid="home-active-loop">
           <span class="activity-row-main">
             <strong>{{ loop_item.name }}</strong>
             <span>{{ loop_item.workdir }}</span>
-            {% if loop_item.attention_reason_kind %}
-            <span
-              class="activity-row-verdict"
-              data-testid="home-active-loop-attention-reason"
-              data-attention-reason-kind="{{ loop_item.attention_reason_kind }}"
-            >
-              <span data-lang="zh">{{ loop_item.attention_reason_zh }}</span>
-              <span data-lang="en">{{ loop_item.attention_reason_en }}</span>
-            </span>
-            {% endif %}
             <span class="activity-row-verdict" data-testid="home-active-loop-verdict">
               <span data-lang="zh">{{ loop_item.card_hint_zh }}</span>
               <span data-lang="en">{{ loop_item.card_hint_en }}</span>
             </span>
-            {% if loop_item.card_excerpt_zh or loop_item.card_excerpt_en or loop_item.card_excerpt %}
-            <span class="activity-row-verdict" data-testid="home-active-loop-excerpt">
-              <span data-lang="zh">{{ loop_item.card_excerpt_zh or loop_item.card_excerpt or "-" }}</span>
-              <span data-lang="en">{{ loop_item.card_excerpt_en or loop_item.card_excerpt or "-" }}</span>
-            </span>
-            {% endif %}
           </span>
-          <span class="activity-row-side">
-            {% if loop_item.attention_action_kind %}
-            <span
-              class="activity-row-action"
-              data-testid="home-active-loop-action"
-              data-attention-action-kind="{{ loop_item.attention_action_kind }}"
-            >
-              <span data-lang="zh">{{ loop_item.attention_action_zh }}</span>
-              <span data-lang="en">{{ loop_item.attention_action_en }}</span>
-            </span>
-            {% endif %}
-            <span class="status-pill status-{{ loop_item_status_label }}" data-status-label="{{ loop_item_status_label }}"></span>
-          </span>
+          <span class="status-pill status-{{ loop_item.latest_status or 'draft' }}" data-status-label="{{ loop_item.latest_status or 'draft' }}"></span>
         </a>
         {% endfor %}
       </div>
@@ -208,8 +83,7 @@
         </summary>
         <div class="activity-list activity-list--secondary" data-testid="home-recent-list">
         {% for loop_item in recent_loops %}
-        {% set loop_item_card_href = workdir_context_href(loop_item.card_href, workdir_context) %}
-        <a class="activity-row" href="{{ loop_item_card_href }}" data-testid="home-recent-loop" data-workdir-context-link="workdir">
+        <a class="activity-row" href="{{ loop_item.card_href }}" data-testid="home-recent-loop">
           <span class="activity-row-main">
             <strong>{{ loop_item.name }}</strong>
             <span>
@@ -221,21 +95,8 @@
               <span data-lang="zh">{{ loop_item.card_hint_zh }}</span>
               <span data-lang="en">{{ loop_item.card_hint_en }}</span>
             </span>
-            {% if loop_item.latest_run_result_accepted %}
-            <span class="activity-row-verdict" data-testid="home-recent-loop-recorded-result">
-              {% if loop_item.latest_run_result_recorded_advisory_follow_up_available %}
-              <span data-lang="zh">必需依据已记录；仍有 {{ loop_item.latest_run_result_recorded_advisory_open_count }} 项可选建议跟进。</span>
-              <span data-lang="en">Required basis recorded; {{ loop_item.latest_run_result_recorded_advisory_open_count }} optional advisory follow-ups remain.</span>
-              {% else %}
-              <span data-lang="zh">这次结论已记录；任务裁决保持可追溯。</span>
-              <span data-lang="en">This result is recorded; the task verdict remains traceable.</span>
-              {% endif %}
-            </span>
-            {% endif %}
           </span>
-          <span class="activity-row-side">
-            <span class="status-pill status-{{ loop_item.latest_status or 'draft' }}" data-status-label="{{ loop_item.latest_status or 'draft' }}"></span>
-          </span>
+          <span class="status-pill status-{{ loop_item.latest_status or 'draft' }}" data-status-label="{{ loop_item.latest_status or 'draft' }}"></span>
         </a>
         {% endfor %}
         </div>
@@ -244,31 +105,13 @@
     {% else %}
       <div class="empty-state empty-state--compact" data-testid="home-activity-empty">
         <h3>
-          {% if workdir_context and hidden_activity_count > 0 %}
-          <span data-lang="zh">当前目标项目没有活动工作</span>
-          <span data-lang="en">No active work for this target project</span>
-          {% else %}
-          <span data-lang="zh">当前没有活动工作</span>
-          <span data-lang="en">No active work</span>
-          {% endif %}
+          <span data-lang="zh">当前没有活动运行</span>
+          <span data-lang="en">No active runs</span>
         </h3>
         <p>
-          {% if workdir_context and hidden_activity_count > 0 %}
-          <span data-lang="zh">其它目标项目里还有需要处理或可复查的最近工作。你可以查看全部，或继续为当前目标项目创建新的 Loop。</span>
-          <span data-lang="en">Other target projects still have work to handle or review. View all, or create a new Loop for the current target project.</span>
-          {% else %}
-          <span data-lang="zh">开始 Web 对话或打开一个 Loop 后，当前进展会出现在这里。</span>
-          <span data-lang="en">Start a Web conversation or open a Loop and the current progress appears here.</span>
-          {% endif %}
+          <span data-lang="zh">开始或打开一个 Loop 后，最近运行会出现在这里。</span>
+          <span data-lang="en">Start or open a Loop and its latest run appears here.</span>
         </p>
-        {% if workdir_context and hidden_activity_count > 0 %}
-        <div class="card-actions">
-          <a class="secondary-button" href="{{ home_all_href }}" data-testid="home-activity-show-all-link">
-            <span data-lang="zh">查看全部当前工作</span>
-            <span data-lang="en">View All Current Work</span>
-          </a>
-        </div>
-        {% endif %}
       </div>
     {% endif %}
   </section>
@@ -290,19 +133,13 @@
     {% if loops %}
       <div class="loop-grid loop-grid--created" id="loop-grid">
         {% for loop_item in loops %}
-        {% set loop_item_card_href = workdir_context_href(loop_item.card_href, workdir_context) %}
-        {% set loop_item_detail_href = workdir_context_href(loop_item.detail_href|default('/loops/' ~ loop_item.id, true), workdir_context) %}
-        {% set loop_item_start_run_action = workdir_context_href(loop_item.start_run_action|default('/loops/' ~ loop_item.id ~ '/runs', true), workdir_context) %}
-        {% set loop_item_agent_entry_start = loop_item.agent_entry_start|default({}) %}
-        {% set loop_item_can_start_from_card = not loop_item.latest_run_id and loop_item.can_start_web_run|default(false) %}
         <article
           class="loop-card loop-card--{{ loop_item.latest_status or 'draft' }} is-clickable"
-          data-open-card="{{ loop_item_card_href }}"
-          data-workdir-context-open-card="workdir"
+          data-open-card="{{ loop_item.card_href }}"
           data-testid="loop-card"
           tabindex="0"
         >
-          <a class="loop-card-link" href="{{ loop_item_card_href }}" tabindex="-1" aria-hidden="true" data-workdir-context-link="workdir"></a>
+          <a class="loop-card-link" href="{{ loop_item.card_href }}" tabindex="-1" aria-hidden="true"></a>
           <div class="loop-card-head">
             <div class="loop-card-copy">
               <h3>{{ loop_item.name }}</h3>
@@ -340,17 +177,6 @@
               <span data-lang="zh">{{ loop_item.card_excerpt_zh or loop_item.card_excerpt or "-" }}</span>
               <span data-lang="en">{{ loop_item.card_excerpt_en or loop_item.card_excerpt or "-" }}</span>
             </p>
-            {% if loop_item.latest_run_result_accepted %}
-            <p class="field-note" data-testid="loop-card-recorded-result">
-              {% if loop_item.latest_run_result_recorded_advisory_follow_up_available %}
-              <span data-lang="zh">必需依据已记录；仍有 {{ loop_item.latest_run_result_recorded_advisory_open_count }} 项可选建议跟进。</span>
-              <span data-lang="en">Required basis recorded; {{ loop_item.latest_run_result_recorded_advisory_open_count }} optional advisory follow-ups remain.</span>
-              {% else %}
-              <span data-lang="zh">最近运行的证据结论已记录；需要更多证据时再开始新运行。</span>
-              <span data-lang="en">The latest evidence verdict is recorded; start a new run when more proof is needed.</span>
-              {% endif %}
-            </p>
-            {% endif %}
             {% if loop_item.managed_by_bundle %}
             <p class="field-note">
               <span data-lang="zh">这条 Loop 来自方案文件 “{{ loop_item.bundle_name or loop_item.bundle_id }}”，删除时会一起清理关联资源。</span>
@@ -359,25 +185,12 @@
             {% endif %}
           </div>
           <div class="card-actions card-actions--loop{% if not loop_item.latest_run_id %} card-actions--loop-compact{% endif %}" data-testid="loop-card-actions">
-            {% if loop_item_agent_entry_start and not loop_item.latest_run_id %}
-            <a class="primary-button" href="{{ loop_item_detail_href }}" data-testid="loop-card-agent-run-guide-link" data-workdir-context-link="workdir">
-              <span data-lang="zh">打开同一 Agent 运行指引</span>
-              <span data-lang="en">Open same-Agent run guide</span>
-            </a>
-            {% elif loop_item_can_start_from_card %}
-            <form method="post" action="{{ loop_item_start_run_action }}" class="inline-form" data-testid="loop-card-start-run-form" data-workdir-context-form="workdir">
-              <button class="primary-button" type="submit" data-testid="loop-card-start-run-button">
-                <span data-lang="zh">开始运行</span>
-                <span data-lang="en">Start run</span>
-              </button>
-            </form>
-            {% endif %}
-            <a class="secondary-button" href="{{ loop_item_detail_href }}" data-workdir-context-link="workdir">
+            <a class="secondary-button" href="/loops/{{ loop_item.id }}">
               <span data-lang="zh">查看 Loop</span>
               <span data-lang="en">View loop</span>
             </a>
             {% if loop_item.latest_run_id %}
-            <a class="ghost-button" href="{{ loop_item_card_href }}" data-workdir-context-link="workdir">
+            <a class="ghost-button" href="/runs/{{ loop_item.latest_run_id }}">
               <span data-lang="zh">最近运行</span>
               <span data-lang="en">Latest run</span>
             </a>
@@ -412,45 +225,15 @@
         <span data-lang="en">Click the body of a card to jump to the latest run. If the loop has no run yet, it opens the loop details instead.</span>
       </p>
       <div class="empty-state" id="loops-empty-state" data-testid="loops-empty-state" hidden>
-        <img class="empty-state-logo" src="{{ logo_asset_url('logo.svg') }}" alt="" aria-hidden="true" />
+        <img class="empty-state-logo" src="/logo/logo.svg" alt="" aria-hidden="true" />
         <h3>
-          {% if workdir_context and hidden_loop_count > 0 %}
-          <span data-lang="zh">当前目标项目还没有 Loop</span>
-          <span data-lang="en">No Loops for this target project</span>
-          {% else %}
           <span data-lang="zh">还没有 Loop</span>
           <span data-lang="en">No Loops yet</span>
-          {% endif %}
         </h3>
         <p>
-          {% if workdir_context and hidden_loop_count > 0 %}
-          <span data-lang="zh">其它目标项目里已有保存的 Loop。你可以查看全部，或继续为当前目标项目创建/导入新的 Loop。</span>
-          <span data-lang="en">Other target projects already have saved Loops. View all, or create/import a new Loop for the current target project.</span>
-          {% else %}
-          <span data-lang="zh">进入适用性判断/Web 选择，再选择 Web 对话、同一 Agent 设置或专家导入/手动编排。</span>
-          <span data-lang="en">Open Fit Guide/Web choices, then choose Web conversation, Same-Agent Setup, or the expert import/manual path.</span>
-          {% endif %}
+          <span data-lang="zh">进入“编排”工作台开始对话编排，也可以导入方案文件或手动编排。</span>
+          <span data-lang="en">Open the Compose workspace to start a conversation, or import a plan file / use manual composition.</span>
         </p>
-        <div class="card-actions">
-          <a class="primary-button" href="{{ nav_compose_href }}" data-testid="loops-empty-create-choice-link" data-workdir-context-link="workdir">
-            <span data-lang="zh">适用性判断/Web 选择</span>
-            <span data-lang="en">Fit Guide/Web Choices</span>
-          </a>
-          {% if workdir_context and hidden_loop_count > 0 %}
-          <a class="secondary-button" href="{{ home_all_href }}" data-testid="loops-empty-show-all-link">
-            <span data-lang="zh">查看全部 Loop</span>
-            <span data-lang="en">View All Loops</span>
-          </a>
-          {% endif %}
-          <a class="secondary-button" href="{{ nav_tools_href }}" data-testid="loops-empty-agent-setup-link" data-workdir-context-link="workdir">
-            <span data-lang="zh">同一 Agent 设置</span>
-            <span data-lang="en">Same-Agent Setup</span>
-          </a>
-          <a class="ghost-button" href="{{ nav_bundle_import_href }}" data-testid="loops-empty-import-plan-link" data-workdir-context-link="workdir">
-            <span data-lang="zh">导入 Plan File</span>
-            <span data-lang="en">Import Plan File</span>
-          </a>
-        </div>
       </div>
     {% else %}
       <div class="loop-grid loop-grid--created" id="loop-grid" hidden></div>
@@ -459,48 +242,17 @@
         <span data-lang="en">Click the body of a card to jump to the latest run. If the loop has no run yet, it opens the loop details instead.</span>
       </p>
       <div class="empty-state" id="loops-empty-state" data-testid="loops-empty-state">
-        <img class="empty-state-logo" src="{{ logo_asset_url('logo.svg') }}" alt="" aria-hidden="true" />
+        <img class="empty-state-logo" src="/logo/logo.svg" alt="" aria-hidden="true" />
         <h3>
-          {% if workdir_context and hidden_loop_count > 0 %}
-          <span data-lang="zh">当前目标项目还没有 Loop</span>
-          <span data-lang="en">No Loops for this target project</span>
-          {% else %}
           <span data-lang="zh">还没有 Loop</span>
           <span data-lang="en">No Loops yet</span>
-          {% endif %}
         </h3>
         <p>
-          {% if workdir_context and hidden_loop_count > 0 %}
-          <span data-lang="zh">其它目标项目里已有保存的 Loop。你可以查看全部，或继续为当前目标项目创建/导入新的 Loop。</span>
-          <span data-lang="en">Other target projects already have saved Loops. View all, or create/import a new Loop for the current target project.</span>
-          {% else %}
-          <span data-lang="zh">进入适用性判断/Web 选择，再选择 Web 对话、同一 Agent 设置或专家导入/手动编排。</span>
-          <span data-lang="en">Open Fit Guide/Web choices, then choose Web conversation, Same-Agent Setup, or the expert import/manual path.</span>
-          {% endif %}
+          <span data-lang="zh">进入“编排”工作台开始对话编排，也可以导入方案文件或手动编排。</span>
+          <span data-lang="en">Open the Compose workspace to start a conversation, or import a plan file / use manual composition.</span>
         </p>
-        <div class="card-actions">
-          <a class="primary-button" href="{{ nav_compose_href }}" data-testid="loops-empty-create-choice-link" data-workdir-context-link="workdir">
-            <span data-lang="zh">适用性判断/Web 选择</span>
-            <span data-lang="en">Fit Guide/Web Choices</span>
-          </a>
-          {% if workdir_context and hidden_loop_count > 0 %}
-          <a class="secondary-button" href="{{ home_all_href }}" data-testid="loops-empty-show-all-link">
-            <span data-lang="zh">查看全部 Loop</span>
-            <span data-lang="en">View All Loops</span>
-          </a>
-          {% endif %}
-          <a class="secondary-button" href="{{ nav_tools_href }}" data-testid="loops-empty-agent-setup-link" data-workdir-context-link="workdir">
-            <span data-lang="zh">同一 Agent 设置</span>
-            <span data-lang="en">Same-Agent Setup</span>
-          </a>
-          <a class="ghost-button" href="{{ nav_bundle_import_href }}" data-testid="loops-empty-import-plan-link" data-workdir-context-link="workdir">
-            <span data-lang="zh">导入 Plan File</span>
-            <span data-lang="en">Import Plan File</span>
-          </a>
-        </div>
       </div>
     {% endif %}
   </details>
-  {% endif %}
 </div>
 {% endblock %}

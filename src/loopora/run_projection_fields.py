@@ -3,10 +3,38 @@ from __future__ import annotations
 from collections.abc import Mapping
 
 from loopora.projections._event_replay_support import EVENT_REPLAY_PROJECTION_SCHEMA_VERSION
-from loopora.run_status_aliases import public_run_status_from_lifecycle
-from loopora.structured_numbers import coerced_int
+from loopora.utils import coerced_int
 from loopora.task_verdict_aliases import public_task_verdict_source, public_task_verdict_status
 from loopora.task_verdicts import normalize_task_verdict
+
+from loopora.kernel.run_state import RunLifecycleStatus
+
+LIFECYCLE_TO_PUBLIC_RUN_STATUS = {
+    RunLifecycleStatus.CREATED.value: "queued",
+    RunLifecycleStatus.RUNNING.value: "running",
+    RunLifecycleStatus.AWAITING_ACTOR.value: "awaiting_agent",
+    RunLifecycleStatus.EVALUATING.value: "running",
+    RunLifecycleStatus.CLOSED.value: "succeeded",
+    RunLifecycleStatus.STOPPED.value: "stopped",
+    RunLifecycleStatus.FAILED.value: "failed",
+}
+
+PUBLIC_RUN_STATUS_TO_LIFECYCLE = {
+    "queued": RunLifecycleStatus.CREATED,
+    "running": RunLifecycleStatus.RUNNING,
+    "awaiting_agent": RunLifecycleStatus.AWAITING_ACTOR,
+    "succeeded": RunLifecycleStatus.CLOSED,
+    "stopped": RunLifecycleStatus.STOPPED,
+    "failed": RunLifecycleStatus.FAILED,
+}
+
+def public_run_status_from_lifecycle(value: object) -> str:
+    status = str(value or "").strip().lower()
+    return LIFECYCLE_TO_PUBLIC_RUN_STATUS.get(status, "")
+
+def lifecycle_status_from_public_run_status(value: object) -> RunLifecycleStatus:
+    status = str(value or "").strip().lower()
+    return PUBLIC_RUN_STATUS_TO_LIFECYCLE.get(status, RunLifecycleStatus.CREATED)
 
 
 def projection_first_run_record_fields(event_projections: Mapping[str, object], *, run: Mapping[str, object] | None = None) -> dict:

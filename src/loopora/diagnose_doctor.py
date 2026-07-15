@@ -1,59 +1,19 @@
 from __future__ import annotations
 
+from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
+import platform
 import shlex
+import sys
 from typing import Any
 
-from loopora.agent_adapters import (
-    adapter_first_task_handoff_policy,
-    adapter_first_task_message_example,
-    adapter_first_task_message_example_state,
-    check_agent_adapter,
-)
-from loopora.agent_adapter_command_prefix import copyable_loopora_command
+from loopora.agent_adapters import check_agent_adapter, prefix_loopora_command
 from loopora.agent_native_adapter_contracts import AGENT_ADAPTER_KINDS
-from loopora.diagnose_doctor_identity import (
-    package_identity_report as package_identity_report,
-    package_source_label as package_source_label,
-)
-from loopora.diagnose_doctor_actions import (
-    doctor_readiness_command as _doctor_readiness_command,
-    doctor_next_action_items as _doctor_next_action_items,
-    target_required_doctor_next_action_items as _target_required_next_action_items,
-)
-from loopora.diagnose_doctor_projection import (
-    doctor_actions_with_command_readiness as _doctor_actions_with_command_readiness,
-    doctor_action_step as doctor_action_step,
-    doctor_json_payload as doctor_json_payload,
-    doctor_summary as doctor_summary,
-    first_task_handoff_blockers as _first_task_handoff_blockers,
-    first_task_handoff_executable as _first_task_handoff_executable,
-    next_steps_from_actions as _next_steps_from_actions,
-)
-from loopora.diagnose_doctor_public import (
-    DOCTOR_PUBLIC_SCHEMA_VERSION as DOCTOR_PUBLIC_SCHEMA_VERSION,
-    PUBLIC_NEXT_ACTION_SUMMARY_BY_KIND as PUBLIC_NEXT_ACTION_SUMMARY_BY_KIND,
-    doctor_public_json_payload as doctor_public_json_payload,
-    doctor_public_summary as doctor_public_summary,
-    doctor_web_readiness_blockers as _web_readiness_blockers,
-)
-from loopora.diagnose_doctor_web_state import (
-    DEFAULT_WEB_HOST as DEFAULT_WEB_HOST,
-    DEFAULT_WEB_PORT as DEFAULT_WEB_PORT,
-    commandless_doctor_web_report as _commandless_web_report,
-    doctor_app_state_report as _app_state_report,
-    doctor_app_state_with_web_recovery as _app_state_with_web_recovery,
-    doctor_target_required_app_state as _target_required_app_state,
-    doctor_web_report as _doctor_web_report,
-)
-from loopora.diagnose_doctor_workdir_state import (
-    agent_entry_blocked_by_workdir as _agent_entry_blocked_by_workdir,
-    doctor_workdir_state as _workdir_state,
-    target_required_doctor_workdir_state as _target_required_workdir_state,
-)
-from loopora.web_bind_preflight import next_available_web_port as next_available_web_port, probe_web_bind as probe_web_bind
+from loopora.web_request_context import _is_loopback_host
 
-DOCTOR_SCHEMA_VERSION = 2
+DOCTOR_SCHEMA_VERSION = 1
+DEFAULT_WEB_HOST = "127.0.0.1"
+DEFAULT_WEB_PORT = 8742
 
 
 def build_doctor_report(
@@ -61,160 +21,43 @@ def build_doctor_report(
     workdir: Path | str,
     web_host: str = DEFAULT_WEB_HOST,
     web_port: int = DEFAULT_WEB_PORT,
-    web_already_running: bool = False,
-    web_auth_enabled: bool | None = None,
 ) -> dict[str, Any]:
-    raw_root = Path(workdir).expanduser()
-    workdir_state = _workdir_state(raw_root)
-    root = Path(str(workdir_state.get("workdir") or raw_root))
-    agent_entries = [
-        _agent_entry_report(adapter, root)
-        if workdir_state["usable_for_agent_entries"]
-        else _agent_entry_blocked_by_workdir(adapter, workdir_state=workdir_state)
-        for adapter in AGENT_ADAPTER_KINDS
-    ]
+    root = Path(workdir).resolve()
+    agent_entries = [_agent_entry_report(adapter, root) for adapter in AGENT_ADAPTER_KINDS]
     ready_entries = [entry for entry in agent_entries if entry["ready"]]
     attention_entries = [entry for entry in agent_entries if _entry_needs_attention(entry)]
-    workdir_usable = workdir_state["usable_for_agent_entries"] is True
-    web = _web_report(
-        web_host,
-        web_port,
-        startup_workdir=root if workdir_usable else None,
-        web_already_running=web_already_running,
-        web_auth_enabled=web_auth_enabled,
-    )
-    app_state = _app_state_report(root, include_commands=workdir_usable)
-    if workdir_usable:
-        app_state = _app_state_with_web_recovery(app_state, web)
-    web = {**web, "readiness_blockers": _web_readiness_blockers(app_state, web)}
-    status = _overall_status(
-        ready_entries=ready_entries,
-        attention_entries=attention_entries,
-        app_state=app_state,
-        web=web,
-    )
-    agent_entry_ready = bool(ready_entries)
-    strict_ready = status == "ready"
-    first_task_handoff_executable = _first_task_handoff_executable(
-        workdir_state=workdir_state,
-        agent_entry_ready=agent_entry_ready,
-        app_state=app_state,
-    )
-    first_task_handoff_blockers = _first_task_handoff_blockers(
-        workdir_state=workdir_state,
-        agent_entry_ready=agent_entry_ready,
-        app_state=app_state,
-    )
-    next_action_items = _doctor_next_action_items(
-        root,
-        workdir_state=workdir_state,
-        agent_entries=agent_entries,
-        app_state=app_state,
-        web=web,
-    )
-    next_action_items = _doctor_actions_with_command_readiness(
-        next_action_items,
-        first_task_handoff_blockers=first_task_handoff_blockers,
-    )
-    primary_next_action_kind = _primary_next_action_kind(next_action_items)
+    status = _overall_status(ready_entries=ready_entries, attention_entries=attention_entries)
     return {
         "schema_version": DOCTOR_SCHEMA_VERSION,
         "status": status,
-        "ready": agent_entry_ready,
-        "agent_entry_ready": agent_entry_ready,
-        "strict_ready": strict_ready,
+        "ready": bool(ready_entries),
         "workdir": str(root),
-        "workdir_state": workdir_state,
         "package": _package_report(),
-        "app_state": app_state,
-        "web": web,
-        "commands": {"confirm_readiness": _doctor_readiness_command(root, web=web)},
+        "web": _web_report(web_host, web_port),
         "agent_entries": agent_entries,
         "ready_adapter_count": len(ready_entries),
         "attention_adapter_count": len(attention_entries),
-        "recommended_adapter": ready_entries[0]["adapter"] if ready_entries else "",
-        "first_task_message_example": adapter_first_task_message_example(),
-        "first_task_message_example_state": adapter_first_task_message_example_state(),
-        "first_task_handoff_policy": _copyable_first_task_handoff_policy(root),
-        "first_task_handoff_executable": first_task_handoff_executable,
-        "first_task_handoff_blockers": first_task_handoff_blockers,
-        "primary_next_action_kind": primary_next_action_kind,
-        "next_action_items": next_action_items,
-        "next_steps": _next_steps_from_actions(next_action_items),
+        "recommended_adapter": ready_entries[0]["adapter"] if ready_entries else "codex",
+        "next_steps": _next_steps(root, ready_entries=ready_entries),
     }
 
 
-def build_target_required_doctor_report(
-    *,
-    web_host: str = DEFAULT_WEB_HOST,
-    web_port: int = DEFAULT_WEB_PORT,
-    web_already_running: bool = False,
-    web_auth_enabled: bool | None = None,
-) -> dict[str, Any]:
-    workdir_state = _target_required_workdir_state()
-    agent_entries = [_agent_entry_blocked_by_workdir(adapter, workdir_state=workdir_state) for adapter in AGENT_ADAPTER_KINDS]
-    app_state = _target_required_app_state()
-    web = _commandless_web_report(
-        _web_report(
-            web_host,
-            web_port,
-            startup_workdir=None,
-            web_already_running=web_already_running,
-            web_auth_enabled=web_auth_enabled,
-        )
-    )
-    first_task_handoff_blockers = _first_task_handoff_blockers(
-        workdir_state=workdir_state,
-        agent_entry_ready=False,
-        app_state=app_state,
-    )
-    next_action_items = _target_required_next_action_items()
+def doctor_summary(report: dict[str, Any]) -> dict[str, Any]:
     return {
-        "schema_version": DOCTOR_SCHEMA_VERSION,
-        "status": "target_required",
-        "ready": False,
-        "agent_entry_ready": False,
-        "strict_ready": False,
-        "target_project_required": True,
-        "workdir": "",
-        "workdir_state": workdir_state,
-        "package": _package_report(),
-        "app_state": app_state,
-        "web": web,
-        "commands": {},
-        "agent_entries": agent_entries,
-        "ready_adapter_count": 0,
-        "attention_adapter_count": 0,
-        "recommended_adapter": "",
-        "first_task_message_example": "",
-        "first_task_message_example_state": adapter_first_task_message_example_state(),
-        "first_task_handoff_policy": {
-            "preferred_source": "completed_fit_review",
-            "fallback_source": "unavailable_until_target_project",
-        },
-        "first_task_handoff_executable": False,
-        "first_task_handoff_blockers": first_task_handoff_blockers,
-        "primary_next_action_kind": _primary_next_action_kind(next_action_items),
-        "next_action_items": next_action_items,
-        "next_steps": _next_steps_from_actions(next_action_items),
+        "schema_version": report.get("schema_version"),
+        "status": report.get("status"),
+        "ready": report.get("ready"),
+        "workdir": report.get("workdir"),
+        "ready_adapter_count": report.get("ready_adapter_count"),
+        "attention_adapter_count": report.get("attention_adapter_count"),
+        "recommended_adapter": report.get("recommended_adapter"),
+        "web_origin": (report.get("web") if isinstance(report.get("web"), dict) else {}).get("origin"),
+        "next_steps": report.get("next_steps"),
     }
 
 
-def _copyable_first_task_handoff_policy(root: Path) -> dict[str, str]:
-    policy = adapter_first_task_handoff_policy(workdir=root)
-    raw_fit_command = str(policy.get("fit_command") or "loopora fit")
-    fit_command = copyable_loopora_command(raw_fit_command)
-    policy["fit_command"] = fit_command
-    policy["copy_rule"] = str(policy.get("copy_rule") or "").replace(raw_fit_command, fit_command)
-    return policy
-
-
-def _primary_next_action_kind(actions: list[dict[str, Any]]) -> str:
-    for action in actions:
-        kind = str(action.get("kind") or "").strip()
-        if kind:
-            return kind
-    return ""
+def doctor_json_payload(report: dict[str, Any]) -> dict[str, Any]:
+    return {"diagnose_doctor_summary": doctor_summary(report), **report}
 
 
 def _agent_entry_report(adapter: str, root: Path) -> dict[str, Any]:
@@ -252,11 +95,11 @@ def _agent_entry_report(adapter: str, root: Path) -> dict[str, Any]:
 def _agent_entry_commands(adapter: str, root: Path, *, recovery: dict[str, Any]) -> dict[str, str]:
     install_command = str(recovery.get("install_command") or "").strip()
     if not install_command:
-        install_command = copyable_loopora_command(f"loopora init {adapter} --workdir {shlex.quote(str(root))}")
+        install_command = prefix_loopora_command(f"loopora init {adapter} --workdir {shlex.quote(str(root))}")
     check_command = str(recovery.get("check_command") or "").strip()
     if not check_command:
-        check_command = copyable_loopora_command(f"loopora init {adapter} --workdir {shlex.quote(str(root))} --check")
-    agent_check_command = copyable_loopora_command(f"loopora agent {adapter} check --workdir {shlex.quote(str(root))}")
+        check_command = prefix_loopora_command(f"loopora init {adapter} --workdir {shlex.quote(str(root))} --check")
+    agent_check_command = prefix_loopora_command(f"loopora agent {adapter} check --workdir {shlex.quote(str(root))}")
     return {
         "install": install_command,
         "install_check": check_command,
@@ -275,42 +118,54 @@ def _agent_entry_next_action(*, check_status: str, install_state: str) -> str:
 def _entry_needs_attention(entry: dict[str, Any]) -> bool:
     if entry.get("ready") is True:
         return False
-    return str(entry.get("install_state") or "") not in {"not_installed", "blocked_by_workdir"}
+    return str(entry.get("install_state") or "") != "not_installed"
 
 
-def _overall_status(
-    *,
-    ready_entries: list[dict[str, Any]],
-    attention_entries: list[dict[str, Any]],
-    app_state: dict[str, Any],
-    web: dict[str, Any],
-) -> str:
-    web_needs_attention = web.get("start_available") is False
-    if ready_entries and (attention_entries or app_state.get("needs_attention") or web_needs_attention):
+def _overall_status(*, ready_entries: list[dict[str, Any]], attention_entries: list[dict[str, Any]]) -> str:
+    if ready_entries and attention_entries:
         return "ready_with_warnings"
     if ready_entries:
         return "ready"
     return "not_ready"
 
 
-def _package_report() -> dict[str, Any]:
-    return package_identity_report()
+def _next_steps(root: Path, *, ready_entries: list[dict[str, Any]]) -> list[str]:
+    if ready_entries:
+        label = str(ready_entries[0].get("label") or ready_entries[0].get("adapter") or "Agent")
+        return [
+            f"Return to {label} in this project with the task goal, fake-done risk, and required evidence.",
+            "Run /loopora-plan to prepare the Loop preview before starting work.",
+            "Review the READY Loop preview, then run /loopora-run in the same Agent session.",
+            "Use `loopora serve --host 127.0.0.1 --port 8742` to observe evidence, gaps, and verdicts in Web.",
+        ]
+    return [
+        f"Install one Agent entry, for example: {prefix_loopora_command(f'loopora init codex --workdir {shlex.quote(str(root))}')}",
+        "Refresh or restart that Agent if the new slash commands are not visible.",
+        "Return to the Agent with the task goal, fake-done risk, and required evidence, then run /loopora-plan.",
+    ]
 
 
-def _web_report(
-    host: str,
-    port: int,
-    *,
-    startup_workdir: Path | None = None,
-    web_already_running: bool = False,
-    web_auth_enabled: bool | None = None,
-) -> dict[str, Any]:
-    return _doctor_web_report(
-        host,
-        port,
-        startup_workdir=startup_workdir,
-        web_already_running=web_already_running,
-        web_auth_enabled=web_auth_enabled,
-        probe_bind=probe_web_bind,
-        next_available_port=next_available_web_port,
-    )
+def _package_report() -> dict[str, str]:
+    try:
+        package_version = version("loopora")
+    except PackageNotFoundError:
+        package_version = "unknown"
+    return {
+        "name": "loopora",
+        "version": package_version,
+        "python": platform.python_version(),
+        "python_executable": sys.executable,
+    }
+
+
+def _web_report(host: str, port: int) -> dict[str, Any]:
+    loopback = _is_loopback_host(host)
+    return {
+        "default": host == DEFAULT_WEB_HOST and port == DEFAULT_WEB_PORT,
+        "host": host,
+        "port": port,
+        "origin": f"http://{host}:{port}",
+        "loopback": loopback,
+        "requires_token_when_non_loopback": True,
+        "start_command": prefix_loopora_command(f"loopora serve --host {shlex.quote(host)} --port {port}"),
+    }

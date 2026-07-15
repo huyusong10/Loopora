@@ -8,7 +8,6 @@ from loopora.agent_native_v3 import agent_v3_legacy_raw
 from loopora.agent_native_v3 import agent_v3_technical_handoff
 from loopora import cli_agent_recoverable_context_output as _recoverable_context_output
 from loopora.cli_agent_plan_repair_hints import validation_repair_hints as _plan_validation_repair_hints
-from loopora.cli_agent_runtime_support import print_web_url as _print_web_url
 from loopora.cli_summary_helpers import (
     set_summary_list as _set_summary_list,
     set_summary_mapping as _set_summary_mapping,
@@ -64,15 +63,11 @@ def _agent_loop_recovery_summary(result: dict) -> dict:
         _set_summary_text(summary, "next_plan_cli_command", result.get("next_plan_cli_command"))
         _set_summary_text(summary, "task_message_template", result.get("task_message_template"))
         _set_summary_text(summary, "first_task_message_example", result.get("first_task_message_example"))
-        for key in ("first_task_message_example_state", "first_task_handoff_policy"):
-            _set_summary_mapping(summary, key, result.get(key))
         _set_summary_text(summary, "debug_cli_example_command", result.get("debug_cli_example_command"))
         _set_summary_text(summary, "next", result.get("next"))
         _set_summary_text(summary, "check_command", result.get("check_command"))
         _set_summary_text(summary, "context_card_error", result.get("context_card_error") or result.get("binding_error"))
         _set_summary_text(summary, "preview_url", result.get("preview_url") or result.get("preview_path"))
-        _set_summary_text(summary, "preview_url_status", result.get("preview_url_status"))
-        _set_summary_text(summary, "preview_url_web_start_command", result.get("preview_url_web_start_command"))
         _set_summary_text(summary, "validation_error", result.get("validation_error") or _agent_gen_error_summary(result))
         _set_summary_list(summary, "repair_focus", result.get("repair_focus"))
         _set_summary_text(summary, "repair_task_message", result.get("repair_task_message"))
@@ -156,8 +151,6 @@ def _attach_active_run_conflict_summary(summary: dict[str, object], result: dict
         summary["active_runs"] = compact_runs
     _set_summary_text(summary, "message", result.get("message"))
     _set_summary_text(summary, "active_run_url", result.get("active_run_url") or result.get("active_run_path"))
-    _set_summary_text(summary, "active_run_url_status", result.get("active_run_url_status"))
-    _set_summary_text(summary, "active_run_url_web_start_command", result.get("active_run_url_web_start_command"))
     _set_summary_text(summary, "next_active_run_command", result.get("next_active_run_command"))
     _set_summary_text(summary, "stop_active_run_command", result.get("stop_active_run_command"))
 
@@ -198,7 +191,8 @@ def _print_active_run_conflict_recovery(result: dict) -> None:
         loop = str(run.get("loop_name") or run.get("loop_id") or "").strip()
         loop_bits = f" loop={loop}" if loop else ""
         typer.echo(f"- {run.get('id')} status={run.get('status')}{loop_bits}{step_bits}")
-    _print_web_url(result, path_key="active_run_path", url_key="active_run_url")
+    if result.get("active_run_url") or result.get("active_run_path"):
+        typer.echo(f"active_run_url: {result.get('active_run_url') or result.get('active_run_path')}")
     if result.get("next_active_run_command"):
         typer.echo(f"next_active_run_command: {result.get('next_active_run_command')}")
     if result.get("stop_active_run_command"):

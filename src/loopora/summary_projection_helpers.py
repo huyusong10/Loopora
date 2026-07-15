@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from loopora.structured_numbers import structured_optional_non_negative_int
+from loopora.utils import structured_optional_non_negative_int
 
 
 def set_summary_text(summary: dict[str, object], key: str, value: object) -> None:

@@ -39,7 +39,7 @@ The headless path remains a first-class automation path and the execution plane 
 
 - Bundle `executor_kind` / `executor_mode` stay in assets for compatibility, Web alignment defaults and headless fallback, but they do not cause nested provider CLI execution in an Agent-native run.
 - Host-native planning avoids hidden background alignment work and duplicate provider cost before candidate validation; Web alignment remains available when the host cannot continue the dialogue or the user chooses it.
-- Agent Native plan/run/submit may discover and reuse a responding same-App-home Web instance, but never spawn a detached Web service. Explicit foreground `serve --open` owns startup and Ctrl-C shutdown.
+- Agent Native plan/run/submit may discover and reuse a responding same-App-home Web instance, but never spawn a detached Web service. Explicit foreground `loopora serve` owns startup and Ctrl-C shutdown.
 - `agent_native` runs can be `awaiting_agent`; this is an active run lifecycle state, not a terminal result and not a hidden background worker.
 - Host submissions must carry dispatch proof, and Core remains the evidence, handoff, coverage and GateKeeper verdict fact source.
 - Agent-native execution preserves the same human judgment contract as headless execution: bundle judgment freezes into the run contract, then projects into every Agent Step View and terminal observation surface.
@@ -47,7 +47,7 @@ The headless path remains a first-class automation path and the execution plane 
 
 ## Validation
 
-- The split Agent adapter contract tests cover host-native alignment before candidate submission, `/loopora-plan -> /loopora-run`, READY binding, imported-session handoff, `agent_native` state, dispatch proof, optional native trace, native todo/question projections, frozen `next_step.judgment_contract`, required coverage, no inline submit, control-step views, and CLI behavior that does not spawn a nested worker.
-- `tests/checks/contracts/test_runner_step_context_architecture.py` and `tests/checks/contracts/test_agent_native_step_view_request.py` cover the StepInstruction context boundary that feeds the Agent Step View projection.
+- Agent Native behavior checks cover READY binding, `agent_native` state, dispatch proof, frozen judgment, required coverage, result templates, and host-owned execution.
+- `tests/checks/contracts/test_agent_native_role_dispatch_message.py`, `tests/checks/contracts/test_agent_native_result_template_contract.py`, and `tests/checks/contracts/test_web_error_boundaries.py` cover the current role-dispatch, Agent Step View result, and foreground-Web boundaries.
 - `tests/probes/real_environment/run_real_probes.py --suite real-agent` is the release-profile real-host check for managed Agent entries.
 - `tests/probes/real_environment/run_real_probes.py --suite real-cli` keeps the explicit headless/provider CLI boundary covered separately.

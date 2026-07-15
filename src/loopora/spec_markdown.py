@@ -4,11 +4,11 @@ import re
 from typing import Any
 
 from loopora.evidence_coverage_targets import with_coverage_targets
-from loopora.runtime_task_language import runtime_task_language_from_text, runtime_task_text
 from loopora.strategy_source import (
     normalize_strategy_role_display_name,
     strategy_archetype_display_name,
 )
+from loopora.utils import runtime_task_language_from_text, runtime_task_text
 
 REQUIRED_SECTIONS = ["Task"]
 HTML_COMMENT_PATTERN = re.compile(r"<!--.*?-->", re.DOTALL)

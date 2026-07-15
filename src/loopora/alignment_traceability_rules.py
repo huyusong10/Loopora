@@ -1,25 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-import re
-
 from loopora.alignment_semantics import text_mentions_loop_fit_contradiction
-from loopora.alignment_traceability_agent_candidate_rules import (
-    alignment_agent_candidate_evidence_preference_issues,
-    alignment_agent_candidate_execution_strategy_issues,
-    alignment_agent_candidate_fake_done_issues,
-    alignment_agent_candidate_residual_risk_policy_issues,
-    alignment_agent_candidate_success_surface_issues,
-    alignment_agent_candidate_tradeoff_issues,
-)
-from loopora.alignment_traceability_categories import (
-    agent_candidate_evidence_preference_categories,
-    agent_candidate_execution_strategy_categories,
-    agent_candidate_fake_done_categories,
-    agent_candidate_residual_risk_policy_categories,
-    agent_candidate_success_surface_categories,
-    agent_candidate_tradeoff_categories,
-)
 from loopora.alignment_traceability_terms import (
     ALIGNMENT_AGENT_CANDIDATE_GENERIC_TERMS as ALIGNMENT_AGENT_CANDIDATE_GENERIC_TERMS,
     ALIGNMENT_LOOP_FIT_TRACEABILITY_GENERIC_TERMS,
@@ -34,7 +16,6 @@ from loopora.alignment_traceability_terms import (
 )
 from loopora.service_alignment_traceability_projection import (
     alignment_bundle_agreement_projection_text,
-    alignment_bundle_runnable_projection_text,
     alignment_bundle_runtime_responsibility_projection_text,
     alignment_governance_marker_responsibility_issues,
     alignment_traceability_term_is_present,
@@ -92,12 +73,6 @@ def alignment_bundle_agreement_traceability_issues(session: dict, bundle: dict) 
                 normalized_runtime_text=normalized_runtime_text,
             )
         )
-        issues.extend(
-            alignment_agreement_category_projection_issues(
-                evidence,
-                normalized_bundle_text=normalized_bundle_text,
-            )
-        )
     workdir_snapshot = alignment_workdir_snapshot(Path(session["workdir"])) if session.get("workdir") else ""
     if alignment_workdir_snapshot_has_governance_markers(workdir_snapshot):
         issues.extend(
@@ -107,78 +82,6 @@ def alignment_bundle_agreement_traceability_issues(session: dict, bundle: dict) 
             )
         )
     return issues
-
-def alignment_agreement_category_projection_issues(evidence: dict, *, normalized_bundle_text: str) -> list[str]:
-    category_checks = (
-        (
-            "success_surface",
-            "success surface",
-            agent_candidate_success_surface_categories(
-                str(evidence.get("success_surface") or ""),
-                require_explicit_marker=False,
-            ),
-            1,
-        ),
-        (
-            "fake_done_risks",
-            "fake-done risks",
-            agent_candidate_fake_done_categories(
-                str(evidence.get("fake_done_risks") or ""),
-                require_explicit_marker=False,
-            ),
-            1,
-        ),
-        (
-            "evidence_preferences",
-            "evidence preferences",
-            agent_candidate_evidence_preference_categories(
-                str(evidence.get("evidence_preferences") or ""),
-                require_explicit_marker=False,
-            ),
-            1,
-        ),
-        (
-            "execution_strategy",
-            "execution strategy",
-            agent_candidate_execution_strategy_categories(
-                str(evidence.get("execution_strategy") or ""),
-                require_explicit_marker=False,
-            ),
-            2,
-        ),
-        (
-            "residual_risk_policy",
-            "residual-risk policy",
-            agent_candidate_residual_risk_policy_categories(
-                str(evidence.get("residual_risk_policy") or ""),
-                require_explicit_marker=False,
-            ),
-            1,
-        ),
-        (
-            "judgment_tradeoffs",
-            "judgment tradeoffs",
-            agent_candidate_tradeoff_categories(str(evidence.get("judgment_tradeoffs") or "")),
-            2,
-        ),
-    )
-    issues: list[str] = []
-    for _key, label, categories, minimum_category_count in category_checks:
-        if len(categories) < minimum_category_count:
-            continue
-        missing = [
-            category_label
-            for category_label, bundle_pattern in categories
-            if not re.search(bundle_pattern, normalized_bundle_text, re.IGNORECASE)
-        ]
-        if not missing:
-            continue
-        issues.append(
-            "alignment bundle must project confirmed working agreement "
-            f"{label} into runnable surfaces: missing {', '.join(missing)}"
-        )
-    return issues
-
 
 def alignment_agent_candidate_traceability_issues(
     task_text: str,
@@ -195,7 +98,6 @@ def alignment_agent_candidate_traceability_issues(
             "ask the user or use Web review before generating a runnable Loop"
         )
     normalized_bundle_text = normalize_alignment_traceability_text(alignment_bundle_agreement_projection_text(bundle))
-    normalized_runnable_text = normalize_alignment_traceability_text(alignment_bundle_runnable_projection_text(bundle))
     normalized_runtime_text = normalize_alignment_traceability_text(alignment_bundle_runtime_responsibility_projection_text(bundle))
     terms = agent_candidate_task_anchor_terms(task_text)
     if terms:
@@ -212,42 +114,6 @@ def alignment_agent_candidate_traceability_issues(
         alignment_governance_marker_responsibility_issues(
             {"agent_candidate": task_text},
             normalized_runtime_text=normalized_runtime_text,
-        )
-    )
-    issues.extend(
-        alignment_agent_candidate_tradeoff_issues(
-            task_text,
-            normalized_bundle_text=normalized_runnable_text,
-        )
-    )
-    issues.extend(
-        alignment_agent_candidate_execution_strategy_issues(
-            task_text,
-            normalized_bundle_text=normalized_runnable_text,
-        )
-    )
-    issues.extend(
-        alignment_agent_candidate_residual_risk_policy_issues(
-            task_text,
-            normalized_bundle_text=normalized_bundle_text,
-        )
-    )
-    issues.extend(
-        alignment_agent_candidate_success_surface_issues(
-            task_text,
-            normalized_bundle_text=normalized_runnable_text,
-        )
-    )
-    issues.extend(
-        alignment_agent_candidate_fake_done_issues(
-            task_text,
-            normalized_bundle_text=normalized_runnable_text,
-        )
-    )
-    issues.extend(
-        alignment_agent_candidate_evidence_preference_issues(
-            task_text,
-            normalized_bundle_text=normalized_runnable_text,
         )
     )
     return issues

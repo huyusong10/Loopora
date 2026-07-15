@@ -9,8 +9,8 @@ from loopora.context_value_helpers import normalize_coverage_gap_rows as _normal
 from loopora.context_value_helpers import string_list as _string_list
 from loopora.run_artifacts import RunArtifactLayout
 from loopora.score_history_values import structured_score_value, structured_score_values
-from loopora.structured_booleans import structured_bool_is_true
-from loopora.structured_numbers import coerced_non_negative_int, structured_non_negative_int
+from loopora.utils import structured_bool_is_true
+from loopora.utils import coerced_non_negative_int, structured_non_negative_int
 
 
 @dataclass(frozen=True)

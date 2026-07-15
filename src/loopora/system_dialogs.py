@@ -76,7 +76,11 @@ def reveal_path(path: str) -> str:
         check=False,
     )
     if result.returncode != 0:
-        raise SystemDialogError("path could not be opened", code="path_reveal_failed", detail=_completed_process_detail(result))
+        raise SystemDialogError(
+            "path could not be opened",
+            code="path_reveal_failed",
+            detail=_completed_process_detail(result),
+        )
     return str(resolved)
 
 
@@ -120,7 +124,7 @@ def _run_osascript(script: str) -> str | None:
     stderr = f"{result.stderr}\n{result.stdout}".lower()
     if "-128" in stderr or "user canceled" in stderr or "cancelled" in stderr:
         return None
-    raise SystemDialogError("native dialog failed", code="native_dialog_failed", detail=result.stderr.strip())
+    raise SystemDialogError(result.stderr.strip() or "native dialog failed")
 
 
 def _run_tk_dialog(kind: str, *, start_path: str | None, default_name: str) -> str | None:
@@ -128,11 +132,7 @@ def _run_tk_dialog(kind: str, *, start_path: str | None, default_name: str) -> s
         import tkinter as tk
         from tkinter import filedialog
     except Exception as exc:  # pragma: no cover - platform dependent
-        raise SystemDialogError(
-            "native dialogs are unavailable in this environment",
-            code="native_dialog_unavailable",
-            detail=str(exc),
-        ) from exc
+        raise SystemDialogError("native dialogs are unavailable in this environment") from exc
 
     initial = _dialog_location(start_path)
     root = None
@@ -155,7 +155,7 @@ def _run_tk_dialog(kind: str, *, start_path: str | None, default_name: str) -> s
                 filetypes=[("Markdown", "*.md"), ("All files", "*.*")],
             )
     except Exception as exc:  # pragma: no cover - platform dependent
-        raise SystemDialogError("failed to open a native dialog", code="native_dialog_failed", detail=str(exc)) from exc
+        raise SystemDialogError("failed to open a native dialog") from exc
     finally:  # pragma: no branch - best effort cleanup
         with suppress(Exception):
             root.destroy()
@@ -181,10 +181,11 @@ def _escape_applescript(value: str) -> str:
 
 
 def _completed_process_detail(*results: subprocess.CompletedProcess) -> str:
-    parts: list[str] = []
+    parts = []
     for result in results:
-        for value in (getattr(result, "stderr", ""), getattr(result, "stdout", "")):
-            text = str(value or "").strip()
-            if text:
-                parts.append(text)
+        parts.extend(
+            text
+            for value in (getattr(result, "stderr", ""), getattr(result, "stdout", ""))
+            if (text := str(value or "").strip())
+        )
     return " | ".join(parts)

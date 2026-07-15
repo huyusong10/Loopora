@@ -7,31 +7,152 @@ from typing import Annotated
 from fastapi import FastAPI, Query, Request
 from fastapi.responses import JSONResponse
 
-from loopora.service_types import LooporaError, LooporaWorkdirUnavailableError
-from loopora.web_alignment_import_recovery import (
-    alignment_bundle_preview_recovery_payload,
-    alignment_bundle_sync_recovery_payload,
-    alignment_import_recovery_payload,
-    is_alignment_import_recovery_error,
-)
-from loopora.web_alignment_event_api import register_alignment_event_api_routes
-from loopora.web_alignment_session_recovery import (
-    alignment_session_creation_recovery_payload,
-    is_alignment_session_creation_recovery_error,
-)
 from loopora.web_common_inputs import _coerce_bool
-from loopora.web_revision_workdir import (
-    bundle_revision_workdir_recovery_payload,
-    is_revision_session_creation_recovery_error,
-    revision_session_creation_recovery_payload,
-    revision_source_workdir_context,
-    run_revision_workdir_recovery_payload,
-)
 from loopora.web_route_context import WebRouteContext
-from loopora.web_run_dispatch import web_run_start_failure_payload
-from loopora.web_start_context import resource_workdir_context_href
-from loopora.web_url_utils import with_query_params
-from loopora.web_workdir_recovery import web_alignment_workdir_ready, web_alignment_workdir_recovery_payload
+
+import json
+
+import logging
+
+import time
+
+from collections.abc import Iterator
+
+
+
+from fastapi.responses import Response, StreamingResponse
+
+from loopora.diagnostics import log_event, log_exception
+
+from loopora.service_alignment_context_factory import ALIGNMENT_ACTIVE_STATUSES
+
+
+import re
+
+STREAM_UNAVAILABLE = "stream_unavailable"
+
+MAX_EVENT_CURSOR_ID = 2**63 - 1
+
+EVENT_CURSOR_TEXT_RE = re.compile(r"^\d+$")
+
+def bounded_event_cursor(value: object, *, default: int = 0) -> int:
+    if isinstance(value, bool):
+        return default
+    if isinstance(value, int) and 0 <= value <= MAX_EVENT_CURSOR_ID:
+        return value
+    return default
+
+def parse_sse_last_event_id(value: object) -> int | None:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    if not EVENT_CURSOR_TEXT_RE.fullmatch(text):
+        return None
+    cursor = int(text)
+    if cursor < 0 or cursor > MAX_EVENT_CURSOR_ID:
+        return None
+    return cursor
+
+def stream_error_payload(*, owner_key: str, owner_id: object, after_id: object) -> dict[str, object]:
+    return {
+        owner_key: str(owner_id or ""),
+        "after_id": bounded_event_cursor(after_id),
+        "error": STREAM_UNAVAILABLE,
+        "retryable": True,
+    }
+
+
+def register_alignment_event_api_routes(app: FastAPI, ctx: WebRouteContext) -> None:
+    @app.get("/api/alignments/sessions/{session_id}/events")
+    async def api_alignment_events(
+        session_id: str,
+        after_id: Annotated[int, Query(ge=0, le=MAX_EVENT_CURSOR_ID)] = 0,
+        limit: Annotated[int, Query(ge=1, le=5000)] = 200,
+    ) -> JSONResponse:
+        latest_event_id = _latest_alignment_event_id(ctx, session_id)
+        if after_id > latest_event_id:
+            return ctx.json_error("event cursor is out of range")
+        return JSONResponse(ctx.svc().list_alignment_events(session_id, after_id=after_id, limit=limit))
+
+    @app.get("/api/alignments/sessions/{session_id}/stream")
+    async def api_alignment_stream(
+        request: Request,
+        session_id: str,
+        after_id: Annotated[int, Query(ge=0, le=MAX_EVENT_CURSOR_ID)] = 0,
+    ) -> Response:
+        ctx.svc().get_alignment_session(session_id)
+        latest_event_id = _latest_alignment_event_id(ctx, session_id)
+        if after_id > latest_event_id:
+            return ctx.json_error("event cursor is out of range")
+        after_id = _resolve_alignment_stream_after_id(
+            ctx,
+            request,
+            session_id=session_id,
+            after_id=after_id,
+            latest_event_id=latest_event_id,
+        )
+        return StreamingResponse(
+            _alignment_event_stream(ctx, session_id=session_id, after_id=after_id),
+            media_type="text/event-stream",
+        )
+
+def _alignment_event_stream(ctx: WebRouteContext, *, session_id: str, after_id: int) -> Iterator[str]:
+    last_id = after_id
+    while True:
+        try:
+            events = ctx.svc().list_alignment_events(session_id, after_id=last_id)
+            for event in events:
+                last_id = event["id"]
+                yield f"id: {event['id']}\n"
+                yield f"event: {event['event_type']}\n"
+                yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+            session = ctx.svc().get_alignment_session(session_id)
+        except Exception as exc:  # noqa: BLE001 - SSE streams must surface failures as stream_error events.
+            log_exception(
+                ctx.logger,
+                "web.alignment_stream.failed",
+                "Alignment event stream failed",
+                error=exc,
+                session_id=session_id,
+                after_id=last_id,
+            )
+            payload = stream_error_payload(owner_key="session_id", owner_id=session_id, after_id=last_id)
+            yield "event: stream_error\n"
+            yield f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
+            break
+        if session["status"] not in ALIGNMENT_ACTIVE_STATUSES and not events:
+            break
+        yield ": keep-alive\n\n"
+        time.sleep(1)
+
+def _latest_alignment_event_id(ctx: WebRouteContext, session_id: str) -> int:
+    return max(0, int(ctx.svc().latest_alignment_event_id(session_id) or 0))
+
+def _resolve_alignment_stream_after_id(
+    ctx: WebRouteContext,
+    request: Request,
+    *,
+    session_id: str,
+    after_id: int,
+    latest_event_id: int,
+) -> int:
+    last_event_header = str(request.headers.get("last-event-id", "")).strip()
+    if not last_event_header:
+        return after_id
+    parsed_header = parse_sse_last_event_id(last_event_header)
+    if parsed_header is None or parsed_header > latest_event_id:
+        log_event(
+            ctx.logger,
+            logging.WARNING,
+            "web.alignment_stream.resume_cursor_invalid",
+            "Ignored invalid or out-of-range SSE resume cursor and kept the request cursor",
+            session_id=session_id,
+            after_id=after_id,
+            latest_event_id=latest_event_id,
+            invalid_last_event_id=last_event_header,
+        )
+        return after_id
+    return max(after_id, parsed_header)
 
 
 def register_alignment_api_routes(app: FastAPI, ctx: WebRouteContext) -> None:
@@ -46,63 +167,20 @@ def _register_alignment_improvement_routes(app: FastAPI, ctx: WebRouteContext) -
     @app.post("/api/bundles/{bundle_id}/revise")
     async def api_create_bundle_improvement_session(bundle_id: str, request: Request) -> JSONResponse:
         payload = await ctx.read_json_mapping(request)
-        recovery = bundle_revision_workdir_recovery_payload(ctx.svc(), bundle_id)
-        if recovery:
-            return JSONResponse(recovery, status_code=400)
-        try:
-            session = ctx.svc().create_bundle_revision_session(bundle_id, **_alignment_executor_payload(payload))
-        except (LooporaError, OSError, UnicodeError) as exc:
-            return _api_revision_creation_error_response(ctx, "bundle", bundle_id, exc)
+        session = ctx.svc().create_bundle_revision_session(bundle_id, **_alignment_executor_payload(payload))
         return JSONResponse(
-            {
-                "session": session,
-                "redirect_url": resource_workdir_context_href(
-                    f"/loops/new/bundle?alignment_session_id={session['id']}",
-                    session,
-                ),
-            },
+            {"session": session, "redirect_url": f"/loops/new/bundle?alignment_session_id={session['id']}"},
             status_code=201,
         )
 
     @app.post("/api/runs/{run_id}/revise")
     async def api_create_run_improvement_session(run_id: str, request: Request) -> JSONResponse:
         payload = await ctx.read_json_mapping(request)
-        recovery = run_revision_workdir_recovery_payload(ctx.svc(), run_id)
-        if recovery:
-            return JSONResponse(recovery, status_code=400)
-        try:
-            session = ctx.svc().create_run_revision_session(run_id, **_alignment_executor_payload(payload))
-        except (LooporaError, OSError, UnicodeError) as exc:
-            return _api_revision_creation_error_response(ctx, "run", run_id, exc)
+        session = ctx.svc().create_run_revision_session(run_id, **_alignment_executor_payload(payload))
         return JSONResponse(
-            {
-                "session": session,
-                "redirect_url": resource_workdir_context_href(
-                    f"/loops/new/bundle?alignment_session_id={session['id']}",
-                    session,
-                ),
-            },
+            {"session": session, "redirect_url": f"/loops/new/bundle?alignment_session_id={session['id']}"},
             status_code=201,
         )
-
-
-def _api_revision_creation_error_response(
-    ctx: WebRouteContext,
-    source_kind: str,
-    source_id: str,
-    exc: BaseException,
-) -> JSONResponse:
-    if is_revision_session_creation_recovery_error(exc):
-        return JSONResponse(
-            revision_session_creation_recovery_payload(
-                source_kind,
-                source_id,
-                exc,
-                workdir_context=revision_source_workdir_context(ctx.svc(), source_kind, source_id),
-            ),
-            status_code=ctx.error_status_code(exc),
-        )
-    return ctx.json_error(str(exc), status_code=ctx.error_status_code(exc))
 
 
 def _register_alignment_workdir_context_route(app: FastAPI, ctx: WebRouteContext) -> None:
@@ -110,53 +188,33 @@ def _register_alignment_workdir_context_route(app: FastAPI, ctx: WebRouteContext
     async def api_alignment_workdir_context(request: Request) -> JSONResponse:
         payload = await ctx.read_json_mapping(request)
         workdir_text = str(payload.get("workdir", "")).strip()
-        if not web_alignment_workdir_ready(workdir_text):
-            return JSONResponse(web_alignment_workdir_recovery_payload(workdir_text, action="workdir_context"), status_code=400)
-        workdir = Path(workdir_text)
-        try:
-            return JSONResponse(ctx.svc().get_alignment_workdir_context(workdir))
-        except LooporaWorkdirUnavailableError as exc:
-            return JSONResponse(web_alignment_workdir_recovery_payload(exc.workdir, action="workdir_context"), status_code=400)
+        if not workdir_text:
+            return ctx.json_error("workdir is required")
+        return JSONResponse(ctx.svc().get_alignment_workdir_context(Path(workdir_text)))
 
 
 def _register_alignment_session_routes(app: FastAPI, ctx: WebRouteContext) -> None:
-    _register_alignment_session_creation_route(app, ctx)
-    _register_alignment_session_record_routes(app, ctx)
-
-
-def _register_alignment_session_creation_route(app: FastAPI, ctx: WebRouteContext) -> None:
     @app.post("/api/alignments/sessions")
     async def api_create_alignment_session(request: Request) -> JSONResponse:
         payload = await ctx.read_json_mapping(request)
-        message = str(payload.get("message", "") or payload.get("user_message", "") or "").strip()
-        if not message:
-            return ctx.json_error("message is required")
+        message = str(payload.get("message", "") or payload.get("user_message", "") or "")
         workdir_text = str(payload.get("workdir", "")).strip()
-        if not web_alignment_workdir_ready(workdir_text):
-            return JSONResponse(web_alignment_workdir_recovery_payload(workdir_text, action="create_alignment_session"), status_code=400)
-        workdir = Path(workdir_text)
-        source_option_id = str(payload.get("source_option_id", "")).strip()
-        try:
-            session = ctx.svc().create_alignment_session(
-                workdir=workdir,
-                message=message,
-                executor_kind=str(payload.get("executor_kind", "codex")).strip() or "codex",
-                executor_mode=str(payload.get("executor_mode", "preset")).strip() or "preset",
-                command_cli=str(payload.get("command_cli", "")).strip(),
-                command_args_text=str(payload.get("command_args_text", "")),
-                model=str(payload.get("model", "")).strip(),
-                reasoning_effort=str(payload.get("reasoning_effort", "")).strip(),
-                source_option_id=source_option_id,
-                start_immediately=_coerce_bool(payload.get("start_immediately", True)),
-            )
-        except LooporaWorkdirUnavailableError as exc:
-            return JSONResponse(web_alignment_workdir_recovery_payload(exc.workdir, action="create_alignment_session"), status_code=400)
-        except (LooporaError, OSError, UnicodeError) as exc:
-            return _api_alignment_session_creation_error_response(ctx, workdir_text, source_option_id, exc)
+        if not workdir_text:
+            return ctx.json_error("workdir is required")
+        session = ctx.svc().create_alignment_session(
+            workdir=Path(workdir_text),
+            message=message,
+            executor_kind=str(payload.get("executor_kind", "codex")).strip() or "codex",
+            executor_mode=str(payload.get("executor_mode", "preset")).strip() or "preset",
+            command_cli=str(payload.get("command_cli", "")).strip(),
+            command_args_text=str(payload.get("command_args_text", "")),
+            model=str(payload.get("model", "")).strip(),
+            reasoning_effort=str(payload.get("reasoning_effort", "")).strip(),
+            source_option_id=str(payload.get("source_option_id", "")).strip(),
+            start_immediately=_coerce_bool(payload.get("start_immediately", True)),
+        )
         return JSONResponse({"session": session}, status_code=201)
 
-
-def _register_alignment_session_record_routes(app: FastAPI, ctx: WebRouteContext) -> None:
     @app.get("/api/alignments/sessions")
     async def api_list_alignment_sessions(limit: Annotated[int, Query(ge=1, le=100)] = 30) -> JSONResponse:
         return JSONResponse({"sessions": ctx.svc().list_alignment_sessions(limit=limit)})
@@ -175,110 +233,25 @@ def _register_alignment_session_record_routes(app: FastAPI, ctx: WebRouteContext
         session = ctx.svc().append_alignment_message(session_id, str(payload.get("message", "")))
         return JSONResponse({"session": session})
 
-    @app.post("/api/alignments/sessions/{session_id}/retry-generation")
-    async def api_retry_alignment_generation(session_id: str, request: Request) -> JSONResponse:
-        payload = await ctx.read_json_mapping(request)
-        executor_fields = {
-            key: payload[key]
-            for key in (
-                "executor_kind",
-                "executor_mode",
-                "command_cli",
-                "command_args_text",
-                "model",
-                "reasoning_effort",
-            )
-            if key in payload
-        }
-        session = ctx.svc().retry_alignment_generation(session_id, **executor_fields)
-        return JSONResponse({"session": session})
-
     @app.post("/api/alignments/sessions/{session_id}/cancel")
     async def api_cancel_alignment_session(session_id: str) -> JSONResponse:
         return JSONResponse({"session": ctx.svc().cancel_alignment_session(session_id)})
 
 
-def _api_alignment_session_creation_error_response(
-    ctx: WebRouteContext,
-    workdir: str,
-    source_option_id: str,
-    exc: BaseException,
-) -> JSONResponse:
-    if is_alignment_session_creation_recovery_error(exc):
-        return JSONResponse(
-            alignment_session_creation_recovery_payload(
-                workdir=workdir,
-                source_option_id=source_option_id,
-                exc=exc,
-            ),
-            status_code=ctx.error_status_code(exc),
-        )
-    return ctx.json_error(str(exc), status_code=ctx.error_status_code(exc))
-
-
 def _register_alignment_bundle_routes(app: FastAPI, ctx: WebRouteContext) -> None:
     @app.get("/api/alignments/sessions/{session_id}/bundle")
     async def api_alignment_bundle(session_id: str) -> JSONResponse:
-        result = ctx.svc().get_alignment_bundle(session_id)
-        if result.get("ok") is False:
-            return JSONResponse(
-                alignment_bundle_preview_recovery_payload(
-                    session_id,
-                    result,
-                    workdir_context=_alignment_session_workdir_context(ctx, session_id),
-                )
-            )
-        return JSONResponse(result)
+        return JSONResponse(ctx.svc().get_alignment_bundle(session_id))
 
     @app.post("/api/alignments/sessions/{session_id}/bundle/sync")
     async def api_sync_alignment_bundle(session_id: str) -> JSONResponse:
-        result = ctx.svc().sync_alignment_bundle_from_file(session_id)
-        if result.get("ok") is False:
-            return JSONResponse(
-                alignment_bundle_sync_recovery_payload(
-                    session_id,
-                    result,
-                    workdir_context=_alignment_session_workdir_context(ctx, session_id),
-                )
-            )
-        return JSONResponse(result)
+        return JSONResponse(ctx.svc().sync_alignment_bundle_from_file(session_id))
 
     @app.post("/api/alignments/sessions/{session_id}/import")
     async def api_import_alignment_bundle(session_id: str, request: Request) -> JSONResponse:
         payload = await ctx.read_json_mapping(request)
         start_immediately = _coerce_bool(payload.get("start_immediately", True))
-        try:
-            result = ctx.svc().import_alignment_bundle(session_id, start_immediately=start_immediately)
-        except (LooporaError, OSError, UnicodeError) as exc:
-            if is_alignment_import_recovery_error(exc):
-                return JSONResponse(
-                    alignment_import_recovery_payload(
-                        session_id,
-                        exc,
-                        workdir_context=_alignment_session_workdir_context(ctx, session_id),
-                    ),
-                    status_code=ctx.error_status_code(exc),
-                )
-            raise
-        if result.get("run_start_error") and result.get("run"):
-            run = ctx.svc().get_run(str(result["run"]["id"]))
-            redirect_url = with_query_params(
-                resource_workdir_context_href(
-                    str(result.get("redirect_url") or f"/runs/{result['run']['id']}"),
-                    run,
-                ),
-                run_action_error=str(result["run_start_error"]),
-            )
-            result.update(
-                web_run_start_failure_payload(
-                    run,
-                    loop=result.get("loop") if isinstance(result.get("loop"), Mapping) else None,
-                    redirect_url=redirect_url,
-                    include_error=False,
-                )
-            )
-        else:
-            result = _alignment_import_result_with_resource_redirect(result)
+        result = ctx.svc().import_alignment_bundle(session_id, start_immediately=start_immediately)
         return JSONResponse(result, status_code=201)
 
 
@@ -293,26 +266,3 @@ def _alignment_executor_payload(payload: Mapping[str, object]) -> dict[str, obje
         "reasoning_effort": str(payload.get("reasoning_effort", "")).strip(),
         "start_immediately": _coerce_bool(payload.get("start_immediately", True)),
     }
-
-
-def _alignment_import_result_with_resource_redirect(result: dict) -> dict:
-    redirect_url = str(result.get("redirect_url") or "").strip()
-    if not redirect_url:
-        return result
-    result = dict(result)
-    result["redirect_url"] = resource_workdir_context_href(
-        redirect_url,
-        result.get("run") if isinstance(result.get("run"), Mapping) else None,
-        result.get("loop") if isinstance(result.get("loop"), Mapping) else None,
-        result.get("bundle") if isinstance(result.get("bundle"), Mapping) else None,
-        result.get("session") if isinstance(result.get("session"), Mapping) else None,
-    )
-    return result
-
-
-def _alignment_session_workdir_context(ctx: WebRouteContext, session_id: str) -> str:
-    try:
-        session = ctx.svc().get_alignment_session(session_id)
-    except LooporaError:
-        return ""
-    return str(session.get("workdir") or "").strip()

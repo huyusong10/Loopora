@@ -70,7 +70,6 @@ def register_error_handlers(app: FastAPI, ctx: WebRouteContext) -> None:
 
     @app.exception_handler(SystemDialogError)
     async def system_dialog_error_handler(request: Request, exc: SystemDialogError) -> Response:
-        detail = str(getattr(exc, "detail", "") or "").strip()
         log_event(
             ctx.logger,
             logging.WARNING,
@@ -80,10 +79,10 @@ def register_error_handlers(app: FastAPI, ctx: WebRouteContext) -> None:
             request_path=request.url.path,
             error_type=type(exc).__name__,
             error_message=str(exc),
-            error_detail=detail,
+            error_detail=str(getattr(exc, "detail", "") or ""),
         )
         if not _request_wants_json(request):
-            return _domain_error_page(request, ctx, status_code=400)
+            return _domain_error_page(status_code=400)
         return JSONResponse(
             {"error": str(exc), "error_code": str(getattr(exc, "code", "") or "system_dialog_failed")},
             status_code=400,
@@ -93,19 +92,14 @@ def register_error_handlers(app: FastAPI, ctx: WebRouteContext) -> None:
 def _domain_error_response(request: Request, ctx: WebRouteContext, message: str, *, status_code: int) -> Response:
     if _request_wants_json(request):
         return ctx.json_error(message, status_code=status_code)
-    return _domain_error_page(request, ctx, status_code=status_code)
+    return _domain_error_page(status_code=status_code)
 
 
-def _domain_error_page(request: Request, ctx: WebRouteContext, *, status_code: int) -> HTMLResponse:
+def _domain_error_page(*, status_code: int) -> HTMLResponse:
     return HTMLResponse(
-        ctx.templates.TemplateResponse(
-            request,
-            "error.html",
-            {
-                "request": request,
-                "status_code": status_code,
-                "access_state": ctx.access_state,
-            },
-        ).body.decode(),
+        "<!doctype html><html lang='en'><head><meta charset='utf-8'><title>Request failed</title></head>"
+        "<body><main data-testid='web-error-page'><h1>Loopora could not complete this request</h1>"
+        f"<p data-testid='web-error-status'>Status {status_code}</p>"
+        "<p><a href='/' data-testid='web-error-home-link'>Return to Loopora home</a></p></main></body></html>",
         status_code=status_code,
     )

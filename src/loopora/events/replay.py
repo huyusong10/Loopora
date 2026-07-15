@@ -7,7 +7,7 @@ from loopora.events.envelope import EventEnvelope
 from loopora.kernel.actors import ActorRef
 from loopora.kernel.run_state import RunLifecycleStatus, RunState
 from loopora.kernel.verdict import VerdictStatus
-from loopora.structured_numbers import coerced_int
+from loopora.utils import coerced_int
 from loopora.task_verdict_aliases import verdict_status_from_task_status
 
 

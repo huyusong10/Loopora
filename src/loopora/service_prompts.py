@@ -4,11 +4,6 @@ import json
 from pathlib import Path
 from typing import Any
 
-from loopora.service_prompt_checks import normalize_generated_checks, render_checks
-from loopora.service_prompt_requests import (
-    GeneratorPromptRequest as GeneratorPromptRequest,
-    generator_prompt_request_from_args,
-)
 from loopora.service_prompt_schemas import (
     BUILDER_SCHEMA as BUILDER_SCHEMA,
     CHALLENGER_SCHEMA as CHALLENGER_SCHEMA,
@@ -31,6 +26,91 @@ from loopora.residual_risk_prompt_guidance import (
 )
 from loopora.specs import resolve_role_note
 from loopora.system_prompt_assets import load_system_prompt_asset, render_system_prompt_asset
+
+
+from collections.abc import Mapping
+
+from dataclasses import dataclass
+
+
+
+@dataclass(frozen=True)
+class GeneratorPromptRequest:
+    compiled_spec: dict
+    workdir: Path
+    iter_id: int
+    mode: str
+    previous_generator_result: dict | None = None
+    previous_tester_result: dict | None = None
+    previous_verifier_result: dict | None = None
+    previous_challenger_result: dict | None = None
+
+def generator_prompt_request_from_args(
+    request: GeneratorPromptRequest | dict,
+    workdir: Path | None,
+    iter_id: int | None,
+    mode: str | None,
+    feedback: dict[str, Any],
+) -> GeneratorPromptRequest:
+    if isinstance(request, GeneratorPromptRequest):
+        if workdir is not None or iter_id is not None or mode is not None or feedback:
+            raise TypeError("generator prompt request object cannot be combined with legacy prompt fields")
+        return request
+    if workdir is None or iter_id is None or mode is None:
+        raise TypeError("legacy generator prompt calls require workdir, iter_id, and mode")
+    fields = dict(feedback)
+    prompt_request = GeneratorPromptRequest(
+        compiled_spec=request,
+        workdir=Path(workdir),
+        iter_id=iter_id,
+        mode=mode,
+        previous_generator_result=fields.pop("previous_generator_result", None),
+        previous_tester_result=fields.pop("previous_tester_result", None),
+        previous_verifier_result=fields.pop("previous_verifier_result", None),
+        previous_challenger_result=fields.pop("previous_challenger_result", None),
+    )
+    if fields:
+        unexpected_fields = ", ".join(sorted(fields))
+        raise TypeError(f"unexpected generator prompt fields: {unexpected_fields}")
+    return prompt_request
+
+def normalize_generated_checks(checks: object) -> list[dict]:
+    if not isinstance(checks, list):
+        return []
+    normalized = []
+    for raw_check in checks:
+        if not isinstance(raw_check, Mapping):
+            continue
+        index = len(normalized) + 1
+        title = str(raw_check.get("title", "")).strip() or f"Exploratory check {index}"
+        when = str(raw_check.get("when", "")).strip()
+        expect = str(raw_check.get("expect", "")).strip()
+        fail_if = str(raw_check.get("fail_if", "")).strip()
+        details = str(raw_check.get("details", "")).strip()
+        if not details:
+            parts = []
+            if when:
+                parts.append(f"When: {when}")
+            if expect:
+                parts.append(f"Expect: {expect}")
+            if fail_if:
+                parts.append(f"Fail if: {fail_if}")
+            details = "\n".join(parts).strip()
+        normalized.append(
+            {
+                "id": f"check_{index:03d}",
+                "title": title,
+                "details": details or "Auto-generated exploratory check.",
+                "when": when,
+                "expect": expect,
+                "fail_if": fail_if,
+                "source": "auto_generated",
+            }
+        )
+    return normalized
+
+def render_checks(checks: list[dict]) -> str:
+    return json.dumps(checks, ensure_ascii=False, indent=2)
 
 
 FROZEN_CONTRACT_GUIDANCE = load_system_prompt_asset("shared/frozen-contract-guidance.md").rstrip() + "\n"

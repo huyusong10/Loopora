@@ -1,11 +1,9 @@
 from __future__ import annotations
 
-import shlex
 from pathlib import Path
 
 import typer
 
-from loopora.agent_adapters import resolve_adapter_project_root
 from loopora.agent_native_task_proof import PASSING_TASK_VERDICT_STATUSES as _PASSING_TASK_VERDICT_STATUSES
 from loopora.cli_agent_context_recovery_output import (
     _agent_loop_recovery_json_payload,
@@ -17,25 +15,16 @@ from loopora.cli_agent_plan_output import (
     _print_agent_repair_guidance,
     _print_agent_web_review_guidance,
 )
-from loopora.cli_agent_plan_recovery_results import (
-    REPAIR_CLI_COMMAND_POLICY,
-    REPAIR_NEXT_REPAIR_STEP,
-    REPAIR_REFERENCE,
-    _agent_plan_repair_action,
-    _agent_repair_cli_command,
-    _attach_agent_gen_recovery_fields,
-)
 from loopora.cli_agent_plan_results import (
     _agent_gen_json_payload,
 )
 from loopora.cli_agent_plan_recovery import (
     agent_plan_error_requires_message as _agent_plan_error_requires_message,
     agent_plan_message_required_result as _agent_plan_message_required_result,
+    print_agent_plan_context_guidance_fields as _print_agent_plan_context_guidance_fields,
     print_agent_plan_context_request_fields as _print_agent_plan_context_request_fields,
     print_agent_plan_message_required as _print_agent_plan_message_required,
-    print_agent_plan_surface_hint as _print_agent_plan_surface_hint,
 )
-from loopora.cli_agent_runtime_support import print_preview_url as _print_preview_url
 from loopora.cli_agent_runtime_support import print_web_status as _print_web_status
 from loopora.cli_agent_recovery_results import (
     _agent_loop_unready_recovery_result,
@@ -53,29 +42,9 @@ def _print_agent_plan_recovery_guidance(
     workdir: Path,
     context_id: str,
     entry_source: str,
-    message: str,
-    bundle_file: Path | None,
     json_output: bool,
 ) -> bool:
-    error = str(exc)
-    if _agent_plan_error_requires_candidate_file_repair(error):
-        result = _agent_plan_candidate_file_repair_result(
-            adapter=adapter,
-            workdir=workdir,
-            context_id=context_id,
-            entry_source=entry_source,
-            message=message,
-            bundle_file=bundle_file,
-            error=error,
-        )
-        if json_output:
-            echo_json(_agent_gen_json_payload(result))
-        else:
-            typer.echo("Loopora Loop preview needs plan file repair before /loopora-run")
-            typer.echo(f"validation_error: {result['validation_error']}")
-            _print_agent_repair_guidance(result)
-        return True
-    if not _agent_plan_error_requires_message(error):
+    if not _agent_plan_error_requires_message(str(exc)):
         return False
     result = _agent_plan_message_required_result(
         adapter=adapter,
@@ -88,73 +57,6 @@ def _print_agent_plan_recovery_guidance(
     else:
         _print_agent_plan_message_required(result)
     return True
-
-
-def _agent_plan_error_requires_candidate_file_repair(error: str) -> bool:
-    return str(error or "").strip() in {
-        "bundle file could not be read",
-        "bundle file does not exist",
-        "bundle file must be UTF-8 encoded YAML",
-        "candidate plan file could not be saved",
-    }
-
-
-def _agent_plan_candidate_file_repair_result(
-    *,
-    adapter: str,
-    workdir: Path,
-    context_id: str,
-    entry_source: str,
-    message: str,
-    bundle_file: Path | None,
-    error: str,
-) -> dict:
-    root = resolve_adapter_project_root(workdir)
-    plan_file = str(bundle_file or "").strip()
-    task_message = str(message or "").strip()
-    result = {
-        "adapter": adapter,
-        "workdir": str(root),
-        "ready": False,
-        "status": "blocked",
-        "requires_web_alignment": False,
-        "requires_candidate_repair": True,
-        "loopora_fit_contradiction": False,
-        "session": {
-            "id": "",
-            "status": "blocked",
-            "error_message": str(error or "").strip(),
-            "validation": {"error": str(error or "").strip()},
-            "bundle_path": "",
-            "transcript": [{"role": "user", "content": task_message}] if task_message else [],
-        },
-        "binding": {
-            "source_path": plan_file,
-            "adapter": adapter,
-            "workdir": str(root),
-            "candidate_adapter": adapter,
-            "candidate_entry_source": entry_source,
-            "entry_source": entry_source,
-            "host_context_id": context_id,
-        },
-        "candidate_origin": "agent_entry",
-        "candidate_entry_source": entry_source,
-        "host_context_id": context_id,
-    }
-    _attach_agent_gen_recovery_fields(result)
-    if plan_file:
-        result["repair_slash_command"] = f"/loopora-plan {shlex.quote(plan_file)}"
-    result["next_plan_command"] = "/loopora-plan"
-    result["repair_reference"] = REPAIR_REFERENCE
-    result["next_repair_step"] = REPAIR_NEXT_REPAIR_STEP
-    repair_cli_command = _agent_repair_cli_command(result, plan_file=plan_file)
-    if repair_cli_command:
-        result["repair_cli_command"] = repair_cli_command
-        result["repair_cli_command_policy"] = REPAIR_CLI_COMMAND_POLICY
-    action = _agent_plan_repair_action(result)
-    if action:
-        result["repair_action"] = action
-    return result
 
 
 def _print_agent_loop_unready_guidance(
@@ -216,7 +118,6 @@ def _print_agent_next_recovery_guidance(
 
 
 def _print_agent_loop_recovery_result(result: dict) -> None:
-    preview_printed = False
     if result.get("loop_recovery") == "active_run_conflict":
         typer.echo("loop_recovery: continue or stop the active Loopora run before starting another preview or run")
         _print_active_run_conflict_recovery(result)
@@ -228,9 +129,9 @@ def _print_agent_loop_recovery_result(result: dict) -> None:
             typer.echo(f"message: {message}")
         typer.echo(f"next_plan_command: {result.get('next_plan_command') or '/loopora-plan'}")
         _print_agent_plan_context_request_fields(result)
-        _print_agent_plan_surface_hint()
+        _print_agent_plan_context_guidance_fields(result)
         typer.echo(
-            f"next: {result.get('next') or 'describe the Loopora fit reason, task goal, fake-done risks, required evidence, judgment tradeoffs, and any direct-path context in /loopora-plan.'}"
+            f"next: {result.get('next') or 'describe the task goal, fake-done risks, required evidence, and judgment tradeoffs in /loopora-plan.'}"
         )
         return
     if result.get("loop_recovery") == "choose_recoverable_context":
@@ -249,14 +150,12 @@ def _print_agent_loop_recovery_result(result: dict) -> None:
     elif result["requires_web_alignment"]:
         typer.echo("loop_recovery: finish the current Web review before /loopora-run can start")
         _print_agent_web_review_guidance(result)
-        preview_printed = True
     else:
         typer.echo("loop_recovery: the current preview is not ready; return to /loopora-plan or Web review before /loopora-run")
     session = result.get("session") if isinstance(result.get("session"), dict) else {}
     session_id = str(session.get("id") or "")
     typer.echo(f"session_id: {session_id}")
-    if not preview_printed:
-        _print_preview_url(result)
+    typer.echo(f"preview_url: {result.get('preview_url') or result.get('preview_path')}")
     _print_web_status(result)
 
 
@@ -277,7 +176,7 @@ def _print_agent_next_recovery_result(result: dict) -> None:
             typer.echo(f"message: {message}")
         typer.echo(f"next_plan_command: {result.get('next_plan_command') or '/loopora-plan'}")
         _print_agent_plan_context_request_fields(result)
-        _print_agent_plan_surface_hint()
+        _print_agent_plan_context_guidance_fields(result)
         typer.echo(f"next: {result.get('next') or 'create and start a Loop before using agent next.'}")
         return
     _print_agent_loop_recovery_result(result)

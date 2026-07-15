@@ -1,144 +1,40 @@
-name: Feature Request
-description: Propose a Loopora improvement with stable behavior and evidence in mind.
+name: Feature request
+description: Propose a stable Loopora capability or workflow improvement.
 title: "[Feature]: "
-labels:
-  - enhancement
+labels: [enhancement]
 body:
   - type: markdown
     attributes:
       value: |
-        Use this form for new Loopora behavior.
-        For usage or setup questions, start with SUPPORT.md. If the request might expose credentials, tokens,
-        private workspace paths, run artifacts, evidence records, or Web access tokens, follow SECURITY.md
-        or private reporting instead of posting details publicly.
-        When diagnostics might help but you are unsure what is safe to paste, run `loopora support` first; it is the
-        safe public reporting router and keeps command/support metadata local-only.
-        If you include diagnostics, paste the public issue support bundle first when readiness or environment evidence matters.
-        Paste public doctor/version output only when lower-level evidence or identity is requested, using
-        loopora version --json only when structured identity is requested; keep support JSON, command lines,
-        JSON command fields, and local Web Support URLs local-only.
+        Describe the recurring judgment or user outcome, not only a preferred implementation. Do not include private project data.
   - type: textarea
     id: problem
     attributes:
-      label: Problem
-      description: What user workflow, evidence gap, or maintenance risk should this improve?
+      label: Problem or recurring judgment
+      description: What currently requires repeated human correction, evidence review, or handoff work?
     validations:
       required: true
   - type: textarea
-    id: proposal
+    id: outcome
     attributes:
-      label: Proposed Behavior
-      description: Describe the user-observable behavior or public contract you want, not private implementation details.
-    validations:
-      required: true
-  - type: textarea
-    id: success_criteria
-    attributes:
-      label: Success Criteria And Adoption Impact
-      description: Who would use this, what workflow becomes easier or safer, and what observable result would make it ready to accept.
-      placeholder: |
-        - Affected users or workflow:
-        - Success criteria:
-        - Not enough on its own:
-    validations:
-      required: true
-  - type: textarea
-    id: loopora_fit
-    attributes:
-      label: Loopora Fit And Non-Goals
-      description: Why should Loopora own this instead of direct Agent use, a normal test/check, or a project-specific workflow? What should stay out of scope?
-    validations:
-      required: true
-  - type: dropdown
-    id: surface
-    attributes:
-      label: Affected Surface
-      multiple: true
-      options:
-        - CLI
-        - Web
-        - Same-Agent setup or Agent adapter
-        - Loop planning
-        - Run evidence and verdicts
-        - Plan File import/export
-        - Support or diagnostics
-        - Local .loopora state
-        - Packaging or install
-        - Public docs or repository collaboration
+      label: Desired stable outcome
+      description: What should users be able to observe or rely on?
     validations:
       required: true
   - type: textarea
     id: evidence
     attributes:
-      label: Evidence Or Examples
-      description: >-
-        What examples, tests, screenshots, or scenarios would prove this works? Put readiness diagnostics
-        in the Public Issue Support Bundle Or Readiness Report field below. If an example needs a command shape or local path context,
-        use placeholders such as `<project-dir>`, `<Loopora checkout>`, or `<redacted>`. Do not paste support JSON,
-        command lines with real local paths, JSON command fields, local Web Support URLs, raw private logs, local paths, tokens, or full run artifacts.
-    validations:
-      required: true
+      label: Evidence and fake-done risks
+      description: What would prove the feature works, and what shallow result could look complete without being complete?
   - type: textarea
-    id: public_doctor
+    id: compatibility
     attributes:
-      label: Public Issue Support Bundle Or Readiness Report
-      description: >-
-        Optional. When the proposal depends on first-use, Web, readiness, package identity, or environment behavior,
-        prefer running `loopora support --workdir "$PWD" --public-issue-bundle` first.
-        Then paste that public issue support bundle here, not the command line, support JSON, or local Web Support URL.
-        From a source checkout before install, `uv run loopora support --workdir <project-dir> --public-issue-bundle`
-        works while your shell is in the Loopora checkout; after changing into the target project, use
-        `uv --directory <Loopora checkout> run loopora support --workdir "$PWD" --public-issue-bundle`.
-        If the support bundle is unavailable or lower-level readiness evidence is requested, paste
-        `loopora doctor --public-json --workdir "$PWD" || true` output instead.
-        Use loopora version --json only when structured package/source identity is requested.
-        These public reports include package/source identity,
-        a human-readable readiness summary, Python, OS, coarse project-directory status, redacted Web readiness blockers, and action summaries,
-        but omit local paths, ports, and commands by design.
-        If project-directory status is missing or not_directory, the public bundle or report is still useful evidence;
-        setup target remains not ready.
-      render: text
-    validations:
-      required: false
-  - type: dropdown
-    id: public_doctor_status
-    attributes:
-      label: Public Readiness Report Status
-      options:
-        - Included above
-        - Not relevant to this proposal
-        - Could not run; explained in Evidence Or Examples
-    validations:
-      required: true
-  - type: textarea
-    id: risks
-    attributes:
-      label: Compatibility And Risk
-      description: Note any public API, data, permission, accessibility, localization, migration, or rollback concerns.
-    validations:
-      required: true
+      label: Compatibility and migration
+      description: Note affected commands, routes, data, permissions, or existing workflows.
   - type: checkboxes
-    id: checks
+    id: safety
     attributes:
-      label: Proposal Checklist
+      label: Safety check
       options:
-        - label: I described stable user-observable behavior rather than only an implementation approach.
-          required: true
-        - label: I described the affected workflow, adoption impact, and observable success criteria.
-          required: true
-        - label: I explained why direct Agent use, normal tests/checks, or project-specific workflow are not enough, and named non-goals.
-          required: true
-        - label: I noted whether this changes public compatibility, data handling, permissions, or security posture.
-          required: true
-        - label: I removed secrets, tokens, private logs, private workspace paths, and sensitive run artifacts.
-          required: true
-        - label: I used placeholders such as <project-dir>, <Loopora checkout>, or <redacted> instead of real local paths in examples.
-          required: true
-        - label: >-
-            I pasted the public issue support bundle first when readiness or
-            environment evidence mattered, used public doctor/version output only
-            when requested, and did not paste support JSON, local command lines,
-            JSON command fields, or local Web Support URLs as public evidence.
-          required: true
-        - label: When unsure which diagnostic material was public, I used `loopora support` or SUPPORT.md first and followed the public allowlist.
+        - label: I removed secrets, private paths, private logs, transcripts, and recovery artifacts.
           required: true

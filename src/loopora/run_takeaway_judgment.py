@@ -12,7 +12,7 @@ from loopora.service_bundle_control_trace_mining import (
     build_loop_fit_trace,
     build_runtime_local_governance_trace,
 )
-from loopora.structured_numbers import structured_non_negative_int
+from loopora.utils import structured_non_negative_int
 
 
 def empty_judgment_contract() -> dict[str, Any]:

@@ -3,8 +3,8 @@ from __future__ import annotations
 import shlex
 from pathlib import Path
 
-from loopora.agent_adapter_command_prefix import copyable_loopora_command
 from loopora.agent_adapters import (
+    prefix_loopora_command,
     read_agent_binding,
     resolve_adapter_project_root,
 )
@@ -22,7 +22,7 @@ from loopora.cli_agent_plan_recovery import (
 )
 from loopora.cli_agent_runtime_support import attach_recoverable_context_preview_urls as _attach_recoverable_context_preview_urls
 from loopora.cli_agent_runtime_support import attach_web_url as _attach_web_url
-from loopora.service_types import ACTIVE_WORKDIR_CONFLICT_PREFIX, LooporaError
+from loopora.service import LooporaError
 from loopora.system_prompt_assets import load_system_prompt_asset
 
 
@@ -88,7 +88,7 @@ def _agent_loop_unready_recovery_result(
     if service is None or not _agent_loop_error_supports_recovery(error):
         return {}
     root = resolve_adapter_project_root(workdir)
-    if ACTIVE_WORKDIR_CONFLICT_PREFIX in error:
+    if "another active run is already using" in error:
         return _agent_active_run_conflict_recovery_result(
             AgentActiveRunConflictRecoveryRequest(
                 service=service,
@@ -100,8 +100,6 @@ def _agent_loop_unready_recovery_result(
                 error=error,
             )
         )
-    if "agent context card could not be saved" in error:
-        return _agent_context_card_save_recovery_result(adapter=adapter, root=root, error=error)
     return _agent_bound_preview_recovery_result(
         service,
         adapter=adapter,
@@ -118,22 +116,8 @@ def _agent_loop_error_supports_recovery(error: str) -> bool:
         or "run /loopora-plan first" in error
         or "no ready Loop preview" in error
         or "does not reference a ready Loop preview" in error
-        or "agent context card is damaged" in error
-        or "agent context card could not be saved" in error
-        or ACTIVE_WORKDIR_CONFLICT_PREFIX in error
+        or "another active run is already using" in error
     )
-
-
-def _agent_context_card_save_recovery_result(*, adapter: str, root: Path, error: str) -> dict:
-    return {
-        "adapter": adapter,
-        "workdir": str(root),
-        "ready": False,
-        "loop_recovery": "repair_agent_binding",
-        "binding_error": error,
-        "context_card_error": error,
-        "check_command": copyable_loopora_command(f"loopora init {adapter} --check --workdir {shlex.quote(str(root))}"),
-    }
 
 
 def _agent_bound_preview_recovery_result(
@@ -159,7 +143,7 @@ def _agent_bound_preview_recovery_result(
             "loop_recovery": "repair_agent_binding",
             "binding_error": str(binding_exc),
             "context_card_error": str(binding_exc),
-            "check_command": copyable_loopora_command(f"loopora init {adapter} --check --workdir {shlex.quote(str(root))}"),
+            "check_command": prefix_loopora_command(f"loopora init {adapter} --check --workdir {shlex.quote(str(root))}"),
         }
     except Exception:  # noqa: BLE001 - error recovery must never replace the primary domain error.
         return {}
@@ -184,7 +168,7 @@ def _agent_bound_preview_recovery_result(
         "binding": binding,
         "preview_path": str(binding.get("preview_path") or f"/loops/new/bundle?alignment_session_id={session_id}"),
     }
-    _attach_web_url(result, path_key="preview_path", url_key="preview_url", no_web=no_web, workdir=root)
+    _attach_web_url(result, path_key="preview_path", url_key="preview_url", no_web=no_web)
     if result["requires_candidate_repair"]:
         _attach_agent_gen_recovery_fields(result)
     elif result["requires_web_alignment"]:
@@ -239,7 +223,7 @@ def _agent_loop_unbound_recovery_result(
         "loop_recovery": "choose_recoverable_context",
         "context_resolution": resolution,
     }
-    _attach_recoverable_context_preview_urls(result, no_web=no_web, workdir=root)
+    _attach_recoverable_context_preview_urls(result, no_web=no_web)
     return result
 
 

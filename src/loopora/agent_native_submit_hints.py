@@ -4,8 +4,8 @@ from pathlib import Path
 import shlex
 from typing import Any
 
-from loopora.agent_adapter_command_prefix import copyable_loopora_command
-from loopora.structured_numbers import structured_non_negative_int
+from loopora.agent_adapters import prefix_loopora_command
+from loopora.utils import structured_non_negative_int
 
 
 def agent_native_submit_command(
@@ -19,7 +19,7 @@ def agent_native_submit_command(
     bits = [
         "loopora",
         "agent",
-        shlex.quote(str(adapter)),
+        adapter,
         "submit",
         "--workdir",
         _agent_native_command_workdir_arg(result_file),
@@ -29,7 +29,6 @@ def agent_native_submit_command(
         shlex.quote(step_id),
         "--result-file",
         shlex.quote(str(result_file or "RESULT_JSON_PATH")),
-        "--attest-role-dispatch",
         "--json",
         "--compact-json",
     ]
@@ -37,7 +36,7 @@ def agent_native_submit_command(
     if normalized_entry_source:
         bits.extend(["--entry-source", shlex.quote(normalized_entry_source)])
     command = " ".join(bits)
-    return copyable_loopora_command(command, entry_source=normalized_entry_source)
+    return prefix_loopora_command(command, entry_source=normalized_entry_source)
 
 
 def agent_native_result_artifact_stem(*, run_id: str, iter_id: int, step_order: int, step_id: str) -> str:
@@ -78,31 +77,21 @@ def agent_native_submit_hint_with_scoped_result_paths(
 
 
 def _agent_native_command_workdir_arg(result_file: str) -> str:
-    workdir = agent_native_workdir_from_loopora_path(result_file)
-    if workdir:
-        return shlex.quote(workdir)
+    text = str(result_file or "").strip()
+    if not text or text == "RESULT_JSON_PATH":
+        return '"$PWD"'
+    try:
+        path = Path(text).expanduser()
+        if not path.is_absolute():
+            return '"$PWD"'
+        parts = path.parts
+        if ".loopora" in parts:
+            loopora_index = parts.index(".loopora")
+            if loopora_index > 0:
+                return shlex.quote(str(Path(*parts[:loopora_index]).resolve()))
+    except OSError:
+        return '"$PWD"'
     return '"$PWD"'
-
-
-def agent_native_workdir_from_loopora_path(value: object) -> str:
-    workdir = ""
-    text = str(value or "").strip()
-    if text and text != "RESULT_JSON_PATH":
-        try:
-            path = Path(text).expanduser()
-        except (OSError, ValueError):
-            path = Path()
-        if path.is_absolute():
-            parts = path.parts
-            if ".loopora" in parts:
-                loopora_index = parts.index(".loopora")
-                if loopora_index > 0:
-                    root = Path(*parts[:loopora_index])
-                    try:
-                        workdir = str(root.resolve())
-                    except OSError:
-                        workdir = str(root)
-    return workdir
 
 
 def _agent_native_step_view_has_step_position(step_view: dict[str, Any]) -> bool:

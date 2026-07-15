@@ -1,14 +1,6 @@
 {% extends "base.html" %}
-{% from "partials/recovery_actions.html" import recovery_panel %}
 {% block title %}{{ loop.name }}{% endblock %}
 {% block content %}
-{% set recorded_target_basis = latest_run_acceptance_state.recorded_coverage_target_basis|default({}) %}
-{% set recorded_required_basis = recorded_target_basis.required|default({}) %}
-{% set recorded_advisory_basis = recorded_target_basis.advisory|default({}) %}
-{% set recorded_advisory_open = recorded_advisory_basis.open|default(0) %}
-{% set recorded_advisory_follow_up_available = latest_run_acceptance_state.recorded_advisory_follow_up_available|default(false) %}
-{% set run_progress = loop.run_progress|default({}) %}
-{% set show_web_loop_primary_actions = latest_run_needs_recovery or latest_run_needs_evidence or not recorded_advisory_follow_up_available %}
 <div class="page-stack" data-testid="loop-detail-page">
 <section class="hero hero-tight">
   <div class="hero-copy-stack">
@@ -32,20 +24,10 @@
         <span data-lang="zh">最近运行迭代</span><span data-lang="en">Latest iter</span> {{ latest_run.display_iter }}
       </span>
     </div>
-  {% endif %}
-</div>
-{% if latest_run_needs_recovery %}
-<div class="field-status is-warning" data-testid="loop-run-recovery-notice" aria-live="polite">
-  <span data-lang="zh">最近运行已在启动或生命周期边界失败；请先重试运行，或打开失败运行查看恢复信息。</span>
-  <span data-lang="en">The latest run failed at a start or lifecycle boundary; retry the run or open the failed run for recovery details.</span>
-</div>
-{% endif %}
-{% if run_start_error %}
-<div class="field-status is-error" data-testid="loop-start-run-error" data-return-feedback-param="run_start_error" aria-live="polite">{{ run_start_error }}</div>
-{% endif %}
-{{ recovery_panel(run_start_recovery, "loop-start-run-recovery", workdir_context=workdir_context, return_to=current_return_to) }}
-{% if agent_entry_start %}
-  <div class="agent-entry-start-guide" id="loop-agent-entry-start-guide" data-testid="loop-agent-entry-start-guide">
+    {% endif %}
+  </div>
+  {% if agent_entry_start %}
+  <div class="agent-entry-start-guide" data-testid="loop-agent-entry-start-guide">
     <div class="agent-entry-start-copy">
       <span class="agent-entry-start-kicker">
         <span data-lang="zh">回到宿主 Agent</span>
@@ -78,7 +60,6 @@
         </button>
       </div>
       <p class="agent-entry-start-copy-status" data-agent-entry-copy-status aria-live="polite"></p>
-      <div class="agent-entry-start-manual-copy" data-agent-entry-manual-copy data-testid="loop-agent-entry-manual-copy" hidden></div>
       <div class="agent-entry-start-actions" data-testid="loop-agent-entry-actions">
         <button
           class="primary-button agent-entry-start-primary-action"
@@ -86,10 +67,9 @@
           data-agent-entry-command-copy
           data-copy-value="{{ agent_entry_start.loop_command }}"
           data-testid="loop-agent-entry-copy-command-primary"
-          data-agent-entry-primary-action="{{ 'next-evidence' if latest_run_needs_evidence else 'agent-command' }}"
         >
           <span aria-hidden="true">⧉</span>
-          {% if latest_run_needs_evidence %}
+          {% if agent_entry_start.next_loop_action == "start_next_run_for_unproven_verdict" %}
           <span data-lang="zh">复制续跑命令</span>
           <span data-lang="en">Copy next-run command</span>
           {% else %}
@@ -97,19 +77,19 @@
           <span data-lang="en">Copy Agent command</span>
           {% endif %}
         </button>
-        {% if latest_run and latest_run_needs_evidence %}
-        <form method="post" action="{{ workdir_context_href('/runs/' ~ latest_run.id ~ '/revise', workdir_context) }}" class="inline-form" data-workdir-context-form="workdir">
+        {% if latest_run and agent_entry_start.next_loop_action == "start_next_run_for_unproven_verdict" %}
+        <form method="post" action="/runs/{{ latest_run.id }}/revise" class="inline-form">
           <button class="secondary-button" type="submit" data-testid="loop-improve-chat-button">
             <span data-lang="zh">用证据改进 Loop</span>
             <span data-lang="en">Improve plan with evidence</span>
           </button>
         </form>
-        <a class="ghost-button" href="{{ workdir_context_href('/runs/' ~ latest_run.id, workdir_context) }}" data-testid="loop-open-evidence-run" data-workdir-context-link="workdir">
+        <a class="ghost-button" href="/runs/{{ latest_run.id }}" data-testid="loop-open-evidence-run">
           <span data-lang="zh">打开证据运行</span>
           <span data-lang="en">Open evidence run</span>
         </a>
         {% elif agent_entry_start.linked_run_id %}
-        <a class="ghost-button" href="{{ workdir_context_href('/runs/' ~ agent_entry_start.linked_run_id, workdir_context) }}" data-testid="loop-open-current-run" data-workdir-context-link="workdir">
+        <a class="ghost-button" href="/runs/{{ agent_entry_start.linked_run_id }}" data-testid="loop-open-current-run">
           <span data-lang="zh">打开当前运行</span>
           <span data-lang="en">Open current run</span>
         </a>
@@ -118,88 +98,15 @@
     </div>
   </div>
   {% else %}
-  {% if show_web_loop_primary_actions %}
-  <div class="card-actions hero-actions" data-testid="loop-primary-actions">
-  {% if latest_run and latest_run_needs_recovery %}
-  <form id="loop-start-run-retry-form" method="post" action="{{ workdir_context_href('/loops/' ~ loop.id ~ '/runs', workdir_context) }}" data-testid="loop-start-run-form" data-workdir-context-form="workdir">
-    <button class="primary-button" type="submit" data-testid="loop-retry-run-button">
-      <span data-lang="zh">重试运行</span>
-      <span data-lang="en">Retry run</span>
-    </button>
-  </form>
-  <a class="ghost-button" href="{{ workdir_context_href('/runs/' ~ latest_run.id, workdir_context) }}" data-testid="loop-open-recovery-run" data-workdir-context-link="workdir">
-    <span data-lang="zh">打开失败运行</span>
-    <span data-lang="en">Open failed run</span>
-  </a>
-  {% elif latest_run and latest_run_needs_evidence %}
-  <form method="post" action="{{ workdir_context_href('/runs/' ~ latest_run.id ~ '/revise', workdir_context) }}" class="inline-form" data-workdir-context-form="workdir">
-    <button class="primary-button" type="submit" data-testid="loop-improve-latest-run-button">
-      <span data-lang="zh">用证据改进 Loop</span>
-      <span data-lang="en">Improve plan with evidence</span>
-    </button>
-  </form>
-  <form id="loop-start-run-retry-form" method="post" action="{{ workdir_context_href('/loops/' ~ loop.id ~ '/runs', workdir_context) }}" data-testid="loop-start-run-form" data-workdir-context-form="workdir">
-    <button class="secondary-button" type="submit" data-testid="loop-start-next-evidence-run-button">
-      <span data-lang="zh">继续补证据</span>
-      <span data-lang="en">Run next evidence pass</span>
-    </button>
-  </form>
-  <a class="ghost-button" href="{{ workdir_context_href('/runs/' ~ latest_run.id, workdir_context) }}" data-testid="loop-open-evidence-run" data-workdir-context-link="workdir">
-    <span data-lang="zh">打开证据运行</span>
-    <span data-lang="en">Open evidence run</span>
-  </a>
-  {% else %}
-  <form id="loop-start-run-retry-form" method="post" action="{{ workdir_context_href('/loops/' ~ loop.id ~ '/runs', workdir_context) }}" data-testid="loop-start-run-form" data-workdir-context-form="workdir">
-    <button class="primary-button" type="submit" data-testid="loop-start-run-button">
+  <form method="post" action="/api/loops/{{ loop.id }}/runs" onsubmit="event.preventDefault(); fetch(this.action, {method: 'POST'}).then(async (response) => { const data = await response.json(); if (!response.ok) { alert(data.error || window.LooporaUI.pickText({zh: '无法启动运行。', en: 'Unable to start the run.'})); return; } window.location.href = '/runs/' + data.id; });">
+    <button class="primary-button" type="submit">
       <span data-lang="zh">开始新运行</span>
       <span data-lang="en">Start new run</span>
     </button>
   </form>
   {% endif %}
-  </div>
-  {% endif %}
-  {% endif %}
-  {% if latest_run_acceptance_state.accepted %}
-  <div class="field-status is-success" data-testid="loop-recorded-result-state" aria-live="polite">
-    <span data-lang="zh">最近运行的证据结论已记录；任务裁决没有被改写。</span>
-    <span data-lang="en">The latest evidence verdict is recorded; the task verdict was not rewritten.</span>
-    {% if recorded_required_basis.total|default(0) > 0 %}
-    <span data-testid="loop-recorded-required-basis">
-      <span data-lang="zh">记录依据：必需目标 {{ recorded_required_basis.covered|default(0) }}/{{ recorded_required_basis.total }} 已证明。</span>
-      <span data-lang="en">Recorded basis: {{ recorded_required_basis.covered|default(0) }}/{{ recorded_required_basis.total }} required targets proven.</span>
-    </span>
-    {% endif %}
-    {% if recorded_advisory_follow_up_available and latest_run %}
-    <span data-testid="loop-recorded-advisory-summary">
-      <span data-lang="zh">仍有 {{ recorded_advisory_open }} 项可选建议跟进，不影响本次记录。</span>
-      <span data-lang="en">{{ recorded_advisory_open }} optional advisory follow-ups remain without reopening this result.</span>
-    </span>
-    <a class="ghost-button" href="{{ workdir_context_href('/runs/' ~ latest_run.id, workdir_context) }}" data-testid="loop-open-recorded-advisory-link" data-workdir-context-link="workdir">
-      <span data-lang="zh">查看建议依据</span>
-      <span data-lang="en">Review advisory basis</span>
-    </a>
-    <form id="loop-start-run-retry-form" method="post" action="{{ workdir_context_href('/runs/' ~ latest_run.id ~ '/rerun', workdir_context) }}" class="inline-form" data-testid="loop-start-run-form" data-workdir-context-form="workdir">
-      <input type="hidden" name="follow_up_kind" value="advisory" />
-      <button class="secondary-button" type="submit" data-testid="loop-start-run-button" data-recorded-follow-up="advisory">
-        <span data-lang="zh">开始建议跟进</span>
-        <span data-lang="en">Start advisory follow-up</span>
-      </button>
-    </form>
-    {% endif %}
-    {% if latest_run %}
-    <form method="post" action="{{ workdir_context_href('/runs/' ~ latest_run.id ~ '/reopen-result', workdir_context) }}" class="inline-form" data-workdir-context-form="workdir">
-      <button class="ghost-button" type="submit" data-testid="loop-reopen-recorded-result-button">
-        <span data-lang="zh">重新打开记录</span>
-        <span data-lang="en">Reopen recorded result</span>
-      </button>
-    </form>
-    {% endif %}
-  </div>
-  {% endif %}
 </section>
 
-{# Keep reference-heavy configuration after the current Run review in rendered document order. #}
-{% set loop_reference_sections %}
 <section class="panel" data-testid="loop-detail-config-panel">
   <header class="panel-header">
     <h2><span data-lang="zh">运行配置</span><span data-lang="en">Configuration</span></h2>
@@ -257,7 +164,6 @@
     </div>
   </div>
 </section>
-{% endset %}
 
 <section class="panel" data-testid="loop-detail-history-panel">
   <header class="panel-header">
@@ -265,84 +171,9 @@
     <span class="loop-detail-history-meta">{{ loop.runs|length }} <span data-lang="zh">条</span><span data-lang="en">stored</span></span>
   </header>
   {% if loop.runs %}
-    <article
-      class="loop-run-progress loop-run-progress--{{ run_progress.status|default('unavailable') }}"
-      data-testid="loop-run-progress-summary"
-      data-run-progress-status="{{ run_progress.status|default('unavailable') }}"
-    >
-      <div class="loop-run-progress-copy">
-        <span class="loop-run-progress-kicker"><span data-lang="zh">最近两次运行</span><span data-lang="en">Latest run change</span></span>
-        <strong>
-          {% if run_progress.status == "baseline" %}
-          <span data-lang="zh">首次运行已建立证据基线</span><span data-lang="en">The first run establishes the evidence baseline</span>
-          {% elif run_progress.status == "active" %}
-          <span data-lang="zh">最新运行仍在推进，暂不判定进展</span><span data-lang="en">The latest run is active; progress is not settled yet</span>
-          {% elif run_progress.status == "progressed" %}
-          <span data-lang="zh">证据覆盖相较上次有进展</span><span data-lang="en">Evidence coverage progressed since the previous run</span>
-          {% elif run_progress.status == "mixed" %}
-          <span data-lang="zh">有新进展，也有证据退化</span><span data-lang="en">Some targets progressed while others regressed</span>
-          {% elif run_progress.status == "regressed" %}
-          <span data-lang="zh">证据覆盖相较上次退化</span><span data-lang="en">Evidence coverage regressed since the previous run</span>
-          {% elif run_progress.status == "no_progress" %}
-          <span data-lang="zh">没有稳定目标获得更强证明</span><span data-lang="en">No stable target gained stronger proof</span>
-          {% elif run_progress.status == "contract_changed" %}
-          <span data-lang="zh">目标契约已变化，不能直接宣称进展</span><span data-lang="en">The target contract changed, so progress is not directly comparable</span>
-          {% else %}
-          <span data-lang="zh">当前运行缺少可比较的证据基线</span><span data-lang="en">Comparable evidence baselines are unavailable</span>
-          {% endif %}
-        </strong>
-        {% if run_progress.status in ["progressed", "mixed", "regressed", "no_progress"] %}
-        <p data-testid="loop-run-progress-counts">
-          <span data-lang="zh">增强 {{ run_progress.improved_target_count }} · 退化 {{ run_progress.regressed_target_count }} · 关闭缺口 {{ run_progress.closed_gap_count }} · 当前必需缺口 {{ run_progress.current_required_gap_count }}</span>
-          <span data-lang="en">Improved {{ run_progress.improved_target_count }} · regressed {{ run_progress.regressed_target_count }} · closed gaps {{ run_progress.closed_gap_count }} · current required gaps {{ run_progress.current_required_gap_count }}</span>
-        </p>
-        {% elif run_progress.status == "contract_changed" %}
-        <p data-testid="loop-run-progress-contract-change">
-          <span data-lang="zh">新增目标 {{ run_progress.added_target_count }} · 删除目标 {{ run_progress.removed_target_count }} · 改写目标 {{ run_progress.changed_target_count }}。请分别审查两次契约。</span>
-          <span data-lang="en">Added {{ run_progress.added_target_count }} · removed {{ run_progress.removed_target_count }} · rewritten {{ run_progress.changed_target_count }}. Review both contracts separately.</span>
-        </p>
-        {% elif run_progress.status == "baseline" %}
-        <p><span data-lang="zh">下一次终态运行将以相同稳定目标为基础比较证据变化。</span><span data-lang="en">The next terminal run will compare evidence changes across the same stable targets.</span></p>
-        {% elif run_progress.status == "active" %}
-        <p><span data-lang="zh">运行结束前的证据数量和覆盖状态都只是中间态。</span><span data-lang="en">Evidence counts and coverage remain intermediate until the run finishes.</span></p>
-        {% else %}
-        <p><span data-lang="zh">生命周期失败、旧版产物或缺失 coverage target 不会被包装成零进展。</span><span data-lang="en">Lifecycle failures, legacy artifacts, or missing coverage targets are not presented as zero progress.</span></p>
-        {% endif %}
-      </div>
-      {% if run_progress.improved_targets or run_progress.regressed_targets %}
-      <div class="loop-run-progress-targets" data-testid="loop-run-progress-targets">
-        {% for target in run_progress.improved_targets %}
-        <div class="loop-run-progress-target loop-run-progress-target--improved">
-          <span aria-hidden="true">↑</span>
-          <span>{{ target.text or target.target_id }}</span>
-          <code>{{ target.previous_status }} → {{ target.current_status }}</code>
-        </div>
-        {% endfor %}
-        {% for target in run_progress.regressed_targets %}
-        <div class="loop-run-progress-target loop-run-progress-target--regressed">
-          <span aria-hidden="true">↓</span>
-          <span>{{ target.text or target.target_id }}</span>
-          <code>{{ target.previous_status }} → {{ target.current_status }}</code>
-        </div>
-        {% endfor %}
-      </div>
-      {% endif %}
-      <div class="loop-run-progress-actions">
-        {% if run_progress.latest_run_id %}
-        <a class="secondary-button" href="{{ workdir_context_href('/runs/' ~ run_progress.latest_run_id, workdir_context) }}" data-testid="loop-run-progress-latest-link" data-workdir-context-link="workdir">
-          <span data-lang="zh">打开最近运行</span><span data-lang="en">Open latest run</span>
-        </a>
-        {% endif %}
-        {% if run_progress.previous_run_id %}
-        <a class="ghost-button" href="{{ workdir_context_href('/runs/' ~ run_progress.previous_run_id, workdir_context) }}" data-testid="loop-run-progress-previous-link" data-workdir-context-link="workdir">
-          <span data-lang="zh">打开上次运行</span><span data-lang="en">Open previous run</span>
-        </a>
-        {% endif %}
-      </div>
-    </article>
     <div class="timeline">
       {% for run_item in loop.runs %}
-      <a class="timeline-item run-history-item run-history-item--{{ run_item.status }}" href="{{ workdir_context_href('/runs/' ~ run_item.id, workdir_context) }}" data-workdir-context-link="workdir">
+      <a class="timeline-item run-history-item run-history-item--{{ run_item.status }}" href="/runs/{{ run_item.id }}">
         <div>
           <strong>{{ run_item.id }}</strong>
           <p><span data-status-label="{{ run_item.status }}"></span> · <span data-lang="zh">迭代</span><span data-lang="en">iter</span> {{ run_item.display_iter }}</p>
@@ -359,21 +190,6 @@
     <div class="empty-state">
       <h3><span data-lang="zh">还没有运行</span><span data-lang="en">No runs yet</span></h3>
       <p><span data-lang="zh">开始第一次运行后，这里会显示时间线。</span><span data-lang="en">Start the first run to populate the timeline.</span></p>
-      <div class="card-actions">
-        {% if agent_entry_start %}
-        <a class="secondary-button" href="#loop-agent-entry-start-guide" data-testid="loop-history-empty-agent-guide-link">
-          <span data-lang="zh">查看同一 Agent 指引</span>
-          <span data-lang="en">View same-Agent guide</span>
-        </a>
-        {% else %}
-        <form method="post" action="{{ workdir_context_href('/loops/' ~ loop.id ~ '/runs', workdir_context) }}" data-testid="loop-history-empty-start-run-form" data-workdir-context-form="workdir">
-          <button class="secondary-button" type="submit" data-testid="loop-history-empty-start-run-button">
-            <span data-lang="zh">开始首次运行</span>
-            <span data-lang="en">Start first run</span>
-          </button>
-        </form>
-        {% endif %}
-      </div>
     </div>
 {% endif %}
 </section>
@@ -382,7 +198,7 @@
 <section class="panel" data-testid="loop-detail-summary-panel">
   <header class="panel-header">
     <h2><span data-lang="zh">最近摘要</span><span data-lang="en">Latest summary</span></h2>
-    <a class="ghost-button" href="{{ workdir_context_href('/runs/' ~ latest_run.id, workdir_context) }}" data-workdir-context-link="workdir">
+    <a class="ghost-button" href="/runs/{{ latest_run.id }}">
       <span data-lang="zh">打开运行</span>
       <span data-lang="en">Open run</span>
     </a>
@@ -428,6 +244,5 @@
   </div>
 </section>
 {% endif %}
-{{ loop_reference_sections|safe }}
 </div>
 {% endblock %}

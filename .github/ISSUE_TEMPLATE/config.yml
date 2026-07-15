@@ -5,4 +5,4 @@ contact_links:
     about: Report vulnerabilities privately; do not publish exploit details or secrets in public issues.
   - name: Support And Questions
     url: https://github.com/huyusong10/Loopora/blob/dev/SUPPORT.md
-    about: Choose the support path, public issue support bundle allowlist, diagnostics route, or private security route before filing.
+    about: Review the public diagnostic allowlist and private security route before filing.

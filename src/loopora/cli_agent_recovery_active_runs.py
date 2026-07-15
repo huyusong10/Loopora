@@ -4,7 +4,7 @@ import shlex
 from dataclasses import dataclass
 from pathlib import Path
 
-from loopora.agent_adapter_command_prefix import copyable_loopora_command
+from loopora.agent_adapters import prefix_loopora_command
 from loopora.cli_agent_runtime_support import agent_next_command_hint as _agent_next_command_hint
 from loopora.cli_agent_runtime_support import attach_web_url as _attach_web_url
 
@@ -83,8 +83,8 @@ def _agent_active_run_conflict_recovery_result(request: AgentActiveRunConflictRe
             run_id=first_run_id,
             entry_source=request.entry_source,
         )
-        result["stop_active_run_command"] = copyable_loopora_command(f"loopora loops stop {shlex.quote(first_run_id)}")
-        _attach_web_url(result, path_key="active_run_path", url_key="active_run_url", no_web=request.no_web, workdir=request.root)
+        result["stop_active_run_command"] = prefix_loopora_command(f"loopora loops stop {shlex.quote(first_run_id)}")
+        _attach_web_url(result, path_key="active_run_path", url_key="active_run_url", no_web=request.no_web)
     return result
 
 

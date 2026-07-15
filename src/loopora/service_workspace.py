@@ -8,7 +8,7 @@ from loopora.branding import APP_STATE_DIRNAME, state_dir_for_workdir
 from loopora.run_artifacts import write_json_with_mirrors
 from loopora.service_types import LooporaError, WorkspaceSafetyError
 from loopora.utils import read_json, utc_now
-from loopora.settings import load_recent_workdirs, save_recent_workdirs
+from loopora.settings import save_recent_workdirs
 
 WORKSPACE_USER_FILE_IGNORED_DIRS = {
     ".git",
@@ -140,18 +140,16 @@ class ServiceWorkspaceMixin:
     def _read_workspace_baseline_files(path: Path) -> set[str]:
         try:
             baseline = read_json(path)
-        except (OSError, UnicodeError) as exc:
-            raise LooporaError("workspace safety baseline could not be read") from exc
-        except ValueError as exc:
-            raise LooporaError("workspace safety baseline is missing or malformed") from exc
+        except (OSError, UnicodeError, ValueError) as exc:
+            raise LooporaError(f"workspace safety baseline could not be read: {path}") from exc
         if not isinstance(baseline, dict) or "files" not in baseline:
-            raise LooporaError("workspace safety baseline is missing or malformed")
+            raise LooporaError(f"workspace safety baseline is missing or malformed: {path}")
         files = baseline.get("files")
         if not isinstance(files, list):
-            raise LooporaError("workspace safety baseline is missing or malformed")
+            raise LooporaError(f"workspace safety baseline is missing or malformed: {path}")
         normalized_files = {str(item).strip() for item in files if isinstance(item, str) and str(item).strip()}
         if len(normalized_files) != len(files):
-            raise LooporaError("workspace safety baseline is missing or malformed")
+            raise LooporaError(f"workspace safety baseline is missing or malformed: {path}")
         return normalized_files
 
     def _ensure_loop_dir(self, workdir: Path, loop_id: str) -> Path:
@@ -166,4 +164,4 @@ class ServiceWorkspaceMixin:
 
     def _write_recent_workdirs(self) -> None:
         loops = self.repository.list_loops()
-        save_recent_workdirs([*(loop["workdir"] for loop in loops), *load_recent_workdirs()])
+        save_recent_workdirs(loop["workdir"] for loop in loops)

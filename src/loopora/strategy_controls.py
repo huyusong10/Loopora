@@ -3,8 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from loopora.structured_booleans import structured_bool_is_true
-from loopora.structured_numbers import structured_non_negative_int
+from loopora.utils import structured_bool_is_true
+from loopora.utils import structured_non_negative_int
 from loopora.strategy_source import default_strategy_step_action_policy
 
 

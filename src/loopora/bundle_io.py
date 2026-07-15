@@ -34,30 +34,29 @@ def load_bundle_file(path: Path) -> dict[str, Any]:
     return load_bundle_text(raw_text)
 
 
-def decode_bundle_text(raw_text: str) -> Mapping[str, object]:
+def load_bundle_text(raw_text: str) -> dict[str, Any]:
+    return normalize_bundle(decode_bundle_text(raw_text))
+
+
+def decode_bundle_text(raw_text: str) -> dict[str, Any]:
     try:
         payload = yaml.safe_load(raw_text) or {}
     except yaml.YAMLError as exc:
         raise BundleError(_invalid_bundle_yaml_message(raw_text)) from exc
     if not isinstance(payload, Mapping):
         raise BundleError("bundle YAML must decode to an object")
-    return payload
+    return dict(payload)
 
 
 def _invalid_bundle_yaml_message(raw_text: str) -> str:
-    if any(_is_yaml_control_character(character) for character in raw_text):
-        return "invalid bundle YAML: contains unsupported control characters"
+    if any(_is_yaml_control_character(char) for char in raw_text):
+        return "invalid bundle YAML: remove unsupported control characters"
     return "invalid bundle YAML: check Plan File YAML syntax"
 
 
-def _is_yaml_control_character(character: str) -> bool:
-    ordinal = ord(character)
-    return ordinal < 32 and character not in "\t\n\r"
-
-
-def load_bundle_text(raw_text: str) -> dict[str, Any]:
-    payload = decode_bundle_text(raw_text)
-    return normalize_bundle(payload)
+def _is_yaml_control_character(char: str) -> bool:
+    codepoint = ord(char)
+    return codepoint < 32 and char not in {"\t", "\n", "\r"}
 
 
 def bundle_to_yaml(bundle: Mapping[str, object]) -> str:

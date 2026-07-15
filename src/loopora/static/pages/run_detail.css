@@ -18,7 +18,6 @@
 }
 
 .run-observation-status[data-observation-state="degraded"],
-.run-observation-status[data-observation-state="snapshot-failed"],
 .run-observation-status[data-observation-state="stream-error"],
 .run-observation-status[data-observation-state="stream-stale"] {
   border-color: rgba(214, 106, 54, 0.18);
@@ -56,79 +55,8 @@
   height: 100%;
 }
 
-.run-observation-cluster {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-}
-
-.run-observation-refresh-button {
-  min-height: 32px;
-  padding: 6px 10px;
-}
-
 .hero-run-detail .hero-actions {
   justify-content: flex-start;
-}
-
-.run-export-menu {
-  position: relative;
-  min-width: 0;
-}
-
-.run-export-menu > summary {
-  list-style: none;
-  cursor: pointer;
-}
-
-.run-export-menu > summary::-webkit-details-marker {
-  display: none;
-}
-
-.run-export-menu-actions {
-  position: absolute;
-  top: calc(100% + 8px);
-  left: 0;
-  z-index: 30;
-  display: grid;
-  gap: 6px;
-  width: min(280px, calc(100vw - 32px));
-  padding: 8px;
-  border: 1px solid var(--line);
-  background: var(--panel-strong);
-  box-shadow: var(--shadow-lg);
-}
-
-.run-export-menu-actions .ghost-button {
-  justify-content: flex-start;
-  width: 100%;
-}
-
-.run-stop-status {
-  flex: 1 0 100%;
-  max-width: 680px;
-  margin: 0;
-}
-
-.hero-run-detail .hero-actions > .run-action-refresh-notice {
-  flex: 1 0 100%;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px;
-  max-width: 760px;
-  margin: 0;
-}
-
-.run-action-refresh-notice[hidden] {
-  display: none;
-}
-
-.run-action-refresh-notice .ghost-button {
-  min-height: 32px;
-  padding: 6px 10px;
 }
 
 /* ── Progress Panel ── */
@@ -943,14 +871,6 @@ html[data-locale="zh"] .highlight-label {
   order: 1;
 }
 
-.run-judgment-grid[data-run-phase="active"] .progress-panel {
-  order: -2;
-}
-
-.run-judgment-grid[data-run-phase="active"] .takeaway-panel {
-  order: -1;
-}
-
 .timeline-panel {
   order: 4;
 }
@@ -1159,36 +1079,6 @@ html[data-locale="zh"] .highlight-label {
   word-break: break-word;
 }
 
-.agent-handoff-manual-copy {
-  display: grid;
-  gap: 8px;
-  min-width: 0;
-}
-
-.agent-handoff-manual-copy[hidden] {
-  display: none;
-}
-
-.agent-handoff-manual-copy label {
-  color: var(--muted);
-  font-size: 0.78rem;
-  font-weight: 700;
-}
-
-.agent-handoff-manual-copy textarea {
-  width: 100%;
-  min-height: 7rem;
-  resize: vertical;
-  padding: 10px;
-  border: 1px solid rgba(var(--outline-rgb), 0.16);
-  border-radius: 8px;
-  background: rgba(var(--glass-rgb), 0.72);
-  color: var(--ink);
-  font-family: "SFMono-Regular", "IBM Plex Mono", monospace;
-  font-size: 0.82rem;
-  line-height: 1.45;
-}
-
 .agent-handoff-contract {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -1243,7 +1133,7 @@ html[data-locale="zh"] .highlight-label {
   display: flex;
   align-items: center;
   gap: 8px;
-  min-height: 44px;
+  min-height: 42px;
   padding: 0 14px;
   color: var(--muted);
   font-size: 0.86rem;
@@ -1341,47 +1231,6 @@ html[data-locale="zh"] .takeaway-path-label {
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
   margin: 0 0 14px;
-}
-
-.run-result-decision {
-  display: grid;
-  gap: 14px;
-  margin: 0 0 16px;
-  padding: 16px 0;
-  border-top: 1px solid var(--line);
-  border-bottom: 1px solid var(--line);
-}
-
-.run-result-decision-copy {
-  display: grid;
-  gap: 5px;
-  min-width: 0;
-}
-
-.run-result-decision-copy > span {
-  color: var(--accent-2);
-  font-size: 0.76rem;
-  font-weight: 800;
-}
-
-.run-result-decision-copy strong {
-  color: var(--ink);
-  font-size: 1rem;
-  line-height: 1.35;
-}
-
-.run-result-decision-copy p {
-  margin: 0;
-  color: var(--muted);
-  font-size: 0.86rem;
-  line-height: 1.55;
-}
-
-.run-result-decision-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  align-items: center;
 }
 
 .takeaway-evidence-card {
@@ -1804,12 +1653,6 @@ html[data-locale="zh"] .takeaway-iteration-label {
   .takeaway-role-grid {
     grid-template-columns: 1fr;
   }
-
-  .run-result-decision-actions > *,
-  .run-result-decision-actions button {
-    width: 100%;
-  }
-
 
   .console-toolbar,
   .console-toolbar-actions,

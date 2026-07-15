@@ -4,7 +4,7 @@ from pathlib import Path
 import tomllib
 from typing import Any
 
-from loopora.agent_adapter_check_utils import adapter_check, markdown_frontmatter, read_text_or_empty
+from loopora.agent_adapter_manifest import adapter_check, markdown_frontmatter, read_text_or_empty
 from loopora.system_prompt_assets import load_system_prompt_asset
 
 CODEX_ROLE_CONTRACT_SNIPPETS_ASSET = "agent_native/codex-role-contract-check-snippets.md"

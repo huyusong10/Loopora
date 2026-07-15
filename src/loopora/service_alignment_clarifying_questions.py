@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 
 from loopora.alignment_readiness_rules import has_any_marker
-from loopora.service_alignment_decision_option_normalization import alignment_has_recommended_decision_options
+from loopora.service_alignment_decision_options import alignment_has_recommended_decision_options
 
 
 def alignment_clarifying_question_issues(output: dict) -> list[str]:

@@ -8,10 +8,6 @@ from loopora.run_takeaway_common import (
     display_iter as _display_iter,
     summary_excerpt as _summary_excerpt,
 )
-from loopora.run_result_recording import run_result_is_lifecycle_failure
-from loopora.service_types import TERMINAL_RUN_STATUSES
-
-UNPROVEN_TASK_VERDICT_STATUSES = frozenset({"insufficient_evidence", "failed", "not_evaluated"})
 
 
 def task_verdict_status(verdict: object) -> str:
@@ -36,12 +32,6 @@ def task_verdict_status_from_run(run: Mapping[str, object]) -> str:
     return task_verdict_status(task_verdict_from_run(run))
 
 
-def terminal_task_verdict_needs_evidence(run_status: object, task_status: object) -> bool:
-    normalized_run_status = str(run_status or "").strip().lower()
-    normalized_task_status = str(task_status or "").strip().lower() or "not_evaluated"
-    return normalized_run_status in TERMINAL_RUN_STATUSES and normalized_task_status in UNPROVEN_TASK_VERDICT_STATUSES
-
-
 def build_run_summary_snapshot(run: dict) -> dict:
     task_verdict = task_verdict_from_run(run)
     raw_verdict = run.get("last_verdict_json") or {}
@@ -49,14 +39,7 @@ def build_run_summary_snapshot(run: dict) -> dict:
     failed_count = len(buckets.get("blocking") or raw_verdict.get("failed_check_ids") or [])
     composite_score = raw_verdict.get("composite_score")
     task_status = str(task_verdict.get("status") or "not_evaluated")
-    lifecycle_failure = run_result_is_lifecycle_failure(run)
-    if lifecycle_failure:
-        verdict_title = ("运行启动失败", "Run start failed")
-        verdict_note = (
-            "运行在产生可记录证据前失败；请从已审查 Loop 重试运行。",
-            "Run failed before recordable evidence was produced; retry from the reviewed Loop.",
-        )
-    elif task_status == "passed":
+    if task_status == "passed":
         verdict_title = ("Loop 裁决：已通过", "Task verdict: passed")
         verdict_note = (
             task_verdict.get("summary") or _first_task_bucket_text(buckets, "proven") or "证据支持本次 Loop 结论。",
@@ -104,23 +87,13 @@ def build_run_summary_snapshot(run: dict) -> dict:
     }
     status = run.get("status") or "draft"
     status_note = status_notes.get(status, status_notes["draft"])
-    if lifecycle_failure:
-        status_note = (
-            "这不是任务证据裁决；先重试运行启动。",
-            "This is not a task evidence verdict; retry run start first.",
-        )
     raw_summary_excerpt = _summary_excerpt(run.get("summary_md"))
-    lifecycle_excerpt = lifecycle_failure_summary_pair(run_status=status, error_message=run.get("error_message"))
-    summary_excerpt_zh, summary_excerpt_en = (
-        lifecycle_excerpt
-        if lifecycle_excerpt[0] or lifecycle_excerpt[1]
-        else verdict_safe_summary_pair(
-            task_status=task_status,
-            run_status=str(status),
-            verdict_note_zh=str(verdict_note[0] or ""),
-            verdict_note_en=str(verdict_note[1] or ""),
-            raw_excerpt=raw_summary_excerpt,
-        )
+    summary_excerpt_zh, summary_excerpt_en = verdict_safe_summary_pair(
+        task_status=task_status,
+        run_status=str(status),
+        verdict_note_zh=str(verdict_note[0] or ""),
+        verdict_note_en=str(verdict_note[1] or ""),
+        raw_excerpt=raw_summary_excerpt,
     )
 
     return {
@@ -155,15 +128,6 @@ def verdict_safe_excerpt_pair(task_verdict: Mapping[str, object], *, run_status:
         verdict_note_zh=note,
         verdict_note_en=note,
         raw_excerpt=raw_excerpt,
-    )
-
-
-def lifecycle_failure_summary_pair(*, run_status: object, error_message: object) -> tuple[str, str]:
-    if not run_result_is_lifecycle_failure({"status": run_status, "error_message": error_message}):
-        return "", ""
-    return (
-        "运行启动失败：未产生可记录证据，先重试运行。",
-        "Run start failed: no recordable evidence was produced; retry the run.",
     )
 
 

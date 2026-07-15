@@ -4,8 +4,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from loopora.coverage_target_semantics import coverage_target_is_required
-from loopora.runtime_task_language import runtime_task_text
-from loopora.structured_numbers import structured_non_negative_int
+from loopora.utils import structured_non_negative_int
 
 
 def summarize_evidence_coverage_projection(projection: Mapping[str, Any], *, coverage_path_available: bool = True) -> dict:
@@ -85,43 +84,19 @@ def top_coverage_gaps(target_rows: list[dict]) -> list[dict]:
     ]
 
 
-def coverage_summary(status: str, top_gaps: list[dict], *, language: str = "en") -> dict:
+def coverage_summary(status: str, top_gaps: list[dict]) -> dict:
     if status == "covered":
-        reason = runtime_task_text(
-            language,
-            "Required and advisory coverage targets have supporting evidence.",
-            "必需和建议覆盖目标都已有支持证据。",
-        )
+        reason = "Required and advisory coverage targets have supporting evidence."
     elif status == "weak":
-        reason = runtime_task_text(
-            language,
-            "Required targets are covered, but advisory evidence is incomplete.",
-            "必需覆盖目标已经证明，但建议证据仍不完整。",
-        )
+        reason = "Required targets are covered, but advisory evidence is incomplete."
     elif status == "partial":
-        reason = runtime_task_text(
-            language,
-            "Required coverage targets still lack direct evidence.",
-            "必需覆盖目标仍缺少直接证据。",
-        )
+        reason = "Required coverage targets still lack direct evidence."
     elif status == "blocked":
-        reason = runtime_task_text(
-            language,
-            "GateKeeper or target evidence reported a blocker.",
-            "GateKeeper 或目标证据报告了阻断项。",
-        )
+        reason = "GateKeeper or target evidence reported a blocker."
     elif status == "legacy":
-        reason = runtime_task_text(
-            language,
-            "This run does not have a readable evidence ledger.",
-            "这个 Run 没有可读取的证据账本。",
-        )
+        reason = "This run does not have a readable evidence ledger."
     else:
-        reason = runtime_task_text(
-            language,
-            "No evidence ledger entries are available yet.",
-            "证据账本中还没有可用条目。",
-        )
+        reason = "No evidence ledger entries are available yet."
     return {
         "status": status,
         "reason": reason,
