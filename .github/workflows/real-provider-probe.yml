@@ -61,7 +61,7 @@ jobs:
       LOOPORA_REAL_PROBE_ALLOW_MODEL_OVERRIDE: ${{ inputs.allow_model_override && '1' || '' }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Set up Python
         uses: actions/setup-python@v6
